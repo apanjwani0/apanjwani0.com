@@ -13,6 +13,7 @@ jobs:
   build:
     name: Build & Push
     runs-on: ubuntu-latest
+    environment: Prod
     permissions:
       contents: read
       packages: write   # needed to push to ghcr.io
@@ -55,6 +56,7 @@ jobs:
     name: Deploy to OCI
     needs: build
     runs-on: ubuntu-latest
+    environment: Prod
 
     steps:
       - name: Deploy via SSH
