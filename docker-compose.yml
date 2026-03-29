@@ -1,6 +1,6 @@
 services:
   portfolio:
-    image: portfolio:latest
+    image: ${DOCKER_IMAGE:-portfolio:latest}
     ports:
       - "${PORT:-4321}:4321"
     volumes:
