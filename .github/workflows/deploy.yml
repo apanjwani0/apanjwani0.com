@@ -78,6 +78,7 @@ jobs:
             --restart unless-stopped \
             -p 80:4321 \
             -v /opt/portfolio/data:/app/data \
+            -v /opt/portfolio/avatar.webp:/app/dist/client/avatar.webp \
             -e ADMIN_SECRET="$ADMIN_SECRET" \
             "$DOCKER_IMAGE"
 

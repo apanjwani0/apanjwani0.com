@@ -9,7 +9,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const token = cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
   await deleteSession(token, runtimeEnv?.SITE_CONFIG)
 
-  const secure = !import.meta.env.DEV ? '; Secure' : ''
+  const isHttps = request.headers.get('x-forwarded-proto') === 'https' || new URL(request.url).protocol === 'https:'
+  const secure = isHttps ? '; Secure' : ''
   return new Response(null, {
     status: 302,
     headers: {

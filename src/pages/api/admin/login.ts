@@ -8,10 +8,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const secret = runtimeEnv?.ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? import.meta.env.ADMIN_SECRET
 
   if (!secret) {
-    return new Response(JSON.stringify({ error: 'Server misconfigured — ADMIN_SECRET not set' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return new Response(null, { status: 404 })
   }
 
   let password: string
@@ -33,7 +30,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const token = await createSession(runtimeEnv?.SITE_CONFIG)
-  const secure = !import.meta.env.DEV ? '; Secure' : ''
+  const isHttps = request.headers.get('x-forwarded-proto') === 'https' || new URL(request.url).protocol === 'https:'
+  const secure = isHttps ? '; Secure' : ''
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: {

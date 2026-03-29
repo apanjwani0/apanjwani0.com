@@ -12,6 +12,11 @@ const secret = runtimeEnv?.ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? import.me
 // In dev with no secret configured, allow through without auth
 const bypassAuth = import.meta.env.DEV && !secret
 
+// In production, refuse to serve the page at all if secret is not set
+if (!import.meta.env.DEV && !secret) {
+  return Astro.redirect('/404')
+}
+
 const cookie = Astro.request.headers.get('cookie') ?? ''
 const token = cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
 const isAuth = bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG)
@@ -458,6 +463,9 @@ const sectionsJson = JSON.stringify(site.sections)
     }
   })
 
+  // Admin panel — only runs when authenticated (elements exist in DOM)
+  if (document.getElementById('form-site')) {
+
   // Tab switching
   document.querySelectorAll<HTMLButtonElement>('.tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -645,4 +653,6 @@ const sectionsJson = JSON.stringify(site.sections)
     }))
     await save('writing', data)
   })
+
+  } // end admin guard
 </script>
