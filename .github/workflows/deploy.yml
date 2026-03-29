@@ -45,53 +45,41 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ── 2. SSH into OCI instance and redeploy ───────────────────────────────────
+  # ── 2. Deploy directly on the OCI instance via self-hosted runner ───────────
   deploy:
     name: Deploy to OCI
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted   # runs on your OCI server — no inbound SSH needed
     environment: Prod
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.OCI_HOST }}
-          username: ${{ secrets.OCI_USER }}
-          key: ${{ secrets.OCI_SSH_KEY }}
-          # Variables listed here are injected into the remote shell session.
-          envs: GHCR_TOKEN,GITHUB_ACTOR,DOCKER_IMAGE,ADMIN_SECRET
-          script: |
-            set -euo pipefail
-
-            # Authenticate against GHCR (needed if package is private)
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-
-            # Pull the new image
-            docker pull "$DOCKER_IMAGE"
-
-            # Stop + remove existing container (ignore errors if not running)
-            docker stop portfolio 2>/dev/null || true
-            docker rm   portfolio 2>/dev/null || true
-
-            # Run new container
-            # - data/ is the persistent admin-written config volume
-            # - ADMIN_SECRET comes from GitHub Secrets, never stored on disk
-            mkdir -p /opt/portfolio/data
-            docker run -d \
-              --name portfolio \
-              --restart unless-stopped \
-              -p 80:4321 \
-              -v /opt/portfolio/data:/app/data \
-              -e ADMIN_SECRET="$ADMIN_SECRET" \
-              "$DOCKER_IMAGE"
-
-            # Clean up dangling images to reclaim disk space
-            docker image prune -f
-
-            echo "✓ Deployed $DOCKER_IMAGE"
+      - name: Pull and restart container
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
           DOCKER_IMAGE: ${{ env.IMAGE }}:latest
           ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+        run: |
+          set -euo pipefail
+
+          # Authenticate against GHCR
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+          # Pull latest image
+          docker pull "$DOCKER_IMAGE"
+
+          # Stop + remove existing container
+          docker stop portfolio 2>/dev/null || true
+          docker rm   portfolio 2>/dev/null || true
+
+          # Run new container
+          mkdir -p /opt/portfolio/data
+          docker run -d \
+            --name portfolio \
+            --restart unless-stopped \
+            -p 80:4321 \
+            -v /opt/portfolio/data:/app/data \
+            -e ADMIN_SECRET="$ADMIN_SECRET" \
+            "$DOCKER_IMAGE"
+
+          docker image prune -f
+          echo "✓ Deployed $DOCKER_IMAGE"
