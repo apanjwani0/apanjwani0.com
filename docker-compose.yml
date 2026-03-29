@@ -1,0 +1,20 @@
+services:
+  portfolio:
+    image: portfolio:latest
+    ports:
+      - "${PORT:-4321}:4321"
+    volumes:
+      # Mutable config written by /admin — persists across deploys
+      - ./data:/app/data
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "4321"
+      NODE_ENV: production
+      ADMIN_SECRET: "${ADMIN_SECRET}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4321/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

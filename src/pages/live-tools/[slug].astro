@@ -1,0 +1,32 @@
+---
+export const prerender = true
+
+import Base from '../../layouts/Base.astro'
+import { tools } from '../../config/tools'
+import '../../styles/tools.css'
+
+export function getStaticPaths() {
+  return tools
+    .filter(t => t.status !== 'external')
+    .map(t => ({ params: { slug: t.slug } }))
+}
+
+const { slug } = Astro.params
+const tool = tools.find(t => t.slug === slug)!
+---
+
+<Base title={tool.title}>
+  <h1>{tool.title}</h1>
+  <p data-type="tool-description">{tool.description}</p>
+
+  {tool.status === 'wip' && <p data-type="tool-wip">This tool is coming soon.</p>}
+  {slug === 'markdown-editor' && <markdown-editor-tool data-tool="markdown-editor"></markdown-editor-tool>}
+</Base>
+
+<script>
+  // Vite statically analyses each import() path — only the needed module is downloaded per page
+  const slug = document.querySelector('[data-tool]')?.getAttribute('data-tool')
+  if (slug === 'markdown-editor') {
+    import('../../components/tools/MarkdownEditor.ts')
+  }
+</script>

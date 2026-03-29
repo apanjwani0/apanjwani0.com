@@ -1,0 +1,14 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import ExperienceItem from '../components/ExperienceItem.astro'
+import { getExperience } from '../lib/config'
+
+const experience = await getExperience(Astro.locals)
+---
+
+<Base title="experience">
+  <h1>experience</h1>
+  {experience.map(company => <ExperienceItem company={company} />)}
+</Base>

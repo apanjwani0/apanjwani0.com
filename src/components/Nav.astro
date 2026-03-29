@@ -1,0 +1,31 @@
+---
+import { getSite } from '../lib/config'
+
+interface Props {
+  site?: Awaited<ReturnType<typeof getSite>>
+}
+
+const { site: siteProp } = Astro.props
+const site = siteProp ?? await getSite(Astro.locals)
+const current = Astro.url.pathname
+---
+
+<header>
+  <a href="/">{site.handle}</a>
+  <nav>
+    {site.nav.map((item: any) => (
+      'children' in item ? (
+        <div data-type="nav-dropdown">
+          <button data-type="nav-dropdown-trigger">{item.label}</button>
+          <div data-type="nav-dropdown-menu">
+            {item.children.map((child: any) => (
+              <a href={child.href} data-active={current === child.href ? true : undefined}>{child.label}</a>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <a href={item.href} data-active={current === item.href || (item.href !== '/' && current.startsWith(item.href)) ? true : undefined}>{item.label}</a>
+      )
+    ))}
+  </nav>
+</header>

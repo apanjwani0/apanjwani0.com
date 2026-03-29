@@ -1,0 +1,648 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import { getSite, getProjects, getExperience, getPosts } from '../lib/config'
+import { validateSession } from '../lib/session'
+
+// Auth: read secret from Cloudflare env (prod) or process.env/.env (dev/Node)
+const runtimeEnv = (Astro.locals as any).runtime?.env
+const secret = runtimeEnv?.ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? import.meta.env.ADMIN_SECRET
+
+// In dev with no secret configured, allow through without auth
+const bypassAuth = import.meta.env.DEV && !secret
+
+const cookie = Astro.request.headers.get('cookie') ?? ''
+const token = cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
+const isAuth = bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG)
+
+const loginError = Astro.url.searchParams.get('error')
+
+// Load from KV (or fallback to bundled TS) so admin always shows live values
+const [site, projects, experience, posts] = await Promise.all([
+  getSite(Astro.locals),
+  getProjects(Astro.locals),
+  getExperience(Astro.locals),
+  getPosts(Astro.locals),
+])
+
+const navJson = JSON.stringify(site.nav)
+const sectionsJson = JSON.stringify(site.sections)
+---
+
+<Base title="admin">
+  <h1>admin</h1>
+
+  {!isAuth ? (
+    <div id="auth-gate">
+      {loginError && <p id="login-error">incorrect password</p>}
+      <form id="login-form">
+        <label>
+          password
+          <div id="pw-field">
+            <input type="password" name="password" id="pw-input" autocomplete="current-password" autofocus />
+            <button type="button" id="pw-toggle">show</button>
+          </div>
+        </label>
+        <button type="submit" id="login-btn">login</button>
+      </form>
+    </div>
+  ) : (<>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="site">site</button>
+    <button class="tab" data-tab="projects">projects</button>
+    <button class="tab" data-tab="experience">experience</button>
+    <button class="tab" data-tab="writing">writing</button>
+  </div>
+
+  <!-- Site -->
+  <section id="tab-site" class="tab-panel">
+    <form id="form-site">
+      <input type="hidden" name="nav" value={navJson} />
+      <input type="hidden" name="sections" value={sectionsJson} />
+      <label>name<input name="name" value={site.name} /></label>
+      <label>handle<input name="handle" value={site.handle} /></label>
+      <label>tagline<input name="tagline" value={site.tagline} /></label>
+      <label>bio<textarea name="bio">{site.bio}</textarea></label>
+      <label>avatar path<input name="avatar" value={site.avatar} /></label>
+      <label>theme
+        <select name="theme">
+          <option value="light" selected={site.theme === 'light'}>light</option>
+          <option value="dark" selected={site.theme === 'dark'}>dark</option>
+        </select>
+      </label>
+      <label>github<input name="github" value={site.social.github} /></label>
+      <label>linkedin<input name="linkedin" value={site.social.linkedin} /></label>
+      <div class="form-actions">
+        <button type="submit">save site</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Projects -->
+  <section id="tab-projects" class="tab-panel hidden">
+    <div id="projects-list">
+      {projects.map((p) => (
+        <div class="item">
+          <label>title<input name="title" value={p.title} /></label>
+          <label>url<input name="url" value={p.url} /></label>
+          <label>description<textarea name="description">{p.description}</textarea></label>
+          <label>tags (comma-separated)<input name="tags" value={p.tags.join(', ')} /></label>
+          <button type="button" class="remove-btn">remove</button>
+        </div>
+      ))}
+    </div>
+    <div class="form-actions">
+      <button type="button" id="add-project" class="add-btn">+ add project</button>
+      <button type="button" id="save-projects">save projects</button>
+    </div>
+  </section>
+
+  <!-- Experience -->
+  <section id="tab-experience" class="tab-panel hidden">
+    <div id="experience-list">
+      {experience.map((company) => (
+        <div class="company-item">
+          <div class="company-header">
+            <label>company<input name="company-name" value={company.name} /></label>
+            <button type="button" class="remove-company-btn">remove company</button>
+          </div>
+          <div class="roles-list">
+            {company.roles.map((role) => (
+              <div class="role-item">
+                <label>title<input name="role-title" value={role.title} /></label>
+                <label>team (optional)<input name="role-team" value={role.team ?? ''} /></label>
+                <label>period<input name="role-period" value={role.period} /></label>
+                <label>bullets (one per line)<textarea name="role-bullets">{role.bullets.join('\n')}</textarea></label>
+                <button type="button" class="remove-role-btn">remove role</button>
+              </div>
+            ))}
+          </div>
+          <div class="form-actions">
+            <button type="button" class="add-role-btn add-btn">+ add role</button>
+          </div>
+        </div>
+      ))}
+    </div>
+    <div class="form-actions">
+      <button type="button" id="add-company" class="add-btn">+ add company</button>
+      <button type="button" id="save-experience">save experience</button>
+    </div>
+  </section>
+
+  <!-- Writing -->
+  <section id="tab-writing" class="tab-panel hidden">
+    <div id="writing-list">
+      {posts.map((p) => (
+        <div class="item">
+          <label>title<input name="title" value={p.title} /></label>
+          <label>href<input name="href" value={p.href} /></label>
+          <label>date<input name="date" type="date" value={p.date} /></label>
+          <label>summary<textarea name="summary">{p.summary}</textarea></label>
+          <button type="button" class="remove-btn">remove</button>
+        </div>
+      ))}
+    </div>
+    <div class="form-actions">
+      <button type="button" id="add-post" class="add-btn">+ add post</button>
+      <button type="button" id="save-writing">save writing</button>
+    </div>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <form method="POST" action="/api/admin/logout" style="margin-top: 3rem;" data-astro-reload>
+    <button type="submit" class="logout-btn">logout</button>
+  </form>
+  </>)}
+</Base>
+
+<style>
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 2rem;
+  }
+
+  .tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.5rem 0;
+    margin-right: 1.75rem;
+    margin-bottom: -1px;
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--color-muted);
+    cursor: pointer;
+  }
+
+  .tab.active {
+    color: var(--color-text);
+    border-bottom-color: var(--color-text);
+  }
+
+  .tab:hover:not(.active) {
+    color: var(--color-text);
+  }
+
+  .tab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .tab-panel.hidden {
+    display: none;
+  }
+
+  #form-site {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 540px;
+  }
+
+  .item {
+    border: 1px solid var(--color-border);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+  }
+
+  input, textarea, select {
+    font: inherit;
+    font-size: 0.95rem;
+    border: 1px solid var(--color-border);
+    padding: 0.4rem 0.6rem;
+    background: var(--color-bg);
+    color: var(--color-text);
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  textarea {
+    min-height: 72px;
+    resize: vertical;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.25rem;
+  }
+
+  button[type="submit"],
+  #save-projects,
+  #save-experience,
+  #save-writing {
+    background: var(--color-text);
+    color: var(--color-bg);
+    border: none;
+    padding: 0.45rem 1.1rem;
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  .add-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    padding: 0.45rem 1rem;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .remove-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    padding: 0.25rem 0.75rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    cursor: pointer;
+    align-self: flex-start;
+  }
+
+  .company-item {
+    border: 1px solid var(--color-border);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .company-header {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+  }
+
+  .company-header label {
+    flex: 1;
+  }
+
+  .roles-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--color-border);
+  }
+
+  .role-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid var(--color-border);
+  }
+
+  .remove-company-btn,
+  .remove-role-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    padding: 0.25rem 0.75rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    align-self: flex-end;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    padding: 0.65rem 1.1rem;
+    font-size: 0.9rem;
+    z-index: 100;
+    transition: opacity 0.2s;
+  }
+
+  .toast.hidden { display: none; }
+  .toast.success { background: var(--color-text); color: var(--color-bg); }
+  .toast.error { background: #c00; color: #fff; }
+
+  #auth-gate {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 320px;
+    margin-top: 1rem;
+  }
+
+  #login-error {
+    color: #c00;
+    font-size: 0.85rem;
+    margin: 0;
+  }
+
+  #login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  #pw-field {
+    display: flex;
+    gap: 0;
+  }
+
+  #pw-field input {
+    flex: 1;
+    border-right: none;
+  }
+
+  #pw-toggle {
+    background: none;
+    border: 1px solid var(--color-border);
+    padding: 0.4rem 0.7rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  #pw-toggle:hover {
+    color: var(--color-text);
+  }
+
+  #login-btn {
+    background: var(--color-text);
+    color: var(--color-bg);
+    border: none;
+    padding: 0.45rem 1.1rem;
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+    align-self: flex-start;
+    transition: opacity 0.15s;
+  }
+
+  #login-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .logout-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    padding: 0.35rem 0.9rem;
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+    cursor: pointer;
+  }
+</style>
+
+<script>
+  // Login form interactivity
+  const pwToggle = document.getElementById('pw-toggle')
+  const pwInput = document.getElementById('pw-input') as HTMLInputElement | null
+  const loginBtn = document.getElementById('login-btn') as HTMLButtonElement | null
+  const loginForm = document.getElementById('login-form') as HTMLFormElement | null
+
+  pwToggle?.addEventListener('click', () => {
+    if (!pwInput) return
+    const isHidden = pwInput.type === 'password'
+    pwInput.type = isHidden ? 'text' : 'password'
+    pwToggle.textContent = isHidden ? 'hide' : 'show'
+    pwInput.focus()
+  })
+
+  loginForm?.addEventListener('submit', async e => {
+    e.preventDefault()
+    if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = 'logging in...' }
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwInput?.value ?? '' }),
+      })
+      const json = await res.json()
+      if (json.ok) {
+        window.location.href = '/admin'
+      } else {
+        const errEl = document.getElementById('login-error')
+        if (errEl) errEl.textContent = json.error ?? 'incorrect password'
+        else {
+          const p = document.createElement('p')
+          p.id = 'login-error'
+          p.textContent = json.error ?? 'incorrect password'
+          loginForm.insertAdjacentElement('beforebegin', p)
+        }
+        if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'login' }
+      }
+    } catch {
+      if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'login' }
+    }
+  })
+
+  // Tab switching
+  document.querySelectorAll<HTMLButtonElement>('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'))
+      btn.classList.add('active')
+      document.getElementById(`tab-${btn.dataset.tab}`)?.classList.remove('hidden')
+    })
+  })
+
+  // Remove item (delegated) — handles flat items, role items, and company blocks
+  document.addEventListener('click', e => {
+    const target = e.target as HTMLElement
+    if (target.classList.contains('remove-btn')) {
+      target.closest('.item')?.remove()
+    }
+    if (target.classList.contains('remove-role-btn')) {
+      target.closest('.role-item')?.remove()
+    }
+    if (target.classList.contains('remove-company-btn')) {
+      target.closest('.company-item')?.remove()
+    }
+    if (target.classList.contains('add-role-btn')) {
+      target.closest('.company-item')?.querySelector('.roles-list')
+        ?.insertAdjacentHTML('beforeend', roleItemHTML())
+    }
+  })
+
+  // Toast
+  function showToast(msg: string, isError = false) {
+    const toast = document.getElementById('toast')!
+    toast.textContent = msg
+    toast.className = `toast ${isError ? 'error' : 'success'}`
+    setTimeout(() => { toast.className = 'toast hidden' }, 3000)
+  }
+
+  // Save
+  async function save(type: string, data: unknown) {
+    try {
+      const res = await fetch('/api/admin/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, data }),
+      })
+      const json = await res.json()
+      if (json.ok) {
+        showToast(`${type} saved`)
+      } else {
+        showToast(json.error ?? 'Save failed', true)
+      }
+    } catch {
+      showToast('Save failed', true)
+    }
+  }
+
+  // --- Site ---
+  // Live theme preview when select changes
+  document.querySelector<HTMLSelectElement>('select[name="theme"]')
+    ?.addEventListener('change', e => {
+      document.documentElement.setAttribute('data-theme', (e.target as HTMLSelectElement).value)
+    })
+
+  document.getElementById('form-site')!.addEventListener('submit', async e => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const theme = fd.get('theme') as string
+    await save('site', {
+      name: fd.get('name'),
+      handle: fd.get('handle'),
+      theme,
+      tagline: fd.get('tagline'),
+      bio: fd.get('bio'),
+      avatar: fd.get('avatar'),
+      nav: JSON.parse(fd.get('nav') as string),
+      social: {
+        github: fd.get('github'),
+        linkedin: fd.get('linkedin'),
+      },
+      sections: JSON.parse(fd.get('sections') as string),
+    })
+    // Apply theme to DOM immediately — no reload needed
+    document.documentElement.setAttribute('data-theme', theme)
+  })
+
+  // --- Projects ---
+  function projectItemHTML() {
+    return `<div class="item">
+      <label>title<input name="title" value="" /></label>
+      <label>url<input name="url" value="" /></label>
+      <label>description<textarea name="description"></textarea></label>
+      <label>tags (comma-separated)<input name="tags" value="" /></label>
+      <button type="button" class="remove-btn">remove</button>
+    </div>`
+  }
+
+  document.getElementById('add-project')!.addEventListener('click', () => {
+    document.getElementById('projects-list')!.insertAdjacentHTML('beforeend', projectItemHTML())
+  })
+
+  document.getElementById('save-projects')!.addEventListener('click', async () => {
+    const items = document.getElementById('projects-list')!.querySelectorAll('.item')
+    const data = Array.from(items).map(item => ({
+      title: (item.querySelector('[name="title"]') as HTMLInputElement).value,
+      url: (item.querySelector('[name="url"]') as HTMLInputElement).value,
+      description: (item.querySelector('[name="description"]') as HTMLTextAreaElement).value,
+      tags: (item.querySelector('[name="tags"]') as HTMLInputElement).value
+        .split(',').map(t => t.trim()).filter(Boolean),
+    }))
+    await save('projects', data)
+  })
+
+  // --- Experience ---
+  function roleItemHTML() {
+    return `<div class="role-item">
+      <label>title<input name="role-title" value="" /></label>
+      <label>team (optional)<input name="role-team" value="" /></label>
+      <label>period<input name="role-period" value="" /></label>
+      <label>bullets (one per line)<textarea name="role-bullets"></textarea></label>
+      <button type="button" class="remove-role-btn">remove role</button>
+    </div>`
+  }
+
+  function companyItemHTML() {
+    return `<div class="company-item">
+      <div class="company-header">
+        <label>company<input name="company-name" value="" /></label>
+        <button type="button" class="remove-company-btn">remove company</button>
+      </div>
+      <div class="roles-list">
+        ${roleItemHTML()}
+      </div>
+      <div class="form-actions">
+        <button type="button" class="add-role-btn add-btn">+ add role</button>
+      </div>
+    </div>`
+  }
+
+  document.getElementById('add-company')!.addEventListener('click', () => {
+    document.getElementById('experience-list')!.insertAdjacentHTML('beforeend', companyItemHTML())
+  })
+
+  document.getElementById('save-experience')!.addEventListener('click', async () => {
+    const companies = document.getElementById('experience-list')!.querySelectorAll('.company-item')
+    const data = Array.from(companies).map(company => {
+      const roles = company.querySelectorAll('.role-item')
+      return {
+        name: (company.querySelector('[name="company-name"]') as HTMLInputElement).value,
+        roles: Array.from(roles).map(role => {
+          const team = (role.querySelector('[name="role-team"]') as HTMLInputElement).value.trim()
+          return {
+            title: (role.querySelector('[name="role-title"]') as HTMLInputElement).value,
+            ...(team ? { team } : {}),
+            period: (role.querySelector('[name="role-period"]') as HTMLInputElement).value,
+            bullets: (role.querySelector('[name="role-bullets"]') as HTMLTextAreaElement).value
+              .split('\n').map(b => b.trim()).filter(Boolean),
+          }
+        }),
+      }
+    })
+    await save('experience', data)
+  })
+
+  // --- Writing ---
+  function writingItemHTML() {
+    return `<div class="item">
+      <label>title<input name="title" value="" /></label>
+      <label>href<input name="href" value="" /></label>
+      <label>date<input name="date" type="date" value="" /></label>
+      <label>summary<textarea name="summary"></textarea></label>
+      <button type="button" class="remove-btn">remove</button>
+    </div>`
+  }
+
+  document.getElementById('add-post')!.addEventListener('click', () => {
+    document.getElementById('writing-list')!.insertAdjacentHTML('beforeend', writingItemHTML())
+  })
+
+  document.getElementById('save-writing')!.addEventListener('click', async () => {
+    const items = document.getElementById('writing-list')!.querySelectorAll('.item')
+    const data = Array.from(items).map(item => ({
+      title: (item.querySelector('[name="title"]') as HTMLInputElement).value,
+      href: (item.querySelector('[name="href"]') as HTMLInputElement).value,
+      date: (item.querySelector('[name="date"]') as HTMLInputElement).value,
+      summary: (item.querySelector('[name="summary"]') as HTMLTextAreaElement).value,
+    }))
+    await save('writing', data)
+  })
+</script>

@@ -1,0 +1,25 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import SocialLinks from '../components/SocialLinks.astro'
+import { Image } from 'astro:assets'
+import { getSite } from '../lib/config'
+
+const site = await getSite(Astro.locals)
+const firstName = site.name.split(' ')[0]
+---
+
+<Base>
+  <section data-type="hero">
+    <div data-type="hero-layout">
+      <Image src={site.avatar} width={160} height={160} alt={site.name} data-type="avatar" loading="eager" />
+      <div data-type="hero-text">
+        <h1>Hi, I'm {firstName}</h1>
+        <p data-type="tagline">{site.tagline}</p>
+        <SocialLinks site={site} />
+      </div>
+    </div>
+    <p data-type="bio">{site.bio}</p>
+  </section>
+</Base>

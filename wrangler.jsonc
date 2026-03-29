@@ -1,0 +1,22 @@
+{
+	"compatibility_date": "2026-03-17",
+	"compatibility_flags": ["global_fetch_strictly_public", "nodejs_compat"],
+	"name": "civil-centauri",
+	"main": "@astrojs/cloudflare/entrypoints/server",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"kv_namespaces": [
+		{
+			// Run: npx wrangler kv namespace create SITE_CONFIG
+			// Then replace the id and preview_id below with the output values.
+			"binding": "SITE_CONFIG",
+			"id": "REPLACE_WITH_KV_NAMESPACE_ID",
+			"preview_id": "REPLACE_WITH_KV_PREVIEW_ID"
+		}
+	]
+}

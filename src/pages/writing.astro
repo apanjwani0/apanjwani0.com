@@ -1,0 +1,23 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import { getPosts } from '../lib/config'
+
+const posts = await getPosts(Astro.locals)
+---
+
+<Base title="writing">
+  <h1>writing</h1>
+  <ul data-type="writing-list">
+    {posts.map(p => (
+      <li>
+        <div data-type="writing-row">
+          <span data-type="writing-date">{p.date}</span>
+          <a href={p.href}>{p.title}</a>
+        </div>
+        <p data-type="writing-summary">{p.summary}</p>
+      </li>
+    ))}
+  </ul>
+</Base>

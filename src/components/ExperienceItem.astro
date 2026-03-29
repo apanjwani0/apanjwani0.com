@@ -1,0 +1,26 @@
+---
+import type { Company } from '../config/experience'
+
+interface Props {
+  company: Company
+}
+
+const { company } = Astro.props
+---
+
+<article data-type="experience">
+  <h2>{company.name}</h2>
+  {company.roles.map(role => (
+    <div data-type="role">
+      <div data-type="role-header">
+        <span>
+          {role.title}{role.team && <span data-type="role-team"> · {role.team}</span>}
+        </span>
+        <span data-type="period">{role.period}</span>
+      </div>
+      <ul>
+        {role.bullets.map(b => <li>{b}</li>)}
+      </ul>
+    </div>
+  ))}
+</article>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aman is sleeping · apanjwani0</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #0e0e0e;
+      color: #e0ddd8;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .card {
+      max-width: 420px;
+      width: 100%;
+    }
+
+    .moon {
+      font-size: 3.5rem;
+      margin-bottom: 1.5rem;
+      display: block;
+      animation: sway 4s ease-in-out infinite;
+    }
+
+    @keyframes sway {
+      0%, 100% { transform: rotate(-8deg); }
+      50%       { transform: rotate(8deg); }
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: normal;
+      line-height: 1.5;
+      margin-bottom: 0.6rem;
+    }
+
+    h1 em { font-style: italic; }
+
+    .sub {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+
+    .links {
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .links a {
+      font-size: 0.85rem;
+      color: #555;
+      text-decoration: none;
+      border-bottom: 1px solid #333;
+      padding-bottom: 1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .links a:hover { color: #e0ddd8; border-color: #e0ddd8; }
+
+    .retry {
+      font-size: 0.75rem;
+      color: #333;
+    }
+
+    .retry .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #333;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; }
+      50%       { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="moon">🌙</span>
+    <h1>Aman seems to be <em>sleeping</em>.</h1>
+    <p class="sub">Come back later — the server is probably taking a nap too.</p>
+    <div class="links">
+      <a href="https://github.com/apanjwani0" target="_blank" rel="noopener">github</a>
+      <a href="https://www.linkedin.com/in/apanjwani0" target="_blank" rel="noopener">linkedin</a>
+    </div>
+    <p class="retry"><span class="dot"></span>napping for <span id="nap-time">0s</span></p>
+  </div>
+
+  <script>
+    const start = parseInt(sessionStorage.getItem('nap-start') || '0') || Date.now()
+    sessionStorage.setItem('nap-start', start)
+
+    function fmt(ms) {
+      const s = Math.floor(ms / 1000)
+      const m = Math.floor(s / 60)
+      const h = Math.floor(m / 60)
+      if (h > 0) return h + 'h ' + (m % 60) + 'm'
+      if (m > 0) return m + 'm ' + (s % 60) + 's'
+      return s + 's'
+    }
+
+    const el = document.getElementById('nap-time')
+    function tick() { el.textContent = fmt(Date.now() - start) }
+    tick()
+    setInterval(tick, 1000)
+
+    // Check if Pi is back — only after 30s, never on immediate load
+    function check() {
+      fetch('/', { method: 'HEAD', cache: 'no-store' })
+        .then(function(r) { if (r.ok) window.location.href = '/' })
+        .catch(function() {})
+    }
+    setInterval(check, 30000)
+  </script>
+</body>
+</html>

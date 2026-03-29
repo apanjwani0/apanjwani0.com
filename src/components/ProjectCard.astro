@@ -1,0 +1,17 @@
+---
+import type { Project } from '../config/projects'
+
+interface Props {
+  project: Project
+}
+
+const { project } = Astro.props
+---
+
+<article data-type="project">
+  <a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a>
+  <p>{project.description}</p>
+  {project.tags.length > 0 && (
+    <p>{project.tags.join(', ')}</p>
+  )}
+</article>

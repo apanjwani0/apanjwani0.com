@@ -1,0 +1,45 @@
+---
+import { getSite } from '../lib/config'
+import Nav from '../components/Nav.astro'
+import { ClientRouter } from 'astro:transitions'
+import '../styles/global.css'
+
+interface Props {
+  title?: string
+  description?: string
+}
+
+const site = await getSite(Astro.locals)
+const { title, description = site.tagline } = Astro.props
+const pageTitle = title ? `${title} · ${site.name}` : site.name
+---
+
+<!doctype html>
+<html lang="en" data-theme={site.theme}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{pageTitle}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-96x96.png" type="image/png" sizes="96x96" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="stylesheet" href="/oat.min.css" />
+    <ClientRouter />
+  </head>
+  <body>
+    <Nav site={site} />
+    <main>
+      <slot />
+    </main>
+    <script src="/oat.min.js" defer></script>
+  </body>
+</html>
