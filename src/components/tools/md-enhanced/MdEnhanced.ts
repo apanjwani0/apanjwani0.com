@@ -25,6 +25,15 @@ class MdEnhancedTool extends HTMLElement {
           <p>Write and export markdown. Clean editor, no distractions.</p>
         </div>
         <div data-type="md-enhanced">
+          <div data-type="md-view-bar">
+            <button data-view="edit" title="Editor only">Edit</button>
+            <button data-view="split" title="Side by side">Split</button>
+            <button data-view="preview" title="Preview only">Preview</button>
+          </div>
+          <div data-type="md-panes">
+            <textarea data-type="md-input" placeholder="Start writing markdown..."></textarea>
+            <div data-type="md-preview"></div>
+          </div>
           <div data-type="md-actions-bar">
             <div data-group="editor">
               <button data-action="clear" title="Clear editor">Clear</button>
@@ -32,15 +41,14 @@ class MdEnhancedTool extends HTMLElement {
               <button data-action="help" title="Syntax reference">Help</button>
             </div>
             <div data-group="export">
-              <button data-export="md" title="Download .md">.md</button>
-              <button data-export="txt" title="Download .txt">.txt</button>
-              <button data-export="pdf" title="Export PDF">PDF</button>
-              <button data-export="image" title="Export as image">IMG</button>
+              <button data-action="export-menu" title="Export options">Export</button>
+              <div data-type="export-options">
+                <button data-export="md" title="Download .md">.md</button>
+                <button data-export="txt" title="Download .txt">.txt</button>
+                <button data-export="pdf" title="Export PDF">PDF</button>
+                <button data-export="image" title="Export as image">IMG</button>
+              </div>
             </div>
-          </div>
-          <div data-type="md-panes">
-            <textarea data-type="md-input" placeholder="Start writing markdown..."></textarea>
-            <div data-type="md-preview"></div>
           </div>
           <div data-type="md-help" hidden>
             <div data-type="help-header">
@@ -65,17 +73,39 @@ class MdEnhancedTool extends HTMLElement {
       this.updatePreview()
     })
 
+    this.querySelector('[data-type="md-view-bar"]')!
+      .addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-view]')
+        if (btn?.dataset.view) this.setView(btn.dataset.view)
+      })
+
     this.querySelector('[data-type="md-actions-bar"]')!
       .addEventListener('click', (e) => {
         const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action], [data-export]')
         if (!btn) return
-        if (btn.dataset.action) this.handleAction(btn.dataset.action)
-        if (btn.dataset.export) this.handleExport(btn.dataset.export)
+        if (btn.dataset.action === 'export-menu') {
+          this.toggleExportMenu()
+        } else if (btn.dataset.action) {
+          this.handleAction(btn.dataset.action)
+        }
+        if (btn.dataset.export) {
+          this.handleExport(btn.dataset.export)
+          this.toggleExportMenu(false)
+        }
       })
+
+    document.addEventListener('click', (e) => {
+      const exportGroup = this.querySelector('[data-group="export"]')
+      if (exportGroup && !exportGroup.contains(e.target as Node)) {
+        this.toggleExportMenu(false)
+      }
+    })
 
     this.querySelector('[data-action="close-help"]')!
       .addEventListener('click', () => this.toggleHelp(false))
 
+    const defaultView = window.innerWidth <= 600 ? 'edit' : 'split'
+    this.setView(defaultView)
     this.updatePreview()
   }
 
@@ -106,6 +136,21 @@ class MdEnhancedTool extends HTMLElement {
         this.toggleHelp()
         break
     }
+  }
+
+  private toggleExportMenu(force?: boolean) {
+    const options = this.querySelector<HTMLElement>('[data-type="export-options"]')!
+    const show = force !== undefined ? force : !options.hasAttribute('data-open')
+    options.toggleAttribute('data-open', show)
+  }
+
+  private setView(mode: string) {
+    const panes = this.querySelector<HTMLElement>('[data-type="md-panes"]')!
+    panes.setAttribute('data-view', mode)
+
+    this.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(btn => {
+      btn.toggleAttribute('data-active', btn.dataset.view === mode)
+    })
   }
 
   private toggleHelp(force?: boolean) {
