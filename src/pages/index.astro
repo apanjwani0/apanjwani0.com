@@ -13,7 +13,7 @@ const firstName = site.name.split(' ')[0]
 <Base>
   <section data-type="hero">
     <div data-type="hero-layout">
-      <Image src={site.avatar} width={160} height={160} alt={site.name} data-type="avatar" loading="eager" />
+      <Image src={site.avatar} width={120} height={120} alt={site.name} data-type="avatar" loading="eager" />
       <div data-type="hero-text">
         <h1>Hi, I'm {firstName}</h1>
         <p data-type="tagline">{site.tagline}</p>
@@ -22,4 +22,24 @@ const firstName = site.name.split(' ')[0]
     </div>
     <p data-type="bio">{site.bio}</p>
   </section>
+
+  {/* TODO: dashboard sections — uncomment when ready
+  <section data-type="dashboard">
+    <div data-type="dash-section">
+      <h2>explore</h2>
+      <ul data-type="dash-list">
+        {site.sections.experience && (
+          <li>
+            <a href="/experience">experience</a>
+          </li>
+        )}
+        {site.sections.writing && (
+          <li>
+            <a href="/writing">writing</a>
+          </li>
+        )}
+      </ul>
+    </div>
+  </section>
+  */}
 </Base>
