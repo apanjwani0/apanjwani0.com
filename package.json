@@ -25,6 +25,9 @@
     "vite": "^7"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.0.5"
+    "@astrojs/check": "^0.9.8",
+    "@types/dompurify": "^3.0.5",
+    "@types/node": "^25.5.0",
+    "typescript": "^5.9.3"
   }
 }
