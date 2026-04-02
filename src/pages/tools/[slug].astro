@@ -1,0 +1,47 @@
+---
+export const prerender = false
+
+import ToolBase from '../../layouts/ToolBase.astro'
+import { tools } from '../../config/tools'
+import { validateSession } from '../../lib/session'
+import '../../components/tools/md-enhanced/md-enhanced.css'
+import '../../components/tools/audio-transcriber/audio-transcriber.css'
+
+const { slug } = Astro.params
+const tool = tools.find(t => t.slug === slug)
+
+if (!tool || tool.status === 'external') {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+if (tool.status === 'disabled') {
+  const runtimeEnv = (Astro.locals as any).runtime?.env
+  const cookie = Astro.request.headers.get('cookie') ?? ''
+  const token = cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
+  const isAdmin = (import.meta.env.DEV && !runtimeEnv?.ADMIN_SECRET && !process.env.ADMIN_SECRET)
+    || await validateSession(token, runtimeEnv?.SITE_CONFIG)
+
+  if (!isAdmin) {
+    return new Response(null, { status: 404, statusText: 'Not Found' })
+  }
+}
+---
+
+<ToolBase
+  toolTitle={tool.title}
+  seoTitle={tool.seoTitle}
+  metaDescription={tool.metaDescription}
+>
+  {slug === 'md-enhanced' && <md-enhanced-tool data-tool="md-enhanced"></md-enhanced-tool>}
+  {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
+</ToolBase>
+
+<script>
+  const slug = document.querySelector('[data-tool]')?.getAttribute('data-tool')
+  if (slug === 'md-enhanced') {
+    import('../../components/tools/md-enhanced/MdEnhanced.ts')
+  }
+  if (slug === 'audio-transcriber') {
+    import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
+  }
+</script>

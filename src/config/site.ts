@@ -1,4 +1,5 @@
 export const site = {
+  "url": "https://apanjwani0.com",
   "name": "Aman Panjwani",
   "handle": "apanjwani0",
   "theme": "dark",
@@ -19,11 +20,11 @@ export const site = {
       "children": [
         {
           "label": "tools",
-          "href": "/live-tools"
+          "href": "/tools"
         },
         {
-          "label": "writing",
-          "href": "/writing"
+          "label": "blogs",
+          "href": "/blogs"
         }
       ]
     }

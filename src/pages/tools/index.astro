@@ -6,15 +6,15 @@ import { tools } from '../../config/tools'
 import '../../styles/tools.css'
 ---
 
-<Base title="live tools">
-  <h1>live tools</h1>
+<Base title="tools">
+  <h1>tools</h1>
   <ul data-type="preview-list">
-    {tools.map(tool => (
+    {tools.filter(t => t.status !== 'disabled').map(tool => (
       <li data-status={tool.status}>
         {tool.status === 'wip'
           ? <span data-type="tool-name">{tool.title}</span>
           : <a
-              href={tool.status === 'external' ? tool.href! : `/live-tools/${tool.slug}`}
+              href={tool.status === 'external' ? tool.href! : `/tools/${tool.slug}`}
               {...(tool.status === 'external' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
             >{tool.title}</a>
         }
