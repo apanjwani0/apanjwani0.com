@@ -8,7 +8,7 @@ export interface Post {
 export const posts: Post[] = [
   {
     "title": "First Draft",
-    "href": "/writing/first-draft",
+    "href": "/blogs/first-draft",
     "date": "2026-03-29",
     "summary": "The day this portfolio went live"
   }

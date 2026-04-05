@@ -16,11 +16,11 @@ import { join } from 'node:path'
 import { site as staticSite } from '../config/site'
 import { projects as staticProjects } from '../config/projects'
 import { experience as staticExperience } from '../config/experience'
-import { posts as staticPosts } from '../config/writing'
+import { posts as staticPosts } from '../config/blogs'
 
 import type { Company } from '../config/experience'
 import type { Project } from '../config/projects'
-import type { Post } from '../config/writing'
+import type { Post } from '../config/blogs'
 
 type KVStore = { get(key: string, type: 'json'): Promise<unknown> }
 

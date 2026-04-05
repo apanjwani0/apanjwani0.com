@@ -17,7 +17,7 @@ portfolio-apanjwani0/
 │   │   ├── site.ts          # Global: name, bio, nav, social, feature flags
 │   │   ├── projects.ts      # Project entries (title, url, description, tags)
 │   │   ├── experience.ts    # Work history (role, company, period, bullets)
-│   │   ├── writing.ts       # Blog/writing entries
+│   │   ├── blogs.ts         # Blog/writing entries
 │   │   └── tools.ts         # Live tools index
 │   │
 │   ├── layouts/
@@ -41,10 +41,10 @@ portfolio-apanjwani0/
 │   ├── pages/
 │   │   ├── index.astro      # Home: bio + highlights
 │   │   ├── projects.astro   # All projects
-│   │   ├── writing.astro    # Blog list
+│   │   ├── blogs.astro      # Blog list
 │   │   ├── experience.astro # Work history / resume
 │   │   ├── admin.astro      # Password-protected content editor
-│   │   ├── live-tools/
+│   │   ├── tools/
 │   │   │   ├── index.astro  # Tools index
 │   │   │   └── [slug].astro # Individual tool page
 │   │   └── api/admin/       # Save / login / logout endpoints
@@ -168,7 +168,7 @@ Rules:
 
 | Feature | Where to add |
 |---|---|
-| CMS-backed blog | Replace `src/config/writing.ts` with a server-side fetch in `writing.astro` |
+| CMS-backed blog | Replace `src/config/blogs.ts` with a server-side fetch in `blogs.astro` |
 | Dark mode | Add a `data-theme` toggle; Oat supports it via CSS custom properties |
 | Analytics | Add script tag in `Base.astro` |
 | Contact form | New page `src/pages/contact.astro` with a server `POST` endpoint |
