@@ -122,6 +122,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
           <label>url<input name="url" value={p.url} /></label>
           <label>description<textarea name="description">{p.description}</textarea></label>
           <label>tags (comma-separated)<input name="tags" value={p.tags.join(', ')} /></label>
+          <label>keywords (optional seo)<input name="keywords" value={p.keywords ?? ''} /></label>
           <button type="button" class="remove-btn">remove</button>
         </div>
       ))}
@@ -174,6 +175,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
           <label>date<input name="date" type="date" value={p.date} /></label>
           <label>summary<textarea name="summary">{p.summary}</textarea></label>
           <label>content (markdown)<textarea name="content" rows="10">{p.content}</textarea></label>
+          <label>keywords (optional seo)<input name="keywords" value={p.keywords ?? ''} /></label>
           <button type="button" class="remove-btn">remove</button>
         </div>
       ))}
@@ -192,6 +194,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
           <label>title<input name="title" value={g.title} /></label>
           <label>slug<input name="slug" value={g.slug} /></label>
           <label>description<textarea name="description">{g.description}</textarea></label>
+          <label>keywords (optional seo)<input name="keywords" value={g.keywords ?? ''} /></label>
           <label class="toggle-label">
             enabled
             <input name="enabled" type="checkbox" checked={g.enabled} />
@@ -314,7 +317,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     letter-spacing: 0.02em;
   }
 
-  input, textarea, select {
+  input:not([type="checkbox"]), textarea, select {
     font: inherit;
     font-size: 0.95rem;
     border: 1px solid var(--color-border);
@@ -323,6 +326,18 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     color: var(--color-text);
     width: 100%;
     box-sizing: border-box;
+  }
+
+  .toggle-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  input[type="checkbox"] {
+    width: auto;
+    cursor: pointer;
   }
 
   textarea {
@@ -676,6 +691,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
       <label>url<input name="url" value="" /></label>
       <label>description<textarea name="description"></textarea></label>
       <label>tags (comma-separated)<input name="tags" value="" /></label>
+      <label>keywords (optional seo)<input name="keywords" value="" /></label>
       <button type="button" class="remove-btn">remove</button>
     </div>`
   }
@@ -749,6 +765,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
       description: (item.querySelector('[name="description"]') as HTMLTextAreaElement).value,
       tags: (item.querySelector('[name="tags"]') as HTMLInputElement).value
         .split(',').map(t => t.trim()).filter(Boolean),
+      keywords: (item.querySelector('[name="keywords"]') as HTMLInputElement).value.trim() || undefined,
     }))
     await save('projects', data)
   })
@@ -812,6 +829,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
       <label>date<input name="date" type="date" value="" /></label>
       <label>summary<textarea name="summary"></textarea></label>
       <label>content (markdown)<textarea name="content" rows="10"></textarea></label>
+      <label>keywords (optional seo)<input name="keywords" value="" /></label>
       <button type="button" class="remove-btn">remove</button>
     </div>`
   }
@@ -828,6 +846,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
       date: (item.querySelector('[name="date"]') as HTMLInputElement).value,
       summary: (item.querySelector('[name="summary"]') as HTMLTextAreaElement).value,
       content: (item.querySelector('[name="content"]') as HTMLTextAreaElement).value.trim() || undefined,
+      keywords: (item.querySelector('[name="keywords"]') as HTMLInputElement).value.trim() || undefined,
     }))
     await save('blogs', data)
   })
@@ -838,6 +857,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
       <label>title<input name="title" value="" /></label>
       <label>slug<input name="slug" value="" /></label>
       <label>description<textarea name="description"></textarea></label>
+      <label>keywords (optional seo)<input name="keywords" value="" /></label>
       <label class="toggle-label">
         enabled
         <input name="enabled" type="checkbox" />
@@ -856,6 +876,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
       title: (item.querySelector('[name="title"]') as HTMLInputElement).value,
       description: (item.querySelector('[name="description"]') as HTMLTextAreaElement).value,
       enabled: (item.querySelector('[name="enabled"]') as HTMLInputElement).checked,
+      keywords: (item.querySelector('[name="keywords"]') as HTMLInputElement).value.trim() || undefined,
     }))
     await save('games', data)
   })

@@ -6,6 +6,12 @@ import { getPosts } from '../lib/config'
 import { render } from '../lib/markdown'
 
 const posts = await getPosts(Astro.locals)
+
+const formatHref = (href: string) => {
+  if (href.startsWith('http') || href.startsWith('/')) return href
+  if (href.startsWith('blogs/')) return '/' + href
+  return '/blogs/' + href
+}
 ---
 
 <Base title="blogs">
@@ -15,7 +21,7 @@ const posts = await getPosts(Astro.locals)
       <li>
         <div data-type="writing-row">
           <span data-type="writing-date">{p.date}</span>
-          <a href={p.href}>{p.title}</a>
+          <a href={formatHref(p.href)}>{p.title}</a>
         </div>
         <div data-type="writing-summary" set:html={render(p.summary)} />
       </li>

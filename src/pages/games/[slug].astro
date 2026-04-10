@@ -1,0 +1,32 @@
+---
+export const prerender = false
+
+import Base from '../../layouts/Base.astro'
+import { getSite, getGames } from '../../lib/config'
+import { render } from '../../lib/markdown'
+import { webAppJsonLd } from '../../lib/jsonld'
+
+const { slug } = Astro.params
+const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
+const game = games.find(g => g.slug === slug && g.enabled)
+
+if (!game) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+const ldJson = webAppJsonLd({
+  name: game.title,
+  description: game.description,
+  url: `${site.url}/games/${game.slug}`,
+  authorName: site.name,
+  authorUrl: site.url,
+  keywords: game.keywords,
+})
+---
+
+<Base title={game.title} description={game.description} keywords={game.keywords}>
+  <script type="application/ld+json" set:html={ldJson} />
+  <h1>{game.title}</h1>
+  <h2 style="color: var(--color-muted); margin-bottom: 2rem;">Coming Soon</h2>
+  <div data-type="project-description" set:html={render(game.description)} />
+</Base>

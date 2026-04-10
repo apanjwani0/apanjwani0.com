@@ -16,6 +16,7 @@ function generateProjects(data) {
   url: string
   description: string
   tags: string[]
+  keywords?: string
 }
 
 export const projects: Project[] = ${JSON.stringify(data, null, 2)}\n`
@@ -44,6 +45,7 @@ function generateBlogs(data) {
   date: string
   summary: string
   content?: string
+  keywords?: string
 }
 
 export const posts: Post[] = ${JSON.stringify(data, null, 2)}\n`
@@ -55,6 +57,7 @@ function generateGames(data) {
   title: string
   description: string
   enabled: boolean
+  keywords?: string
 }
 
 export const games: Game[] = ${JSON.stringify(data, null, 2)}\n`

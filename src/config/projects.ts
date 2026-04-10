@@ -3,6 +3,7 @@ export interface Project {
   url: string
   description: string
   tags: string[]
+  keywords?: string
 }
 
 export const projects: Project[] = [
