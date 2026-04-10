@@ -1,0 +1,32 @@
+---
+export const prerender = false
+
+import { marked } from 'marked'
+import Base from '../../layouts/Base.astro'
+import { getPosts } from '../../lib/config'
+
+const { slug } = Astro.params
+const posts = await getPosts(Astro.locals)
+const post = posts.find(p => p.href === `/blogs/${slug}`)
+
+if (!post) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+const contentHtml = post.content ? marked(post.content) : null
+---
+
+<Base title={post.title} description={post.summary}>
+  <article>
+    <header>
+      <h1>{post.title}</h1>
+      <time datetime={post.date}>{post.date}</time>
+    </header>
+    <section data-type="post-summary">
+      <p><em>Summary:</em> {post.summary}</p>
+    </section>
+    {contentHtml && (
+      <section data-type="post-content" set:html={contentHtml} />
+    )}
+  </article>
+</Base>

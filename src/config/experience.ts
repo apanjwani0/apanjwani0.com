@@ -19,7 +19,7 @@ export const experience: Company[] = [
         "team": "Payments",
         "period": "Sept 2024 – Present",
         "bullets": [
-          "Designed and scaled payment infrastructure processing 100k+ daily transactions across Digital Wallets and Prepaid Cards (₹25L+ daily volume)",
+          "Designed and scaled payment infrastructure processing 100k+ daily transactions across Digital Wallets and Prepaid Cards (₹2.5M+ daily volume)",
           "Implemented idempotency mechanisms for zero duplicate transactions and strong financial data consistency",
           "Led Partner Bank API migration complying with RBI regulations for Prepaid Payment Instruments (PPI)",
           "Re-architected refund workflows and transaction reconciliation logic, reducing customer support incidents by 75%"

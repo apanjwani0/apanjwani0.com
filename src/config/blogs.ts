@@ -3,6 +3,7 @@ export interface Post {
   href: string
   date: string
   summary: string
+  content?: string
 }
 
 export const posts: Post[] = [

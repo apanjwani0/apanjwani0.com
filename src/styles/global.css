@@ -128,18 +128,72 @@ article[data-type="project"] {
   margin-top: 1.5rem;
 }
 
-article[data-type="project"] > a {
+div[data-type="project-header"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+div[data-type="project-header"] > a {
   font-weight: bold;
 }
 
-article[data-type="project"] > p {
+span[data-type="project-stats"] {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+span[data-type="project-stats"] a {
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+span[data-type="project-stats"] a:hover {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+div[data-type="project-description"] {
   color: var(--color-muted);
   margin: 0.5rem 0;
 }
 
-article[data-type="project"] > p:last-of-type {
+div[data-type="project-description"] p,
+div[data-type="writing-summary"] p {
+  margin: 0.5rem 0;
+}
+
+div[data-type="project-description"] ul,
+div[data-type="project-description"] ol,
+div[data-type="writing-summary"] ul,
+div[data-type="writing-summary"] ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+div[data-type="project-description"] li,
+div[data-type="writing-summary"] li {
+  margin-bottom: 0.25rem;
+}
+
+div[data-type="project-description"] > *:first-child,
+div[data-type="writing-summary"] > *:first-child {
+  margin-top: 0;
+}
+
+div[data-type="project-description"] > *:last-child,
+div[data-type="writing-summary"] > *:last-child {
+  margin-bottom: 0;
+}
+
+p[data-type="project-tags"] {
   font-size: 0.8rem;
-  margin: 0;
+  margin: 0.5rem 0 0 0;
+  color: var(--color-muted);
 }
 
 article[data-type="experience"] {
@@ -205,11 +259,12 @@ span[data-type="writing-date"] {
   flex-shrink: 0;
 }
 
-p[data-type="writing-summary"] {
+div[data-type="writing-summary"] {
   color: var(--color-muted);
   font-size: 0.85rem;
   margin: 0.5rem 0 0 0;
 }
+
 
 /* ── Dashboard ── */
 

@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     })
   }
 
-  const allowed = ['site', 'projects', 'experience', 'writing']
+  const allowed = ['site', 'projects', 'experience', 'blogs', 'games']
   if (!allowed.includes(type)) {
     return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
       status: 400,

@@ -8,7 +8,7 @@
  * Usage in any Astro page, layout, or component:
  *   const site = await getSite(Astro.locals)
  *
- * Keys: 'site' | 'projects' | 'experience' | 'writing'
+ * Keys: 'site' | 'projects' | 'experience' | 'blogs' | 'games'
  */
 
 import { readFile } from 'node:fs/promises'
@@ -17,10 +17,12 @@ import { site as staticSite } from '../config/site'
 import { projects as staticProjects } from '../config/projects'
 import { experience as staticExperience } from '../config/experience'
 import { posts as staticPosts } from '../config/blogs'
+import { games as staticGames } from '../config/games'
 
 import type { Company } from '../config/experience'
 import type { Project } from '../config/projects'
 import type { Post } from '../config/blogs'
+import type { Game } from '../config/games'
 
 type KVStore = { get(key: string, type: 'json'): Promise<unknown> }
 
@@ -75,5 +77,9 @@ export async function getExperience(locals: unknown): Promise<Company[]> {
 }
 
 export async function getPosts(locals: unknown): Promise<Post[]> {
-  return getConfig(locals, 'writing', staticPosts as Post[])
+  return getConfig(locals, 'blogs', staticPosts as Post[])
+}
+
+export async function getGames(locals: unknown): Promise<Game[]> {
+  return getConfig(locals, 'games', staticGames as Game[])
 }

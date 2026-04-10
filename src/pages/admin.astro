@@ -2,7 +2,7 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
-import { getSite, getProjects, getExperience, getPosts } from '../lib/config'
+import { getSite, getProjects, getExperience, getPosts, getGames } from '../lib/config'
 import { validateSession } from '../lib/session'
 import { tools } from '../config/tools'
 
@@ -13,29 +13,53 @@ const secret = runtimeEnv?.ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? import.me
 // In dev with no secret configured, allow through without auth
 const bypassAuth = import.meta.env.DEV && !secret
 
-// In production, refuse to serve the page at all if secret is not set
-if (!import.meta.env.DEV && !secret) {
-  return Astro.redirect('/404')
+// In production: 404 unless the request IP is in the whitelist
+// Set ADMIN_IP_WHITELIST as a comma-separated list of allowed IPs in your environment variables
+let blocked = false
+if (!import.meta.env.DEV) {
+  const whitelist = (runtimeEnv?.ADMIN_IP_WHITELIST ?? process.env.ADMIN_IP_WHITELIST ?? import.meta.env.ADMIN_IP_WHITELIST ?? '')
+    .split(',').map((ip: string) => ip.trim()).filter(Boolean)
+
+  const clientIp =
+    Astro.request.headers.get('cf-connecting-ip') ??
+    Astro.request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+    ''
+
+  if (!whitelist.includes(clientIp)) {
+    blocked = true
+    Astro.response.status = 404
+  }
 }
 
-const cookie = Astro.request.headers.get('cookie') ?? ''
-const token = cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
-const isAuth = bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG)
+// Skip all data loading for blocked requests
+const cookie = blocked ? '' : (Astro.request.headers.get('cookie') ?? '')
+const token = blocked ? undefined : cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
+const isAuth = !blocked && (bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG))
 
-const loginError = Astro.url.searchParams.get('error')
+const loginError = blocked ? null : Astro.url.searchParams.get('error')
 
 // Load from KV (or fallback to bundled TS) so admin always shows live values
-const [site, projects, experience, posts] = await Promise.all([
-  getSite(Astro.locals),
-  getProjects(Astro.locals),
-  getExperience(Astro.locals),
-  getPosts(Astro.locals),
-])
+const [site, projects, experience, posts, games] = blocked
+  ? [null, null, null, null, null]
+  : await Promise.all([
+      getSite(Astro.locals),
+      getProjects(Astro.locals),
+      getExperience(Astro.locals),
+      getPosts(Astro.locals),
+      getGames(Astro.locals),
+    ])
 
-const navJson = JSON.stringify(site.nav)
-const sectionsJson = JSON.stringify(site.sections)
+const navJson = blocked ? '{}' : JSON.stringify(site!.nav)
+const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
 ---
 
+{blocked ? (
+  <Base title="404">
+    <h1>404</h1>
+    <p>This page doesn't exist.</p>
+    <a href="/">Go home</a>
+  </Base>
+) : (
 <Base title="admin" noindex={true}>
   <h1>admin</h1>
 
@@ -59,7 +83,8 @@ const sectionsJson = JSON.stringify(site.sections)
     <button class="tab active" data-tab="site">site</button>
     <button class="tab" data-tab="projects">projects</button>
     <button class="tab" data-tab="experience">experience</button>
-    <button class="tab" data-tab="writing">blogs</button>
+    <button class="tab" data-tab="blogs">blogs</button>
+    <button class="tab" data-tab="games">games</button>
     <button class="tab" data-tab="tools">tools</button>
   </div>
 
@@ -92,6 +117,7 @@ const sectionsJson = JSON.stringify(site.sections)
     <div id="projects-list">
       {projects.map((p) => (
         <div class="item">
+          <div class="drag-handle" title="drag to reorder">⠿</div>
           <label>title<input name="title" value={p.title} /></label>
           <label>url<input name="url" value={p.url} /></label>
           <label>description<textarea name="description">{p.description}</textarea></label>
@@ -139,21 +165,43 @@ const sectionsJson = JSON.stringify(site.sections)
   </section>
 
   <!-- Writing -->
-  <section id="tab-writing" class="tab-panel hidden">
-    <div id="writing-list">
+  <section id="tab-blogs" class="tab-panel hidden">
+    <div id="blogs-list">
       {posts.map((p) => (
         <div class="item">
           <label>title<input name="title" value={p.title} /></label>
           <label>href<input name="href" value={p.href} /></label>
           <label>date<input name="date" type="date" value={p.date} /></label>
           <label>summary<textarea name="summary">{p.summary}</textarea></label>
+          <label>content (markdown)<textarea name="content" rows="10">{p.content}</textarea></label>
           <button type="button" class="remove-btn">remove</button>
         </div>
       ))}
     </div>
     <div class="form-actions">
       <button type="button" id="add-post" class="add-btn">+ add post</button>
-      <button type="button" id="save-writing">save writing</button>
+      <button type="button" id="save-blogs">save blogs</button>
+    </div>
+  </section>
+
+  <!-- Games -->
+  <section id="tab-games" class="tab-panel hidden">
+    <div id="games-list">
+      {games!.map((g) => (
+        <div class="item">
+          <label>title<input name="title" value={g.title} /></label>
+          <label>slug<input name="slug" value={g.slug} /></label>
+          <label>description<textarea name="description">{g.description}</textarea></label>
+          <label class="toggle-label">
+            enabled
+            <input name="enabled" type="checkbox" checked={g.enabled} />
+          </label>
+        </div>
+      ))}
+    </div>
+    <div class="form-actions">
+      <button type="button" id="add-game" class="add-btn">+ add game</button>
+      <button type="button" id="save-games">save games</button>
     </div>
   </section>
 
@@ -176,6 +224,7 @@ const sectionsJson = JSON.stringify(site.sections)
   </form>
   </>)}
 </Base>
+)}
 
 <style>
   .tabs {
@@ -230,6 +279,29 @@ const sectionsJson = JSON.stringify(site.sections)
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    transition: opacity 0.15s;
+  }
+
+  .item.dragging {
+    opacity: 0.3;
+  }
+
+  .item.drag-over {
+    border-color: var(--color-text);
+  }
+
+  .drag-handle {
+    cursor: grab;
+    color: var(--color-muted);
+    font-size: 1.1rem;
+    user-select: none;
+    align-self: flex-start;
+    line-height: 1;
+    padding: 0 0.1rem;
+  }
+
+  .drag-handle:hover {
+    color: var(--color-text);
   }
 
   label {
@@ -268,7 +340,8 @@ const sectionsJson = JSON.stringify(site.sections)
   button[type="submit"],
   #save-projects,
   #save-experience,
-  #save-writing {
+  #save-blogs,
+  #save-games {
     background: var(--color-text);
     color: var(--color-bg);
     border: none;
@@ -598,6 +671,7 @@ const sectionsJson = JSON.stringify(site.sections)
   // --- Projects ---
   function projectItemHTML() {
     return `<div class="item">
+      <div class="drag-handle" title="drag to reorder">⠿</div>
       <label>title<input name="title" value="" /></label>
       <label>url<input name="url" value="" /></label>
       <label>description<textarea name="description"></textarea></label>
@@ -605,6 +679,63 @@ const sectionsJson = JSON.stringify(site.sections)
       <button type="button" class="remove-btn">remove</button>
     </div>`
   }
+
+  // Drag-to-reorder — reorders DOM nodes; save-projects reads DOM order
+  // draggable is set dynamically on mousedown of the handle only,
+  // so text selection inside the card works normally.
+  const projectsList = document.getElementById('projects-list')!
+  let dragSrc: HTMLElement | null = null
+
+  projectsList.addEventListener('mousedown', e => {
+    const item = (e.target as HTMLElement).closest('.item') as HTMLElement | null
+    if (!item) return
+    item.draggable = !!(e.target as HTMLElement).closest('.drag-handle')
+  })
+
+  projectsList.addEventListener('dragstart', e => {
+    const item = (e.target as HTMLElement).closest('.item') as HTMLElement | null
+    if (!item || !item.draggable) return
+    dragSrc = item
+    // Defer class add so the drag ghost captures the un-faded style
+    requestAnimationFrame(() => item.classList.add('dragging'))
+    e.dataTransfer!.effectAllowed = 'move'
+  })
+
+  projectsList.addEventListener('dragend', () => {
+    dragSrc?.classList.remove('dragging')
+    if (dragSrc) dragSrc.draggable = false
+    projectsList.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'))
+    dragSrc = null
+  })
+
+  projectsList.addEventListener('dragover', e => {
+    e.preventDefault()
+    e.dataTransfer!.dropEffect = 'move'
+    const item = (e.target as HTMLElement).closest('.item') as HTMLElement | null
+    if (!item || item === dragSrc) return
+    projectsList.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'))
+    item.classList.add('drag-over')
+  })
+
+  projectsList.addEventListener('dragleave', e => {
+    const related = e.relatedTarget as HTMLElement | null
+    if (related?.closest('.item') !== (e.target as HTMLElement).closest('.item')) {
+      ;(e.target as HTMLElement).closest('.item')?.classList.remove('drag-over')
+    }
+  })
+
+  projectsList.addEventListener('drop', e => {
+    e.preventDefault()
+    const item = (e.target as HTMLElement).closest('.item') as HTMLElement | null
+    if (!item || !dragSrc || item === dragSrc) return
+    item.classList.remove('drag-over')
+    const mid = item.getBoundingClientRect().top + item.getBoundingClientRect().height / 2
+    if (e.clientY < mid) {
+      projectsList.insertBefore(dragSrc, item)
+    } else {
+      item.after(dragSrc)
+    }
+  })
 
   document.getElementById('add-project')!.addEventListener('click', () => {
     document.getElementById('projects-list')!.insertAdjacentHTML('beforeend', projectItemHTML())
@@ -674,30 +805,61 @@ const sectionsJson = JSON.stringify(site.sections)
   })
 
   // --- Writing ---
-  function writingItemHTML() {
+  function blogsItemHTML() {
     return `<div class="item">
       <label>title<input name="title" value="" /></label>
       <label>href<input name="href" value="" /></label>
       <label>date<input name="date" type="date" value="" /></label>
       <label>summary<textarea name="summary"></textarea></label>
+      <label>content (markdown)<textarea name="content" rows="10"></textarea></label>
       <button type="button" class="remove-btn">remove</button>
     </div>`
   }
 
   document.getElementById('add-post')!.addEventListener('click', () => {
-    document.getElementById('writing-list')!.insertAdjacentHTML('beforeend', writingItemHTML())
+    document.getElementById('blogs-list')!.insertAdjacentHTML('beforeend', blogsItemHTML())
   })
 
-  document.getElementById('save-writing')!.addEventListener('click', async () => {
-    const items = document.getElementById('writing-list')!.querySelectorAll('.item')
+  document.getElementById('save-blogs')!.addEventListener('click', async () => {
+    const items = document.getElementById('blogs-list')!.querySelectorAll('.item')
     const data = Array.from(items).map(item => ({
       title: (item.querySelector('[name="title"]') as HTMLInputElement).value,
       href: (item.querySelector('[name="href"]') as HTMLInputElement).value,
       date: (item.querySelector('[name="date"]') as HTMLInputElement).value,
       summary: (item.querySelector('[name="summary"]') as HTMLTextAreaElement).value,
+      content: (item.querySelector('[name="content"]') as HTMLTextAreaElement).value.trim() || undefined,
     }))
-    await save('writing', data)
+    await save('blogs', data)
+  })
+
+  // --- Games ---
+  function gamesItemHTML() {
+    return `<div class="item">
+      <label>title<input name="title" value="" /></label>
+      <label>slug<input name="slug" value="" /></label>
+      <label>description<textarea name="description"></textarea></label>
+      <label class="toggle-label">
+        enabled
+        <input name="enabled" type="checkbox" />
+      </label>
+    </div>`
+  }
+
+  document.getElementById('add-game')!.addEventListener('click', () => {
+    document.getElementById('games-list')!.insertAdjacentHTML('beforeend', gamesItemHTML())
+  })
+
+  document.getElementById('save-games')!.addEventListener('click', async () => {
+    const items = document.getElementById('games-list')!.querySelectorAll('.item')
+    const data = Array.from(items).map(item => ({
+      slug: (item.querySelector('[name="slug"]') as HTMLInputElement).value,
+      title: (item.querySelector('[name="title"]') as HTMLInputElement).value,
+      description: (item.querySelector('[name="description"]') as HTMLTextAreaElement).value,
+      enabled: (item.querySelector('[name="enabled"]') as HTMLInputElement).checked,
+    }))
+    await save('games', data)
   })
 
   } // end admin guard
 </script>
+

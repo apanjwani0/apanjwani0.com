@@ -1,5 +1,6 @@
 ---
 import type { Company } from '../config/experience'
+import { renderInline } from '../lib/markdown'
 
 interface Props {
   company: Company
@@ -19,7 +20,7 @@ const { company } = Astro.props
         <span data-type="period">{role.period}</span>
       </div>
       <ul>
-        {role.bullets.map(b => <li>{b}</li>)}
+        {role.bullets.map(b => <li set:html={renderInline(b)} />)}
       </ul>
     </div>
   ))}
