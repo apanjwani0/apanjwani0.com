@@ -7,14 +7,16 @@ interface Props {
   canonicalURL: string
   siteName: string
   noindex?: boolean
+  keywords?: string
 }
 
-const { pageTitle, description, canonicalURL, siteName, noindex = false } = Astro.props
+const { pageTitle, description, canonicalURL, siteName, noindex = false, keywords } = Astro.props
 ---
 
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content={description} />
+{keywords && <meta name="keywords" content={keywords} />}
 {noindex && <meta name="robots" content="noindex, nofollow" />}
 <link rel="canonical" href={canonicalURL} />
 <title>{pageTitle}</title>

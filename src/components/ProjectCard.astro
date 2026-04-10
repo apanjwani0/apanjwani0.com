@@ -1,17 +1,32 @@
 ---
 import type { Project } from '../config/projects'
+import type { GitHubStats } from '../lib/github'
+import { renderInline, render } from '../lib/markdown'
 
 interface Props {
   project: Project
+  stats?: GitHubStats
 }
 
-const { project } = Astro.props
+const { project, stats } = Astro.props
 ---
 
 <article data-type="project">
-  <a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a>
-  <p>{project.description}</p>
+  <div data-type="project-header">
+    <a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a>
+    {stats && (
+      <span data-type="project-stats">
+        <a href={`${project.url}/stargazers`} target="_blank" rel="noopener noreferrer" title="Stargazers">
+          ★ {stats.stars.toLocaleString()}
+        </a>
+        <a href={`${project.url}/forks`} target="_blank" rel="noopener noreferrer" title="Forks">
+          ⑂ {stats.forks.toLocaleString()}
+        </a>
+      </span>
+    )}
+  </div>
+  <div data-type="project-description" set:html={render(project.description)} />
   {project.tags.length > 0 && (
-    <p>{project.tags.join(', ')}</p>
+    <p data-type="project-tags">{project.tags.join(', ')}</p>
   )}
 </article>

@@ -4,11 +4,13 @@ export const prerender = false
 import Base from '../layouts/Base.astro'
 import ProjectCard from '../components/ProjectCard.astro'
 import { getProjects } from '../lib/config'
+import { getProjectStats } from '../lib/github'
 
 const projects = await getProjects(Astro.locals)
+const stats    = await getProjectStats(projects)
 ---
 
 <Base title="projects">
   <h1>projects</h1>
-  {projects.map(p => <ProjectCard project={p} />)}
+  {projects.map(p => <ProjectCard project={p} stats={stats[p.url]} />)}
 </Base>

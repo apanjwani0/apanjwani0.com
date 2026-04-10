@@ -16,6 +16,7 @@ function generateProjects(data) {
   url: string
   description: string
   tags: string[]
+  keywords?: string
 }
 
 export const projects: Project[] = ${JSON.stringify(data, null, 2)}\n`
@@ -37,15 +38,29 @@ export interface Company {
 export const experience: Company[] = ${JSON.stringify(data, null, 2)}\n`
 }
 
-function generateWriting(data) {
+function generateBlogs(data) {
   return `export interface Post {
   title: string
   href: string
   date: string
   summary: string
+  content?: string
+  keywords?: string
 }
 
 export const posts: Post[] = ${JSON.stringify(data, null, 2)}\n`
+}
+
+function generateGames(data) {
+  return `export interface Game {
+  slug: string
+  title: string
+  description: string
+  enabled: boolean
+  keywords?: string
+}
+
+export const games: Game[] = ${JSON.stringify(data, null, 2)}\n`
 }
 
 /** @type {import('vite').Plugin} */
@@ -80,9 +95,13 @@ const adminSavePlugin = {
               content = generateExperience(data)
               filename = 'experience.ts'
               break
-            case 'writing':
-              content = generateWriting(data)
-              filename = 'writing.ts'
+            case 'blogs':
+              content = generateBlogs(data)
+              filename = 'blogs.ts'
+              break
+            case 'games':
+              content = generateGames(data)
+              filename = 'games.ts'
               break
             default:
               res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -95,7 +114,7 @@ const adminSavePlugin = {
           res.end(JSON.stringify({ ok: true }))
         } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ error: e.message }))
+          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }))
         }
       })
     })

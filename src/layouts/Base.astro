@@ -8,10 +8,11 @@ interface Props {
   title?: string
   description?: string
   noindex?: boolean
+  keywords?: string
 }
 
 const site = await getSite(Astro.locals)
-const { title, description = site.tagline, noindex = false } = Astro.props
+const { title, description = site.tagline, noindex = false, keywords } = Astro.props
 const pageTitle = title ? `${title} · ${site.name}` : site.name
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
 ---
@@ -25,6 +26,7 @@ const canonicalURL = new URL(Astro.url.pathname, site.url).href
       canonicalURL={canonicalURL}
       siteName={site.name}
       noindex={noindex}
+      keywords={keywords}
     />
   </head>
   <body>

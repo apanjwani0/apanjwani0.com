@@ -1,0 +1,30 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import { getGames } from '../lib/config'
+import { render } from '../lib/markdown'
+
+const games = (await getGames(Astro.locals)).filter(g => g.enabled)
+---
+
+<Base title="games">
+  <h1>games</h1>
+  {games.length === 0 ? (
+    <p>Coming soon.</p>
+  ) : (
+    <div>
+      {games.map(g => (
+        <article data-type="project">
+          <div data-type="project-header">
+            <a href={`/games/${g.slug}`}>{g.title}</a>
+            <span data-type="project-stats">
+              <span style="font-size: 0.75rem; border: 1px solid var(--color-border); padding: 0.15rem 0.45rem; border-radius: 0.2rem;">coming soon</span>
+            </span>
+          </div>
+          <div data-type="project-description" set:html={render(g.description)} />
+        </article>
+      ))}
+    </div>
+  )}
+</Base>

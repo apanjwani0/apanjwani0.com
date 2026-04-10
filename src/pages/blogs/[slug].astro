@@ -1,0 +1,48 @@
+---
+export const prerender = false
+
+import { marked } from 'marked'
+import Base from '../../layouts/Base.astro'
+import { getSite, getPosts } from '../../lib/config'
+import { blogPostingJsonLd } from '../../lib/jsonld'
+
+const { slug } = Astro.params
+const [site, posts] = await Promise.all([getSite(Astro.locals), getPosts(Astro.locals)])
+
+// Robust matching: normalize both the href from config and the URL slug
+// so "/blogs/foo", "blogs/foo", and "foo" all match the slug "foo".
+const normalize = (path: string) => path.replace(/^\/?(blogs\/)?/, '').replace(/\/$/, '')
+const post = posts.find(p => normalize(p.href) === normalize(slug!))
+
+if (!post) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+const contentHtml = post.content ? marked(post.content) : null
+const canonicalUrl = `${site.url}/blogs/${normalize(post.href)}`
+const ldJson = blogPostingJsonLd({
+  headline: post.title,
+  description: post.summary,
+  url: canonicalUrl,
+  datePublished: post.date,
+  authorName: site.name,
+  authorUrl: site.url,
+  keywords: post.keywords,
+})
+---
+
+<Base title={post.title} description={post.summary} keywords={post.keywords}>
+  <script type="application/ld+json" set:html={ldJson} />
+  <article>
+    <header>
+      <h1>{post.title}</h1>
+      <time datetime={post.date}>{post.date}</time>
+    </header>
+    <section data-type="post-summary">
+      <p><em>Summary:</em> {post.summary}</p>
+    </section>
+    {contentHtml && (
+      <section data-type="post-content" set:html={contentHtml} />
+    )}
+  </article>
+</Base>

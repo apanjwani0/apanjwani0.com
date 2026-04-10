@@ -5,12 +5,24 @@ import Base from '../layouts/Base.astro'
 import SocialLinks from '../components/SocialLinks.astro'
 import { Image } from 'astro:assets'
 import { getSite } from '../lib/config'
+import { personJsonLd } from '../lib/jsonld'
 
 const site = await getSite(Astro.locals)
 const firstName = site.name.split(' ')[0]
+
+const sameAs = [site.social.github, site.social.linkedin].filter(Boolean)
+const ldJson = personJsonLd({
+  name: site.name,
+  url: site.url,
+  jobTitle: site.tagline,
+  description: site.bio,
+  sameAs,
+  image: `${site.url}/avatar.webp`,
+})
 ---
 
-<Base>
+<Base keywords={`${site.name}, ${site.handle}, portfolio, software engineer`}>
+  <script type="application/ld+json" set:html={ldJson} />
   <section data-type="hero">
     <div data-type="hero-layout">
       <Image src={site.avatar} width={120} height={120} alt={site.name} data-type="avatar" loading="eager" />
@@ -33,9 +45,9 @@ const firstName = site.name.split(' ')[0]
             <a href="/experience">experience</a>
           </li>
         )}
-        {site.sections.writing && (
+        {site.sections.blogs && (
           <li>
-            <a href="/writing">writing</a>
+            <a href="/blogs">blogs</a>
           </li>
         )}
       </ul>
