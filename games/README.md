@@ -18,4 +18,4 @@ Mini-games integrated into the portfolio. Each game is developed independently a
 
 ## Current games
 
-- **flash-cricket** — 2D cricket game (C++/Raylib → WASM). Source in `/flash-cricket/`. Status: prototype.
+- **flash-cricket** — 2D arcade cricket game (C++/Raylib → WASM): pick 1/3/5 overs, swing to score 4s/6s, keep your wickets. Source + `build.sh` + headless test harness in `/flash-cricket/`. Status: playable build, not yet embedded on the site (page still shows "Coming Soon").

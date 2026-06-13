@@ -9,10 +9,11 @@ interface Props {
   description?: string
   noindex?: boolean
   keywords?: string
+  bare?: boolean
 }
 
 const site = await getSite(Astro.locals)
-const { title, description = site.tagline, noindex = false, keywords } = Astro.props
+const { title, description = site.tagline, noindex = false, keywords, bare = false } = Astro.props
 const pageTitle = title ? `${title} · ${site.name}` : site.name
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
 ---
@@ -29,9 +30,9 @@ const canonicalURL = new URL(Astro.url.pathname, site.url).href
       keywords={keywords}
     />
   </head>
-  <body>
-    <Nav site={site} />
-    <main>
+  <body data-bare={bare ? '' : undefined}>
+    {!bare && <Nav site={site} />}
+    <main data-bare={bare ? '' : undefined}>
       <slot />
     </main>
     <script src="/oat.min.js" defer></script>

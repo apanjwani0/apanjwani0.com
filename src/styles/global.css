@@ -16,13 +16,13 @@ header {
 }
 
 h1 {
-  font-size: 1.75rem;
+  font-size: var(--text-title);
   letter-spacing: normal;
   margin-top: 0;
 }
 
 h2 {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
   letter-spacing: normal;
 }
 
@@ -38,74 +38,30 @@ a {
 
 a:hover {
   text-decoration: underline;
+  text-decoration-color: var(--color-accent);
 }
 
 main {
-  padding: 2.5rem 0;
+  padding: var(--space-section) 0;
 }
 
 section {
-  margin-top: 2.5rem;
+  margin-top: var(--space-section);
 }
 
 section[data-type="hero"] {
   margin-top: 0;
 }
 
-div[data-type="hero-layout"] {
-  display: flex;
-  align-items: center;
-  gap: clamp(1.5rem, 6vw, 6rem);
-  padding-left: 20px;
-}
-
-div[data-type="hero-text"] h1 {
-  margin-top: 0;
-  margin-bottom: 0.2rem;
-}
-
 p[data-type="tagline"] {
   margin: 0 0 0.5rem 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   color: var(--color-muted);
-}
-
-div[data-type="hero-text"] p:not([data-type]) {
-  margin: 0;
-}
-
-p[data-type="bio"] {
-  color: var(--color-muted);
-  line-height: 1.7;
-  margin-top: 1.25rem;
-}
-
-@media (max-width: 480px) {
-  div[data-type="hero-layout"] {
-    flex-direction: row;
-    align-items: center;
-    gap: 1rem;
-    padding-left: 0;
-  }
-}
-
-@media (max-width: 560px) {
-  div[data-type="hero-layout"] {
-    gap: 1.25rem;
-  }
-
-  img[data-type="avatar"] {
-    width: 90px;
-  }
-
-  div[data-type="hero-text"] h1 {
-    font-size: 1.35rem;
-  }
 }
 
 section h2 {
   text-transform: lowercase;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin-bottom: 1rem;
 }
@@ -113,13 +69,6 @@ section h2 {
 section ul[data-type="preview-list"] {
   list-style: none;
   padding: 0;
-}
-
-img[data-type="avatar"] {
-  width: 160px;
-  height: auto;
-  max-width: 100%;
-  flex-shrink: 0;
 }
 
 article[data-type="project"] {
@@ -142,7 +91,7 @@ div[data-type="project-header"] > a {
 span[data-type="project-stats"] {
   display: flex;
   gap: 0.75rem;
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   color: var(--color-muted);
   flex-shrink: 0;
 }
@@ -191,18 +140,18 @@ div[data-type="writing-summary"] > *:last-child {
 }
 
 p[data-type="project-tags"] {
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   margin: 0.5rem 0 0 0;
   color: var(--color-muted);
 }
 
 article[data-type="experience"] {
-  margin-bottom: 2.5rem;
+  margin-bottom: var(--space-section);
 }
 
 article[data-type="experience"] h2 {
   margin: 0 0 1rem 0;
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   text-transform: lowercase;
 }
@@ -220,7 +169,7 @@ div[data-type="role-header"] {
   flex-wrap: wrap;
   gap: 0.25rem;
   margin-bottom: 0.4rem;
-  font-size: 0.95rem;
+  font-size: var(--text-sm);
 }
 
 span[data-type="role-team"] {
@@ -229,12 +178,12 @@ span[data-type="role-team"] {
 
 div[data-type="period"] {
   color: var(--color-muted);
-  font-size: 0.95rem;
+  font-size: var(--text-sm);
 }
 
 article[data-type="experience"] > ul {
   color: var(--color-muted);
-  font-size: 0.95rem;
+  font-size: var(--text-sm);
 }
 
 ul[data-type="writing-list"] {
@@ -254,55 +203,15 @@ div[data-type="writing-row"] {
 
 span[data-type="writing-date"] {
   color: var(--color-muted);
-  font-family: monospace;
-  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
   flex-shrink: 0;
 }
 
 div[data-type="writing-summary"] {
   color: var(--color-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   margin: 0.5rem 0 0 0;
-}
-
-
-/* ── Dashboard ── */
-
-section[data-type="dashboard"] {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-div[data-type="dash-section"] h2 {
-  text-transform: lowercase;
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-ul[data-type="dash-list"] {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-ul[data-type="dash-list"] li {
-  padding: 0.35rem 0;
-}
-
-ul[data-type="dash-list"] a {
-  font-weight: 600;
-}
-
-ul[data-type="dash-list"] span {
-  color: var(--color-muted);
-  font-size: 0.9rem;
-}
-
-ul[data-type="dash-list"] span::before {
-  content: ' — ';
 }
 
 @media (max-width: 560px) {

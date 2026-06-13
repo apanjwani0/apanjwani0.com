@@ -13,6 +13,15 @@ export interface Tool {
 
 export const tools: Tool[] = [
   {
+    slug: 'pattern-forge',
+    title: 'Pattern Forge',
+    description: 'Seeded generative art — make and download unique wallpapers.',
+    status: 'live',
+    seoTitle: 'Pattern Forge — Free Generative Art & Wallpaper Maker',
+    metaDescription: 'Create one-of-a-kind generative wallpapers in your browser. Pick a style and palette, tweak the density, and export a high-res PNG. Every result is seeded, reproducible, and shareable — no login, no uploads.',
+    intro: 'A browser-based generative art studio. Choose from flow fields, harmonographs, mosaics, waves, or constellations, pair them with a colour palette, and dial in the density. Each artwork is driven by a seed, so the same settings always produce the same image — copy the link to share an exact piece, or export it as a 1920×1080 PNG. Everything runs locally with no server uploads.',
+  },
+  {
     slug: 'md-enhanced',
     title: 'MD Enhanced',
     description: 'Markdown editor with live preview and multi-format export.',
