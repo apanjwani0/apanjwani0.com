@@ -43,3 +43,4 @@ SECURITY_REVIEW.md
 graphify-out/cost.json        # local only
 graphify-out/graph.json       # local only
 graphify-out/metadata.json    # local only
+graphify-out/cache/           # local only
