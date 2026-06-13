@@ -38,3 +38,9 @@ data/*.json
 # project docs not intended for public repo
 CLAUDE.md
 SECURITY_REVIEW.md
+
+#graphify output
+graphify-out/cost.json        # local only
+graphify-out/graph.json       # local only
+graphify-out/metadata.json    # local only
+graphify-out/cache/           # local only
