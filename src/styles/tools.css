@@ -1,0 +1,17 @@
+/* Tools directory listing */
+li[data-status="wip"] span[data-type="tool-name"] {
+  color: var(--color-muted);
+}
+
+span[data-type="tool-description"] {
+  color: var(--color-muted);
+}
+
+span[data-type="tool-wip"] {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+p[data-type="tool-description"] {
+  color: var(--color-muted);
+}

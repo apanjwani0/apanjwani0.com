@@ -1,0 +1,230 @@
+@import './shared.css';
+
+body {
+  font-family: var(--font-serif);
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-page-x);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* portfolio body has horizontal padding, so header doesn't need it twice */
+header {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+h1 {
+  font-size: var(--text-title);
+  letter-spacing: normal;
+  margin-top: 0;
+}
+
+h2 {
+  font-size: var(--text-lg);
+  letter-spacing: normal;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+}
+
+main {
+  padding: var(--space-section) 0;
+}
+
+section {
+  margin-top: var(--space-section);
+}
+
+section[data-type="hero"] {
+  margin-top: 0;
+}
+
+p[data-type="tagline"] {
+  margin: 0 0 0.5rem 0;
+  font-size: var(--text-base);
+  color: var(--color-muted);
+}
+
+section h2 {
+  text-transform: lowercase;
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+section ul[data-type="preview-list"] {
+  list-style: none;
+  padding: 0;
+}
+
+article[data-type="project"] {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+div[data-type="project-header"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+div[data-type="project-header"] > a {
+  font-weight: bold;
+}
+
+span[data-type="project-stats"] {
+  display: flex;
+  gap: 0.75rem;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+span[data-type="project-stats"] a {
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+span[data-type="project-stats"] a:hover {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+div[data-type="project-description"] {
+  color: var(--color-muted);
+  margin: 0.5rem 0;
+}
+
+div[data-type="project-description"] p,
+div[data-type="writing-summary"] p {
+  margin: 0.5rem 0;
+}
+
+div[data-type="project-description"] ul,
+div[data-type="project-description"] ol,
+div[data-type="writing-summary"] ul,
+div[data-type="writing-summary"] ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+div[data-type="project-description"] li,
+div[data-type="writing-summary"] li {
+  margin-bottom: 0.25rem;
+}
+
+div[data-type="project-description"] > *:first-child,
+div[data-type="writing-summary"] > *:first-child {
+  margin-top: 0;
+}
+
+div[data-type="project-description"] > *:last-child,
+div[data-type="writing-summary"] > *:last-child {
+  margin-bottom: 0;
+}
+
+p[data-type="project-tags"] {
+  font-size: var(--text-xs);
+  margin: 0.5rem 0 0 0;
+  color: var(--color-muted);
+}
+
+article[data-type="experience"] {
+  margin-bottom: var(--space-section);
+}
+
+article[data-type="experience"] h2 {
+  margin: 0 0 1rem 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+div[data-type="role"] {
+  padding-left: 1rem;
+  border-left: 1px solid var(--color-border);
+  margin-bottom: 1.5rem;
+}
+
+div[data-type="role-header"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
+  font-size: var(--text-sm);
+}
+
+span[data-type="role-team"] {
+  color: var(--color-muted);
+}
+
+div[data-type="period"] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+article[data-type="experience"] > ul {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+ul[data-type="writing-list"] {
+  list-style: none;
+  padding: 0;
+}
+
+ul[data-type="writing-list"] li {
+  margin-bottom: 1.5rem;
+}
+
+div[data-type="writing-row"] {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+span[data-type="writing-date"] {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+div[data-type="writing-summary"] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  margin: 0.5rem 0 0 0;
+}
+
+@media (max-width: 560px) {
+  main {
+    padding: 1.5rem 0;
+  }
+
+  section {
+    margin-top: 1.75rem;
+  }
+
+  div[data-type="writing-row"] {
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+}

@@ -1,0 +1,33 @@
+---
+export const prerender = false
+
+import { getGames, getPosts } from '../lib/config'
+
+const { slug } = Astro.params
+
+if (!slug) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+const normalize = (path: string) => path.replace(/^\/?(blogs\/|games\/)?/, '').replace(/\/$/, '')
+const normalizedSlug = normalize(slug)
+
+// Check if slug matches any Games
+const games = await getGames(Astro.locals)
+const gameMatch = games.find(g => normalize(g.slug) === normalizedSlug && g.enabled)
+
+if (gameMatch) {
+  return Astro.redirect(`/games/${gameMatch.slug}`, 301)
+}
+
+// Check if slug matches any Blogs
+const posts = await getPosts(Astro.locals)
+const postMatch = posts.find(p => normalize(p.href) === normalizedSlug)
+
+if (postMatch) {
+  return Astro.redirect(postMatch.href.startsWith('/') ? postMatch.href : `/blogs/${normalize(postMatch.href)}`, 301)
+}
+
+// Ensure pages like 404 fall through properly
+return new Response(null, { status: 404, statusText: 'Not Found' })
+---

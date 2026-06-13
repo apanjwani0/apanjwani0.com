@@ -1,0 +1,22 @@
+---
+import { getSite } from '../lib/config'
+
+interface Props {
+  site?: Awaited<ReturnType<typeof getSite>>
+}
+
+const { site: siteProp } = Astro.props
+const site = siteProp ?? await getSite(Astro.locals)
+const links = Object.entries(site.social).filter(([, url]) => url)
+---
+
+{links.length > 0 && (
+  <p>
+    {links.map(([platform, url], i) => (
+      <>
+        <a href={url as string} target="_blank" rel="noopener noreferrer">{platform}</a>
+        {i < links.length - 1 && ' · '}
+      </>
+    ))}
+  </p>
+)}

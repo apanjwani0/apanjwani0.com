@@ -1,0 +1,142 @@
+div[data-type="tool-page"] {
+  padding: 2rem 1.5rem;
+  box-sizing: border-box;
+}
+
+div[data-type="tool-header"] {
+  margin-bottom: 1.5rem;
+}
+
+div[data-type="tool-header"] h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.35rem;
+}
+
+div[data-type="tool-header"] p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+div[data-type="audio-transcriber"] {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* ── Controls ── */
+
+div[data-type="at-controls"] {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+select[data-type="at-language"] {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  font-size: 0.85rem;
+}
+
+span[data-type="at-status"] {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+span[data-type="at-duration"] {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+/* ── Mic button ── */
+
+div[data-type="at-mic-area"] {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem 0;
+}
+
+button[data-type="at-mic"] {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+button[data-type="at-mic"]:hover {
+  border-color: var(--color-text);
+}
+
+button[data-type="at-mic"][data-recording="true"] {
+  border-color: #c0392b;
+  color: #c0392b;
+  animation: mic-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.3); }
+  50% { box-shadow: 0 0 0 12px rgba(192, 57, 43, 0); }
+}
+
+/* ── Transcript output ── */
+
+div[data-type="at-output"] {
+  min-height: 200px;
+  border: 1px solid var(--color-border);
+  padding: 0.75rem 1rem;
+  line-height: 1.7;
+}
+
+div[data-type="at-transcript"]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+span[data-type="at-interim"] {
+  color: var(--color-muted);
+}
+
+/* ── Actions ── */
+
+div[data-type="at-actions"] {
+  display: flex;
+  gap: 0.25rem;
+}
+
+div[data-type="at-actions"] button {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-serif);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+div[data-type="at-actions"] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+/* ── Unsupported message ── */
+
+div[data-type="at-unsupported"] p {
+  color: var(--color-muted);
+  text-align: center;
+  padding: 2rem 0;
+}
