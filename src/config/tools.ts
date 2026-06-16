@@ -13,6 +13,15 @@ export interface Tool {
 
 export const tools: Tool[] = [
   {
+    slug: 'type-trial',
+    title: 'Type Trial',
+    description: 'A typing speed test — chase your best WPM, right in the browser.',
+    status: 'live',
+    seoTitle: 'Type Trial — Free Online Typing Speed Test (WPM & Accuracy)',
+    metaDescription: 'Test your typing speed in seconds. Pick quotes, code, or numbers, then track your words-per-minute and accuracy live as you type. Your personal best is saved locally — no login, no tracking, no uploads.',
+    intro: 'A clean, distraction-free typing speed test. Choose a category — handwritten quotes, real code snippets, or numbers and symbols — and start typing; the timer begins on your first keystroke. Watch your words-per-minute and accuracy update live, see each character highlighted as you go, and get a ranked result card when you finish. Your personal best is remembered in your browser and never uploaded.',
+  },
+  {
     slug: 'pattern-forge',
     title: 'Pattern Forge',
     description: 'Seeded generative art — make and download unique wallpapers.',

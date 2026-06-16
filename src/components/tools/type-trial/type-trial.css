@@ -1,0 +1,242 @@
+div[data-type="tool-page"][data-tool="type-trial"] {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* ── Category selector ───────────────────────────────────── */
+div[data-tool="type-trial"] [data-group="categories"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1.25rem;
+}
+
+div[data-tool="type-trial"] [data-group="categories"] button {
+  padding: 0.32rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+div[data-tool="type-trial"] [data-group="categories"] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+div[data-tool="type-trial"] [data-group="categories"] button[data-active] {
+  color: var(--color-bg);
+  background: var(--color-text);
+  border-color: var(--color-text);
+}
+
+/* ── Typing stage ────────────────────────────────────────── */
+div[data-type="tt-stage"] {
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  padding: clamp(1rem, 4vw, 1.75rem);
+  cursor: text;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+div[data-type="tt-stage"][data-focused] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+div[data-type="tt-stage"][data-done] {
+  cursor: default;
+}
+
+div[data-type="tt-text"] {
+  font-family: var(--font-mono);
+  font-size: clamp(1rem, 3.2vw, 1.3rem);
+  line-height: 1.9;
+  letter-spacing: 0.01em;
+  color: var(--color-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: none;
+}
+
+/* Untyped characters inherit the muted colour above. */
+div[data-type="tt-text"] span.ok {
+  color: var(--color-text);
+}
+
+div[data-type="tt-text"] span.bad {
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 16%, transparent);
+  border-radius: 2px;
+}
+
+/* Blinking caret drawn as a left border on the current character. */
+div[data-type="tt-text"] span.caret {
+  border-left: 2px solid var(--color-accent);
+  margin-left: -2px;
+  animation: tt-blink 1s step-end infinite;
+}
+
+@keyframes tt-blink {
+  0%, 100% { border-left-color: var(--color-accent); }
+  50% { border-left-color: transparent; }
+}
+
+/* The real input sits transparent over the stage to capture typing/focus. */
+input[data-type="tt-input"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px; /* prevents iOS zoom-on-focus */
+  opacity: 0;
+  outline: none;
+  cursor: text;
+}
+
+div[data-type="tt-overlay"] {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-bg) 78%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+div[data-type="tt-overlay"] span {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+}
+
+/* ── Live stats ──────────────────────────────────────────── */
+div[data-type="tt-stats"] {
+  display: flex;
+  gap: clamp(1.5rem, 6vw, 3rem);
+  margin: 1.25rem 0 0.5rem;
+}
+
+div[data-type="tt-stats"] [data-stat] {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+div[data-type="tt-stats"] span[data-type="tt-val"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+div[data-type="tt-stats"] span[data-type="tt-lbl"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--color-muted);
+  margin-top: 0.2rem;
+}
+
+/* ── Result card ─────────────────────────────────────────── */
+div[data-type="tt-result"] {
+  margin: 1rem 0 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-success);
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+
+p[data-type="tt-rank"] {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  color: var(--color-success);
+}
+
+p[data-type="tt-summary"] {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--color-text);
+}
+
+p[data-type="tt-summary"] strong {
+  font-family: var(--font-mono);
+}
+
+/* ── Actions ─────────────────────────────────────────────── */
+div[data-tool="type-trial"] [data-group="actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.25rem 0 0;
+}
+
+div[data-tool="type-trial"] [data-group="actions"] button {
+  padding: 0.32rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+div[data-tool="type-trial"] [data-group="actions"] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+p[data-type="tt-best"] {
+  margin: 1rem 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+p[data-type="tt-best"] [data-action="reset-best"] {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+p[data-type="tt-best"] [data-action="reset-best"]:hover {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  div[data-type="tt-text"] span.caret {
+    animation: none;
+  }
+}
