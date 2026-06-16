@@ -1,16 +1,16 @@
-# Graph Report - portfolio-apanjwani0  (2026-06-13)
+# Graph Report - portfolio-apanjwani0  (2026-06-17)
 
 ## Corpus Check
-- 54 files · ~29,341 words
+- 57 files · ~22,084 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 385 nodes · 565 edges · 26 communities (21 shown, 5 thin omitted)
+- 457 nodes · 657 edges · 27 communities (23 shown, 4 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `61b95267`
+- Built from commit: `4ed5bf78`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -45,25 +45,25 @@
 1. `../../components/tools/pattern-forge/PatternForge.ts` - 23 edges
 2. `$()` - 21 edges
 3. `../../layouts/Base.astro` - 17 edges
-4. `getSite()` - 14 edges
-5. `adminSavePlugin` - 11 edges
-6. `MdEnhancedTool` - 11 edges
-7. `PatternForgeTool` - 11 edges
-8. `getPosts()` - 10 edges
-9. `getGames()` - 10 edges
-10. `MdEnhancedTool (custom element)` - 10 edges
+4. `TypeTrialTool` - 14 edges
+5. `getSite()` - 14 edges
+6. `../../components/tools/type-trial/TypeTrial.ts` - 12 edges
+7. `adminSavePlugin` - 11 edges
+8. `MdEnhancedTool` - 11 edges
+9. `PatternForgeTool` - 11 edges
+10. `getPosts()` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `tools/index.astro tools listing` --references--> `../../layouts/Base.astro`  [EXTRACTED]
   src/pages/tools/index.astro → src/layouts/Base.astro
+- `tools/[slug].astro dynamic tool page` --references--> `../../layouts/ToolBase.astro`  [EXTRACTED]
+  src/pages/tools/[slug].astro → src/layouts/ToolBase.astro
 - `MdEnhancedTool (custom element)` --conceptually_related_to--> `starterTemplate`  [INFERRED]
   src/components/tools/md-enhanced/MdEnhanced.ts → src/components/tools/md-enhanced/templates.ts
 - `MdEnhancedTool (custom element)` --conceptually_related_to--> `toggleExtension (marked >+ syntax)`  [INFERRED]
   src/components/tools/md-enhanced/MdEnhanced.ts → src/components/tools/md-enhanced/toggle-extension.ts
 - `ToolBase.astro (tools layout)` --semantically_similar_to--> `Base.astro (default layout)`  [INFERRED] [semantically similar]
   src/layouts/ToolBase.astro → src/layouts/Base.astro
-- `blogs/[slug].astro post detail page` --references--> `../../layouts/Base.astro`  [EXTRACTED]
-  src/pages/blogs/[slug].astro → src/layouts/Base.astro
 
 ## Import Cycles
 - None detected.
@@ -75,27 +75,31 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (26 total, 5 thin omitted)
+## Communities (27 total, 4 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
-Cohesion: 0.07
-Nodes (39): adminSavePlugin, ExperienceItem Props, Post, Post (interface), posts, Company, Company (interface), experience (+31 more)
+Cohesion: 0.05
+Nodes (50): adminSavePlugin, ClientRouter (view transitions), Head Props (SEO meta), Post, Post (interface), posts, Company (interface), experience (+42 more)
 
 ### Community 1 - "Dynamic [slug] Routes + SEO ld+json"
-Cohesion: 0.07
-Nodes (35): ldJson, post, ../components/Avatar.astro, ../components/ExperienceItem.astro, ../components/Head.astro, ../components/Nav.astro, ../components/ProjectCard.astro, ProjectCard Props (+27 more)
+Cohesion: 0.10
+Nodes (22): ldJson, post, ../components/Avatar.astro, ../components/Head.astro, ../components/Nav.astro, game, ldJson, ../../layouts/Base.astro (+14 more)
 
 ### Community 2 - "Config KV-with-Fallback Chain"
-Cohesion: 0.18
-Nodes (14): ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout), ToolBase.astro (tools layout), getGames(), getPosts(), getSite(), blogs/[slug].astro post detail page (+6 more)
+Cohesion: 0.05
+Nodes (39): 1. Authentication & Session Management, 2. Input Validation & Injection, 3. Infrastructure & Deployment, 4. Middleware, Config Access & Data Flow, 5. Dependencies & Supply Chain, Consolidated Remediation Roadmap, CRITICAL — C1.1: Timing Attack on Password Comparison, CRITICAL — C1.2: Auth Bypass if ADMIN_SECRET Is Unset in Production (+31 more)
 
 ### Community 3 - "Admin UI + Save API + Tools Config"
 Cohesion: 0.07
-Nodes (32): POST(), POST /api/admin/login, POST(), POST /api/admin/logout, admin save allowed types whitelist, POST(), POST /api/admin/save, __admin_session HttpOnly cookie (+24 more)
+Nodes (34): POST(), POST /api/admin/login, POST(), POST /api/admin/logout, admin save allowed types whitelist, POST(), POST /api/admin/save, __admin_session HttpOnly cookie (+26 more)
 
 ### Community 4 - "Card Components + GitHub Stats"
-Cohesion: 0.27
-Nodes (7): buildResult(), CACHE_PATH, getProjectStats(), memCache, readCache(), StatsCache, writeCache()
+Cohesion: 0.08
+Nodes (24): ../components/ExperienceItem.astro, ExperienceItem Props, ../components/ProjectCard.astro, ProjectCard Props, Company, buildResult(), CACHE_PATH, getProjectStats() (+16 more)
+
+### Community 5 - "MdEnhanced Tool (markdown render)"
+Cohesion: 0.19
+Nodes (5): HelpEntry, HelpSection, helpSections, ../../components/tools/md-enhanced/MdEnhanced.ts, MdEnhancedTool
 
 ### Community 6 - "MdEnhanced Export Pipeline (PDF/Image)"
 Cohesion: 0.13
@@ -106,8 +110,8 @@ Cohesion: 0.09
 Nodes (21): ../../components/tools/pattern-forge/PatternForge.ts, decodeState(), encodeState(), GENERATORS, makeNoise(), mulberry32(), paint(), Palette (+13 more)
 
 ### Community 8 - "astro.config.mjs Plugin Generators"
-Cohesion: 0.09
-Nodes (11): Admin Config Management, `/antigravity <task>`, `/browser-debug [url] [what to check]`, Configuration, Design System, `/frontent-design`, Key Conventions, Skills & Commands (+3 more)
+Cohesion: 0.07
+Nodes (15): Admin Config Management, `/antigravity <task>`, `/browser-debug [url] [what to check]`, Build / Test / Run, Code graph (graphify), Configuration, Design System, `/frontent-design` (+7 more)
 
 ### Community 9 - "AudioTranscriber Tool Logic"
 Cohesion: 0.27
@@ -130,12 +134,12 @@ Cohesion: 0.67
 Nodes (3): Admin path no-store/noindex gate, CSP, onRequest
 
 ### Community 18 - "Community 18"
-Cohesion: 0.11
-Nodes (18): devDependencies, @astrojs/check, @types/dompurify, @types/node, typescript, engines, node, name (+10 more)
+Cohesion: 0.07
+Nodes (26): dependencies, astro, @astrojs/cloudflare, @astrojs/node, dompurify, html2canvas, wrangler, devDependencies (+18 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.13
-Nodes (13): HelpEntry, HelpSection, helpSections, ../../components/tools/md-enhanced/MdEnhanced.ts, toggleExtension, dependencies, astro, @astrojs/cloudflare (+5 more)
+Cohesion: 0.15
+Nodes (12): ../../components/tools/type-trial/TypeTrial.ts, Best, CATEGORIES, Category, escapeHtml(), loadBest(), pick(), rankFor() (+4 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.21
@@ -158,24 +162,24 @@ Cohesion: 0.50
 Nodes (3): exclude, extends, include
 
 ## Knowledge Gaps
-- **129 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+124 more)
+- **172 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+167 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **5 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `../../components/tools/pattern-forge/PatternForge.ts` connect `Admin API Route Handlers (login/logout/save)` to `Admin UI + Save API + Tools Config`?**
-  _High betweenness centrality (0.118) - this node is a cross-community bridge._
-- **Why does `../../components/tools/md-enhanced/MdEnhanced.ts` connect `Community 19` to `Admin UI + Save API + Tools Config`, `MdEnhanced Tool (markdown render)`?**
-  _High betweenness centrality (0.092) - this node is a cross-community bridge._
+  _High betweenness centrality (0.093) - this node is a cross-community bridge._
+- **Why does `../../components/tools/md-enhanced/MdEnhanced.ts` connect `MdEnhanced Tool (markdown render)` to `Admin UI + Save API + Tools Config`, `Card Components + GitHub Stats`?**
+  _High betweenness centrality (0.081) - this node is a cross-community bridge._
+- **Why does `marked` connect `Card Components + GitHub Stats` to `Community 18`?**
+  _High betweenness centrality (0.077) - this node is a cross-community bridge._
 - **What connects `name`, `type`, `version` to the rest of the system?**
-  _129 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _172 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Content Types + AdminSavePlugin Dispatch` be split into smaller, more focused modules?**
-  _Cohesion score 0.06763285024154589 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05499735589635114 - nodes in this community are weakly interconnected._
 - **Should `Dynamic [slug] Routes + SEO ld+json` be split into smaller, more focused modules?**
-  _Cohesion score 0.06745098039215686 - nodes in this community are weakly interconnected._
-- **Should `Admin UI + Save API + Tools Config` be split into smaller, more focused modules?**
-  _Cohesion score 0.07317073170731707 - nodes in this community are weakly interconnected._
-- **Should `MdEnhanced Export Pipeline (PDF/Image)` be split into smaller, more focused modules?**
-  _Cohesion score 0.1323529411764706 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0967741935483871 - nodes in this community are weakly interconnected._
+- **Should `Config KV-with-Fallback Chain` be split into smaller, more focused modules?**
+  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
