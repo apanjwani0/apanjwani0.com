@@ -6,8 +6,15 @@ import { tools } from '../../config/tools'
 import '../../styles/tools.css'
 ---
 
-<Base title="tools">
+<Base
+  title="tools"
+  description="Free, browser-based tools built by Aman Panjwani — no sign-up, no tracking, just open and use."
+>
   <h1>tools</h1>
+  <p data-type="page-intro">
+    Small, fast, single-purpose tools I built to scratch my own itches. No sign-ups,
+    no tracking — they run right in your browser.
+  </p>
   <ul data-type="preview-list">
     {tools.filter(t => t.status !== 'disabled').map(tool => (
       <li data-status={tool.status}>

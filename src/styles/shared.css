@@ -6,6 +6,56 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Accessible keyboard focus ring — visible only for keyboard/AT users (not on
+   mouse click), so it never disrupts the hover-driven visual language above.
+   Uses the navy accent token so it re-themes with everything else. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* Skip-to-content link: hidden off-screen until a keyboard user tabs to it,
+   then slides into the top-left as the first focusable element on the page. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 100;
+  padding: 0.5rem 0.85rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+/* main is a programmatic focus target for the skip link — don't draw a ring
+   around the whole content column when it receives focus. */
+main:focus {
+  outline: none;
+}
+
+/* Respect users who ask the OS to minimise motion: neutralise long transitions,
+   animations and smooth-scroll site-wide (canvas hero handles its own opt-out). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Lightweight header — borderless, serif wordmark + mono nav, matches the home aesthetic.
    Shared by Base.astro and ToolBase.astro; horizontal padding lives here. */
 header {

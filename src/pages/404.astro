@@ -2,8 +2,65 @@
 import Base from '../layouts/Base.astro'
 ---
 
-<Base title="404">
-  <h1>404</h1>
-  <p>This page doesn't exist.</p>
-  <a href="/">Go home</a>
+<Base title="404" description="That page wandered off — here are a few good places to land instead.">
+  <section data-type="notfound" aria-labelledby="nf-title">
+    <p data-type="nf-code">404</p>
+    <h1 id="nf-title">This page drifted off into space.</h1>
+    <p data-type="nf-lead">
+      The link you followed is broken or the page has moved. No harm done —
+      here are a few places worth landing instead.
+    </p>
+    <nav data-type="nf-links" aria-label="Suggested pages">
+      <a href="/">home</a>
+      <a href="/projects">projects</a>
+      <a href="/tools">tools</a>
+      <a href="/games">games</a>
+    </nav>
+  </section>
 </Base>
+
+<style>
+  section[data-type="notfound"] {
+    padding: clamp(2rem, 8vw, 4rem) 0;
+    max-width: 34rem;
+  }
+
+  p[data-type="nf-code"] {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    letter-spacing: 0.25em;
+    color: var(--color-muted);
+    margin: 0 0 0.75rem;
+  }
+
+  section[data-type="notfound"] h1 {
+    font-size: var(--text-title);
+    line-height: 1.2;
+    margin: 0 0 0.9rem;
+  }
+
+  p[data-type="nf-lead"] {
+    color: var(--color-muted);
+    line-height: 1.6;
+    margin: 0 0 1.75rem;
+  }
+
+  nav[data-type="nf-links"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(1rem, 4vw, 1.75rem);
+  }
+
+  nav[data-type="nf-links"] a {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: 0.04em;
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-underline-offset: 0.35em;
+  }
+
+  nav[data-type="nf-links"] a:hover {
+    text-decoration-thickness: 2px;
+  }
+</style>
