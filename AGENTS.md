@@ -57,3 +57,20 @@ Every content section displayed on the portfolio must be manageable via the `/ad
 5. Add a tab + form + JS save handler in `src/pages/admin.astro`
 
 Current config keys: `site`, `projects`, `experience`, `blogs`, `games`
+
+## Code graph (graphify)
+
+`graphify-out/` holds a generated code-graph used **only as an AI navigation aid** — the
+`.claude/` PreToolUse hooks nudge the agent to run `graphify query "<question>"` before grepping
+or reading source. It is not part of the build, runtime, or CI; the site builds and deploys fine
+without it.
+
+- **Regenerate** after meaningful code changes with `npm run graph` (alias for `graphify update .`).
+  It's incremental and local (zero API cost). You do **not** need to run it after every edit —
+  only when you want the graph to reflect new structure so the agent stays oriented. If it goes
+  stale, compare `git rev-parse HEAD` to the commit listed in `GRAPH_REPORT.md`.
+- **Requires** the `graphify` CLI installed locally (e.g. via `uv`); it is not an npm dependency.
+- **Git policy:** only `graphify-out/GRAPH_REPORT.md` (the human-readable summary) is committed.
+  Everything else — `graph.json`, `graph.html`, `cache/`, `manifest.json`, the `.graphify_*` state
+  files, and dated run snapshots — is local-only and `.gitignore`d. Keep `.gitignore` comments on
+  their own lines: git does not support end-of-line comments.

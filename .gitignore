@@ -39,8 +39,10 @@ data/*.json
 CLAUDE.md
 SECURITY_REVIEW.md
 
-#graphify output
-graphify-out/cost.json        # local only
-graphify-out/graph.json       # local only
-graphify-out/metadata.json    # local only
-graphify-out/cache/           # local only
+# graphify output — local-only generated code-graph (an AI navigation aid wired
+# via .claude/ hooks; regenerate locally with `graphify update .`, zero API cost).
+# NOTE: git does NOT support inline (end-of-line) comments — keep comments on
+# their own lines, or the pattern silently matches nothing.
+# Keep only the human-readable report in git; everything else stays local.
+graphify-out/*
+!graphify-out/GRAPH_REPORT.md
