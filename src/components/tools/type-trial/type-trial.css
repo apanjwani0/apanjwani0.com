@@ -210,6 +210,14 @@ div[data-tool="type-trial"] [data-group="actions"] button:hover {
   border-color: var(--color-muted);
 }
 
+div[data-tool="type-trial"] [data-group="actions"] [data-type="tt-hint"] {
+  align-self: center;
+  margin-left: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
 p[data-type="tt-best"] {
   margin: 1rem 0 0;
   font-family: var(--font-mono);

@@ -105,6 +105,12 @@ class TypeTrialTool extends HTMLElement {
   private finishedAt: number | null = null
   private finished = false
   private tick = 0
+  // Cumulative keystroke tally for accuracy: every character the user enters is
+  // counted, and any that was wrong when typed is an error — so accuracy
+  // reflects mistakes made even after they're backspaced and corrected.
+  private typedCount = 0
+  private errorCount = 0
+  private prevLen = 0
 
   private input!: HTMLInputElement
   private textEl!: HTMLElement
@@ -150,9 +156,10 @@ class TypeTrialTool extends HTMLElement {
         <div data-type="tt-result" role="status" aria-live="polite" hidden></div>
 
         <div data-group="actions">
-          <button data-action="restart" type="button">Restart</button>
+          <button data-action="restart" type="button" aria-keyshortcuts="Escape">Restart</button>
           <button data-action="new" type="button">New text</button>
           <button data-action="share" type="button" hidden>Copy result</button>
+          <span data-type="tt-hint" aria-hidden="true">Esc to restart</span>
         </div>
 
         <p data-type="tt-best">
@@ -221,14 +228,12 @@ class TypeTrialTool extends HTMLElement {
   }
 
   private onKeydown = (e: KeyboardEvent) => {
+    // Esc restarts the current passage. Tab is intentionally NOT intercepted so
+    // it keeps its normal focus-navigation behaviour (accessibility); the
+    // visible "New text" button is the way to load a fresh passage.
     if (e.key === 'Escape') {
       e.preventDefault()
       this.restart(false)
-    }
-    // Tab → fresh text, without leaving the input.
-    if (e.key === 'Tab') {
-      e.preventDefault()
-      this.restart(true)
     }
   }
 
@@ -267,6 +272,7 @@ class TypeTrialTool extends HTMLElement {
     // elapsed time is ~0 and the WPM is nonsensical. Discard it and reset.
     if (starting && this.target.length > 1 && this.input.value.length === this.target.length) {
       this.input.value = ''
+      this.prevLen = 0
       this.renderText()
       this.renderStats({ wpm: 0, acc: 100, sec: 0, correct: 0, typedLen: 0 })
       return
@@ -275,8 +281,20 @@ class TypeTrialTool extends HTMLElement {
       this.startedAt = performance.now()
       this.startTick()
     }
+    // Tally any newly-entered characters for accuracy (additions only; a
+    // backspace lowers the length and isn't counted, but the earlier error was
+    // — so corrected mistakes still cost accuracy, as in MonkeyType).
+    const len = this.input.value.length
+    for (let i = this.prevLen; i < len; i++) {
+      this.typedCount++
+      if (this.input.value[i] !== this.target[i]) this.errorCount++
+    }
+    this.prevLen = len
     this.renderText()
-    if (this.input.value.length === this.target.length) {
+    // Finish only when the passage has been entered in full AND correctly. A
+    // wrong or final keystroke no longer ends the run, so the user can backspace
+    // and fix any character (including the last one) before completing.
+    if (this.input.value === this.target) {
       this.finish()
     } else {
       this.renderStats(this.computeStats())
@@ -297,7 +315,11 @@ class TypeTrialTool extends HTMLElement {
     // looks broken live and would let a near-instant completion post a bogus
     // score. Real runs of these texts always take well over a second.
     const wpm = elapsedMs >= 1000 ? Math.round((correct / 5) / minutes) : 0
-    const acc = typed.length ? Math.round((correct / typed.length) * 100) : 100
+    // Accuracy = correct keystrokes / total keystrokes entered, so it reflects
+    // every mistake made over the run, not just the final on-screen state.
+    const acc = this.typedCount
+      ? Math.round(((this.typedCount - this.errorCount) / this.typedCount) * 100)
+      : 100
     return { wpm, acc, sec: elapsedMs / 1000, correct, typedLen: typed.length }
   }
 
@@ -374,6 +396,9 @@ class TypeTrialTool extends HTMLElement {
     this.finishedAt = null
     this.finished = false
     this.lastResult = null
+    this.typedCount = 0
+    this.errorCount = 0
+    this.prevLen = 0
     this.stopTick()
 
     const stage = this.querySelector('[data-type="tt-stage"]') as HTMLElement
