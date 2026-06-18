@@ -111,11 +111,16 @@ div[data-type="tt-overlay"] {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
+  /* Sit the hint at the bottom of the stage and let clicks fall through, so it
+     never covers the text the user needs to read and type. No dimming scrim —
+     the text stays fully legible; the unfocused border + this pill signal the
+     paused state. */
+  align-items: flex-end;
   justify-content: center;
+  padding: 0.6rem;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--color-bg) 78%, transparent);
-  backdrop-filter: blur(1px);
+  background: none;
+  pointer-events: none;
 }
 
 div[data-type="tt-overlay"] span {
@@ -126,6 +131,7 @@ div[data-type="tt-overlay"] span {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--color-surface);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-bg) 70%, transparent);
 }
 
 /* ── Live stats ──────────────────────────────────────────── */
