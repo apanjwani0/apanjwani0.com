@@ -116,8 +116,8 @@ div[data-type="tt-overlay"] {
      the text stays fully legible; the unfocused border + this pill signal the
      paused state. */
   align-items: flex-end;
-  justify-content: center;
-  padding: 0.6rem;
+  justify-content: flex-end;
+  padding: 0.5rem;
   border-radius: 8px;
   background: none;
   pointer-events: none;

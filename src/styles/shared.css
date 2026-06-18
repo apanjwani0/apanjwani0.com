@@ -6,6 +6,13 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Make the `hidden` attribute reliable. Some elements set an explicit display
+   (e.g. flex) whose specificity beats the UA `[hidden] { display: none }`, so
+   toggling `.hidden` in JS leaves them visible. This guarantees hidden wins. */
+[hidden] {
+  display: none !important;
+}
+
 /* Accessible keyboard focus ring — visible only for keyboard/AT users (not on
    mouse click), so it never disrupts the hover-driven visual language above.
    Uses the navy accent token so it re-themes with everything else. */
