@@ -76,7 +76,7 @@ section h2 {
   margin-bottom: 1rem;
 }
 
-section ul[data-type="preview-list"] {
+ul[data-type="preview-list"] {
   list-style: none;
   padding: 0;
 }
