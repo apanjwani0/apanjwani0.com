@@ -332,7 +332,7 @@ class TypeTrialTool extends HTMLElement {
       const classes: string[] = []
       if (i < typed.length) classes.push(typed[i] === t[i] ? 'ok' : 'bad')
       if (i === typed.length && !this.finished) classes.push('caret')
-      const cls = classes.length ? ` class="${classes.join(' ')}"` : ''
+      const cls = classes.length ? ` data-s="${classes.join(' ')}"` : ''
       html += `<span${cls}>${display}</span>`
     }
     this.textEl.innerHTML = html

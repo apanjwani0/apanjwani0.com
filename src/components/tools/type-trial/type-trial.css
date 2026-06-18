@@ -67,18 +67,18 @@ div[data-type="tt-text"] {
 }
 
 /* Untyped characters inherit the muted colour above. */
-div[data-type="tt-text"] span.ok {
+div[data-type="tt-text"] span[data-s="ok"] {
   color: var(--color-text);
 }
 
-div[data-type="tt-text"] span.bad {
+div[data-type="tt-text"] span[data-s="bad"] {
   color: var(--color-error);
   background: color-mix(in srgb, var(--color-error) 16%, transparent);
   border-radius: 2px;
 }
 
 /* Blinking caret drawn as a left border on the current character. */
-div[data-type="tt-text"] span.caret {
+div[data-type="tt-text"] span[data-s="caret"] {
   border-left: 2px solid var(--color-accent);
   margin-left: -2px;
   animation: tt-blink 1s step-end infinite;
@@ -244,7 +244,7 @@ p[data-type="tt-best"] [data-action="reset-best"]:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  div[data-type="tt-text"] span.caret {
+  div[data-type="tt-text"] span[data-s="caret"] {
     animation: none;
   }
 }

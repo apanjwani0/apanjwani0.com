@@ -17,7 +17,7 @@ html {
 
 /* Skip-to-content link: hidden off-screen until a keyboard user tabs to it,
    then slides into the top-left as the first focusable element on the page. */
-.skip-link {
+a[data-type="skip-link"] {
   position: absolute;
   left: 0.5rem;
   top: -3rem;
@@ -33,7 +33,7 @@ html {
   transition: top 0.15s ease;
 }
 
-.skip-link:focus {
+a[data-type="skip-link"]:focus {
   top: 0.5rem;
 }
 

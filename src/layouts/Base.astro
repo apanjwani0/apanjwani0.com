@@ -34,7 +34,7 @@ const ogImage = new URL(site.avatar, site.url).href
     />
   </head>
   <body data-bare={bare ? '' : undefined}>
-    <a href="#main-content" class="skip-link">Skip to content</a>
+    <a href="#main-content" data-type="skip-link">Skip to content</a>
     {!bare && <Nav site={site} />}
     <main id="main-content" tabindex="-1" data-bare={bare ? '' : undefined}>
       <slot />
