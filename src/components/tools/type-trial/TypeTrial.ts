@@ -104,6 +104,11 @@ class TypeTrialTool extends HTMLElement {
   private startedAt: number | null = null
   private finishedAt: number | null = null
   private finished = false
+  // Elapsed-time accounting that pauses while the field is unfocused mid-run:
+  // elapsedBeforePauseMs banks completed running segments; runningSince marks
+  // the start of the current running segment (null while paused or stopped).
+  private elapsedBeforePauseMs = 0
+  private runningSince: number | null = null
   private tick = 0
   // Cumulative keystroke tally for accuracy: every character the user enters is
   // counted, and any that was wrong when typed is an error — so accuracy
@@ -241,13 +246,25 @@ class TypeTrialTool extends HTMLElement {
     const overlay = this.querySelector('[data-type="tt-overlay"]') as HTMLElement
     overlay.hidden = true
     ;(this.querySelector('[data-type="tt-stage"]') as HTMLElement).dataset.focused = ''
+    // Resume the clock if a run is in progress but was paused when focus was lost.
+    if (this.startedAt !== null && !this.finished && this.runningSince === null) {
+      this.runningSince = performance.now()
+      this.startTick()
+    }
   }
 
   private onBlur = () => {
     const stage = this.querySelector('[data-type="tt-stage"]') as HTMLElement
     delete stage.dataset.focused
-    // Only nag the user to refocus mid-run, not before they start or once done.
+    // Only act mid-run, not before the run starts or once it's done.
     if (this.startedAt !== null && !this.finished) {
+      // Pause the clock: bank the running segment so time spent unfocused (while
+      // the "click to focus" overlay is up and the user can't type) isn't counted.
+      if (this.runningSince !== null) {
+        this.elapsedBeforePauseMs += performance.now() - this.runningSince
+        this.runningSince = null
+      }
+      this.stopTick()
       ;(this.querySelector('[data-type="tt-overlay"]') as HTMLElement).hidden = false
     }
   }
@@ -279,6 +296,8 @@ class TypeTrialTool extends HTMLElement {
     }
     if (starting) {
       this.startedAt = performance.now()
+      this.elapsedBeforePauseMs = 0
+      this.runningSince = this.startedAt
       this.startTick()
     }
     // Tally any newly-entered characters for accuracy (additions only; a
@@ -301,14 +320,18 @@ class TypeTrialTool extends HTMLElement {
     }
   }
 
+  /** Total run time, excluding any spans the field was unfocused mid-run. */
+  private elapsed(now = performance.now()): number {
+    return this.elapsedBeforePauseMs + (this.runningSince !== null ? now - this.runningSince : 0)
+  }
+
   private computeStats(): Stats {
     const typed = this.input.value
     let correct = 0
     for (let i = 0; i < typed.length; i++) {
       if (typed[i] === this.target[i]) correct++
     }
-    const now = this.finishedAt ?? performance.now()
-    const elapsedMs = this.startedAt ? now - this.startedAt : 0
+    const elapsedMs = this.elapsed(this.finishedAt ?? performance.now())
     const minutes = elapsedMs / 60000
     // Hold WPM at 0 for the first second. With a tiny denominator the figure
     // spikes into the hundreds/thousands on the opening keystrokes — which both
@@ -356,6 +379,11 @@ class TypeTrialTool extends HTMLElement {
   private finish() {
     this.finished = true
     this.finishedAt = performance.now()
+    // Bank the final running segment so elapsed time is exact up to completion.
+    if (this.runningSince !== null) {
+      this.elapsedBeforePauseMs += this.finishedAt - this.runningSince
+      this.runningSince = null
+    }
     this.stopTick()
     this.renderText()
 
@@ -395,6 +423,8 @@ class TypeTrialTool extends HTMLElement {
     this.startedAt = null
     this.finishedAt = null
     this.finished = false
+    this.elapsedBeforePauseMs = 0
+    this.runningSince = null
     this.lastResult = null
     this.typedCount = 0
     this.errorCount = 0
