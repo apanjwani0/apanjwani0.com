@@ -8,14 +8,18 @@ interface Props {
   siteName: string
   noindex?: boolean
   keywords?: string
+  image?: string
 }
 
-const { pageTitle, description, canonicalURL, siteName, noindex = false, keywords } = Astro.props
+const { pageTitle, description, canonicalURL, siteName, noindex = false, keywords, image } = Astro.props
 ---
 
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#111111" />
 <meta name="description" content={description} />
+<meta name="author" content={siteName} />
 {keywords && <meta name="keywords" content={keywords} />}
 {noindex && <meta name="robots" content="noindex, nofollow" />}
 <link rel="canonical" href={canonicalURL} />
@@ -26,10 +30,14 @@ const { pageTitle, description, canonicalURL, siteName, noindex = false, keyword
 <meta property="og:url" content={canonicalURL} />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content={siteName} />
+<meta property="og:locale" content="en_US" />
+{image && <meta property="og:image" content={image} />}
+{image && <meta property="og:image:alt" content={siteName} />}
 
 <meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content={pageTitle} />
 <meta name="twitter:description" content={description} />
+{image && <meta name="twitter:image" content={image} />}
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

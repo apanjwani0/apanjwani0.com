@@ -16,6 +16,8 @@ const site = await getSite(Astro.locals)
 const { title, description = site.tagline, noindex = false, keywords, bare = false } = Astro.props
 const pageTitle = title ? `${title} · ${site.name}` : site.name
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
+// Absolute URL for the social-share preview image (link cards on Slack, X, etc.)
+const ogImage = new URL(site.avatar, site.url).href
 ---
 
 <!doctype html>
@@ -28,11 +30,13 @@ const canonicalURL = new URL(Astro.url.pathname, site.url).href
       siteName={site.name}
       noindex={noindex}
       keywords={keywords}
+      image={ogImage}
     />
   </head>
   <body data-bare={bare ? '' : undefined}>
+    <a href="#main-content" data-type="skip-link">Skip to content</a>
     {!bare && <Nav site={site} />}
-    <main data-bare={bare ? '' : undefined}>
+    <main id="main-content" tabindex="-1" data-bare={bare ? '' : undefined}>
       <slot />
     </main>
     <script src="/oat.min.js" defer></script>

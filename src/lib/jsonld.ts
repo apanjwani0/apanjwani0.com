@@ -59,6 +59,8 @@ export interface WebApplicationSchema {
   authorName: string
   authorUrl: string
   keywords?: string
+  /** schema.org applicationCategory — e.g. 'Game' (default) or 'DeveloperApplication'. */
+  applicationCategory?: string
 }
 
 export function webAppJsonLd(a: WebApplicationSchema): string {
@@ -68,7 +70,14 @@ export function webAppJsonLd(a: WebApplicationSchema): string {
     name: a.name,
     description: a.description,
     url: a.url,
-    applicationCategory: 'Game',
+    applicationCategory: a.applicationCategory ?? 'Game',
+    operatingSystem: 'Any',
+    // Free, browser-based — the price-0 offer is what marks it "free" for rich results.
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD',
+    },
     author: {
       '@type': 'Person',
       name: a.authorName,

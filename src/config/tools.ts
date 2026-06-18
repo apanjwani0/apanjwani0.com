@@ -13,6 +13,24 @@ export interface Tool {
 
 export const tools: Tool[] = [
   {
+    slug: 'json-tidy',
+    title: 'JSON Tidy',
+    description: 'Format, validate, and minify JSON — with pinpoint error locations.',
+    status: 'live',
+    seoTitle: 'JSON Tidy — Free Online JSON Formatter, Validator & Minifier',
+    metaDescription: 'Paste JSON to pretty-print, validate, or minify it instantly in your browser. Parse errors are pinpointed by line and column with a marked excerpt. Choose 2/4-space or tab indent, optionally sort keys, and copy in one click — no login, no tracking, no uploads.',
+    intro: 'A fast, client-side JSON workbench. Paste JSON and format it with your choice of 2-space, 4-space, or tab indentation, optionally sorting object keys for clean diffs — or minify it down to the smallest valid payload. Validation runs live as you type: a status line tells you whether the JSON is valid and, when it is not, points to the exact line and column of the error with a caret-marked excerpt. Output is copy-first, and your last input and settings are remembered in your browser. Everything runs locally with nothing uploaded.',
+  },
+  {
+    slug: 'type-trial',
+    title: 'Type Trial',
+    description: 'A typing speed test — chase your best WPM, right in the browser.',
+    status: 'live',
+    seoTitle: 'Type Trial — Free Online Typing Speed Test (WPM & Accuracy)',
+    metaDescription: 'Test your typing speed in seconds. Pick quotes, code, or numbers, then track your words-per-minute and accuracy live as you type. Your personal best is saved locally — no login, no tracking, no uploads.',
+    intro: 'A clean, distraction-free typing speed test. Choose a category — handwritten quotes, real code snippets, or numbers and symbols — and start typing; the timer begins on your first keystroke. Watch your words-per-minute and accuracy update live, see each character highlighted as you go, and get a ranked result card when you finish. Your personal best is remembered in your browser and never uploaded.',
+  },
+  {
     slug: 'pattern-forge',
     title: 'Pattern Forge',
     description: 'Seeded generative art — make and download unique wallpapers.',

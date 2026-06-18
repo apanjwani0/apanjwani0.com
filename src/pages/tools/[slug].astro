@@ -3,10 +3,14 @@ export const prerender = false
 
 import ToolBase from '../../layouts/ToolBase.astro'
 import { tools } from '../../config/tools'
+import { getSite } from '../../lib/config'
+import { webAppJsonLd } from '../../lib/jsonld'
 import { validateSession } from '../../lib/session'
 import '../../components/tools/md-enhanced/md-enhanced.css'
 import '../../components/tools/audio-transcriber/audio-transcriber.css'
 import '../../components/tools/pattern-forge/pattern-forge.css'
+import '../../components/tools/type-trial/type-trial.css'
+import '../../components/tools/json-tidy/json-tidy.css'
 
 const { slug } = Astro.params
 const tool = tools.find(t => t.slug === slug)
@@ -26,6 +30,16 @@ if (tool.status === 'disabled') {
     return new Response(null, { status: 404, statusText: 'Not Found' })
   }
 }
+
+const site = await getSite(Astro.locals)
+const ldJson = webAppJsonLd({
+  name: tool.title,
+  description: tool.metaDescription || tool.description,
+  url: `${site.url}/tools/${tool.slug}`,
+  authorName: site.name,
+  authorUrl: site.url,
+  applicationCategory: 'DeveloperApplication',
+})
 ---
 
 <ToolBase
@@ -33,9 +47,12 @@ if (tool.status === 'disabled') {
   seoTitle={tool.seoTitle}
   metaDescription={tool.metaDescription}
 >
+  <script type="application/ld+json" set:html={ldJson} />
   {slug === 'md-enhanced' && <md-enhanced-tool data-tool="md-enhanced"></md-enhanced-tool>}
   {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
   {slug === 'pattern-forge' && <pattern-forge-tool data-tool="pattern-forge"></pattern-forge-tool>}
+  {slug === 'type-trial' && <type-trial-tool data-tool="type-trial"></type-trial-tool>}
+  {slug === 'json-tidy' && <json-tidy-tool data-tool="json-tidy"></json-tidy-tool>}
 </ToolBase>
 
 <script>
@@ -47,6 +64,8 @@ if (tool.status === 'disabled') {
     if (slug === 'md-enhanced') import('../../components/tools/md-enhanced/MdEnhanced.ts')
     else if (slug === 'audio-transcriber') import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
     else if (slug === 'pattern-forge') import('../../components/tools/pattern-forge/PatternForge.ts')
+    else if (slug === 'type-trial') import('../../components/tools/type-trial/TypeTrial.ts')
+    else if (slug === 'json-tidy') import('../../components/tools/json-tidy/JsonTidy.ts')
   }
   document.addEventListener('astro:page-load', mountTool)
 </script>

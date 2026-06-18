@@ -24,6 +24,8 @@
   --color-muted: #666666;    /* secondary text                  */
   --color-border: #e8e8e8;   /* hairlines / dividers            */
   --color-accent: #2e4d8f;   /* navy — links, markers, trail    */
+  --color-error: #c0392b;    /* errors, incorrect input         */
+  --color-success: #1e7d4f;  /* success, correct input          */
 
   /* ── Fonts ───────────────────────────────────────────────── */
   --font-serif: 'Source Serif 4', Georgia, serif;
@@ -54,4 +56,6 @@
   --color-muted: #888888;
   --color-border: #2a2a2a;
   --color-accent: #2e4d8f;
+  --color-error: #ff6b6b;
+  --color-success: #4ade80;
 }

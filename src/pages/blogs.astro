@@ -14,8 +14,14 @@ const formatHref = (href: string) => {
 }
 ---
 
-<Base title="blogs">
+<Base
+  title="blogs"
+  description="Writing by Aman Panjwani on software engineering, payments, and side projects."
+>
   <h1>blogs</h1>
+  <p data-type="page-intro">
+    Occasional notes on engineering, payments, and whatever I'm currently nerding out about.
+  </p>
   <ul data-type="writing-list">
     {posts.map(p => (
       <li>
