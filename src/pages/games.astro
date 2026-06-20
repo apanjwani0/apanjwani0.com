@@ -14,7 +14,8 @@ const games = (await getGames(Astro.locals)).filter(g => g.enabled)
 >
   <h1>games</h1>
   <p data-type="page-intro">
-    Browser games and playable experiments — built for fun, no download required.
+    Browser games and playable experiments — little things I build for the fun of it.
+    Everything runs right in your browser; nothing to download or install.
   </p>
   {games.length === 0 ? (
     <p>Coming soon.</p>
@@ -25,7 +26,7 @@ const games = (await getGames(Astro.locals)).filter(g => g.enabled)
           <div data-type="project-header">
             <a href={`/games/${g.slug}`}>{g.title}</a>
             <span data-type="project-stats">
-              <span style="font-size: 0.75rem; border: 1px solid var(--color-border); padding: 0.15rem 0.45rem; border-radius: 0.2rem;">coming soon</span>
+              <span style="font-size: var(--text-xs); border: 1px solid var(--color-border); padding: 0.15rem 0.45rem; border-radius: 0.2rem;">coming soon</span>
             </span>
           </div>
           <div data-type="project-description" set:html={render(g.description)} />

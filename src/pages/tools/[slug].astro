@@ -39,6 +39,7 @@ const ldJson = webAppJsonLd({
   authorName: site.name,
   authorUrl: site.url,
   applicationCategory: 'DeveloperApplication',
+  keywords: tool.keywords,
 })
 ---
 
@@ -46,6 +47,7 @@ const ldJson = webAppJsonLd({
   toolTitle={tool.title}
   seoTitle={tool.seoTitle}
   metaDescription={tool.metaDescription}
+  keywords={tool.keywords}
 >
   <script type="application/ld+json" set:html={ldJson} />
   {slug === 'md-enhanced' && <md-enhanced-tool data-tool="md-enhanced"></md-enhanced-tool>}
