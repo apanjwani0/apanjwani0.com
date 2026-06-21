@@ -2,6 +2,7 @@ export const prerender = false
 
 import type { APIRoute } from 'astro'
 import { getSite, getPosts, getGames } from '../lib/config'
+import { tools } from '../config/tools'
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = await getSite(locals)
@@ -23,7 +24,6 @@ export const GET: APIRoute = async ({ locals }) => {
     '/blogs',
     '/games',
     '/tools',
-    '/tools/md-enhanced',
   ]
 
   // Dynamic pages from config
@@ -34,7 +34,12 @@ export const GET: APIRoute = async ({ locals }) => {
 
   const gamePages = games.map(g => `/games/${g.slug}`)
 
-  const allPages = [...staticPages, ...blogPages, ...gamePages]
+  // Only live tools have their own crawlable detail route (wip/external/disabled don't).
+  const toolPages = tools
+    .filter(t => t.status === 'live')
+    .map(t => `/tools/${t.slug}`)
+
+  const allPages = [...staticPages, ...blogPages, ...gamePages, ...toolPages]
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

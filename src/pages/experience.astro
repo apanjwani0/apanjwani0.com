@@ -10,5 +10,9 @@ const experience = await getExperience(Astro.locals)
 
 <Base title="experience">
   <h1>experience</h1>
+  <p data-type="page-intro">
+    The roles, teams, and systems I've worked on — backend and payments engineering,
+    with a recurring theme of keeping money-movement reliable as it scales.
+  </p>
   {experience.map(company => <ExperienceItem company={company} />)}
 </Base>

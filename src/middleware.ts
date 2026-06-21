@@ -21,9 +21,28 @@ export const onRequest = defineMiddleware(async (context, next) => {
   response.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=(self)')
   response.headers.set('Content-Security-Policy', CSP)
 
-  if (pathname === '/admin' || pathname.startsWith('/api/admin/')) {
-    response.headers.set('Cache-Control', 'no-store')
-    response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+  // Caching policy. Cloudflare's edge sits in front (a Cache Rule makes HTML
+  // eligible for caching); these headers tell it *how long* and *what to skip*.
+  // Only on-demand (SSR) responses are cached here — prerendered routes are
+  // static files at runtime, and reading request data during prerender warns.
+  if (!context.isPrerendered) {
+    // Never cache the admin editor, the admin API, or any response carrying an
+    // admin session — gated pages (e.g. disabled tools) render differently for
+    // admins and must not be stored and served to the public.
+    const isAdminSurface = pathname === '/admin' || pathname.startsWith('/api/admin/')
+    const hasAdminSession = context.request.headers.get('cookie')?.includes('__admin_session') ?? false
+
+    if (isAdminSurface) {
+      response.headers.set('Cache-Control', 'no-store')
+      response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+    } else if (hasAdminSession) {
+      response.headers.set('Cache-Control', 'no-store')
+    } else if (context.request.method === 'GET' && response.status === 200) {
+      // Public, successful page → cacheable. s-maxage drives the CDN edge;
+      // stale-while-revalidate lets it refresh in the background so no visitor
+      // ever blocks on the (slow, distant) origin.
+      response.headers.set('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=86400')
+    }
   }
 
   return response

@@ -52,10 +52,32 @@ The `src/config/*.ts` files serve two purposes:
 1. **Fallback** — used when KV has no value for a key (first deploy, local dev without KV)
 2. **Source of truth for git** — edit these to update the bundled defaults
 
+## Caching & Performance
+
+The site runs on the `@astrojs/node` origin behind Cloudflare. Pages are SSR, so
+Cloudflare does **not** edge-cache HTML by default — every request used to hit the
+(slow, distant) origin, with multi-second TTFB. Two layers fix this; **neither
+touches the build or deploy pipeline**:
+
+1. **Cloudflare Cache Rule** (dashboard, one-time): marks HTML *eligible for
+   cache* for everything **except** `/api/*`, `/admin`, and requests carrying the
+   `__admin_session` cookie. Edge TTL is "Override origin" (1 h); switch it to
+   "Respect origin TTL" to let the headers below drive freshness end-to-end.
+2. **`Cache-Control` headers** (`src/middleware.ts`): public `GET` 200 responses
+   get `public, s-maxage=600, stale-while-revalidate=86400`; `/admin`, the admin
+   API, and any logged-in-admin response get `no-store`. This keeps the cache
+   policy in git and guarantees personalized/admin responses are never edge-cached
+   even if the dashboard rule changes.
+
+**Gotcha:** after editing content in `/admin`, public pages keep serving the
+cached copy until the TTL expires. To see changes immediately, purge via
+Cloudflare → Caching → Configuration → Purge Everything. Verify caching with
+`curl -sSI https://apanjwani0.com/ | grep cf-cache-status` (want `HIT`).
+
 ## Key Conventions
 
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
-- **SSR everywhere**: All pages use `export const prerender = false` — required for KV reads to work at request time.
+- **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time. The lone exception is `src/pages/tools/index.astro` (`prerender = true`), which reads only the static `tools` config, so it ships as a static file (and is served by the static handler, bypassing `src/middleware.ts` at runtime).
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
 - **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.

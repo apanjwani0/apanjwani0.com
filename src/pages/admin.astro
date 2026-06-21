@@ -199,6 +199,10 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
             enabled
             <input name="enabled" type="checkbox" checked={g.enabled} />
           </label>
+          <label class="toggle-label">
+            interactive (playable component)
+            <input name="interactive" type="checkbox" checked={g.interactive} />
+          </label>
         </div>
       ))}
     </div>
@@ -862,6 +866,10 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
         enabled
         <input name="enabled" type="checkbox" />
       </label>
+      <label class="toggle-label">
+        interactive (playable component)
+        <input name="interactive" type="checkbox" />
+      </label>
     </div>`
   }
 
@@ -877,6 +885,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
       description: (item.querySelector('[name="description"]') as HTMLTextAreaElement).value,
       enabled: (item.querySelector('[name="enabled"]') as HTMLInputElement).checked,
       keywords: (item.querySelector('[name="keywords"]') as HTMLInputElement).value.trim() || undefined,
+      interactive: (item.querySelector('[name="interactive"]') as HTMLInputElement).checked || undefined,
     }))
     await save('games', data)
   })

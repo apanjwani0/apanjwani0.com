@@ -16,11 +16,21 @@ const { project, stats } = Astro.props
     <a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a>
     {stats && (
       <span data-type="project-stats">
-        <a href={`${project.url}/stargazers`} target="_blank" rel="noopener noreferrer" title="Stargazers">
-          ★ {stats.stars.toLocaleString()}
+        <a
+          href={`${project.url}/stargazers`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${stats.stars.toLocaleString()} stargazers on GitHub`}
+        >
+          <span aria-hidden="true">★ {stats.stars.toLocaleString()}</span>
         </a>
-        <a href={`${project.url}/forks`} target="_blank" rel="noopener noreferrer" title="Forks">
-          ⑂ {stats.forks.toLocaleString()}
+        <a
+          href={`${project.url}/forks`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${stats.forks.toLocaleString()} forks on GitHub`}
+        >
+          <span aria-hidden="true">⑂ {stats.forks.toLocaleString()}</span>
         </a>
       </span>
     )}
