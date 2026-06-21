@@ -1,7 +1,6 @@
 import type { APIRoute } from 'astro'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import logger from '../../../lib/logger'
 import { validateSession } from '../../../lib/session'
 
 export const prerender = false
@@ -59,7 +58,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       await writeFile(join(dataDir, `${type}.json`), JSON.stringify(data, null, 2), 'utf-8')
     }
   } catch (e: unknown) {
-    logger.error('[admin/save]', e)
+    console.error('[admin/save]', e)
     return new Response(JSON.stringify({ error: 'Write failed' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

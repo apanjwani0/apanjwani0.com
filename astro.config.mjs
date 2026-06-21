@@ -58,6 +58,8 @@ function generateGames(data) {
   description: string
   enabled: boolean
   keywords?: string
+  /** true = ships a playable in-browser component; false/undefined = "coming soon" placeholder */
+  interactive?: boolean
 }
 
 export const games: Game[] = ${JSON.stringify(data, null, 2)}\n`
