@@ -38,7 +38,7 @@ div[data-type="pf-controls"] button {
   border-radius: 4px;
   background: none;
   color: var(--color-muted);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 0.82rem;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
@@ -91,7 +91,7 @@ div[data-type="pf-controls"] [data-group="seed"] input[type="text"] {
   border-radius: 4px;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 0.82rem;
 }
 

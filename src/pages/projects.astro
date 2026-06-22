@@ -19,5 +19,5 @@ const stats    = await getProjectStats(projects)
     Things I've shipped and things I tinker with — payments infrastructure by day,
     and side projects that exist mostly because I got curious.
   </p>
-  {projects.map(p => <ProjectCard project={p} stats={stats[p.url]} />)}
+  {projects.map((p, i) => <ProjectCard project={p} stats={stats[p.url]} index={i + 1} />)}
 </Base>

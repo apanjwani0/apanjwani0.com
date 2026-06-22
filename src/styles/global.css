@@ -1,12 +1,17 @@
 @import './shared.css';
 
 body {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 0 var(--space-page-x);
   background-color: var(--color-bg);
   color: var(--color-text);
+  /* faint violet bloom at the top — the "signal" glow, kept low so it never
+     fights body text. */
+  background-image: radial-gradient(ellipse 90% 55% at 50% -12%, color-mix(in srgb, var(--color-accent) 11%, transparent), transparent 62%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 /* portfolio body has horizontal padding, so header doesn't need it twice */
@@ -15,20 +20,34 @@ header {
   padding-right: 0;
 }
 
+/* Page title — architectural, uppercase, with a short violet signal rule. */
 h1 {
   font-size: var(--text-title);
-  letter-spacing: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
   margin-top: 0;
+  margin-bottom: 0.9rem;
 }
 
-/* One-line lede that sits under a page's h1 to give listing pages context
-   (for readers) and descriptive copy (for search engines). */
+h1::after {
+  content: '';
+  display: block;
+  width: 2.75rem;
+  height: 2px;
+  margin-top: 0.7rem;
+  background: var(--color-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--color-accent) 70%, transparent);
+}
+
+/* One-line lede under a page's h1 — context for readers, copy for search. */
 p[data-type="page-intro"] {
-  margin: -0.25rem 0 var(--space-section);
-  max-width: 42rem;
+  margin: 0 0 var(--space-section);
+  max-width: 46rem;
   color: var(--color-muted);
   font-size: var(--text-base);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 h2 {
@@ -47,8 +66,7 @@ a {
 }
 
 a:hover {
-  text-decoration: underline;
-  text-decoration-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 main {
@@ -69,10 +87,14 @@ p[data-type="tagline"] {
   color: var(--color-muted);
 }
 
+/* Section sub-heading (home "writing" etc.) — mono kicker. */
 section h2 {
-  text-transform: lowercase;
-  font-size: var(--text-base);
-  font-weight: 600;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-accent);
   margin-bottom: 1rem;
 }
 
@@ -81,10 +103,47 @@ ul[data-type="preview-list"] {
   padding: 0;
 }
 
+/* ── HUD project / game panel ───────────────────────────────── */
 article[data-type="project"] {
-  border-top: 1px solid var(--color-border);
-  padding-top: 1.5rem;
-  margin-top: 1.5rem;
+  position: relative;
+  margin-top: 1rem;
+  padding: 1.4rem 1.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  clip-path: polygon(
+    var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)),
+    calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer)
+  );
+  transition: border-color 0.15s ease;
+}
+
+article[data-type="project"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+article[data-type="project"]:hover {
+  border-color: var(--color-accent-dim);
+}
+
+article[data-type="project"]:hover::before {
+  background: var(--color-accent);
+  box-shadow: 0 0 14px var(--color-accent);
+}
+
+span[data-type="project-num"] {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.1em;
+  color: var(--color-accent);
+  margin-bottom: 0.5rem;
 }
 
 div[data-type="project-header"] {
@@ -95,30 +154,32 @@ div[data-type="project-header"] {
 }
 
 div[data-type="project-header"] > a {
-  font-weight: bold;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 span[data-type="project-stats"] {
   display: flex;
   gap: 0.75rem;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  color: var(--color-muted);
+  color: var(--color-accent);
   flex-shrink: 0;
 }
 
 span[data-type="project-stats"] a {
-  color: var(--color-muted);
-  text-decoration: none;
+  color: var(--color-accent);
 }
 
 span[data-type="project-stats"] a:hover {
   color: var(--color-text);
-  text-decoration: none;
 }
 
 div[data-type="project-description"] {
   color: var(--color-muted);
   margin: 0.5rem 0;
+  font-size: var(--text-sm);
 }
 
 div[data-type="project-description"] p,
@@ -150,26 +211,31 @@ div[data-type="writing-summary"] > *:last-child {
 }
 
 p[data-type="project-tags"] {
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  margin: 0.5rem 0 0 0;
+  margin: 0.6rem 0 0 0;
   color: var(--color-muted);
 }
 
+/* ── Experience ─────────────────────────────────────────────── */
 article[data-type="experience"] {
   margin-bottom: var(--space-section);
 }
 
 article[data-type="experience"] h2 {
-  margin: 0 0 1rem 0;
-  font-size: var(--text-base);
-  font-weight: 600;
-  text-transform: lowercase;
+  margin: 0 0 1.1rem 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-accent);
 }
 
 div[data-type="role"] {
-  padding-left: 1rem;
-  border-left: 1px solid var(--color-border);
-  margin-bottom: 1.5rem;
+  padding-left: 1.1rem;
+  border-left: 1px solid var(--color-accent-dim);
+  margin-bottom: 1.6rem;
 }
 
 div[data-type="role-header"] {
@@ -180,15 +246,19 @@ div[data-type="role-header"] {
   gap: 0.25rem;
   margin-bottom: 0.4rem;
   font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 span[data-type="role-team"] {
   color: var(--color-muted);
+  font-weight: 400;
 }
 
 div[data-type="period"] {
   color: var(--color-muted);
-  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 400;
 }
 
 article[data-type="experience"] > ul {
@@ -196,13 +266,14 @@ article[data-type="experience"] > ul {
   font-size: var(--text-sm);
 }
 
+/* ── Writing / blogs ────────────────────────────────────────── */
 ul[data-type="writing-list"] {
   list-style: none;
   padding: 0;
 }
 
 ul[data-type="writing-list"] li {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.6rem;
 }
 
 div[data-type="writing-row"] {
@@ -212,7 +283,7 @@ div[data-type="writing-row"] {
 }
 
 span[data-type="writing-date"] {
-  color: var(--color-muted);
+  color: var(--color-accent);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   flex-shrink: 0;
@@ -226,11 +297,15 @@ div[data-type="writing-summary"] {
 
 @media (max-width: 560px) {
   main {
-    padding: 1.5rem 0;
+    padding: 1.75rem 0;
   }
 
   section {
     margin-top: 1.75rem;
+  }
+
+  article[data-type="project"] {
+    padding: 1.2rem 1.2rem;
   }
 
   div[data-type="writing-row"] {

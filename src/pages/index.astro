@@ -2,15 +2,15 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
-import Avatar from '../components/Avatar.astro'
 import { getSite } from '../lib/config'
 import { personJsonLd } from '../lib/jsonld'
 import '../styles/home.css'
 
 const site = await getSite(Astro.locals)
 
-// Bespoke hero line for the landing page. site.tagline stays the role line used
-// for SEO/meta and the rest of the site.
+// Bespoke hero line for the landing page, reused as the home page's meta
+// description (the default site.tagline role line is too thin a search snippet
+// for the most important page). site.tagline stays the role line elsewhere.
 const heroTagline =
   'I build software for a living and for fun — payments at scale by day; apps, tools and games by night.'
 
@@ -25,20 +25,13 @@ const ldJson = personJsonLd({
 })
 ---
 
-<Base bare keywords={`${site.name}, ${site.handle}, portfolio, software engineer`}>
+<Base bare description={heroTagline} keywords={`${site.name}, ${site.handle}, portfolio, software engineer`}>
   <script type="application/ld+json" set:html={ldJson} />
-
-  <nav data-type="hero-nav" aria-label="Site sections">
-    {site.nav.flatMap((item) => ('children' in item ? item.children : [item])).map((link) => (
-      <a href={link.href}>{link.label}</a>
-    ))}
-  </nav>
-
-  <star-field data-type="starfield" aria-hidden="true"></star-field>
 
   <section data-type="hero" aria-label="Introduction">
     <div data-type="hero-content">
-      <Avatar src={site.avatar} alt={site.name} />
+      <div data-type="reticle" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <p data-type="kicker">{site.tagline}</p>
       <h1>{site.name}</h1>
       <p data-type="tagline">{heroTagline}</p>
       <nav data-type="hero-links" aria-label="Links">
@@ -49,12 +42,3 @@ const ldJson = personJsonLd({
     </div>
   </section>
 </Base>
-
-<script>
-  // Load the canvas controller on initial load and after every View Transition
-  // navigation — bundled scripts run only once per session otherwise, so the
-  // hero canvas would be missing when home is reached via in-site nav.
-  document.addEventListener('astro:page-load', () => {
-    import('../components/home/StarField.ts')
-  })
-</script>

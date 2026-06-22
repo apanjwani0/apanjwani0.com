@@ -75,7 +75,7 @@ div[data-type="gol-controls"] button {
   border-radius: 4px;
   background: none;
   color: var(--color-muted);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-xs);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;

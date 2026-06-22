@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-06-22)
 
 ## Corpus Check
-- 56 files · ~27,724 words
+- 54 files · ~26,584 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 516 nodes · 781 edges · 34 communities (30 shown, 4 thin omitted)
+- 501 nodes · 761 edges · 27 communities (23 shown, 4 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `baa78234`
+- Built from commit: `23f12ef5`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -18,7 +18,6 @@
 - [[_COMMUNITY_Content Types + AdminSavePlugin Dispatch|Content Types + AdminSavePlugin Dispatch]]
 - [[_COMMUNITY_Community 1|Community 1]]
 - [[_COMMUNITY_Config KV-with-Fallback Chain|Config KV-with-Fallback Chain]]
-- [[_COMMUNITY_Admin UI + Save API + Tools Config|Admin UI + Save API + Tools Config]]
 - [[_COMMUNITY_Card Components + GitHub Stats|Card Components + GitHub Stats]]
 - [[_COMMUNITY_MdEnhanced Tool (markdown render)|MdEnhanced Tool (markdown render)]]
 - [[_COMMUNITY_MdEnhanced Export Pipeline (PDFImage)|MdEnhanced Export Pipeline (PDF/Image)]]
@@ -35,7 +34,6 @@
 - [[_COMMUNITY_Session Token Generation|Session Token Generation]]
 - [[_COMMUNITY_Community 18|Community 18]]
 - [[_COMMUNITY_Community 19|Community 19]]
-- [[_COMMUNITY_Community 20|Community 20]]
 - [[_COMMUNITY_Community 21|Community 21]]
 - [[_COMMUNITY_Community 22|Community 22]]
 - [[_COMMUNITY_Community 23|Community 23]]
@@ -43,11 +41,6 @@
 - [[_COMMUNITY_Community 25|Community 25]]
 - [[_COMMUNITY_Community 27|Community 27]]
 - [[_COMMUNITY_Community 28|Community 28]]
-- [[_COMMUNITY_Community 29|Community 29]]
-- [[_COMMUNITY_Community 30|Community 30]]
-- [[_COMMUNITY_Community 31|Community 31]]
-- [[_COMMUNITY_Community 32|Community 32]]
-- [[_COMMUNITY_Community 33|Community 33]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `../../components/tools/pattern-forge/PatternForge.ts` - 23 edges
@@ -68,10 +61,10 @@
   src/pages/tools/[slug].astro → src/layouts/ToolBase.astro
 - `ToolBase.astro (tools layout)` --semantically_similar_to--> `Base.astro (default layout)`  [INFERRED] [semantically similar]
   src/layouts/ToolBase.astro → src/layouts/Base.astro
-- `[slug].astro top-level redirect router` --references--> `games/[slug].astro game detail page`  [INFERRED]
-  src/pages/[slug].astro → src/pages/games/[slug].astro
-- `blogs/[slug].astro post detail page` --references--> `../../layouts/Base.astro`  [EXTRACTED]
-  src/pages/blogs/[slug].astro → src/layouts/Base.astro
+- `POST()` --calls--> `validateSession()`  [EXTRACTED]
+  src/pages/api/admin/save.ts → src/lib/session.ts
+- `MdEnhancedTool (custom element)` --references--> `helpSections const`  [EXTRACTED]
+  src/components/tools/md-enhanced/MdEnhanced.ts → src/components/tools/md-enhanced/help-content.ts
 
 ## Import Cycles
 - None detected.
@@ -83,27 +76,23 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (34 total, 4 thin omitted)
+## Communities (27 total, 4 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.07
 Nodes (38): adminSavePlugin, Post, Post (interface), posts, Company, Company (interface), experience, Role (+30 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.11
-Nodes (20): Tool, Tool (interface), ToolStatus (type), tools, ToolStatus, admin projects drag-to-reorder, admin IP whitelist 404 guard, admin tabs (site/projects/experience/blogs/games/tools) (+12 more)
+Cohesion: 0.07
+Nodes (35): POST(), POST /api/admin/login, POST(), POST /api/admin/logout, admin save allowed types whitelist, POST(), POST /api/admin/save, __admin_session HttpOnly cookie (+27 more)
 
 ### Community 2 - "Config KV-with-Fallback Chain"
 Cohesion: 0.05
 Nodes (39): 1. Authentication & Session Management, 2. Input Validation & Injection, 3. Infrastructure & Deployment, 4. Middleware, Config Access & Data Flow, 5. Dependencies & Supply Chain, Consolidated Remediation Roadmap, CRITICAL — C1.1: Timing Attack on Password Comparison, CRITICAL — C1.2: Auth Bypass if ADMIN_SECRET Is Unset in Production (+31 more)
 
-### Community 3 - "Admin UI + Save API + Tools Config"
-Cohesion: 0.14
-Nodes (15): POST(), POST /api/admin/login, POST(), POST /api/admin/logout, admin save allowed types whitelist, POST(), POST /api/admin/save, __admin_session HttpOnly cookie (+7 more)
-
 ### Community 4 - "Card Components + GitHub Stats"
-Cohesion: 0.15
-Nodes (15): ExperienceItem Props, ../components/ProjectCard.astro, ProjectCard Props, buildResult(), CACHE_PATH, getProjectStats(), GitHubStats, memCache (+7 more)
+Cohesion: 0.18
+Nodes (13): ../components/ProjectCard.astro, ProjectCard Props, buildResult(), CACHE_PATH, getProjectStats(), GitHubStats, memCache, parseGithubUrl() (+5 more)
 
 ### Community 5 - "MdEnhanced Tool (markdown render)"
 Cohesion: 0.19
@@ -149,10 +138,6 @@ Nodes (26): dependencies, astro, @astrojs/cloudflare, @astrojs/node, dompurify, 
 Cohesion: 0.15
 Nodes (12): ../../components/tools/type-trial/TypeTrial.ts, Best, CATEGORIES, Category, escapeHtml(), loadBest(), pick(), rankFor() (+4 more)
 
-### Community 20 - "Community 20"
-Cohesion: 0.21
-Nodes (6): ../components/home/StarField.ts, parseColor(), RGB, Star, StarField, TrailPoint
-
 ### Community 21 - "Community 21"
 Cohesion: 0.22
 Nodes (7): Config Schema (conceptual), Data Flow, Directory Structure, Extensibility Points, Oat UI Integration, Philosophy, SSR & Adapter
@@ -178,31 +163,11 @@ Cohesion: 0.13
 Nodes (15): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), byteLength(), cleanMessage(), countKeys(), ErrorLoc, escapeHtml(), formatBytes() (+7 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.15
-Nodes (12): ldJson, post, game, ldJson, blogPostingJsonLd(), BlogPostingSchema, personJsonLd(), PersonSchema (+4 more)
-
-### Community 29 - "Community 29"
-Cohesion: 0.27
-Nodes (8): getGames(), getPosts(), blogs/[slug].astro post detail page, GET(), [slug].astro top-level redirect router, gameMatch, normalizedSlug, postMatch
-
-### Community 30 - "Community 30"
-Cohesion: 0.31
-Nodes (7): ../components/Head.astro, ../components/Nav.astro, ../../layouts/Base.astro, ../../layouts/ToolBase.astro, ../../lib/config, ../styles/global.css, ../styles/shared.css
-
-### Community 31 - "Community 31"
-Cohesion: 0.21
-Nodes (8): ../components/ExperienceItem.astro, render(), renderInline, marked, games, games/[slug].astro game detail page, ../config/experience, ../../lib/markdown
-
-### Community 32 - "Community 32"
-Cohesion: 0.33
-Nodes (4): ../components/Avatar.astro, ldJson, sameAs, ../styles/home.css
-
-### Community 33 - "Community 33"
-Cohesion: 0.48
-Nodes (5): ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout), ToolBase.astro (tools layout), getSite()
+Cohesion: 0.06
+Nodes (45): ldJson, post, ../components/ExperienceItem.astro, ExperienceItem Props, ../components/Head.astro, ClientRouter (view transitions), Head Props (SEO meta), ../components/Nav.astro (+37 more)
 
 ## Knowledge Gaps
-- **184 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+179 more)
+- **181 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+176 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -210,16 +175,16 @@ Nodes (5): ClientRouter (view transitions), Head Props (SEO meta), Base.astro (d
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `../../components/games/game-of-life/GameOfLife.ts` connect `Community 25` to `Community 28`?**
-  _High betweenness centrality (0.139) - this node is a cross-community bridge._
+  _High betweenness centrality (0.141) - this node is a cross-community bridge._
 - **Why does `../../components/tools/pattern-forge/PatternForge.ts` connect `Admin API Route Handlers (login/logout/save)` to `Community 1`?**
-  _High betweenness centrality (0.093) - this node is a cross-community bridge._
+  _High betweenness centrality (0.095) - this node is a cross-community bridge._
 - **What connects `name`, `type`, `version` to the rest of the system?**
-  _184 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _181 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Content Types + AdminSavePlugin Dispatch` be split into smaller, more focused modules?**
   _Cohesion score 0.0707070707070707 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.10507246376811594 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0664451827242525 - nodes in this community are weakly interconnected._
 - **Should `Config KV-with-Fallback Chain` be split into smaller, more focused modules?**
   _Cohesion score 0.05 - nodes in this community are weakly interconnected._
-- **Should `Admin UI + Save API + Tools Config` be split into smaller, more focused modules?**
-  _Cohesion score 0.14035087719298245 - nodes in this community are weakly interconnected._
+- **Should `MdEnhanced Export Pipeline (PDF/Image)` be split into smaller, more focused modules?**
+  _Cohesion score 0.14285714285714285 - nodes in this community are weakly interconnected._

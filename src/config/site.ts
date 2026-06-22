@@ -7,31 +7,11 @@ export const site = {
   "bio": "Backend engineer specialising in payments infrastructure and fintech systems. Currently scaling transaction pipelines at Chalo Mobility — processing 100k+ daily transactions across digital wallets and prepaid cards. Passionate about reliability, financial data consistency, and open source.",
   "avatar": "/avatar.webp",
   "nav": [
-    {
-      "label": "experience",
-      "href": "/experience"
-    },
-    {
-      "label": "projects",
-      "href": "/projects"
-    },
-    {
-      "label": "others",
-      "children": [
-        {
-          "label": "tools",
-          "href": "/tools"
-        },
-        {
-          "label": "blogs",
-          "href": "/blogs"
-        },
-        {
-          "label": "games",
-          "href": "/games"
-        }
-      ]
-    }
+    { "label": "experience", "href": "/experience" },
+    { "label": "projects", "href": "/projects" },
+    { "label": "tools", "href": "/tools" },
+    { "label": "blogs", "href": "/blogs" },
+    { "label": "games", "href": "/games" }
   ],
   "social": {
     "github": "https://github.com/apanjwani0",

@@ -7,55 +7,64 @@
    │ properties, so a redesign is a tokens-only change — no page/component edits. │
    └───────────────────────────────────────────────────────────────────────────┘
 
+   Design language: "Cosmic Noir" — deep space-black, a cold violet "signal"
+   accent that glows like a searchlight, architectural type, HUD geometry.
+
    Rule for every other stylesheet (shared.css, global.css, home.css, component
    CSS, scoped <style> blocks): reference these tokens — never hardcode a colour,
    font, or type size.
 
    Load order: theme.css → shared.css (base + header) → global.css (content pages)
    / home.css (home hero) / component CSS. Light is the :root default; the dark
-   theme overrides the palette only.
+   theme (the one the site actually runs) overrides the palette only.
    ============================================================================= */
 
 :root {
-  /* ── Palette ─────────────────────────────────────────────── */
-  --color-bg: #ffffff;       /* page background                 */
-  --color-surface: #f6f6f6;  /* raised surface (menus, cards)   */
-  --color-text: #111111;     /* primary text                    */
-  --color-muted: #666666;    /* secondary text                  */
-  --color-border: #e8e8e8;   /* hairlines / dividers            */
-  --color-accent: #2e4d8f;   /* navy — links, markers, trail    */
-  --color-error: #c0392b;    /* errors, incorrect input         */
-  --color-success: #1e7d4f;  /* success, correct input          */
+  /* ── Palette (light fallback) ────────────────────────────── */
+  --color-bg: #f6f6fb;        /* page background                 */
+  --color-surface: #ffffff;   /* raised surface (panels, menus)  */
+  --color-text: #15151c;      /* primary text                    */
+  --color-muted: #5b5e6b;     /* secondary text                  */
+  --color-border: #e3e3ee;    /* hairlines / dividers            */
+  --color-accent: #6a5bd0;    /* violet — links, markers, glow   */
+  --color-accent-dim: #b3a9ee;/* faint accent — rules, reticle   */
+  --color-error: #c0392b;     /* errors, incorrect input         */
+  --color-success: #1e7d4f;   /* success, correct input          */
 
   /* ── Fonts ───────────────────────────────────────────────── */
-  --font-serif: 'Source Serif 4', Georgia, serif;
+  --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* ── Type scale ──────────────────────────────────────────── */
-  --text-xs: 0.8rem;      /* tags, stats, fine print            */
-  --text-sm: 0.9rem;      /* meta: dates, roles, captions       */
-  --text-base: 1rem;      /* body + section headings            */
-  --text-lg: 1.1rem;      /* large heading                      */
-  --text-title: 1.75rem;  /* page title (h1)                    */
-  --text-display: clamp(2rem, 7vw, 3.5rem);   /* home hero name  */
-  --text-lead: clamp(1rem, 2.7vw, 1.3rem);    /* home tagline    */
-  --text-label: clamp(0.72rem, 2vw, 0.8rem);  /* mono nav + small links */
+  --text-xs: 0.78rem;     /* tags, stats, fine print            */
+  --text-sm: 0.88rem;     /* meta: dates, roles, captions       */
+  --text-base: 1rem;      /* body                               */
+  --text-lg: 1.25rem;     /* project / large heading            */
+  --text-title: clamp(1.9rem, 4.5vw, 2.7rem);  /* page title (h1) — uppercase */
+  --text-display: clamp(2.8rem, 9vw, 5.3rem);  /* home hero name  */
+  --text-lead: clamp(1rem, 2.4vw, 1.2rem);     /* home tagline    */
+  --text-label: clamp(0.72rem, 2vw, 0.78rem);  /* mono nav + small links */
 
   /* ── Spacing ─────────────────────────────────────────────── */
-  --space-page-x: 1.25rem;  /* page side gutter                 */
-  --space-section: 2.5rem;  /* vertical rhythm between blocks    */
+  --space-2xs: 0.15rem;     /* inline padding (badge y)          */
+  --space-xs: 0.45rem;      /* inline padding (badge x)          */
+  --space-page-x: 1.4rem;   /* page side gutter                 */
+  --space-section: 2.75rem; /* vertical rhythm between blocks    */
 
   /* ── Layout ──────────────────────────────────────────────── */
-  --max-width: 768px;       /* readable content column          */
+  --radius: 0.2rem;         /* corner rounding (badges, chips)   */
+  --chamfer: 10px;          /* corner cut for HUD panels/buttons */
+  --max-width: 880px;       /* readable content column          */
 }
 
 [data-theme="dark"] {
-  --color-bg: #111111;
-  --color-surface: #1a1a1a;
-  --color-text: #e8e8e8;
-  --color-muted: #888888;
-  --color-border: #2a2a2a;
-  --color-accent: #2e4d8f;
+  --color-bg: #05070c;
+  --color-surface: #0b0f18;
+  --color-text: #dde6f2;
+  --color-muted: #6b7889;
+  --color-border: #1a2132;
+  --color-accent: #9b8cff;
+  --color-accent-dim: #564bb5;
   --color-error: #ff6b6b;
   --color-success: #4ade80;
 }
