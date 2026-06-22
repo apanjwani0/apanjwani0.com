@@ -1,0 +1,36 @@
+---
+/**
+ * Self-contained avatar. The image is a transparent cut-out (PNG/WebP), so it sits
+ * directly over the background with no frame or crop. Swap `src` to change the
+ * photo, or delete the <Avatar /> usage to remove it — all styling is scoped here.
+ */
+import { Image } from 'astro:assets'
+
+interface Props {
+  src: string
+  alt: string
+}
+
+const { src, alt } = Astro.props
+---
+
+<figure data-type="hero-avatar">
+  <Image src={src} width={320} height={468} alt={alt} loading="eager" decoding="async" />
+</figure>
+
+<style>
+  [data-type="hero-avatar"] {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  [data-type="hero-avatar"] :global(img) {
+    display: block;
+    width: auto;
+    height: clamp(170px, 32vh, 280px);
+    max-width: 100%;
+    /* transparent cut-out over the field — softened, with a faint grounding shadow */
+    filter: grayscale(0.2) contrast(1.04) brightness(0.95) drop-shadow(0 12px 26px rgba(0, 0, 0, 0.5));
+  }
+</style>

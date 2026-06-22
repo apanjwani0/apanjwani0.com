@@ -1,53 +1,42 @@
 ---
 import type { Project } from '../config/projects'
 import type { GitHubStats } from '../lib/github'
-import { render } from '../lib/markdown'
+import { renderInline, render } from '../lib/markdown'
 
 interface Props {
   project: Project
   stats?: GitHubStats
-  index?: number
 }
 
-const { project, stats, index } = Astro.props
-const num = index != null ? String(index).padStart(2, '0') : null
-const stars = stats?.stars ?? 0
-const forks = stats?.forks ?? 0
+const { project, stats } = Astro.props
 ---
 
 <article data-type="project">
-  {num && <span data-type="project-num" aria-hidden="true">{num}</span>}
-  <div data-type="project-body">
-    <div data-type="project-header">
-      <a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a>
-      {(stars > 0 || forks > 0) && (
-        <span data-type="project-stats">
-          {stars > 0 && (
-            <a
-              href={`${project.url}/stargazers`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${stars.toLocaleString()} stargazers on GitHub`}
-            >
-              <span aria-hidden="true">★ {stars.toLocaleString()}</span>
-            </a>
-          )}
-          {forks > 0 && (
-            <a
-              href={`${project.url}/forks`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${forks.toLocaleString()} forks on GitHub`}
-            >
-              <span aria-hidden="true">⑂ {forks.toLocaleString()}</span>
-            </a>
-          )}
-        </span>
-      )}
-    </div>
-    <div data-type="project-description" set:html={render(project.description)} />
-    {project.tags.length > 0 && (
-      <p data-type="project-tags">{project.tags.join(', ')}</p>
+  <div data-type="project-header">
+    <a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a>
+    {stats && (
+      <span data-type="project-stats">
+        <a
+          href={`${project.url}/stargazers`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${stats.stars.toLocaleString()} stargazers on GitHub`}
+        >
+          <span aria-hidden="true">★ {stats.stars.toLocaleString()}</span>
+        </a>
+        <a
+          href={`${project.url}/forks`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${stats.forks.toLocaleString()} forks on GitHub`}
+        >
+          <span aria-hidden="true">⑂ {stats.forks.toLocaleString()}</span>
+        </a>
+      </span>
     )}
   </div>
+  <div data-type="project-description" set:html={render(project.description)} />
+  {project.tags.length > 0 && (
+    <p data-type="project-tags">{project.tags.join(', ')}</p>
+  )}
 </article>

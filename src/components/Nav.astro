@@ -8,17 +8,24 @@ interface Props {
 const { site: siteProp } = Astro.props
 const site = siteProp ?? await getSite(Astro.locals)
 const current = Astro.url.pathname
-
-// Flatten any nested groups ("others") so every section is a single inline link —
-// one unified nav, no dropdown. Works whatever shape the KV/config nav is in.
-const links = site.nav.flatMap((item: any) => ('children' in item ? item.children : [item]))
 ---
 
 <header>
-  <a href="/" data-type="wordmark">{site.handle.slice(0, -1)}<b>{site.handle.slice(-1)}</b></a>
+  <a href="/">{site.handle}</a>
   <nav>
-    {links.map((link: any) => (
-      <a href={link.href} data-active={current === link.href || (link.href !== '/' && current.startsWith(link.href)) ? true : undefined}>{link.label}</a>
+    {site.nav.map((item: any) => (
+      'children' in item ? (
+        <div data-type="nav-dropdown">
+          <button data-type="nav-dropdown-trigger">{item.label}</button>
+          <div data-type="nav-dropdown-menu">
+            {item.children.map((child: any) => (
+              <a href={child.href} data-active={current === child.href ? true : undefined}>{child.label}</a>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <a href={item.href} data-active={current === item.href || (item.href !== '/' && current.startsWith(item.href)) ? true : undefined}>{item.label}</a>
+      )
     ))}
   </nav>
 </header>

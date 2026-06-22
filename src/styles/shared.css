@@ -63,54 +63,104 @@ main:focus {
   }
 }
 
-/* Header — HUD top bar: wordmark + flat mono nav (one unified nav, no dropdown).
+/* Lightweight header — borderless, serif wordmark + mono nav, matches the home aesthetic.
    Shared by Base.astro and ToolBase.astro; horizontal padding lives here. */
 header {
   padding: 1.1rem var(--space-page-x);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  border-bottom: 1px solid var(--color-border);
 }
 
-a[data-type="wordmark"] {
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: 0.01em;
+/* serif wordmark */
+header > a {
+  font-size: 1.2rem;
   text-decoration: none;
-  color: var(--color-text);
-}
-
-a[data-type="wordmark"] b {
-  color: var(--color-accent);
-  font-weight: 700;
+  color: inherit;
 }
 
 header nav {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: clamp(0.9rem, 3vw, 1.5rem);
+  gap: clamp(1rem, 3vw, 1.5rem);
 }
 
-/* mono, muted nav links that light up violet on hover / active */
-header nav a {
+/* mono, muted nav links with a navy-accent hover (same language as the home nav) */
+header nav a,
+div[data-type="nav-dropdown"] > button {
   font-family: var(--font-mono);
   font-size: var(--text-label);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: var(--color-muted);
   text-decoration: none;
 }
 
 header nav a:hover,
+div[data-type="nav-dropdown"] > button:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-underline-offset: 0.3em;
+}
+
 header nav a[data-active] {
-  color: var(--color-accent);
+  color: var(--color-text);
 }
 
 @media (max-width: 560px) {
-  a[data-type="wordmark"] { font-size: 0.95rem; }
-  header nav { gap: 0.7rem; }
+  header > a {
+    font-size: 1.05rem;
+  }
+
+  header nav {
+    gap: 0.7rem;
+  }
+}
+
+div[data-type="nav-dropdown"] {
+  position: relative;
+}
+
+div[data-type="nav-dropdown"] > button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+div[data-type="nav-dropdown-menu"] {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  min-width: 120px;
+  z-index: 10;
+  visibility: hidden;
+  opacity: 0;
+  transition: visibility 0s linear 0.15s, opacity 0.15s;
+}
+
+div[data-type="nav-dropdown-menu"] a {
+  display: block;
+  padding: 0.45rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+div[data-type="nav-dropdown-menu"] a:hover {
+  text-decoration: none;
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+div[data-type="nav-dropdown"]:hover div[data-type="nav-dropdown-menu"],
+div[data-type="nav-dropdown"]:focus-within div[data-type="nav-dropdown-menu"] {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s;
 }
