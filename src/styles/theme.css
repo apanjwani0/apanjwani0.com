@@ -40,6 +40,7 @@
   --text-display: clamp(2rem, 7vw, 3.5rem);   /* home hero name  */
   --text-lead: clamp(1rem, 2.7vw, 1.3rem);    /* home tagline    */
   --text-label: clamp(0.72rem, 2vw, 0.8rem);  /* mono nav + small links */
+  --text-wordmark: clamp(1.05rem, 1rem + 0.6vw, 1.2rem);  /* header wordmark — fluid 1.05→1.2 */
 
   /* ── Spacing ─────────────────────────────────────────────── */
   --space-2xs: 0.15rem;     /* inline padding (badge y)          */
@@ -48,6 +49,7 @@
   --space-section: 2.5rem;  /* vertical rhythm between blocks    */
 
   /* ── Layout ──────────────────────────────────────────────── */
+  --radius-sm: 0.125rem;    /* fine UI: focus rings (2px)        */
   --radius: 0.2rem;         /* corner rounding (badges, chips)   */
   --max-width: 768px;       /* readable content column          */
 }
