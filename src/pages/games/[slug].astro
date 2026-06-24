@@ -15,6 +15,10 @@ if (!game) {
   return new Response(null, { status: 404, statusText: 'Not Found' })
 }
 
+// For a "coming soon" page, point the visitor at a game that's actually
+// playable right now so the page is an invitation, not a dead end.
+const liveGame = games.find(g => g.enabled && g.interactive && g.slug !== slug)
+
 const ldJson = webAppJsonLd({
   name: game.title,
   description: game.description,
@@ -34,8 +38,13 @@ const ldJson = webAppJsonLd({
   {!game.interactive && (
     <>
       <h1>{game.title}</h1>
-      <h2 style="color: var(--color-muted); margin-bottom: 2rem;">Coming Soon</h2>
+      <h2 style="color: var(--color-muted); margin-bottom: var(--space-section);">Coming Soon</h2>
       <div data-type="project-description" set:html={render(game.description)} />
+      {liveGame && (
+        <p>
+          Want to play something now? <a href={`/games/${liveGame.slug}`}>{liveGame.title}</a> is live and ready.
+        </p>
+      )}
     </>
   )}
 </Base>

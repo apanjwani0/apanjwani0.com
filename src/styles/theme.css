@@ -23,7 +23,7 @@
   --color-text: #111111;     /* primary text                    */
   --color-muted: #666666;    /* secondary text                  */
   --color-border: #e8e8e8;   /* hairlines / dividers            */
-  --color-accent: #2e4d8f;   /* navy — links, markers, trail    */
+  --color-accent: #6a5bd0;   /* violet — links, markers, trail  */
   --color-error: #c0392b;    /* errors, incorrect input         */
   --color-success: #1e7d4f;  /* success, correct input          */
 
@@ -40,22 +40,27 @@
   --text-display: clamp(2rem, 7vw, 3.5rem);   /* home hero name  */
   --text-lead: clamp(1rem, 2.7vw, 1.3rem);    /* home tagline    */
   --text-label: clamp(0.72rem, 2vw, 0.8rem);  /* mono nav + small links */
+  --text-wordmark: clamp(1.05rem, 1rem + 0.6vw, 1.2rem);  /* header wordmark — fluid 1.05→1.2 */
 
   /* ── Spacing ─────────────────────────────────────────────── */
+  --space-2xs: 0.15rem;     /* inline padding (badge y)          */
+  --space-xs: 0.45rem;      /* inline padding (badge x)          */
   --space-page-x: 1.25rem;  /* page side gutter                 */
   --space-section: 2.5rem;  /* vertical rhythm between blocks    */
 
   /* ── Layout ──────────────────────────────────────────────── */
+  --radius-sm: 0.125rem;    /* fine UI: focus rings (2px)        */
+  --radius: 0.2rem;         /* corner rounding (badges, chips)   */
   --max-width: 768px;       /* readable content column          */
 }
 
 [data-theme="dark"] {
-  --color-bg: #111111;
-  --color-surface: #1a1a1a;
-  --color-text: #e8e8e8;
-  --color-muted: #888888;
-  --color-border: #2a2a2a;
-  --color-accent: #2e4d8f;
+  --color-bg: #05070c;
+  --color-surface: #0b0f18;
+  --color-text: #dde6f2;
+  --color-muted: #73808f;
+  --color-border: #1a2132;
+  --color-accent: #9b8cff;
   --color-error: #ff6b6b;
   --color-success: #4ade80;
 }

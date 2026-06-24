@@ -52,6 +52,31 @@ export function blogPostingJsonLd(b: BlogPostingSchema): string {
   })
 }
 
+export interface ItemListEntry {
+  name: string
+  url: string
+}
+
+/**
+ * ItemList structured data for a listing/index page (e.g. /games, /tools).
+ * Gives search engines an explicit, ordered map of the items on the page —
+ * the listing-page counterpart to the per-item WebApplication schema.
+ */
+export function itemListJsonLd(name: string, items: ItemListEntry[]): string {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name,
+    numberOfItems: items.length,
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: it.name,
+      url: it.url,
+    })),
+  })
+}
+
 export interface WebApplicationSchema {
   name: string
   description: string
