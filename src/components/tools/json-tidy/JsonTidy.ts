@@ -1,33 +1,54 @@
 /**
- * JSON Tidy — a client-side JSON formatter, validator and minifier.
+ * JSON Tidy — a client-side JSON workbench: format, validate, minify, convert.
  *
- * Paste JSON, then pretty-print (2/4-space or tab indent, optional key sort) or
- * minify it in place. Validation runs live as you type: a clear status line
+ * Two panes: an editable, live-validated JSON input on the left and a read-only
+ * output panel on the right. Operations (Format / Minify / Stringify and the
+ * JSON → YAML / CSV / XML converters) render into the output panel, which is
+ * copy-first and downloadable. Validation runs live as you type: a status line
  * reports a parse error with its line and column plus a caret-marked excerpt of
- * the offending line. Output is copy-first (one-click copy) and the last input,
- * indent and sort choice persist in localStorage so the tool feels like a tab
- * you can return to. Mounts as a WebComponent so it survives Astro's
- * client-side View Transitions (see astro:page-load wiring in tools/[slug].astro).
+ * the offending line. Indent (2 / 3 / 4 spaces or tab), key-sort, and an
+ * auto-format-as-you-type toggle all persist in localStorage, as does the last
+ * input, so the tool feels like a tab you can return to. Everything runs in the
+ * browser; nothing is uploaded.
+ *
+ * Mounts as a WebComponent so it survives Astro's client-side View Transitions
+ * (see the astro:page-load wiring in tools/[slug].astro).
  */
 
-type Indent = '2' | '4' | 'tab'
+type Indent = '2' | '3' | '4' | 'tab'
+type OutputKind = 'format' | 'minify' | 'stringify' | 'yaml' | 'csv' | 'xml'
+type ViewMode = 'text' | 'tree'
 
 const LS_INPUT = 'json-tidy:input:v1'
 const LS_INDENT = 'json-tidy:indent:v1'
 const LS_SORT = 'json-tidy:sort:v1'
+const LS_AUTO = 'json-tidy:auto:v1'
+const LS_VIEW = 'json-tidy:view:v1'
 const MAX_PERSIST = 256 * 1024 // don't try to persist absurdly large blobs
+const MAX_TREE_NODES = 15000 // above this, skip the interactive tree (DOM gets too heavy)
 
 const SAMPLE = `{
   "tool": "JSON Tidy",
   "tidy": true,
-  "indentOptions": [2, 4, "tab"],
-  "features": ["format", "validate", "minify", "sort keys"],
+  "indentOptions": [2, 3, 4, "tab"],
+  "converters": ["yaml", "csv", "xml"],
   "nested": { "count": 3, "items": [1, 2, 3], "ok": null }
 }`
 
+const OUTPUT_META: Record<OutputKind, { title: string; ext: string; mime: string }> = {
+  format: { title: 'Formatted JSON', ext: 'json', mime: 'application/json' },
+  minify: { title: 'Minified JSON', ext: 'json', mime: 'application/json' },
+  stringify: { title: 'Stringified JSON', ext: 'txt', mime: 'text/plain' },
+  yaml: { title: 'YAML', ext: 'yaml', mime: 'text/yaml' },
+  csv: { title: 'CSV', ext: 'csv', mime: 'text/csv' },
+  xml: { title: 'XML', ext: 'xml', mime: 'application/xml' },
+}
+
 function indentString(i: Indent): string {
   if (i === 'tab') return '\t'
-  return i === '4' ? '    ' : '  '
+  if (i === '4') return '    '
+  if (i === '3') return '   '
+  return '  '
 }
 
 function lineColFromOffset(src: string, offset: number): { line: number; col: number } {
@@ -255,37 +276,224 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
 }
 
+function isPrimitive(v: unknown): boolean {
+  return v === null || typeof v !== 'object'
+}
+
+// ── JSON → YAML ──────────────────────────────────────────────
+const YAML_PLAIN = /^[A-Za-z0-9][\w .\-/@]*$/
+function yamlNeedsQuote(s: string): boolean {
+  if (s === '') return true
+  if (/^\s|\s$/.test(s)) return true
+  if (/[:#[\]{}&*!|>'"%@`,]/.test(s)) return true
+  if (/[\n\t]/.test(s)) return true
+  if (/^(true|false|null|yes|no|on|off|~)$/i.test(s)) return true
+  if (/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(s)) return true
+  if (!YAML_PLAIN.test(s)) return true
+  return false
+}
+function yamlScalar(v: unknown): string {
+  if (v === null) return 'null'
+  if (typeof v === 'boolean') return v ? 'true' : 'false'
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'null'
+  const s = String(v)
+  return yamlNeedsQuote(s) ? JSON.stringify(s) : s
+}
+function yamlBlock(value: unknown, indent: number): string {
+  const pad = '  '.repeat(indent)
+  if (Array.isArray(value)) {
+    if (value.length === 0) return `${pad}[]`
+    return value.map((item) => {
+      if (isPrimitive(item)) return `${pad}- ${yamlScalar(item)}`
+      const inner = yamlBlock(item, indent + 1)
+      const stripped = inner.replace('  '.repeat(indent + 1), '')
+      return `${pad}- ${stripped}`
+    }).join('\n')
+  }
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    const keys = Object.keys(obj)
+    if (keys.length === 0) return `${pad}{}`
+    return keys.map((k) => {
+      const v = obj[k]
+      const key = yamlNeedsQuote(k) ? JSON.stringify(k) : k
+      if (isPrimitive(v)) return `${pad}${key}: ${yamlScalar(v)}`
+      if (Array.isArray(v) && v.length === 0) return `${pad}${key}: []`
+      if (!Array.isArray(v) && Object.keys(v as object).length === 0) return `${pad}${key}: {}`
+      // arrays render block-style at the same indent as the key; objects indent +1
+      const childIndent = Array.isArray(v) ? indent : indent + 1
+      return `${pad}${key}:\n${yamlBlock(v, childIndent)}`
+    }).join('\n')
+  }
+  return `${pad}${yamlScalar(value)}`
+}
+function toYaml(value: unknown): string {
+  if (isPrimitive(value)) return yamlScalar(value)
+  return yamlBlock(value, 0)
+}
+
+// ── JSON → CSV ───────────────────────────────────────────────
+function flatten(obj: unknown, prefix: string, out: Record<string, unknown>): Record<string, unknown> {
+  if (obj === null || typeof obj !== 'object') {
+    out[prefix] = obj
+    return out
+  }
+  if (Array.isArray(obj)) {
+    out[prefix] = JSON.stringify(obj)
+    return out
+  }
+  const rec = obj as Record<string, unknown>
+  const keys = Object.keys(rec)
+  if (keys.length === 0) { out[prefix] = ''; return out }
+  for (const k of keys) flatten(rec[k], prefix ? `${prefix}.${k}` : k, out)
+  return out
+}
+function csvCell(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  const s = typeof v === 'object' ? JSON.stringify(v) : String(v)
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
+  return s
+}
+function toCsv(value: unknown): string {
+  const rows = Array.isArray(value) ? value : [value]
+  if (rows.every(isPrimitive)) {
+    const body = rows.map((r) => csvCell(r)).join('\n')
+    return rows.length ? `value\n${body}` : 'value'
+  }
+  const flat = rows.map((r) => (isPrimitive(r) ? { value: r } : flatten(r, '', {})))
+  const headers: string[] = []
+  const seen = new Set<string>()
+  for (const row of flat) for (const k of Object.keys(row)) if (!seen.has(k)) { seen.add(k); headers.push(k) }
+  const head = headers.map(csvCell).join(',')
+  const body = flat.map((row) => headers.map((h) => csvCell((row as Record<string, unknown>)[h])).join(',')).join('\n')
+  return body ? `${head}\n${body}` : head
+}
+
+// ── JSON → XML ───────────────────────────────────────────────
+function xmlEscape(s: unknown): string {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+function xmlName(k: string): string {
+  let n = String(k).replace(/[^A-Za-z0-9_.\-]/g, '_')
+  if (!n || /^[^A-Za-z_]/.test(n)) n = '_' + n
+  return n
+}
+function xmlNode(name: string, value: unknown, indent: number): string {
+  const pad = '  '.repeat(indent)
+  if (value === null || value === undefined) return `${pad}<${name}/>`
+  if (Array.isArray(value)) {
+    if (value.length === 0) return `${pad}<${name}/>`
+    return value.map((item) => xmlNode(name, item, indent)).join('\n')
+  }
+  if (typeof value === 'object') {
+    const rec = value as Record<string, unknown>
+    const keys = Object.keys(rec)
+    if (keys.length === 0) return `${pad}<${name}/>`
+    const inner = keys.map((k) => xmlNode(xmlName(k), rec[k], indent + 1)).join('\n')
+    return `${pad}<${name}>\n${inner}\n${pad}</${name}>`
+  }
+  return `${pad}<${name}>${xmlEscape(value)}</${name}>`
+}
+function toXml(value: unknown, root = 'root'): string {
+  const header = '<?xml version="1.0" encoding="UTF-8"?>'
+  let body: string
+  if (Array.isArray(value)) {
+    const inner = value.map((item) => xmlNode('item', item, 1)).join('\n')
+    body = value.length ? `<${root}>\n${inner}\n</${root}>` : `<${root}/>`
+  } else {
+    body = xmlNode(root, value, 0)
+  }
+  return `${header}\n${body}`
+}
+
+// ── Tree view helpers ────────────────────────────────────────
+/** Build a JS-style path to a child (used for the "copy path" affordance). */
+function childPath(parent: string, key: string | number): string {
+  if (typeof key === 'number') return `${parent}[${key}]`
+  if (/^[A-Za-z_$][\w$]*$/.test(key)) return `${parent}.${key}`
+  return `${parent}[${JSON.stringify(key)}]`
+}
+
+/** Count nodes with an early bail so huge structures don't stall the walk. */
+function exceedsNodeCap(v: unknown, cap: number): boolean {
+  let count = 0
+  const walk = (x: unknown): void => {
+    if (count > cap) return
+    count++
+    if (Array.isArray(x)) {
+      for (const item of x) { if (count > cap) return; walk(item) }
+    } else if (x && typeof x === 'object') {
+      for (const k of Object.keys(x as Record<string, unknown>)) {
+        if (count > cap) return
+        walk((x as Record<string, unknown>)[k])
+      }
+    }
+  }
+  walk(v)
+  return count > cap
+}
+
+function makeSpan(dtype: string, text?: string): HTMLSpanElement {
+  const s = document.createElement('span')
+  s.dataset.type = dtype
+  if (text !== undefined) s.textContent = text
+  return s
+}
+
 class JsonTidyTool extends HTMLElement {
   private indent: Indent = '2'
   private sort = false
+  private auto = false
   private debounce = 0
 
+  private output = ''
+  private outputKind: OutputKind | null = null
+
+  private view: ViewMode = 'text'
+  private collapsed = new Set<string>()
+  private treeReady = false
+
   private input!: HTMLTextAreaElement
+  private fileInput!: HTMLInputElement
   private statusEl!: HTMLElement
   private errorEl!: HTMLElement
   private metaEl!: HTMLElement
+  private outEl!: HTMLElement
+  private treeEl!: HTMLElement
+  private outTitleEl!: HTMLElement
   private copyBtn!: HTMLButtonElement
+  private downloadBtn!: HTMLButtonElement
+  private expandAllBtn!: HTMLButtonElement
+  private collapseAllBtn!: HTMLButtonElement
 
   connectedCallback() {
     this.indent = (this.readLS(LS_INDENT) as Indent) || '2'
-    if (this.indent !== '2' && this.indent !== '4' && this.indent !== 'tab') this.indent = '2'
+    if (!['2', '3', '4', 'tab'].includes(this.indent)) this.indent = '2'
     this.sort = this.readLS(LS_SORT) === '1'
+    this.auto = this.readLS(LS_AUTO) === '1'
+    this.view = this.readLS(LS_VIEW) === 'tree' ? 'tree' : 'text'
 
     this.innerHTML = `
       <div data-type="tool-page" data-tool="json-tidy">
         <div data-type="tool-header">
           <h1>JSON Tidy</h1>
-          <p>Paste JSON to format, validate or minify it — instantly, in your browser. Errors are pinpointed by line and column; nothing is uploaded.</p>
+          <p>Paste JSON to format, validate, minify, explore in a collapsible tree, or convert it to YAML, CSV, or XML — instantly, in your browser. Errors are pinpointed by line and column; nothing is uploaded.</p>
         </div>
 
         <div data-group="toolbar">
           <button data-action="format" type="button">Format</button>
           <button data-action="minify" type="button">Minify</button>
+          <button data-action="stringify" type="button">Stringify</button>
+          <span data-type="jt-sep" aria-hidden="true"></span>
+          <button data-action="to-yaml" type="button">→ YAML</button>
+          <button data-action="to-csv" type="button">→ CSV</button>
+          <button data-action="to-xml" type="button">→ XML</button>
           <span data-type="jt-sep" aria-hidden="true"></span>
           <label data-type="jt-field">
             <span>Indent</span>
             <select data-control="indent" aria-label="Indent size">
               <option value="2">2 spaces</option>
+              <option value="3">3 spaces</option>
               <option value="4">4 spaces</option>
               <option value="tab">Tab</option>
             </select>
@@ -294,47 +502,85 @@ class JsonTidyTool extends HTMLElement {
             <input data-control="sort" type="checkbox" />
             <span>Sort keys</span>
           </label>
+          <label data-type="jt-field" data-variant="check">
+            <input data-control="auto" type="checkbox" />
+            <span>Auto-format</span>
+          </label>
         </div>
 
-        <textarea
-          data-type="jt-input"
-          spellcheck="false"
-          autocomplete="off"
-          autocapitalize="off"
-          autocorrect="off"
-          aria-label="JSON input"
-          placeholder="Paste or type JSON here…  (Ctrl/Cmd + Enter to format)"
-        ></textarea>
+        <div data-type="jt-panes">
+          <section data-type="jt-pane" data-side="input">
+            <div data-type="jt-pane-head">
+              <span data-type="jt-pane-title">Input</span>
+              <div data-group="pane-actions">
+                <button data-action="upload" type="button">Upload</button>
+                <button data-action="sample" type="button">Sample</button>
+                <button data-action="clear" type="button">Clear</button>
+              </div>
+            </div>
+            <textarea
+              data-type="jt-input"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              aria-label="JSON input"
+              placeholder="Paste or type JSON here…  (Ctrl/Cmd + Enter to format)"
+            ></textarea>
+            <input data-control="file" type="file" accept=".json,.txt,application/json,text/plain" hidden aria-hidden="true" />
+            <div data-type="jt-statusbar">
+              <span data-type="jt-status" role="status" aria-live="polite"></span>
+              <span data-type="jt-meta"></span>
+            </div>
+            <pre data-type="jt-error" hidden></pre>
+          </section>
 
-        <div data-type="jt-statusbar">
-          <span data-type="jt-status" role="status" aria-live="polite"></span>
-          <span data-type="jt-meta"></span>
-        </div>
-
-        <pre data-type="jt-error" hidden></pre>
-
-        <div data-group="actions">
-          <button data-action="copy" type="button">Copy</button>
-          <button data-action="sample" type="button">Sample</button>
-          <button data-action="clear" type="button">Clear</button>
+          <section data-type="jt-pane" data-side="output">
+            <div data-type="jt-pane-head">
+              <div data-group="view-toggle" role="group" aria-label="Output view">
+                <button data-view="text" type="button" aria-pressed="true">Text</button>
+                <button data-view="tree" type="button" aria-pressed="false">Tree</button>
+              </div>
+              <span data-type="jt-pane-title" data-control="out-title">Output</span>
+              <div data-group="pane-actions">
+                <button data-action="expand-all" type="button" hidden>Expand all</button>
+                <button data-action="collapse-all" type="button" hidden>Collapse all</button>
+                <button data-action="copy" type="button">Copy</button>
+                <button data-action="download" type="button">Download</button>
+              </div>
+            </div>
+            <pre data-type="jt-output" tabindex="0" aria-label="Conversion output"></pre>
+            <div data-type="jt-tree" role="tree" aria-label="JSON tree view" hidden></div>
+          </section>
         </div>
       </div>
     `
 
     this.input = this.querySelector('[data-type="jt-input"]') as HTMLTextAreaElement
+    this.fileInput = this.querySelector('[data-control="file"]') as HTMLInputElement
     this.statusEl = this.querySelector('[data-type="jt-status"]') as HTMLElement
     this.errorEl = this.querySelector('[data-type="jt-error"]') as HTMLElement
     this.metaEl = this.querySelector('[data-type="jt-meta"]') as HTMLElement
+    this.outEl = this.querySelector('[data-type="jt-output"]') as HTMLElement
+    this.treeEl = this.querySelector('[data-type="jt-tree"]') as HTMLElement
+    this.outTitleEl = this.querySelector('[data-control="out-title"]') as HTMLElement
     this.copyBtn = this.querySelector('[data-action="copy"]') as HTMLButtonElement
+    this.downloadBtn = this.querySelector('[data-action="download"]') as HTMLButtonElement
+    this.expandAllBtn = this.querySelector('[data-action="expand-all"]') as HTMLButtonElement
+    this.collapseAllBtn = this.querySelector('[data-action="collapse-all"]') as HTMLButtonElement
 
     // Restore prior session.
     const saved = this.readLS(LS_INPUT)
     if (saved) this.input.value = saved
     ;(this.querySelector('[data-control="indent"]') as HTMLSelectElement).value = this.indent
     ;(this.querySelector('[data-control="sort"]') as HTMLInputElement).checked = this.sort
+    ;(this.querySelector('[data-control="auto"]') as HTMLInputElement).checked = this.auto
 
     this.wire()
+    this.renderOutput()
     this.validate()
+    if (this.auto) this.maybeAutoFormat()
+    this.setView(this.view)
   }
 
   disconnectedCallback() {
@@ -344,41 +590,90 @@ class JsonTidyTool extends HTMLElement {
   private wire() {
     this.input.addEventListener('input', () => this.scheduleUpdate())
     this.input.addEventListener('keydown', (e) => {
-      // Ctrl/Cmd + Enter → format. Tab inserts a tab instead of leaving the field.
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
-        this.transform(false)
+        this.produce('format')
       } else if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
         this.insertAtCursor('\t')
       }
     })
 
-    this.querySelector('[data-action="format"]')!.addEventListener('click', () => this.transform(false))
-    this.querySelector('[data-action="minify"]')!.addEventListener('click', () => this.transform(true))
+    const op = (sel: string, kind: OutputKind) =>
+      this.querySelector(sel)!.addEventListener('click', () => this.produce(kind))
+    op('[data-action="format"]', 'format')
+    op('[data-action="minify"]', 'minify')
+    op('[data-action="stringify"]', 'stringify')
+    op('[data-action="to-yaml"]', 'yaml')
+    op('[data-action="to-csv"]', 'csv')
+    op('[data-action="to-xml"]', 'xml')
+
     this.copyBtn.addEventListener('click', () => this.copy())
+    this.downloadBtn.addEventListener('click', () => this.download())
+
+    this.querySelector('[data-view="text"]')!.addEventListener('click', () => this.setView('text'))
+    this.querySelector('[data-view="tree"]')!.addEventListener('click', () => this.setView('tree'))
+    this.expandAllBtn.addEventListener('click', () => this.expandAll())
+    this.collapseAllBtn.addEventListener('click', () => this.collapseAll())
+
+    // Delegated tree interaction: toggles expand/collapse; key clicks copy the path.
+    this.treeEl.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement
+      const toggle = target.closest('[data-type="jt-toggle"]')
+      if (toggle) {
+        this.toggleNode(toggle.closest('[data-branch]') as HTMLElement | null)
+        return
+      }
+      const key = target.closest('[data-type="jt-key"]') as HTMLElement | null
+      if (key && key.dataset.path) this.copyPath(key)
+    })
+    this.treeEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return
+      const target = e.target as HTMLElement
+      if (target.dataset.type === 'jt-key' && target.dataset.path) {
+        e.preventDefault()
+        this.copyPath(target)
+      }
+    })
+
+    this.querySelector('[data-action="upload"]')!.addEventListener('click', () => this.fileInput.click())
+    this.fileInput.addEventListener('change', () => this.loadFile())
+
     this.querySelector('[data-action="sample"]')!.addEventListener('click', () => {
       this.input.value = SAMPLE
       this.persist()
       this.validate()
       this.input.focus()
+      this.maybeAutoFormat()
+      if (this.view === 'tree') this.renderTree()
     })
     this.querySelector('[data-action="clear"]')!.addEventListener('click', () => {
       this.input.value = ''
+      this.collapsed.clear()
       this.persist()
       this.validate()
+      this.setOutput('', null)
       this.input.focus()
+      if (this.view === 'tree') this.renderTree()
     })
 
     const indentSel = this.querySelector('[data-control="indent"]') as HTMLSelectElement
     indentSel.addEventListener('change', () => {
       this.indent = indentSel.value as Indent
       this.writeLS(LS_INDENT, this.indent)
+      this.reflowOutput()
     })
     const sortChk = this.querySelector('[data-control="sort"]') as HTMLInputElement
     sortChk.addEventListener('change', () => {
       this.sort = sortChk.checked
       this.writeLS(LS_SORT, this.sort ? '1' : '0')
+      this.reflowOutput()
+    })
+    const autoChk = this.querySelector('[data-control="auto"]') as HTMLInputElement
+    autoChk.addEventListener('change', () => {
+      this.auto = autoChk.checked
+      this.writeLS(LS_AUTO, this.auto ? '1' : '0')
+      if (this.auto) this.produce('format', true)
     })
   }
 
@@ -397,7 +692,21 @@ class JsonTidyTool extends HTMLElement {
       this.debounce = 0
       this.validate()
       this.persist()
+      this.maybeAutoFormat()
+      if (this.view === 'tree') this.renderTree()
     }, 180)
+  }
+
+  private maybeAutoFormat() {
+    if (!this.auto) return
+    if (!this.input.value.trim()) { this.setOutput('', null); return }
+    this.produce('format', true)
+  }
+
+  /** Re-run the current output operation when indent/sort change. */
+  private reflowOutput() {
+    if (this.outputKind && this.input.value.trim()) this.produce(this.outputKind, true)
+    if (this.view === 'tree') this.renderTree()
   }
 
   private validate() {
@@ -431,7 +740,6 @@ class JsonTidyTool extends HTMLElement {
     const lines = src.split('\n')
     const lineText = lines[res.line - 1] ?? ''
     const col = Math.max(1, res.col ?? 1)
-    // Keep a window around the column so very long lines stay readable.
     const WINDOW = 80
     let start = 0
     let display = lineText
@@ -450,33 +758,265 @@ class JsonTidyTool extends HTMLElement {
     this.errorEl.hidden = false
   }
 
-  private transform(minify: boolean) {
+  /**
+   * Run an operation against the current input and render the result into the
+   * output pane. `silent` skips the invalid-input flash (used for auto-format
+   * and reflows, where surfacing the live status line is enough).
+   */
+  private produce(kind: OutputKind, silent = false) {
     const src = this.input.value
     if (!src.trim()) {
-      this.input.focus()
+      if (!silent) this.input.focus()
       return
     }
     const res = analyze(src)
     if (!res.ok) {
       this.validate()
-      this.flash(this.querySelector(`[data-action="${minify ? 'minify' : 'format'}"]`) as HTMLButtonElement, 'Invalid JSON')
+      if (!silent) {
+        const btn = this.querySelector(`[data-action="${kind === 'format' ? 'format' : kind === 'minify' ? 'minify' : kind === 'stringify' ? 'stringify' : `to-${kind}`}"]`) as HTMLButtonElement
+        if (btn) this.flash(btn, 'Invalid JSON')
+      }
       return
     }
     const value = this.sort ? sortDeep(res.value) : res.value
-    const out = minify
-      ? JSON.stringify(value)
-      : JSON.stringify(value, null, indentString(this.indent))
-    this.input.value = out
-    this.persist()
-    this.validate()
-    if (minify) {
+    let out = ''
+    switch (kind) {
+      case 'format': out = JSON.stringify(value, null, indentString(this.indent)); break
+      case 'minify': out = JSON.stringify(value); break
+      case 'stringify': out = JSON.stringify(JSON.stringify(value)); break
+      case 'yaml': out = toYaml(value); break
+      case 'csv': out = toCsv(value); break
+      case 'xml': out = toXml(value); break
+    }
+    let detail = ''
+    if (kind === 'minify') {
       const saved = byteLength(src) - byteLength(out)
-      if (saved > 0) this.metaEl.textContent += ` · saved ${formatBytes(saved)}`
+      if (saved > 0) detail = ` · saved ${formatBytes(saved)}`
+    }
+    this.setOutput(out, kind, detail)
+    // Explicit ops produce text — surface the Text view so the result is visible.
+    if (!silent && this.view !== 'text') this.setView('text')
+  }
+
+  private setOutput(text: string, kind: OutputKind | null, detail = '') {
+    this.output = text
+    this.outputKind = kind
+    this.outTitleEl.textContent = kind ? OUTPUT_META[kind].title + detail : 'Output'
+    this.renderOutput()
+  }
+
+  private renderOutput() {
+    const has = this.output.length > 0
+    if (has) {
+      this.outEl.textContent = this.output
+      this.outEl.removeAttribute('data-empty')
+    } else {
+      this.outEl.textContent = 'Run Format, Minify, Stringify, or a converter — the result appears here.'
+      this.outEl.setAttribute('data-empty', '')
+    }
+    this.updateActionStates()
+  }
+
+  // ── View switching ───────────────────────────────────────────
+  private setView(mode: ViewMode) {
+    this.view = mode
+    this.writeLS(LS_VIEW, mode)
+    const tree = mode === 'tree'
+    this.outEl.hidden = tree
+    this.treeEl.hidden = !tree
+    this.outTitleEl.hidden = tree
+    this.expandAllBtn.hidden = !tree
+    this.collapseAllBtn.hidden = !tree
+    ;(this.querySelector('[data-view="text"]') as HTMLButtonElement).setAttribute('aria-pressed', String(!tree))
+    ;(this.querySelector('[data-view="tree"]') as HTMLButtonElement).setAttribute('aria-pressed', String(tree))
+    if (tree) this.renderTree()
+    else this.updateActionStates()
+  }
+
+  private updateActionStates() {
+    const enabled = this.view === 'tree' ? this.treeReady : this.output.length > 0
+    this.copyBtn.disabled = !enabled
+    this.downloadBtn.disabled = !enabled
+  }
+
+  // ── Tree view ────────────────────────────────────────────────
+  /** The formatted-JSON snapshot the tree represents (for copy/download). */
+  private treeText(): string {
+    const res = analyze(this.input.value)
+    if (!res.ok) return ''
+    const value = this.sort ? sortDeep(res.value) : res.value
+    return JSON.stringify(value, null, indentString(this.indent))
+  }
+
+  private renderTree() {
+    this.treeEl.replaceChildren()
+    this.treeReady = false
+    const src = this.input.value
+    if (!src.trim()) {
+      this.treeNotice('Your JSON renders as an interactive, collapsible tree here.')
+    } else {
+      const res = analyze(src)
+      if (!res.ok) {
+        this.treeNotice('Can’t render the tree — the JSON is invalid. Fix the highlighted error on the left.')
+      } else {
+        const value = this.sort ? sortDeep(res.value) : res.value
+        if (exceedsNodeCap(value, MAX_TREE_NODES)) {
+          this.treeNotice(`This JSON is very large (over ${MAX_TREE_NODES.toLocaleString()} nodes) — switch to the Text view to format or convert it.`)
+        } else {
+          this.treeEl.append(this.buildNode(null, value, '$'))
+          this.treeReady = true
+        }
+      }
+    }
+    this.updateActionStates()
+  }
+
+  private treeNotice(msg: string) {
+    const div = document.createElement('div')
+    div.dataset.type = 'jt-tree-empty'
+    div.textContent = msg
+    this.treeEl.append(div)
+  }
+
+  /** Recursively build one tree node. Uses textContent throughout (no HTML injection). */
+  private buildNode(key: string | number | null, value: unknown, path: string): HTMLElement {
+    const node = document.createElement('div')
+    node.dataset.type = 'jt-node'
+    const isArr = Array.isArray(value)
+    const isObj = value !== null && typeof value === 'object'
+    const entries: [string | number, unknown][] = isObj
+      ? (isArr
+          ? (value as unknown[]).map((v, i) => [i, v] as [number, unknown])
+          : Object.entries(value as Record<string, unknown>))
+      : []
+    const n = entries.length
+    const row = document.createElement('div')
+    row.dataset.type = 'jt-node-row'
+
+    if (isObj && n > 0) {
+      node.dataset.branch = ''
+      node.dataset.kind = isArr ? 'array' : 'object'
+      node.dataset.path = path
+      const collapsed = this.collapsed.has(path)
+      if (collapsed) node.dataset.collapsed = ''
+
+      const toggle = document.createElement('button')
+      toggle.type = 'button'
+      toggle.dataset.type = 'jt-toggle'
+      toggle.setAttribute('aria-expanded', String(!collapsed))
+      toggle.setAttribute('aria-label', 'Toggle node')
+      toggle.append(makeSpan('jt-arrow', '▸'))
+      row.append(toggle)
+
+      this.appendKey(row, key, path)
+      row.append(makeSpan('jt-bracket', isArr ? '[' : '{'))
+      row.append(makeSpan('jt-count', isArr ? `${n} ${n === 1 ? 'item' : 'items'}` : `${n} ${n === 1 ? 'key' : 'keys'}`))
+      row.append(makeSpan('jt-preview', isArr ? '… ]' : '… }'))
+      node.append(row)
+
+      const kids = document.createElement('div')
+      kids.dataset.type = 'jt-children'
+      for (const [k, v] of entries) kids.append(this.buildNode(k, v, childPath(path, k)))
+      node.append(kids)
+
+      const closeRow = document.createElement('div')
+      closeRow.dataset.type = 'jt-node-row'
+      closeRow.dataset.kind = 'close'
+      closeRow.append(makeSpan('jt-spacer'))
+      closeRow.append(makeSpan('jt-bracket', isArr ? ']' : '}'))
+      node.append(closeRow)
+      return node
+    }
+
+    // Leaf, or an empty object/array.
+    node.dataset.leaf = ''
+    node.dataset.path = path
+    row.append(makeSpan('jt-spacer'))
+    this.appendKey(row, key, path)
+    if (isObj) {
+      row.append(makeSpan('jt-bracket', isArr ? '[]' : '{}'))
+    } else {
+      const display = value === null ? 'null' : typeof value === 'string' ? JSON.stringify(value) : String(value)
+      const val = makeSpan('jt-val', display)
+      val.dataset.vtype = value === null ? 'null' : typeof value
+      row.append(val)
+    }
+    node.append(row)
+    return node
+  }
+
+  private appendKey(row: HTMLElement, key: string | number | null, path: string) {
+    if (key === null) return
+    const k = makeSpan('jt-key', String(key))
+    if (typeof key === 'number') k.dataset.kind = 'index'
+    k.dataset.path = path
+    k.title = `Copy path: ${path}`
+    k.setAttribute('role', 'button')
+    k.tabIndex = 0
+    row.append(k, makeSpan('jt-colon', ': '))
+  }
+
+  private toggleNode(node: HTMLElement | null) {
+    if (!node) return
+    const path = node.dataset.path
+    const toggle = node.querySelector(':scope > [data-type="jt-node-row"] > [data-type="jt-toggle"]') as HTMLButtonElement | null
+    if (node.hasAttribute('data-collapsed')) {
+      node.removeAttribute('data-collapsed')
+      if (path) this.collapsed.delete(path)
+      toggle?.setAttribute('aria-expanded', 'true')
+    } else {
+      node.setAttribute('data-collapsed', '')
+      if (path) this.collapsed.add(path)
+      toggle?.setAttribute('aria-expanded', 'false')
     }
   }
 
+  private expandAll() {
+    this.collapsed.clear()
+    this.treeEl.querySelectorAll('[data-branch]').forEach((n) => {
+      n.removeAttribute('data-collapsed')
+      n.querySelector(':scope > [data-type="jt-node-row"] > [data-type="jt-toggle"]')?.setAttribute('aria-expanded', 'true')
+    })
+  }
+
+  private collapseAll() {
+    this.treeEl.querySelectorAll<HTMLElement>('[data-branch]').forEach((n) => {
+      if (n.dataset.path) this.collapsed.add(n.dataset.path)
+      n.setAttribute('data-collapsed', '')
+      n.querySelector(':scope > [data-type="jt-node-row"] > [data-type="jt-toggle"]')?.setAttribute('aria-expanded', 'false')
+    })
+  }
+
+  private async copyPath(keyEl: HTMLElement) {
+    const path = keyEl.dataset.path
+    if (!path) return
+    try {
+      await navigator.clipboard.writeText(path)
+      keyEl.dataset.copied = ''
+      window.setTimeout(() => keyEl.removeAttribute('data-copied'), 900)
+    } catch { /* clipboard unavailable */ }
+  }
+
+  private loadFile() {
+    const file = this.fileInput.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      this.input.value = typeof reader.result === 'string' ? reader.result : ''
+      this.collapsed.clear()
+      this.persist()
+      this.validate()
+      this.maybeAutoFormat()
+      this.input.focus()
+      if (this.view === 'tree') this.renderTree()
+    }
+    reader.onerror = () => this.flash(this.querySelector('[data-action="upload"]') as HTMLButtonElement, 'Read failed')
+    reader.readAsText(file)
+    this.fileInput.value = '' // allow re-uploading the same file
+  }
+
   private async copy() {
-    const text = this.input.value
+    const text = this.view === 'tree' ? this.treeText() : this.output
     if (!text) return
     try {
       await navigator.clipboard.writeText(text)
@@ -486,7 +1026,29 @@ class JsonTidyTool extends HTMLElement {
     }
   }
 
+  private download() {
+    const text = this.view === 'tree' ? this.treeText() : this.output
+    const kind: OutputKind | null = this.view === 'tree' ? 'format' : this.outputKind
+    if (!text || !kind) return
+    const { ext, mime } = OUTPUT_META[kind]
+    try {
+      const blob = new Blob([text], { type: `${mime};charset=utf-8` })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `json-tidy.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      this.flash(this.downloadBtn, 'Saved!')
+    } catch {
+      this.flash(this.downloadBtn, 'Failed')
+    }
+  }
+
   private flash(btn: HTMLButtonElement, label: string) {
+    if (!btn) return
     const original = btn.dataset.label ?? btn.textContent ?? ''
     if (!btn.dataset.label) btn.dataset.label = original
     btn.textContent = label

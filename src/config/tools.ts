@@ -18,12 +18,12 @@ export const tools: Tool[] = [
   {
     slug: 'json-tidy',
     title: 'JSON Tidy',
-    description: 'Format, validate, and minify JSON — with pinpoint error locations.',
+    description: 'Format, validate, view as a tree & convert JSON to YAML, CSV, or XML.',
     status: 'live',
-    seoTitle: 'JSON Tidy — Free Online JSON Formatter, Validator & Minifier',
-    metaDescription: 'Paste JSON to pretty-print, validate, or minify it instantly in your browser. Parse errors are pinpointed by line and column with a marked excerpt. Choose 2/4-space or tab indent, optionally sort keys, and copy in one click — no login, no tracking, no uploads.',
-    keywords: 'json formatter, json validator, json minifier, pretty print json, format json online, json beautifier, sort json keys',
-    intro: 'A fast, client-side JSON workbench. Paste JSON and format it with your choice of 2-space, 4-space, or tab indentation, optionally sorting object keys for clean diffs — or minify it down to the smallest valid payload. Validation runs live as you type: a status line tells you whether the JSON is valid and, when it is not, points to the exact line and column of the error with a caret-marked excerpt. Output is copy-first, and your last input and settings are remembered in your browser. Everything runs locally with nothing uploaded.',
+    seoTitle: 'JSON Tidy — Free Online JSON Formatter, Viewer, Validator & Converter',
+    metaDescription: 'Paste JSON to pretty-print, validate, minify, explore in a collapsible tree viewer, or convert it to YAML, CSV, or XML — instantly in your browser. Parse errors are pinpointed by line and column with a marked excerpt. Choose 2/3/4-space or tab indent, sort keys, upload a file, and copy or download the result — no login, no tracking, no uploads.',
+    keywords: 'json formatter, json viewer, json tree viewer, json tree view, collapsible json, json validator, json minifier, json to yaml, json to csv, json to xml, json converter, pretty print json, format json online, json beautifier, sort json keys',
+    intro: 'A fast, client-side JSON workbench with a two-pane layout: edit JSON on the left and see the result on the right. Format it with your choice of 2-, 3-, or 4-space or tab indentation, optionally sorting object keys for clean diffs; minify it to the smallest valid payload; stringify it to an escaped one-liner; or convert it straight to YAML, CSV, or XML. Switch the output to an interactive tree viewer to drill into nested objects and arrays — expand and collapse any node, see how many keys or items each holds, and click a key to copy its path. Validation runs live as you type — a status line tells you whether the JSON is valid and, when it is not, points to the exact line and column of the error with a caret-marked excerpt. Load a .json file, turn on auto-format to beautify as you type, then copy or download the output in one click. Your last input, view, and settings are remembered in your browser, and everything runs locally with nothing uploaded.',
   },
   {
     slug: 'type-trial',
