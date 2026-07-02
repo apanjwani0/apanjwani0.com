@@ -2,18 +2,38 @@
 export const prerender = true
 
 import Base from '../../layouts/Base.astro'
+import { site } from '../../config/site'
 import { tools } from '../../config/tools'
+import { itemListJsonLd } from '../../lib/jsonld'
 import '../../styles/tools.css'
+
+// Prerendered page: KV isn't available at build time, so read the static config
+// directly (same reason `tools` is imported statically, not via getTools()).
+
+// Map the navigable tools (live pages + external links; skip wip placeholders and
+// disabled tools) to an ItemList so search engines get an explicit, ordered map of
+// the hub — the listing-page counterpart to each tool's WebApplication schema.
+const listed = tools.filter(t => t.status === 'live' || t.status === 'external')
+const ldJson = itemListJsonLd(
+  'Tools by Aman Panjwani',
+  listed.map(t => ({
+    name: t.title,
+    url: t.status === 'external' ? t.href! : `${site.url}/tools/${t.slug}`,
+  })),
+)
 ---
 
 <Base
   title="tools"
-  description="Free, browser-based tools built by Aman Panjwani — no sign-up, no tracking, just open and use."
+  description="A growing set of fast, free developer tools that run entirely in your browser — a JSON formatter and tree viewer, a generative wallpaper maker, and a markdown editor. No sign-up, no tracking, nothing uploaded."
+  keywords="developer tools, online dev tools, json formatter, json viewer, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
 >
+  {listed.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
   <h1>tools</h1>
   <p data-type="page-intro">
-    Small, fast, single-purpose tools I built to scratch my own itches. Each one is
-    copy-first, keyboard-friendly, and runs entirely in your browser — no sign-ups,
+    Small, fast, single-purpose tools I built to scratch my own itches — a JSON
+    formatter, a generative-art maker, a markdown editor, and more. Each one is
+    copy-first, keyboard-friendly, and runs entirely in your browser: no sign-ups,
     no tracking, nothing uploaded.
   </p>
   <ul data-type="preview-list">

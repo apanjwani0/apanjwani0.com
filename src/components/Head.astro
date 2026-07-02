@@ -9,9 +9,11 @@ interface Props {
   noindex?: boolean
   keywords?: string
   image?: string
+  imageWidth?: number
+  imageHeight?: number
 }
 
-const { pageTitle, description, canonicalURL, siteName, noindex = false, keywords, image } = Astro.props
+const { pageTitle, description, canonicalURL, siteName, noindex = false, keywords, image, imageWidth, imageHeight } = Astro.props
 ---
 
 <meta charset="UTF-8" />
@@ -33,11 +35,14 @@ const { pageTitle, description, canonicalURL, siteName, noindex = false, keyword
 <meta property="og:locale" content="en_US" />
 {image && <meta property="og:image" content={image} />}
 {image && <meta property="og:image:alt" content={siteName} />}
+{image && imageWidth && <meta property="og:image:width" content={String(imageWidth)} />}
+{image && imageHeight && <meta property="og:image:height" content={String(imageHeight)} />}
 
 <meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content={pageTitle} />
 <meta name="twitter:description" content={description} />
 {image && <meta name="twitter:image" content={image} />}
+{image && <meta name="twitter:image:alt" content={siteName} />}
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

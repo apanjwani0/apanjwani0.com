@@ -24,6 +24,7 @@ const LS_INDENT = 'json-tidy:indent:v1'
 const LS_SORT = 'json-tidy:sort:v1'
 const LS_AUTO = 'json-tidy:auto:v1'
 const LS_VIEW = 'json-tidy:view:v1'
+const LS_SEARCH = 'json-tidy:search:v1'
 const MAX_PERSIST = 256 * 1024 // don't try to persist absurdly large blobs
 const MAX_TREE_NODES = 15000 // above this, skip the interactive tree (DOM gets too heavy)
 
@@ -453,6 +454,11 @@ class JsonTidyTool extends HTMLElement {
   private collapsed = new Set<string>()
   private treeReady = false
 
+  private query = ''
+  private searchHits: HTMLElement[] = []
+  private activeMatch = -1
+  private searchDebounce = 0
+
   private input!: HTMLTextAreaElement
   private fileInput!: HTMLInputElement
   private statusEl!: HTMLElement
@@ -465,6 +471,12 @@ class JsonTidyTool extends HTMLElement {
   private downloadBtn!: HTMLButtonElement
   private expandAllBtn!: HTMLButtonElement
   private collapseAllBtn!: HTMLButtonElement
+  private searchBar!: HTMLElement
+  private searchInput!: HTMLInputElement
+  private searchCountEl!: HTMLElement
+  private searchPrevBtn!: HTMLButtonElement
+  private searchNextBtn!: HTMLButtonElement
+  private searchClearBtn!: HTMLButtonElement
 
   connectedCallback() {
     this.indent = (this.readLS(LS_INDENT) as Indent) || '2'
@@ -472,12 +484,13 @@ class JsonTidyTool extends HTMLElement {
     this.sort = this.readLS(LS_SORT) === '1'
     this.auto = this.readLS(LS_AUTO) === '1'
     this.view = this.readLS(LS_VIEW) === 'tree' ? 'tree' : 'text'
+    this.query = this.readLS(LS_SEARCH) || ''
 
     this.innerHTML = `
       <div data-type="tool-page" data-tool="json-tidy">
         <div data-type="tool-header">
           <h1>JSON Tidy</h1>
-          <p>Paste JSON to format, validate, minify, explore in a collapsible tree, or convert it to YAML, CSV, or XML — instantly, in your browser. Errors are pinpointed by line and column; nothing is uploaded.</p>
+          <p>Paste JSON to format, validate, minify, explore in a searchable collapsible tree, or convert it to YAML, CSV, or XML — instantly, in your browser. Errors are pinpointed by line and column; nothing is uploaded.</p>
         </div>
 
         <div data-group="toolbar">
@@ -549,6 +562,24 @@ class JsonTidyTool extends HTMLElement {
                 <button data-action="download" type="button">Download</button>
               </div>
             </div>
+            <div data-type="jt-search" hidden>
+              <input
+                data-control="tree-search"
+                type="search"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                aria-label="Search keys and values in the tree"
+                placeholder="Search keys &amp; values…  (Enter / Shift+Enter to step, Esc to clear)"
+              />
+              <span data-type="jt-search-count" role="status" aria-live="polite"></span>
+              <div data-group="search-nav">
+                <button data-action="search-prev" type="button" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled>↑</button>
+                <button data-action="search-next" type="button" aria-label="Next match" title="Next match (Enter)" disabled>↓</button>
+                <button data-action="search-clear" type="button" aria-label="Clear search" title="Clear search (Esc)" disabled>✕</button>
+              </div>
+            </div>
             <pre data-type="jt-output" tabindex="0" aria-label="Conversion output"></pre>
             <div data-type="jt-tree" role="tree" aria-label="JSON tree view" hidden></div>
           </section>
@@ -568,10 +599,17 @@ class JsonTidyTool extends HTMLElement {
     this.downloadBtn = this.querySelector('[data-action="download"]') as HTMLButtonElement
     this.expandAllBtn = this.querySelector('[data-action="expand-all"]') as HTMLButtonElement
     this.collapseAllBtn = this.querySelector('[data-action="collapse-all"]') as HTMLButtonElement
+    this.searchBar = this.querySelector('[data-type="jt-search"]') as HTMLElement
+    this.searchInput = this.querySelector('[data-control="tree-search"]') as HTMLInputElement
+    this.searchCountEl = this.querySelector('[data-type="jt-search-count"]') as HTMLElement
+    this.searchPrevBtn = this.querySelector('[data-action="search-prev"]') as HTMLButtonElement
+    this.searchNextBtn = this.querySelector('[data-action="search-next"]') as HTMLButtonElement
+    this.searchClearBtn = this.querySelector('[data-action="search-clear"]') as HTMLButtonElement
 
     // Restore prior session.
     const saved = this.readLS(LS_INPUT)
     if (saved) this.input.value = saved
+    this.searchInput.value = this.query
     ;(this.querySelector('[data-control="indent"]') as HTMLSelectElement).value = this.indent
     ;(this.querySelector('[data-control="sort"]') as HTMLInputElement).checked = this.sort
     ;(this.querySelector('[data-control="auto"]') as HTMLInputElement).checked = this.auto
@@ -585,6 +623,7 @@ class JsonTidyTool extends HTMLElement {
 
   disconnectedCallback() {
     if (this.debounce) clearTimeout(this.debounce)
+    if (this.searchDebounce) clearTimeout(this.searchDebounce)
   }
 
   private wire() {
@@ -615,6 +654,27 @@ class JsonTidyTool extends HTMLElement {
     this.querySelector('[data-view="tree"]')!.addEventListener('click', () => this.setView('tree'))
     this.expandAllBtn.addEventListener('click', () => this.expandAll())
     this.collapseAllBtn.addEventListener('click', () => this.collapseAll())
+
+    // Tree search: highlight matches, auto-expand ancestors, step through hits.
+    this.searchInput.addEventListener('input', () => {
+      if (this.searchDebounce) clearTimeout(this.searchDebounce)
+      this.searchDebounce = window.setTimeout(() => {
+        this.searchDebounce = 0
+        this.applySearch(this.searchInput.value, true)
+      }, 120)
+    })
+    this.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        this.gotoMatch(e.shiftKey ? -1 : 1)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        this.clearSearch()
+      }
+    })
+    this.searchPrevBtn.addEventListener('click', () => this.gotoMatch(-1))
+    this.searchNextBtn.addEventListener('click', () => this.gotoMatch(1))
+    this.searchClearBtn.addEventListener('click', () => { this.clearSearch(); this.searchInput.focus() })
 
     // Delegated tree interaction: toggles expand/collapse; key clicks copy the path.
     this.treeEl.addEventListener('click', (e) => {
@@ -827,6 +887,7 @@ class JsonTidyTool extends HTMLElement {
     this.outTitleEl.hidden = tree
     this.expandAllBtn.hidden = !tree
     this.collapseAllBtn.hidden = !tree
+    this.searchBar.hidden = !tree
     ;(this.querySelector('[data-view="text"]') as HTMLButtonElement).setAttribute('aria-pressed', String(!tree))
     ;(this.querySelector('[data-view="tree"]') as HTMLButtonElement).setAttribute('aria-pressed', String(tree))
     if (tree) this.renderTree()
@@ -869,6 +930,10 @@ class JsonTidyTool extends HTMLElement {
       }
     }
     this.updateActionStates()
+    // Re-apply the active search against the freshly built tree (no auto-scroll
+    // on rebuild — only user-driven search/steps move the viewport).
+    this.searchInput.disabled = !this.treeReady
+    this.applySearch(this.query, false)
   }
 
   private treeNotice(msg: string) {
@@ -985,6 +1050,145 @@ class JsonTidyTool extends HTMLElement {
       n.setAttribute('data-collapsed', '')
       n.querySelector(':scope > [data-type="jt-node-row"] > [data-type="jt-toggle"]')?.setAttribute('aria-expanded', 'false')
     })
+    // A manual collapse-all can bury search hits — re-expand ancestors of matches.
+    if (this.query.trim() && this.searchHits.length) {
+      this.searchHits.forEach((m) => this.expandAncestorsForSearch(m))
+      this.scrollToActive()
+    }
+  }
+
+  // ── Tree search ──────────────────────────────────────────────
+  /**
+   * Highlight every occurrence of the query across keys and leaf values, expand
+   * the ancestors of each hit so it's visible, and collect the hit spans for
+   * next/prev stepping. An empty query restores the tree to the user's own
+   * collapse state. Never mutates the persistent `collapsed` Set, so clearing a
+   * search returns the tree exactly to how the user had it.
+   */
+  private applySearch(raw: string, scroll = false) {
+    this.query = raw
+    this.writeLS(LS_SEARCH, raw)
+    this.clearHighlights()
+    this.syncCollapsedFromSet() // baseline: honour the user's manual collapses
+    const q = raw.trim().toLowerCase()
+    if (!q || !this.treeReady) {
+      this.searchHits = []
+      this.activeMatch = -1
+      this.updateSearchUI()
+      return
+    }
+    // Keys (skip array indices — searching "0" should hit values, not indices)
+    // and leaf value spans are the searchable text.
+    const targets = this.treeEl.querySelectorAll<HTMLElement>(
+      '[data-type="jt-key"]:not([data-kind="index"]), [data-type="jt-val"]',
+    )
+    const matchedEls: HTMLElement[] = []
+    targets.forEach((el) => { if (this.highlightInto(el, q)) matchedEls.push(el) })
+    matchedEls.forEach((el) => this.expandAncestorsForSearch(el))
+    // Collect the individual highlight marks in document order for stepping.
+    this.searchHits = Array.from(this.treeEl.querySelectorAll<HTMLElement>('[data-type="jt-hl"]'))
+    this.activeMatch = this.searchHits.length ? 0 : -1
+    this.markActive()
+    this.updateSearchUI()
+    if (scroll && this.activeMatch >= 0) this.scrollToActive()
+  }
+
+  /** Collapse any highlight marks back into plain text on key/value spans. */
+  private clearHighlights() {
+    this.treeEl
+      .querySelectorAll<HTMLElement>('[data-type="jt-key"], [data-type="jt-val"]')
+      .forEach((el) => {
+        if (el.querySelector('[data-type="jt-hl"]')) el.textContent = el.textContent
+      })
+  }
+
+  /** Wrap each case-insensitive occurrence of `q` in `el` with a highlight span. */
+  private highlightInto(el: HTMLElement, q: string): boolean {
+    const text = el.textContent ?? ''
+    const lower = text.toLowerCase()
+    let i = lower.indexOf(q)
+    if (i < 0) return false
+    el.textContent = ''
+    let pos = 0
+    while (i >= 0) {
+      if (i > pos) el.append(document.createTextNode(text.slice(pos, i)))
+      const mk = document.createElement('span')
+      mk.dataset.type = 'jt-hl'
+      mk.textContent = text.slice(i, i + q.length)
+      el.append(mk)
+      pos = i + q.length
+      i = lower.indexOf(q, pos)
+    }
+    if (pos < text.length) el.append(document.createTextNode(text.slice(pos)))
+    return true
+  }
+
+  /** Expand (in the DOM only) every collapsed branch above `el`. */
+  private expandAncestorsForSearch(el: HTMLElement) {
+    let cur: HTMLElement | null = el.parentElement
+    while (cur && cur !== this.treeEl) {
+      if (cur.matches('[data-branch]') && cur.hasAttribute('data-collapsed')) {
+        cur.removeAttribute('data-collapsed')
+        cur
+          .querySelector(':scope > [data-type="jt-node-row"] > [data-type="jt-toggle"]')
+          ?.setAttribute('aria-expanded', 'true')
+      }
+      cur = cur.parentElement
+    }
+  }
+
+  /** Restore each branch's DOM collapse state from the persistent `collapsed` Set. */
+  private syncCollapsedFromSet() {
+    this.treeEl.querySelectorAll<HTMLElement>('[data-branch]').forEach((n) => {
+      const collapsed = !!n.dataset.path && this.collapsed.has(n.dataset.path)
+      const toggle = n.querySelector(':scope > [data-type="jt-node-row"] > [data-type="jt-toggle"]')
+      if (collapsed) {
+        n.setAttribute('data-collapsed', '')
+        toggle?.setAttribute('aria-expanded', 'false')
+      } else {
+        n.removeAttribute('data-collapsed')
+        toggle?.setAttribute('aria-expanded', 'true')
+      }
+    })
+  }
+
+  private markActive() {
+    this.searchHits.forEach((m, idx) => {
+      if (idx === this.activeMatch) m.dataset.active = ''
+      else m.removeAttribute('data-active')
+    })
+  }
+
+  private scrollToActive() {
+    this.searchHits[this.activeMatch]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }
+
+  private gotoMatch(dir: number) {
+    if (!this.searchHits.length) return
+    this.activeMatch = (this.activeMatch + dir + this.searchHits.length) % this.searchHits.length
+    this.markActive()
+    this.scrollToActive()
+    this.updateSearchUI()
+  }
+
+  private clearSearch() {
+    this.searchInput.value = ''
+    this.applySearch('', false)
+  }
+
+  private updateSearchUI() {
+    const q = this.query.trim()
+    const has = this.searchHits.length > 0
+    if (!q || !this.treeReady) {
+      this.searchCountEl.textContent = ''
+      this.searchCountEl.removeAttribute('data-state')
+    } else {
+      this.searchCountEl.textContent = has ? `${this.activeMatch + 1} / ${this.searchHits.length}` : 'No matches'
+      this.searchCountEl.dataset.state = has ? 'ok' : 'none'
+    }
+    this.searchPrevBtn.disabled = !has
+    this.searchNextBtn.disabled = !has
+    this.searchClearBtn.disabled = !q
   }
 
   private async copyPath(keyEl: HTMLElement) {

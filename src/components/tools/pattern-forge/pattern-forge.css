@@ -1,13 +1,8 @@
-div[data-type="tool-page"][data-tool="pattern-forge"] {
-  max-width: 980px;
-  margin: 0 auto;
-}
-
 div[data-type="pf-stage"] {
   width: 100%;
   margin: 0.5rem 0 1.25rem;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   line-height: 0;
   background: var(--color-bg);
@@ -35,7 +30,7 @@ div[data-type="pf-controls"] [data-group] {
 div[data-type="pf-controls"] button {
   padding: 0.32rem 0.7rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-muted);
   font-family: var(--font-serif);
@@ -65,7 +60,7 @@ span[data-type="pf-swatch"] {
   display: inline-block;
   width: 2.2rem;
   height: 0.7rem;
-  border-radius: 3px;
+  border-radius: var(--radius);
   background: linear-gradient(90deg, var(--c1) 0 33%, var(--c2) 33% 66%, var(--c3) 66% 100%);
 }
 
@@ -88,7 +83,7 @@ div[data-type="pf-controls"] [data-group="seed"] input[type="text"] {
   max-width: 220px;
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-serif);

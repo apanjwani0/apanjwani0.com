@@ -9,10 +9,17 @@ import { validateSession } from '../../lib/session'
 import '../../components/tools/md-enhanced/md-enhanced.css'
 import '../../components/tools/audio-transcriber/audio-transcriber.css'
 import '../../components/tools/pattern-forge/pattern-forge.css'
-import '../../components/tools/type-trial/type-trial.css'
 import '../../components/tools/json-tidy/json-tidy.css'
 
 const { slug } = Astro.params
+
+// Tools that have moved elsewhere keep their old URL alive with a permanent
+// redirect, so existing links and search results don't 404. Type Trial graduated
+// from a tool to a game.
+const MOVED: Record<string, string> = { 'type-trial': '/games/type-trial' }
+const movedTo = MOVED[slug as string]
+if (movedTo) return Astro.redirect(movedTo, 301)
+
 const tool = tools.find(t => t.slug === slug)
 
 if (!tool || tool.status === 'external') {
@@ -53,7 +60,6 @@ const ldJson = webAppJsonLd({
   {slug === 'md-enhanced' && <md-enhanced-tool data-tool="md-enhanced"></md-enhanced-tool>}
   {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
   {slug === 'pattern-forge' && <pattern-forge-tool data-tool="pattern-forge"></pattern-forge-tool>}
-  {slug === 'type-trial' && <type-trial-tool data-tool="type-trial"></type-trial-tool>}
   {slug === 'json-tidy' && <json-tidy-tool data-tool="json-tidy"></json-tidy-tool>}
 </ToolBase>
 
@@ -66,7 +72,6 @@ const ldJson = webAppJsonLd({
     if (slug === 'md-enhanced') import('../../components/tools/md-enhanced/MdEnhanced.ts')
     else if (slug === 'audio-transcriber') import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
     else if (slug === 'pattern-forge') import('../../components/tools/pattern-forge/PatternForge.ts')
-    else if (slug === 'type-trial') import('../../components/tools/type-trial/TypeTrial.ts')
     else if (slug === 'json-tidy') import('../../components/tools/json-tidy/JsonTidy.ts')
   }
   document.addEventListener('astro:page-load', mountTool)

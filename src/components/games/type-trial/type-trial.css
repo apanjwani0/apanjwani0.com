@@ -14,7 +14,7 @@ div[data-tool="type-trial"] [data-group="categories"] {
 div[data-tool="type-trial"] [data-group="categories"] button {
   padding: 0.32rem 0.8rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-muted);
   font-family: var(--font-mono);
@@ -39,7 +39,7 @@ div[data-tool="type-trial"] [data-group="categories"] button[data-active] {
 div[data-type="tt-stage"] {
   position: relative;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   background: var(--color-surface);
   padding: clamp(1rem, 4vw, 1.75rem);
   cursor: text;
@@ -74,7 +74,7 @@ div[data-type="tt-text"] span[data-s="ok"] {
 div[data-type="tt-text"] span[data-s="bad"] {
   color: var(--color-error);
   background: color-mix(in srgb, var(--color-error) 16%, transparent);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* Blinking caret drawn as a left border on the current character. */
@@ -118,7 +118,7 @@ div[data-type="tt-overlay"] {
   align-items: flex-end;
   justify-content: flex-end;
   padding: 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   background: none;
   pointer-events: none;
 }
@@ -129,7 +129,7 @@ div[data-type="tt-overlay"] span {
   color: var(--color-text);
   padding: 0.4rem 0.9rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--color-bg) 70%, transparent);
 }
@@ -169,7 +169,7 @@ div[data-type="tt-result"] {
   padding: 1rem 1.25rem;
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-success);
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
 
@@ -202,7 +202,7 @@ div[data-tool="type-trial"] [data-group="actions"] {
 div[data-tool="type-trial"] [data-group="actions"] button {
   padding: 0.32rem 0.8rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-muted);
   font-family: var(--font-mono);
@@ -235,7 +235,7 @@ p[data-type="tt-best"] [data-action="reset-best"] {
   margin-left: 0.5rem;
   padding: 0.1rem 0.45rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-muted);
   font-family: var(--font-mono);

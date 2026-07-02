@@ -3,9 +3,10 @@
  *
  * Pure DOM + a single transparent input, no dependencies. The timer starts on
  * the first keystroke; net WPM is (correct chars / 5) ÷ minutes and accuracy is
- * correct ÷ typed. Your personal best is remembered locally (never uploaded),
- * and a finished run produces a shareable one-line result. Mounts as a
- * WebComponent so it survives Astro's client-side View Transitions.
+ * correct ÷ typed. Each category (quotes / code / numbers) keeps its own personal
+ * best, remembered locally (never uploaded), and a finished run produces a
+ * shareable one-line result. Mounts as a WebComponent so it survives Astro's
+ * client-side View Transitions. Surfaced as a game at /games/type-trial.
  */
 
 type Category = 'quotes' | 'code' | 'numbers'
@@ -49,7 +50,10 @@ const TEXTS: Record<Category, string[]> = {
   ],
 }
 
-const PB_KEY = 'type-trial:pb:v1'
+/* Per-category personal bests. Bumped from the old single-best `…:pb:v1` key —
+   each category now tracks its own best, so a slow Numbers run no longer hides a
+   fast Quotes run (and vice versa). Old v1 data is simply left behind. */
+const BESTS_KEY = 'type-trial:bests:v1'
 
 function escapeHtml(ch: string): string {
   switch (ch) {
@@ -80,20 +84,33 @@ function rankFor(wpm: number): string {
   return 'Just starting out'
 }
 
-interface Best { wpm: number; acc: number }
-
-function loadBest(): Best | null {
-  try {
-    const raw = localStorage.getItem(PB_KEY)
-    if (!raw) return null
-    const v = JSON.parse(raw)
-    if (typeof v?.wpm === 'number') return { wpm: v.wpm, acc: v.acc ?? 0 }
-  } catch { /* ignore storage errors */ }
-  return null
+function categoryName(id: Category): string {
+  return CATEGORIES.find(c => c.id === id)?.name ?? id
 }
 
-function saveBest(b: Best): void {
-  try { localStorage.setItem(PB_KEY, JSON.stringify(b)) } catch { /* ignore */ }
+interface Best { wpm: number; acc: number }
+type Bests = Partial<Record<Category, Best>>
+
+function loadBests(): Bests {
+  try {
+    const raw = localStorage.getItem(BESTS_KEY)
+    if (!raw) return {}
+    const v = JSON.parse(raw)
+    if (!v || typeof v !== 'object') return {}
+    const out: Bests = {}
+    for (const c of CATEGORIES) {
+      const b = (v as Record<string, unknown>)[c.id] as Partial<Best> | undefined
+      if (b && typeof b.wpm === 'number') {
+        out[c.id] = { wpm: b.wpm, acc: typeof b.acc === 'number' ? b.acc : 0 }
+      }
+    }
+    return out
+  } catch { /* ignore storage errors */ }
+  return {}
+}
+
+function saveBests(b: Bests): void {
+  try { localStorage.setItem(BESTS_KEY, JSON.stringify(b)) } catch { /* ignore */ }
 }
 
 interface Stats { wpm: number; acc: number; sec: number; correct: number; typedLen: number }
@@ -219,6 +236,7 @@ class TypeTrialTool extends HTMLElement {
         if (cat === this.category) { this.restart(true); return }
         this.category = cat
         this.syncCategoryUI()
+        this.renderBest()
         this.restart(true)
       }),
     )
@@ -227,7 +245,10 @@ class TypeTrialTool extends HTMLElement {
     this.querySelector('[data-action="new"]')!.addEventListener('click', () => this.restart(true))
     this.shareBtn.addEventListener('click', (e) => this.copyResult(e))
     this.resetBtn.addEventListener('click', () => {
-      try { localStorage.removeItem(PB_KEY) } catch { /* ignore */ }
+      // Clear only the active category's best, leaving the others intact.
+      const m = loadBests()
+      delete m[this.category]
+      saveBests(m)
       this.renderBest()
     })
   }
@@ -368,11 +389,12 @@ class TypeTrialTool extends HTMLElement {
   }
 
   private renderBest() {
-    const best = loadBest()
+    const best = loadBests()[this.category] ?? null
+    const name = categoryName(this.category)
     this.bestEl.textContent = best
-      ? `Personal best: ${best.wpm} wpm · ${best.acc}% accuracy`
-      : 'No personal best yet — finish a run to set one.'
-    // Offer a reset only when there's actually a stored best to clear.
+      ? `${name} best: ${best.wpm} wpm · ${best.acc}% accuracy`
+      : `No ${name} best yet — finish a run to set one.`
+    // Offer a reset only when this category actually has a stored best to clear.
     this.resetBtn.hidden = !best
   }
 
@@ -390,19 +412,28 @@ class TypeTrialTool extends HTMLElement {
     const s = this.computeStats()
     this.renderStats(s)
 
-    const prev = loadBest()
+    const bests = loadBests()
+    const prev = bests[this.category] ?? null
     // Only record a personal best from a plausibly-timed run. A sub-second
     // completion means the text wasn't actually typed (autofill or a stray
     // programmatic fill that slipped past the paste/instant-fill guards), so
     // its WPM is meaningless and must never be stored or shown as a new best.
     const plausible = s.sec >= 1
     const isBest = plausible && s.wpm > 0 && (!prev || s.wpm > prev.wpm)
-    if (isBest) saveBest({ wpm: s.wpm, acc: s.acc })
+    // How much this run beat the previous category best by (only when there was one).
+    const gain = isBest && prev ? s.wpm - prev.wpm : 0
+    if (isBest) {
+      bests[this.category] = { wpm: s.wpm, acc: s.acc }
+      saveBests(bests)
+    }
 
     const rank = rankFor(s.wpm)
+    const bestNote = isBest
+      ? ` · new ${categoryName(this.category)} best!${gain > 0 ? ` +${gain} wpm` : ''}`
+      : ''
     this.resultEl.hidden = false
     this.resultEl.innerHTML = `
-      <p data-type="tt-rank">${rank}${isBest ? ' · new best!' : ''}</p>
+      <p data-type="tt-rank">${rank}${bestNote}</p>
       <p data-type="tt-summary">
         <strong>${s.wpm}</strong> wpm &nbsp;·&nbsp; <strong>${s.acc}%</strong> accuracy &nbsp;·&nbsp; ${s.sec.toFixed(1)}s
       </p>
@@ -481,6 +512,6 @@ class TypeTrialTool extends HTMLElement {
   }
 }
 
-if (!customElements.get('type-trial-tool')) {
-  customElements.define('type-trial-tool', TypeTrialTool)
+if (!customElements.get('type-trial-game')) {
+  customElements.define('type-trial-game', TypeTrialTool)
 }

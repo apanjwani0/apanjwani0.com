@@ -6,6 +6,7 @@ import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import { webAppJsonLd } from '../../lib/jsonld'
 import '../../components/games/game-of-life/game-of-life.css'
+import '../../components/games/type-trial/type-trial.css'
 
 const { slug } = Astro.params
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
@@ -35,6 +36,9 @@ const ldJson = webAppJsonLd({
   {game.interactive && slug === 'game-of-life' && (
     <game-of-life-game data-game="game-of-life"></game-of-life-game>
   )}
+  {game.interactive && slug === 'type-trial' && (
+    <type-trial-game data-game="type-trial"></type-trial-game>
+  )}
   {!game.interactive && (
     <>
       <h1>{game.title}</h1>
@@ -57,6 +61,7 @@ const ldJson = webAppJsonLd({
     function mountGame() {
       const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
       if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
+      else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')
     }
     document.addEventListener('astro:page-load', mountGame)
   </script>
