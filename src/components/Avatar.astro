@@ -15,7 +15,7 @@ const { src, alt } = Astro.props
 ---
 
 <figure data-type="hero-avatar">
-  <Image src={src} width={320} height={468} alt={alt} loading="eager" decoding="async" />
+  <Image src={src} width={320} height={468} alt={alt} loading="eager" decoding="async" fetchpriority="high" />
 </figure>
 
 <style>

@@ -1,16 +1,16 @@
-# Graph Report - portfolio-apanjwani0  (2026-06-25)
+# Graph Report - portfolio-apanjwani0  (2026-07-03)
 
 ## Corpus Check
-- 56 files · ~27,929 words
+- 56 files · ~31,746 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 519 nodes · 787 edges · 35 communities (31 shown, 4 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.84)
+- 570 nodes · 897 edges · 35 communities (31 shown, 4 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `18b1b507`
+- Built from commit: `4c67b0a9`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -19,7 +19,7 @@
 - [[_COMMUNITY_Community 1|Community 1]]
 - [[_COMMUNITY_Config KV-with-Fallback Chain|Config KV-with-Fallback Chain]]
 - [[_COMMUNITY_Community 3|Community 3]]
-- [[_COMMUNITY_Card Components + GitHub Stats|Card Components + GitHub Stats]]
+- [[_COMMUNITY_Community 4|Community 4]]
 - [[_COMMUNITY_MdEnhanced Tool (markdown render)|MdEnhanced Tool (markdown render)]]
 - [[_COMMUNITY_MdEnhanced Export Pipeline (PDFImage)|MdEnhanced Export Pipeline (PDF/Image)]]
 - [[_COMMUNITY_Admin API Route Handlers (loginlogoutsave)|Admin API Route Handlers (login/logout/save)]]
@@ -51,15 +51,15 @@
 - [[_COMMUNITY_Community 34|Community 34]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `../../components/tools/pattern-forge/PatternForge.ts` - 23 edges
-2. `GameOfLifeGame` - 22 edges
-3. `$()` - 21 edges
-4. `../../layouts/Base.astro` - 17 edges
-5. `getSite()` - 16 edges
-6. `../../components/tools/json-tidy/JsonTidy.ts` - 15 edges
-7. `JsonTidyTool` - 15 edges
-8. `TypeTrialTool` - 15 edges
-9. `../../components/tools/type-trial/TypeTrial.ts` - 12 edges
+1. `JsonTidyTool` - 42 edges
+2. `../../components/tools/json-tidy/JsonTidy.ts` - 33 edges
+3. `../../components/tools/pattern-forge/PatternForge.ts` - 23 edges
+4. `GameOfLifeGame` - 22 edges
+5. `$()` - 21 edges
+6. `../../layouts/Base.astro` - 17 edges
+7. `getSite()` - 16 edges
+8. `../../components/games/type-trial/TypeTrial.ts` - 15 edges
+9. `TypeTrialTool` - 15 edges
 10. `adminSavePlugin` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -69,10 +69,10 @@
   src/pages/tools/[slug].astro → src/layouts/ToolBase.astro
 - `ToolBase.astro (tools layout)` --semantically_similar_to--> `Base.astro (default layout)`  [INFERRED] [semantically similar]
   src/layouts/ToolBase.astro → src/layouts/Base.astro
+- `[slug].astro top-level redirect router` --references--> `games/[slug].astro game detail page`  [INFERRED]
+  src/pages/[slug].astro → src/pages/games/[slug].astro
 - `blogs/[slug].astro post detail page` --references--> `../../layouts/Base.astro`  [EXTRACTED]
   src/pages/blogs/[slug].astro → src/layouts/Base.astro
-- `games/[slug].astro game detail page` --references--> `../../layouts/Base.astro`  [EXTRACTED]
-  src/pages/games/[slug].astro → src/layouts/Base.astro
 
 ## Import Cycles
 - None detected.
@@ -87,12 +87,12 @@
 ## Communities (35 total, 4 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
-Cohesion: 0.05
-Nodes (33): adminSavePlugin, ExperienceItem Props, ProjectCard Props, Post, Post (interface), posts, Company, Company (interface) (+25 more)
+Cohesion: 0.07
+Nodes (39): adminSavePlugin, ExperienceItem Props, Post, Post (interface), posts, Company, Company (interface), experience (+31 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.11
-Nodes (20): Tool, Tool (interface), ToolStatus (type), tools, ToolStatus, admin projects drag-to-reorder, admin IP whitelist 404 guard, admin tabs (site/projects/experience/blogs/games/tools) (+12 more)
+Cohesion: 0.27
+Nodes (8): POST(), POST(), POST(), createSession(), deleteSession(), devSessions, generateToken(), validateSession()
 
 ### Community 2 - "Config KV-with-Fallback Chain"
 Cohesion: 0.05
@@ -102,9 +102,9 @@ Nodes (39): 1. Authentication & Session Management, 2. Input Validation & Inject
 Cohesion: 0.21
 Nodes (6): ../components/home/StarField.ts, parseColor(), RGB, Star, StarField, TrailPoint
 
-### Community 4 - "Card Components + GitHub Stats"
-Cohesion: 0.24
-Nodes (9): ../components/ExperienceItem.astro, ../components/ProjectCard.astro, render(), renderInline, renderInline(), ../config/experience, ../config/projects, ../lib/github (+1 more)
+### Community 4 - "Community 4"
+Cohesion: 0.15
+Nodes (12): ../components/Avatar.astro, ../components/Head.astro, ../components/Nav.astro, ../../layouts/Base.astro, ../../layouts/ToolBase.astro, personJsonLd(), ldJson, sameAs (+4 more)
 
 ### Community 5 - "MdEnhanced Tool (markdown render)"
 Cohesion: 0.11
@@ -147,12 +147,12 @@ Cohesion: 0.10
 Nodes (19): devDependencies, @astrojs/check, @types/dompurify, @types/node, typescript, engines, node, name (+11 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.15
-Nodes (12): ../../components/tools/type-trial/TypeTrial.ts, Best, CATEGORIES, Category, escapeHtml(), loadBest(), pick(), rankFor() (+4 more)
+Cohesion: 0.14
+Nodes (14): ../../components/games/type-trial/TypeTrial.ts, Best, Bests, CATEGORIES, Category, categoryName(), escapeHtml(), loadBests() (+6 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.27
-Nodes (8): POST(), POST(), POST(), createSession(), deleteSession(), devSessions, generateToken(), validateSession()
+Cohesion: 0.18
+Nodes (10): ldJson, post, blogPostingJsonLd(), BlogPostingSchema, ItemListEntry, itemListJsonLd(), PersonSchema, WebApplicationSchema (+2 more)
 
 ### Community 21 - "Community 21"
 Cohesion: 0.22
@@ -175,56 +175,56 @@ Cohesion: 0.12
 Nodes (12): ../../components/games/game-of-life/GameOfLife.ts, clamp(), GameOfLifeGame, GLIDER, GOSPER_GUN, LWSS, PatternDef, patternHeight() (+4 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.13
-Nodes (15): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), byteLength(), cleanMessage(), countKeys(), ErrorLoc, escapeHtml(), formatBytes() (+7 more)
+Cohesion: 0.05
+Nodes (30): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), byteLength(), childPath(), cleanMessage(), countKeys(), ErrorLoc, escapeHtml() (+22 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.13
-Nodes (15): ldJson, post, game, ldJson, liveGame, blogPostingJsonLd(), BlogPostingSchema, ItemListEntry (+7 more)
+Cohesion: 0.12
+Nodes (20): ../components/ExperienceItem.astro, ../components/ProjectCard.astro, ProjectCard Props, buildResult(), CACHE_PATH, getProjectStats(), GitHubStats, memCache (+12 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.29
-Nodes (7): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, admin auth gate / login form, admin client save() fetch helper
+Cohesion: 0.20
+Nodes (11): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, admin auth gate / login form, admin projects drag-to-reorder, admin IP whitelist 404 guard (+3 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.27
-Nodes (10): getGames(), getPosts(), getSite(), blogs/[slug].astro post detail page, games/[slug].astro game detail page, GET(), [slug].astro top-level redirect router, gameMatch (+2 more)
+Cohesion: 0.15
+Nodes (12): Tool, Tool (interface), ToolStatus (type), tools, ToolStatus, tools/index.astro tools listing, tools/[slug].astro dynamic tool page, ldJson (+4 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.15
-Nodes (12): ../components/Avatar.astro, ../components/Head.astro, ../components/Nav.astro, ../../layouts/Base.astro, ../../layouts/ToolBase.astro, personJsonLd(), ldJson, sameAs (+4 more)
+Cohesion: 0.27
+Nodes (8): getGames(), getPosts(), blogs/[slug].astro post detail page, GET(), [slug].astro top-level redirect router, gameMatch, normalizedSlug, postMatch
 
 ### Community 32 - "Community 32"
-Cohesion: 0.38
-Nodes (8): fromFile(), fromKV(), getConfig(), getExperience(), getKV(), getProjects(), KVStore, merge()
+Cohesion: 0.25
+Nodes (7): ldJson, string, tool, ../../components/tools/audio-transcriber/audio-transcriber.css, ../../components/tools/json-tidy/json-tidy.css, ../../components/tools/md-enhanced/md-enhanced.css, ../../components/tools/pattern-forge/pattern-forge.css
 
 ### Community 33 - "Community 33"
-Cohesion: 0.47
-Nodes (4): ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout), ToolBase.astro (tools layout)
+Cohesion: 0.48
+Nodes (5): ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout), ToolBase.astro (tools layout), getSite()
 
 ### Community 34 - "Community 34"
 Cohesion: 0.29
-Nodes (8): buildResult(), CACHE_PATH, getProjectStats(), memCache, parseGithubUrl(), readCache(), StatsCache, writeCache()
+Nodes (6): game, ldJson, liveGame, webAppJsonLd(), ../../components/games/game-of-life/game-of-life.css, ../../components/games/type-trial/type-trial.css
 
 ## Knowledge Gaps
-- **186 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+181 more)
+- **193 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+188 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `../../components/games/game-of-life/GameOfLife.ts` connect `Community 25` to `Community 28`?**
-  _High betweenness centrality (0.138) - this node is a cross-community bridge._
-- **Why does `../../components/tools/pattern-forge/PatternForge.ts` connect `Admin API Route Handlers (login/logout/save)` to `Community 1`?**
-  _High betweenness centrality (0.093) - this node is a cross-community bridge._
+- **Why does `../../components/tools/json-tidy/JsonTidy.ts` connect `Community 27` to `Community 32`?**
+  _High betweenness centrality (0.182) - this node is a cross-community bridge._
+- **Why does `../../components/games/game-of-life/GameOfLife.ts` connect `Community 25` to `Community 34`?**
+  _High betweenness centrality (0.130) - this node is a cross-community bridge._
 - **What connects `name`, `type`, `version` to the rest of the system?**
-  _186 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _193 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Content Types + AdminSavePlugin Dispatch` be split into smaller, more focused modules?**
-  _Cohesion score 0.05384615384615385 - nodes in this community are weakly interconnected._
-- **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.10507246376811594 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0666049953746531 - nodes in this community are weakly interconnected._
 - **Should `Config KV-with-Fallback Chain` be split into smaller, more focused modules?**
   _Cohesion score 0.05 - nodes in this community are weakly interconnected._
 - **Should `MdEnhanced Tool (markdown render)` be split into smaller, more focused modules?**
   _Cohesion score 0.10666666666666667 - nodes in this community are weakly interconnected._
+- **Should `MdEnhanced Export Pipeline (PDF/Image)` be split into smaller, more focused modules?**
+  _Cohesion score 0.14285714285714285 - nodes in this community are weakly interconnected._

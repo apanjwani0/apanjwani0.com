@@ -21,7 +21,7 @@ span[data-type="gol-badge"] {
   letter-spacing: 0.02em;
   color: var(--color-accent);
   border: 1px solid var(--color-accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.1rem 0.55rem;
   white-space: nowrap;
 }
@@ -37,7 +37,7 @@ div[data-type="gol-stage"] {
   width: 100%;
   margin: 0.5rem 0 1.25rem;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   line-height: 0;
   background: var(--color-bg);
@@ -72,7 +72,7 @@ div[data-type="gol-controls"] [data-group] {
 div[data-type="gol-controls"] button {
   padding: 0.32rem 0.7rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-muted);
   font-family: var(--font-serif);
@@ -140,7 +140,7 @@ span[data-type="gol-stats"] {
 details[data-type="gol-explainer"] {
   margin-top: 1.5rem;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   padding: 0 1rem;
 }
@@ -195,7 +195,7 @@ div[data-type="gol-rule"] {
   gap: 0.35rem;
   padding: 0.7rem;
   border: 1px solid var(--color-border);
-  border-radius: 5px;
+  border-radius: var(--radius-lg);
   background: var(--color-bg);
   font-size: var(--text-sm);
   color: var(--color-muted);
@@ -230,7 +230,7 @@ p[data-type="gol-legend"] span[data-type="gol-dot"] {
   display: inline-block;
   width: 0.7rem;
   height: 0.7rem;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   vertical-align: middle;
 }
 p[data-type="gol-legend"] span[data-type="gol-dot"][data-kind="born"] {
@@ -245,7 +245,7 @@ p[data-type="gol-try"] {
   padding: 0.6rem 0.75rem;
   border-left: 2px solid var(--color-accent);
   background: var(--color-bg);
-  border-radius: 3px;
+  border-radius: var(--radius);
 }
 
 p[data-type="gol-hint"] {

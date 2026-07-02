@@ -19,13 +19,14 @@ const ldJson = itemListJsonLd(
 
 <Base
   title="games"
-  description="Browser games and playable experiments by Aman Panjwani — built for fun."
+  description="Browser games and playable experiments by Aman Panjwani — an interactive Conway's Game of Life and a Type Trial typing-speed race. No downloads, no sign-up; everything runs right in your browser."
+  keywords="browser games, conway's game of life, online game of life, cellular automaton, typing game, typing speed test, wpm game, playable experiments, generative games, no-download games"
 >
   {games.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
   <h1>games</h1>
   <p data-type="page-intro">
     Browser games and playable experiments — little things I build for the fun of it.
-    Everything runs right in your browser — the ones marked play are live now; the rest are coming soon.
+    The ones marked play are live now; the rest are on the way.
   </p>
   {games.length === 0 ? (
     <p>Coming soon.</p>
@@ -37,9 +38,9 @@ const ldJson = itemListJsonLd(
             <a href={`/games/${g.slug}`}>{g.title}</a>
             <span data-type="project-stats">
               {g.interactive ? (
-                <span style="font-size: var(--text-xs); color: var(--color-success); border: 1px solid var(--color-success); padding: var(--space-2xs) var(--space-xs); border-radius: var(--radius);">play <span aria-hidden="true">&rsaquo;</span></span>
+                <span data-type="game-badge" data-live>play <span aria-hidden="true">&rsaquo;</span></span>
               ) : (
-                <span style="font-size: var(--text-xs); border: 1px solid var(--color-border); padding: var(--space-2xs) var(--space-xs); border-radius: var(--radius);">coming soon</span>
+                <span data-type="game-badge">coming soon</span>
               )}
             </span>
           </div>
@@ -49,3 +50,20 @@ const ldJson = itemListJsonLd(
     </div>
   )}
 </Base>
+
+<style>
+  /* Status pill on each game card — replaces the previous duplicated inline
+     styles; live vs coming-soon differ only by colour. Tokens only. */
+  [data-type="game-badge"] {
+    font-size: var(--text-xs);
+    border: 1px solid var(--color-border);
+    padding: var(--space-2xs) var(--space-xs);
+    border-radius: var(--radius);
+    white-space: nowrap;
+  }
+
+  [data-type="game-badge"][data-live] {
+    color: var(--color-success);
+    border-color: var(--color-success);
+  }
+</style>

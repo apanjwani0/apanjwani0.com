@@ -160,3 +160,14 @@ div[data-type="nav-dropdown"]:focus-within div[data-type="nav-dropdown-menu"] {
   opacity: 1;
   transition-delay: 0s;
 }
+
+/* Every tool workbench shares one width + side gutter so all tools (and the site
+   header) line up. Individual tools style only their own internals — never their
+   own container width. On narrow screens the max-width is a no-op and the gutter
+   keeps content off the edges. */
+[data-type="tool-page"] {
+  max-width: var(--tool-width);
+  margin-inline: auto;
+  padding: 2rem var(--space-page-x);
+  box-sizing: border-box;
+}

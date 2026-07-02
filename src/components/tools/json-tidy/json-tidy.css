@@ -1,6 +1,8 @@
 div[data-type="tool-page"][data-tool="json-tidy"] {
-  max-width: 760px;
-  margin: 0 auto;
+  /* Shared editor/output/tree height — kept in one place so the two panes
+     always match. Tall by default to show as much JSON as possible.
+     Width + gutter come from the shared [data-type="tool-page"] rule. */
+  --jt-pane-h: clamp(24rem, 72vh, 64rem);
 }
 
 /* ── Toolbar ─────────────────────────────────────────────── */
@@ -9,13 +11,13 @@ div[data-tool="json-tidy"] [data-group="toolbar"] {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.5rem 0 0.75rem;
+  margin: 0.5rem 0 1rem;
 }
 
 div[data-tool="json-tidy"] [data-group="toolbar"] button {
   padding: 0.32rem 0.85rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-muted);
   font-family: var(--font-mono);
@@ -66,7 +68,7 @@ label[data-type="jt-field"][data-variant="check"] {
 label[data-type="jt-field"] select {
   padding: 0.28rem 0.4rem;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -79,16 +81,84 @@ label[data-type="jt-field"] input[type="checkbox"] {
   cursor: pointer;
 }
 
+/* ── Two-pane layout ─────────────────────────────────────── */
+div[data-tool="json-tidy"] [data-type="jt-panes"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  div[data-tool="json-tidy"] [data-type="jt-panes"] {
+    grid-template-columns: 1fr;
+  }
+  /* Panes stack on mobile — shorten each so both stay reachable while still
+     showing plenty of JSON. */
+  div[data-type="tool-page"][data-tool="json-tidy"] {
+    --jt-pane-h: clamp(18rem, 56vh, 40rem);
+  }
+}
+
+section[data-type="jt-pane"] {
+  min-width: 0;
+}
+
+div[data-type="jt-pane-head"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+}
+
+span[data-type="jt-pane-title"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+div[data-group="pane-actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+div[data-group="pane-actions"] button {
+  padding: 0.26rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+div[data-group="pane-actions"] button:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+div[data-group="pane-actions"] button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ── Input editor ────────────────────────────────────────── */
 textarea[data-type="jt-input"] {
   display: block;
   width: 100%;
   box-sizing: border-box;
-  min-height: clamp(14rem, 48vh, 26rem);
+  height: var(--jt-pane-h);
   resize: vertical;
   padding: clamp(0.85rem, 3vw, 1.25rem);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -109,6 +179,37 @@ textarea[data-type="jt-input"]:focus {
 textarea[data-type="jt-input"]::placeholder {
   color: var(--color-muted);
   opacity: 0.7;
+}
+
+/* ── Output panel ────────────────────────────────────────── */
+pre[data-type="jt-output"] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  height: var(--jt-pane-h);
+  padding: clamp(0.85rem, 3vw, 1.25rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
+pre[data-type="jt-output"]:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+pre[data-type="jt-output"][data-empty] {
+  color: var(--color-muted);
+  white-space: pre-wrap;
 }
 
 /* ── Status bar ──────────────────────────────────────────── */
@@ -141,7 +242,7 @@ pre[data-type="jt-error"] {
   padding: 0.75rem 1rem;
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-error);
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -160,27 +261,301 @@ span[data-type="jt-caret"] {
   font-weight: 700;
 }
 
-/* ── Actions ─────────────────────────────────────────────── */
-div[data-tool="json-tidy"] [data-group="actions"] {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1rem 0 0;
+/* ── Output view toggle (Text / Tree) ────────────────────── */
+div[data-tool="json-tidy"] [data-group="view-toggle"] {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
-div[data-tool="json-tidy"] [data-group="actions"] button {
-  padding: 0.32rem 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
+div[data-tool="json-tidy"] [data-group="view-toggle"] button {
+  padding: 0.26rem 0.7rem;
+  border: none;
   background: none;
   color: var(--color-muted);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, background-color 0.15s;
 }
 
-div[data-tool="json-tidy"] [data-group="actions"] button:hover {
+div[data-tool="json-tidy"] [data-group="view-toggle"] button + button {
+  border-left: 1px solid var(--color-border);
+}
+
+div[data-tool="json-tidy"] [data-group="view-toggle"] button:hover {
+  color: var(--color-text);
+}
+
+div[data-tool="json-tidy"] [data-group="view-toggle"] button[aria-pressed="true"] {
+  color: var(--color-bg);
+  background: var(--color-text);
+}
+
+/* Let the output title flex between the toggle and the actions. */
+section[data-side="output"] span[data-type="jt-pane-title"][data-control="out-title"] {
+  flex: 1 1 5rem;
+  min-width: 0;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Tree view container ─────────────────────────────────── */
+div[data-type="jt-tree"] {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  height: var(--jt-pane-h);
+  padding: clamp(0.85rem, 3vw, 1.25rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  overflow: auto;
+}
+
+pre[data-type="jt-output"][hidden],
+div[data-type="jt-tree"][hidden] {
+  display: none;
+}
+
+/* ── Tree search bar ─────────────────────────────────────── */
+div[data-tool="json-tidy"] [data-type="jt-search"] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+}
+
+div[data-tool="json-tidy"] [data-type="jt-search"][hidden] {
+  display: none;
+}
+
+div[data-tool="json-tidy"] input[data-control="tree-search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+div[data-tool="json-tidy"] input[data-control="tree-search"]:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+div[data-tool="json-tidy"] input[data-control="tree-search"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+div[data-tool="json-tidy"] input[data-control="tree-search"]::placeholder {
+  color: var(--color-muted);
+  opacity: 0.75;
+}
+
+span[data-type="jt-search-count"] {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  color: var(--color-muted);
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+span[data-type="jt-search-count"][data-state="none"] {
+  color: var(--color-error);
+}
+
+div[data-group="search-nav"] {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.3rem;
+}
+
+div[data-group="search-nav"] button {
+  width: 1.7rem;
+  padding: 0.24rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+div[data-group="search-nav"] button:hover:not(:disabled) {
   color: var(--color-text);
   border-color: var(--color-muted);
+}
+
+div[data-group="search-nav"] button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Search-match highlights ─────────────────────────────── */
+div[data-type="jt-tree"] [data-type="jt-hl"] {
+  padding: 0 0.05em;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  color: var(--color-text);
+}
+
+div[data-type="jt-tree"] [data-type="jt-hl"][data-active] {
+  background: var(--color-accent);
+  color: var(--color-bg);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+div[data-type="jt-tree-empty"] {
+  color: var(--color-muted);
+  line-height: 1.6;
+  white-space: normal;
+}
+
+/* ── Tree nodes ──────────────────────────────────────────── */
+div[data-type="jt-tree"] [data-type="jt-node-row"] {
+  display: block;
+  white-space: pre;
+}
+
+div[data-type="jt-tree"] [data-type="jt-children"] {
+  margin-left: 0.55rem;
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--color-border);
+}
+
+div[data-type="jt-tree"] [data-type="jt-toggle"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-right: 0.15rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  vertical-align: -0.15rem;
+}
+
+div[data-type="jt-tree"] [data-type="jt-toggle"]:hover {
+  color: var(--color-text);
+}
+
+div[data-type="jt-tree"] [data-type="jt-toggle"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-accent);
+  border-radius: var(--radius-sm);
+}
+
+div[data-type="jt-tree"] [data-type="jt-arrow"] {
+  display: inline-block;
+  font-size: 0.7em;
+  transform: rotate(90deg); /* expanded → ▾ */
+  transition: transform 0.12s ease;
+}
+
+div[data-type="jt-tree"] [data-branch][data-collapsed] > [data-type="jt-node-row"] [data-type="jt-arrow"] {
+  transform: rotate(0deg); /* collapsed → ▸ */
+}
+
+div[data-type="jt-tree"] [data-type="jt-spacer"] {
+  display: inline-block;
+  width: 1.25rem;
+}
+
+/* Collapsed branches hide their children + closing bracket, show the preview. */
+div[data-type="jt-tree"] [data-branch][data-collapsed] > [data-type="jt-children"],
+div[data-type="jt-tree"] [data-branch][data-collapsed] > [data-type="jt-node-row"][data-kind="close"] {
+  display: none;
+}
+
+div[data-type="jt-tree"] [data-type="jt-preview"] {
+  display: none;
+  color: var(--color-muted);
+}
+
+div[data-type="jt-tree"] [data-branch][data-collapsed] > [data-type="jt-node-row"] > [data-type="jt-preview"] {
+  display: inline;
+}
+
+div[data-type="jt-tree"] [data-type="jt-bracket"],
+div[data-type="jt-tree"] [data-type="jt-colon"] {
+  color: var(--color-muted);
+}
+
+div[data-type="jt-tree"] [data-type="jt-count"] {
+  margin: 0 0.4rem;
+  color: var(--color-muted);
+  font-size: 0.85em;
+}
+
+div[data-type="jt-tree"] [data-type="jt-key"] {
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+div[data-type="jt-tree"] [data-type="jt-key"][data-kind="index"] {
+  color: var(--color-muted);
+}
+
+div[data-type="jt-tree"] [data-type="jt-key"]:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+div[data-type="jt-tree"] [data-type="jt-key"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+div[data-type="jt-tree"] [data-type="jt-key"][data-copied] {
+  color: var(--color-success);
+  text-decoration: none;
+}
+
+div[data-type="jt-tree"] [data-type="jt-key"][data-copied]::after {
+  content: " ✓ copied";
+  color: var(--color-success);
+  font-size: 0.85em;
+}
+
+div[data-type="jt-tree"] [data-type="jt-val"][data-vtype="string"] {
+  color: var(--color-success);
+}
+
+div[data-type="jt-tree"] [data-type="jt-val"][data-vtype="number"] {
+  color: var(--color-accent);
+}
+
+div[data-type="jt-tree"] [data-type="jt-val"][data-vtype="boolean"] {
+  color: var(--color-error);
+}
+
+div[data-type="jt-tree"] [data-type="jt-val"][data-vtype="null"] {
+  color: var(--color-muted);
+  font-style: italic;
 }
