@@ -242,12 +242,29 @@ class HueHuntGame extends HTMLElement {
 
         <div data-type="hue-scorebar" aria-live="polite"></div>
 
-        <details data-type="hue-explainer">
-          <summary>How to play</summary>
-          <p><strong>Pick mode:</strong> a swatch appears above a row of hex codes. Exactly one code produced that colour — click it (or press its number). Harder levels add more decoys and squeeze them closer together.</p>
-          <p><strong>Type mode:</strong> read the swatch, then type your best hex guess (<code>#rrggbb</code> or the short <code>#rgb</code>). You're scored on perceptual closeness and your guess is drawn beside the answer, so you can literally see how far off you were.</p>
+        <details data-type="hue-explainer" open>
+          <summary>New to hex? How colour works + how to play</summary>
+
+          <p><strong>Every colour on a screen is a mix of three lights — Red, Green and Blue.</strong> A hex code just writes down how much of each: <code>#RRGGBB</code> — the first pair is Red, the middle Green, the last Blue. Each runs from <code>00</code> (that light off) to <code>FF</code> (that light full). More light means brighter.</p>
+
+          <div data-type="hue-legend">
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#FF0000"></span><code>#FF0000</code> <span>Red full, no green or blue</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#00FF00"></span><code>#00FF00</code> <span>Green only</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#0000FF"></span><code>#0000FF</code> <span>Blue only</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#FFFF00"></span><code>#FFFF00</code> <span>Red + Green = yellow</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#00FFFF"></span><code>#00FFFF</code> <span>Green + Blue = cyan</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#FF00FF"></span><code>#FF00FF</code> <span>Red + Blue = magenta</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#FF8000"></span><code>#FF8000</code> <span>Red full, Green half = orange</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#808080"></span><code>#808080</code> <span>equal medium = grey</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#FFFFFF"></span><code>#FFFFFF</code> <span>all three full = white</span></div>
+            <div data-type="hue-legend-item"><span data-type="hue-ex-sw" style="background:#000000"></span><code>#000000</code> <span>all three off = black</span></div>
+          </div>
+
+          <p><strong>Play — Pick:</strong> a mystery swatch sits above a row of hex codes; exactly one made it. Ask which code has the most of the colours you see, then click it (or press its number). After each round it shows the answer's Red/Green/Blue mix, so the codes start to click.</p>
+          <p><strong>Play — Type:</strong> read the swatch and type a guess (<code>#RRGGBB</code>, or the short <code>#RGB</code>). You're scored on how close you got, with your colour and its mix drawn right next to the answer.</p>
           <p><strong>Keyboard:</strong> <kbd>1</kbd>–<kbd>6</kbd> pick an option · <kbd>Enter</kbd> submits a typed guess · <kbd>N</kbd> jumps to the next colour.</p>
-          <p data-type="hue-tip"><strong>Tip:</strong> think in three parts — how much red, green and blue. Bright yellow is lots of red + green and almost no blue (<code>#FFEE33</code>-ish); a dusty teal is low red, medium green, medium-high blue.</p>
+
+          <p data-type="hue-tip"><strong>Quick trick:</strong> name the colour to yourself first — "orange = mostly red, a bit of green, no blue" — then match that to the codes instead of reading the numbers cold.</p>
         </details>
       </div>
     `
@@ -486,6 +503,13 @@ class HueHuntGame extends HTMLElement {
       ? `Correct — ${toHex(this.target)}. Streak ${this.streak}.`
       : `Not quite. It was ${toHex(this.target)}.`
     fb.appendChild(verdict)
+    const mix = document.createElement('div')
+    mix.setAttribute('data-type', 'hue-mix')
+    const cap = document.createElement('span')
+    cap.setAttribute('data-type', 'hue-mix-cap')
+    cap.textContent = `${toHex(this.target)} is:`
+    mix.append(cap, this.channelBars(this.target))
+    fb.appendChild(mix)
     fb.appendChild(this.nextButton())
 
     // reveal the answer on the swatch tag
@@ -540,15 +564,16 @@ class HueHuntGame extends HTMLElement {
 
     const compare = document.createElement('div')
     compare.setAttribute('data-type', 'hue-compare')
-    compare.appendChild(this.miniSwatch('Answer', toHex(this.target)))
-    compare.appendChild(this.miniSwatch('Your guess', toHex(guess)))
+    compare.appendChild(this.miniSwatch('Answer', this.target))
+    compare.appendChild(this.miniSwatch('Your guess', guess))
     fb.appendChild(compare)
 
     fb.appendChild(this.nextButton())
     this.renderScoreboard()
   }
 
-  private miniSwatch(label: string, hex: string): HTMLElement {
+  private miniSwatch(label: string, c: Rgb): HTMLElement {
+    const hex = toHex(c)
     const wrap = document.createElement('div')
     wrap.setAttribute('data-type', 'hue-mini')
     const sw = document.createElement('div')
@@ -560,7 +585,38 @@ class HueHuntGame extends HTMLElement {
     const code = document.createElement('span')
     code.setAttribute('data-type', 'hue-mini-hex')
     code.textContent = hex
-    wrap.append(sw, lab, code)
+    wrap.append(sw, lab, code, this.channelBars(c))
+    return wrap
+  }
+
+  /** Three labelled R/G/B bars showing how much of each light makes colour `c`. */
+  private channelBars(c: Rgb): HTMLElement {
+    const wrap = document.createElement('div')
+    wrap.setAttribute('data-type', 'hue-channels')
+    const chans: [string, number, string][] = [
+      ['R', c.r, '#e5484d'],
+      ['G', c.g, '#30a46c'],
+      ['B', c.b, '#3e63dd'],
+    ]
+    for (const [label, val, color] of chans) {
+      const row = document.createElement('div')
+      row.setAttribute('data-type', 'hue-chan')
+      const lab = document.createElement('span')
+      lab.setAttribute('data-type', 'hue-chan-label')
+      lab.textContent = label
+      const track = document.createElement('span')
+      track.setAttribute('data-type', 'hue-chan-track')
+      const fill = document.createElement('span')
+      fill.setAttribute('data-type', 'hue-chan-fill')
+      fill.style.width = `${(val / 255) * 100}%`
+      fill.style.background = color
+      track.appendChild(fill)
+      const num = document.createElement('span')
+      num.setAttribute('data-type', 'hue-chan-val')
+      num.textContent = String(val)
+      row.append(lab, track, num)
+      wrap.appendChild(row)
+    }
     return wrap
   }
 
