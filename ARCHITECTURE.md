@@ -18,39 +18,48 @@ portfolio-apanjwani0/
 │   │   ├── projects.ts      # Project entries (title, url, description, tags)
 │   │   ├── experience.ts    # Work history (role, company, period, bullets)
 │   │   ├── blogs.ts         # Blog/writing entries
-│   │   └── tools.ts         # Live tools index
+│   │   ├── games.ts         # Games index (game-of-life, type-trial, hue-hunt, …)
+│   │   └── tools.ts         # Tools index (json-tidy, pattern-forge, md-enhanced, …)
 │   │
 │   ├── layouts/
-│   │   └── Base.astro       # Root HTML shell: Oat CSS/JS, meta, nav, footer
+│   │   ├── Base.astro       # Root HTML shell: Oat CSS/JS, meta, nav, footer
+│   │   └── ToolBase.astro   # Detail-page shell
 │   │
 │   ├── components/
-│   │   ├── Nav.astro        # Top navigation driven by site.config.nav
-│   │   ├── ProjectCard.astro
-│   │   ├── ExperienceItem.astro
-│   │   ├── SocialLinks.astro
-│   │   └── tools/           # Live tool implementations
-│   │       └── MarkdownEditor.ts
+│   │   ├── Nav.astro        # Top navigation driven by site.nav
+│   │   ├── Head.astro       # <head> meta + SEO/OG tags
+│   │   ├── Avatar.astro / ProjectCard.astro / ExperienceItem.astro / SocialLinks.astro
+│   │   ├── home/            # Home hero pieces (star canvas, …)
+│   │   ├── tools/           # Tool WebComponents (json-tidy/, pattern-forge/, md-enhanced/, …)
+│   │   └── games/           # Game WebComponents (game-of-life/, type-trial/, hue-hunt/)
 │   │
 │   ├── lib/
 │   │   ├── config.ts        # KV-aware config accessors (always use these)
 │   │   ├── session.ts       # Session create/validate/delete
-│   │   └── logger.ts        # Thin console wrapper
+│   │   ├── markdown.ts      # marked + dompurify render/sanitize
+│   │   ├── jsonld.ts        # JSON-LD structured-data builders
+│   │   └── github.ts        # GitHub data helper
 │   │
-│   ├── middleware.ts         # Security headers on every response
+│   ├── middleware.ts         # Security headers (CSP, HSTS, …) + Cache-Control on responses
 │   │
 │   ├── pages/
 │   │   ├── index.astro      # Home: bio + highlights
-│   │   ├── projects.astro   # All projects
-│   │   ├── blogs.astro      # Blog list
-│   │   ├── experience.astro # Work history / resume
-│   │   ├── admin.astro      # Password-protected content editor
+│   │   ├── projects.astro / experience.astro / blogs.astro / games.astro
+│   │   ├── [slug].astro     # Top-level dynamic page   ·   404.astro
+│   │   ├── admin.astro      # Content editor (dev-open, IP-gated in prod)
+│   │   ├── sitemap.xml.ts   # Dynamic sitemap (iterates getGames / getPosts / tools)
+│   │   ├── blogs/[slug].astro   ·   games/[slug].astro
 │   │   ├── tools/
-│   │   │   ├── index.astro  # Tools index
+│   │   │   ├── index.astro  # Tools index (prerender = true)
 │   │   │   └── [slug].astro # Individual tool page
-│   │   └── api/admin/       # Save / login / logout endpoints
+│   │   └── api/admin/       # login / logout (content saves via Vite middleware in astro.config.mjs)
 │   │
 │   └── styles/
-│       └── global.css       # CSS custom properties only; no component styles
+│       ├── theme.css        # Design tokens — single source of truth (palette/fonts/scale/spacing)
+│       ├── shared.css       # Base elements + header (shared by both layouts)
+│       ├── global.css       # Content-page styles
+│       ├── home.css         # Home hero
+│       └── tools.css        # Tools index
 │
 ├── public/
 │   ├── oat.min.css          # Oat UI stylesheet (vendored)
@@ -169,7 +178,6 @@ Rules:
 | Feature | Where to add |
 |---|---|
 | CMS-backed blog | Replace `src/config/blogs.ts` with a server-side fetch in `blogs.astro` |
-| Dark mode | Add a `data-theme` toggle; Oat supports it via CSS custom properties |
 | Analytics | Add script tag in `Base.astro` |
 | Contact form | New page `src/pages/contact.astro` with a server `POST` endpoint |
 | RSS feed | `src/pages/rss.xml.ts` using Astro's RSS helper |

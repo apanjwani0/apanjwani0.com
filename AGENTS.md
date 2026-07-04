@@ -22,7 +22,7 @@ KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 - `src/config/*.ts` — config interfaces + default data (git source of truth & KV fallback).
 - `src/lib/config.ts` — KV-aware accessors (`getSite`, `getProjects`, …). The only sanctioned way to read config.
 - `src/pages/` — routes; `src/pages/admin.astro` (config editor) and `src/pages/api/admin/save.ts` (save allowlist).
-- `src/layouts/` — page shells; `src/components/` (`home/`, `tools/`) — UI pieces.
+- `src/layouts/` — page shells; `src/components/` (`home/`, `tools/`, `games/`) — UI pieces.
 - `src/styles/theme.css` — design tokens (single source of truth for palette/fonts/scale/spacing).
 - `astro.config.mjs` — adapter choice **and** the Vite middleware that persists `/admin` saves.
 
