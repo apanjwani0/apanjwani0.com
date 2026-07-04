@@ -26,6 +26,14 @@ export const games: Game[] = [
     "keywords": "typing game,typing race,typing speed test,wpm game,words per minute,typing practice,typing test"
   },
   {
+    "slug": "hue-hunt",
+    "title": "Hue Hunt",
+    "description": "A hex colour guessing game. A mystery colour appears — pick the hex code that made it, or switch to type mode and guess the code yourself to see how sharp your eye really is.\n\nThree difficulty levels crowd the decoys closer together, and typed guesses are scored on true perceptual closeness and drawn right next to the answer. Streaks and best scores save in your browser — nothing is uploaded.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "hex color game,color guessing game,guess the hex,hex code game,color quiz,rgb guessing game,learn hex colors,color memory game"
+  },
+  {
     "slug": "flash-cricket",
     "title": "Flash Cricket",
     "description": "A 2D browser cricket game — swing your bat and hit the ball into the scoring zones.\n\nA hobby build. I grew up playing Miniclip-style cricket games like this one and can't find them anywhere anymore — so why not make my own? Writing it in C++.",
