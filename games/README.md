@@ -1,21 +1,41 @@
 # Games
 
-Mini-games integrated into the portfolio. Each game is developed independently and compiled to WebAssembly for browser delivery.
+Mini-games surfaced on `/games`. Content comes from `src/config/games.ts` (managed
+via `/admin`). Each entry has an `enabled` toggle (hidden when false) and an
+`interactive` flag (renders a live component vs. a "coming soon" placeholder).
 
-## How it works
+Two kinds of game live here:
 
-- Games are listed on `/games` — content comes from `src/config/games.ts` (managed via `/admin`)
-- Each game entry has an `enabled` toggle — disabled games don't appear on the page
-- Game source code lives in its own folder (e.g. `flash-cricket/`) and can be developed/built independently
-- When a game is ready for integration, add an Astro component and page route for it
-
-## Adding a new game
-
-1. Add the game config in `/admin` → games tab (slug, title, description, enabled)
-2. Build the game's WASM output into `public/games/{slug}/`
-3. Create an Astro island component in `src/components/games/`
-4. Create a page route at `src/pages/games/{slug}.astro`
+- **In-browser TypeScript / Canvas games** — the live ones. Self-contained
+  WebComponents under `src/components/games/{slug}/`, no build step, no WASM.
+  This is the default for new games.
+- **Independently-built WASM games** (e.g. `flash-cricket`, C++/Raylib → WASM)
+  whose output is dropped into `public/games/{slug}/`. Heavier — only when a game
+  genuinely needs it.
 
 ## Current games
 
-- **flash-cricket** — 2D arcade cricket game (C++/Raylib → WASM): pick 1/3/5 overs, swing to score 4s/6s, keep your wickets. Source + `build.sh` + headless test harness in `/flash-cricket/`. Status: playable build, not yet embedded on the site (page still shows "Coming Soon").
+- **game-of-life** — Conway's Game of Life, interactive canvas. Live.
+- **type-trial** — typing-speed / WPM game with per-category bests. Live. (Moved
+  here from `/tools`; `/tools/type-trial` 301-redirects to `/games/type-trial`.)
+- **hue-hunt** — hex-colour guessing game (pick or type a hex, scored on
+  perceptual closeness, with an R/G/B breakdown on reveal). Live.
+- **flash-cricket** — 2D arcade cricket (C++/Raylib → WASM). Enabled in config but
+  not yet embedded — shows "coming soon". Source + `build.sh` + headless test
+  harness live in `/flash-cricket/`.
+
+## Adding a new game (TypeScript / Canvas — the common path)
+
+1. Add the entry to `src/config/games.ts` (or `/admin` → games tab): `slug`,
+   `title`, `description`, `enabled`, `interactive: true`, `keywords`.
+2. Build the game as a WebComponent under `src/components/games/{slug}/` (a `.ts`
+   controller + `.css`, theme tokens only). Mount it inside
+   `document.addEventListener('astro:page-load', …)` (View Transitions gotcha — see
+   AGENTS.md).
+3. Wire it into `src/pages/games/[slug].astro`: import its CSS, add a
+   `slug === '{slug}'` render branch for the custom element, and add the
+   dynamic-`import()` branch in the `astro:page-load` mount block.
+
+It then appears on the `/games` index and in the sitemap automatically (both
+iterate `getGames`). For a WASM game instead, build its output into
+`public/games/{slug}/` and embed that from the render branch.
