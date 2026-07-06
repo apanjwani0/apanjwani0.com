@@ -31,7 +31,7 @@ const ldJson = blogPostingJsonLd({
 })
 ---
 
-<Base title={post.title} description={post.summary} keywords={post.keywords}>
+<Base title={post.title} description={post.summary} keywords={post.keywords} ogType="article" publishedTime={post.date}>
   <script type="application/ld+json" set:html={ldJson} />
   <article>
     <header>

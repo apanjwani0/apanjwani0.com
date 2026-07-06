@@ -18,6 +18,14 @@ export const games: Game[] = [
     "keywords": "game of life simulator,conway's game of life,cellular automaton,glider gun,life simulation,zero-player game"
   },
   {
+    "slug": "flow-field",
+    "title": "Flow Field",
+    "description": "Seeded generative art you steer in the browser. Hundreds of particles drift across an invisible field of currents woven from noise, each trailing colour as it flows — and the whole picture is fixed by a single seed.\n\nReroll for a new one or type a seed to reproduce a piece exactly. Tune the particle count, speed, field detail, trails and palette, click the canvas to stir the flow, then download the frame you like as a PNG. Runs entirely in your browser.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "flow field generator,generative art,perlin noise art,particle flow,seeded art,algorithmic art,noise field,download png art"
+  },
+  {
     "slug": "type-trial",
     "title": "Type Trial",
     "description": "A fast, distraction-free typing race. Pick quotes, code, or numbers, then chase your best words-per-minute as the clock starts on your first keystroke.\n\nEvery character lights up as you go, your speed and accuracy tick live, and a ranked result card lands when you finish. Each category keeps its own personal best, saved right in your browser — nothing is ever uploaded.",
@@ -38,6 +46,6 @@ export const games: Game[] = [
     "title": "Flash Cricket",
     "description": "A 2D browser cricket game — swing your bat and hit the ball into the scoring zones.\n\nA hobby build. I grew up playing Miniclip-style cricket games like this one and can't find them anywhere anymore — so why not make my own? Writing it in C++.",
     "enabled": true,
-    "keywords": "cricket,miniclip,flash-game, flash-cricket"
+    "keywords": "cricket game,miniclip cricket,browser cricket game,2d cricket,flash cricket"
   }
 ]

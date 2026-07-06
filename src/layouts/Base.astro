@@ -10,10 +10,12 @@ interface Props {
   noindex?: boolean
   keywords?: string
   bare?: boolean
+  ogType?: 'website' | 'article'
+  publishedTime?: string
 }
 
 const site = await getSite(Astro.locals)
-const { title, description = site.tagline, noindex = false, keywords, bare = false } = Astro.props
+const { title, description = site.tagline, noindex = false, keywords, bare = false, ogType = 'website', publishedTime } = Astro.props
 const pageTitle = title ? `${title} · ${site.name}` : site.name
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
 // Absolute URL for the social-share preview image (link cards on Slack, X, etc.).
@@ -37,6 +39,8 @@ const ogImageHeight = 468
       image={ogImage}
       imageWidth={ogImageWidth}
       imageHeight={ogImageHeight}
+      ogType={ogType}
+      publishedTime={publishedTime}
     />
   </head>
   <body data-bare={bare ? '' : undefined}>
