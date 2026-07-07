@@ -559,3 +559,193 @@ div[data-type="jt-tree"] [data-type="jt-val"][data-vtype="null"] {
   color: var(--color-muted);
   font-style: italic;
 }
+
+/* ── Mode toggle (Format / Compare) ──────────────────────── */
+div[data-tool="json-tidy"] [data-group="mode-toggle"] {
+  display: inline-flex;
+  margin: 0 0 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+div[data-tool="json-tidy"] [data-group="mode-toggle"] button {
+  padding: 0.3rem 0.9rem;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+div[data-tool="json-tidy"] [data-group="mode-toggle"] button + button {
+  border-left: 1px solid var(--color-border);
+}
+
+div[data-tool="json-tidy"] [data-group="mode-toggle"] button:hover {
+  color: var(--color-text);
+}
+
+div[data-tool="json-tidy"] [data-group="mode-toggle"] button[aria-pressed="true"] {
+  color: var(--color-bg);
+  background: var(--color-text);
+}
+
+/* ── Compare mode: show/hide by root data-mode ───────────── */
+div[data-type="jt-compare"] {
+  display: none;
+}
+
+div[data-tool="json-tidy"][data-mode="compare"] [data-group="toolbar"],
+div[data-tool="json-tidy"][data-mode="compare"] [data-type="jt-panes"] {
+  display: none;
+}
+
+div[data-tool="json-tidy"][data-mode="compare"] [data-type="jt-compare"] {
+  display: block;
+}
+
+/* ── Compare inputs (A / B) ──────────────────────────────── */
+div[data-type="jt-compare-inputs"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  div[data-type="jt-compare-inputs"] {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Shorter than the formatter panes so the diff below stays in view. */
+div[data-type="jt-compare-inputs"] textarea[data-type="jt-input"] {
+  height: clamp(11rem, 32vh, 26rem);
+}
+
+/* ── Diff header (summary + nav) ─────────────────────────── */
+div[data-type="jt-diff-head"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 1rem 0 0.5rem;
+}
+
+span[data-type="jt-diff-summary"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  color: var(--color-muted);
+}
+
+span[data-type="jt-diff-summary"][data-state="same"] {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+span[data-type="jt-diff-summary"][data-state="diff"] {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* ── Diff list ───────────────────────────────────────────── */
+div[data-type="jt-diff"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 10rem;
+  max-height: var(--jt-pane-h);
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow: auto;
+}
+
+div[data-type="jt-diff"]:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+div[data-type="jt-diff-empty"] {
+  padding: 0.5rem;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+div[data-type="jt-diff-more"] {
+  margin-top: 0.35rem;
+  padding: 0.5rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+div[data-type="jt-diff-row"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.5rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.6rem;
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm);
+  scroll-margin: 0.5rem;
+}
+
+div[data-type="jt-diff-row"] + div[data-type="jt-diff-row"] {
+  margin-top: 0.2rem;
+}
+
+div[data-type="jt-diff-row"][data-kind="added"] {
+  border-left-color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, transparent);
+}
+
+div[data-type="jt-diff-row"][data-kind="removed"] {
+  border-left-color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+}
+
+div[data-type="jt-diff-row"][data-kind="changed"] {
+  border-left-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+div[data-type="jt-diff-row"][data-active] {
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+span[data-type="jt-diff-sign"] {
+  flex-shrink: 0;
+  width: 1ch;
+  font-weight: 700;
+}
+
+div[data-type="jt-diff-row"][data-kind="added"] [data-type="jt-diff-sign"] { color: var(--color-success); }
+div[data-type="jt-diff-row"][data-kind="removed"] [data-type="jt-diff-sign"] { color: var(--color-error); }
+div[data-type="jt-diff-row"][data-kind="changed"] [data-type="jt-diff-sign"] { color: var(--color-accent); }
+
+span[data-type="jt-diff-path"] {
+  flex-shrink: 0;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+span[data-type="jt-diff-val"] {
+  min-width: 0;
+  color: var(--color-muted);
+  word-break: break-word;
+}
+
+span[data-type="jt-diff-before"] { color: var(--color-error); }
+span[data-type="jt-diff-after"] { color: var(--color-success); }
+span[data-type="jt-diff-arrow"] { color: var(--color-muted); }

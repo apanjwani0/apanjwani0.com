@@ -6,6 +6,8 @@ import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import { webAppJsonLd } from '../../lib/jsonld'
 import '../../components/games/game-of-life/game-of-life.css'
+import '../../components/games/poker/poker.css'
+import '../../components/games/flow-field/flow-field.css'
 import '../../components/games/type-trial/type-trial.css'
 import '../../components/games/hue-hunt/hue-hunt.css'
 
@@ -37,6 +39,12 @@ const ldJson = webAppJsonLd({
   {game.interactive && slug === 'game-of-life' && (
     <game-of-life-game data-game="game-of-life"></game-of-life-game>
   )}
+  {game.interactive && slug === 'flow-field' && (
+    <flow-field-game data-game="flow-field"></flow-field-game>
+  )}
+  {game.interactive && slug === 'poker' && (
+    <poker-game data-game="poker"></poker-game>
+  )}
   {game.interactive && slug === 'type-trial' && (
     <type-trial-game data-game="type-trial"></type-trial-game>
   )}
@@ -65,6 +73,8 @@ const ldJson = webAppJsonLd({
     function mountGame() {
       const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
       if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
+      else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
+      else if (slug === 'poker') import('../../components/games/poker/Poker.ts')
       else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')
       else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
     }

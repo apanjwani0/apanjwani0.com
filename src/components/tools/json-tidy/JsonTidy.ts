@@ -25,8 +25,12 @@ const LS_SORT = 'json-tidy:sort:v1'
 const LS_AUTO = 'json-tidy:auto:v1'
 const LS_VIEW = 'json-tidy:view:v1'
 const LS_SEARCH = 'json-tidy:search:v1'
+const LS_INPUT_A = 'json-tidy:input-a:v1' // Compare mode — the first (left) document
+const LS_INPUT_B = 'json-tidy:input-b:v1' // Compare mode — the second (right) document
+const LS_MODE = 'json-tidy:mode:v1' // 'format' | 'compare'
 const MAX_PERSIST = 256 * 1024 // don't try to persist absurdly large blobs
 const MAX_TREE_NODES = 15000 // above this, skip the interactive tree (DOM gets too heavy)
+const MAX_DIFF_ROWS = 5000 // cap rendered diff rows so a huge document can't freeze the DOM
 
 const SAMPLE = `{
   "tool": "JSON Tidy",
@@ -34,6 +38,22 @@ const SAMPLE = `{
   "indentOptions": [2, 3, 4, "tab"],
   "converters": ["yaml", "csv", "xml"],
   "nested": { "count": 3, "items": [1, 2, 3], "ok": null }
+}`
+
+// Two similar-but-different documents used by Compare's "Load example" — they show
+// an added array item, a changed nested value, and an added top-level key.
+const CMP_SAMPLE_A = `{
+  "name": "Ada Lovelace",
+  "born": 1815,
+  "fields": ["mathematics", "computing"],
+  "notes": { "pioneer": true, "engine": "Analytical Engine" }
+}`
+const CMP_SAMPLE_B = `{
+  "name": "Ada Lovelace",
+  "born": 1815,
+  "fields": ["mathematics", "computing", "poetry"],
+  "notes": { "pioneer": true, "engine": "Ada" },
+  "honoured": "Ada Lovelace Day"
 }`
 
 const OUTPUT_META: Record<OutputKind, { title: string; ext: string; mime: string }> = {
@@ -441,6 +461,86 @@ function makeSpan(dtype: string, text?: string): HTMLSpanElement {
   return s
 }
 
+// ── Compare / diff helpers ───────────────────────────────────
+type JtMode = 'format' | 'compare'
+type JtDiffKind = 'added' | 'removed' | 'changed'
+interface JtDiffEntry { path: string; kind: JtDiffKind; before?: unknown; after?: unknown }
+
+/** Structural deep-equality for parsed JSON values (order-sensitive for arrays). */
+function jtDeepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (a === null || b === null) return a === b
+  if (typeof a !== 'object' || typeof b !== 'object') return a === b
+  const aArr = Array.isArray(a)
+  if (aArr !== Array.isArray(b)) return false
+  if (aArr) {
+    const x = a as unknown[], y = b as unknown[]
+    if (x.length !== y.length) return false
+    for (let i = 0; i < x.length; i++) if (!jtDeepEqual(x[i], y[i])) return false
+    return true
+  }
+  const x = a as Record<string, unknown>, y = b as Record<string, unknown>
+  const xk = Object.keys(x), yk = Object.keys(y)
+  if (xk.length !== yk.length) return false
+  for (const k of xk) {
+    if (!Object.prototype.hasOwnProperty.call(y, k)) return false
+    if (!jtDeepEqual(x[k], y[k])) return false
+  }
+  return true
+}
+
+/** Compact, single-line rendering of a value for a diff row (truncated). */
+function jtCompact(v: unknown): string {
+  let s: string
+  if (v === null) s = 'null'
+  else if (typeof v === 'string') s = JSON.stringify(v)
+  else if (typeof v === 'object') s = JSON.stringify(v)
+  else s = String(v)
+  return s.length > 140 ? s.slice(0, 139) + '…' : s
+}
+
+/**
+ * Walk two parsed JSON values in parallel and collect the differences that turn
+ * `a` (before) into `b` (after). Objects compare by key (union), arrays by index;
+ * a shape/type mismatch or a differing primitive yields one `changed` entry at
+ * that path. Equal subtrees produce nothing. Entries come out in document order.
+ */
+function jtDiff(a: unknown, b: unknown, path: string, out: JtDiffEntry[]): void {
+  if (jtDeepEqual(a, b)) return
+  const aObj = a !== null && typeof a === 'object'
+  const bObj = b !== null && typeof b === 'object'
+  const aArr = Array.isArray(a)
+  const bArr = Array.isArray(b)
+  if (aObj && bObj && aArr === bArr) {
+    if (aArr) {
+      const x = a as unknown[], y = b as unknown[]
+      const len = Math.max(x.length, y.length)
+      for (let i = 0; i < len; i++) {
+        const p = childPath(path, i)
+        if (i >= x.length) out.push({ path: p, kind: 'added', after: y[i] })
+        else if (i >= y.length) out.push({ path: p, kind: 'removed', before: x[i] })
+        else jtDiff(x[i], y[i], p, out)
+      }
+    } else {
+      const x = a as Record<string, unknown>, y = b as Record<string, unknown>
+      const seen = new Set<string>()
+      for (const k of [...Object.keys(x), ...Object.keys(y)]) {
+        if (seen.has(k)) continue
+        seen.add(k)
+        const p = childPath(path, k)
+        const inA = Object.prototype.hasOwnProperty.call(x, k)
+        const inB = Object.prototype.hasOwnProperty.call(y, k)
+        if (!inA) out.push({ path: p, kind: 'added', after: y[k] })
+        else if (!inB) out.push({ path: p, kind: 'removed', before: x[k] })
+        else jtDiff(x[k], y[k], p, out)
+      }
+    }
+  } else {
+    // Differing primitive, or an object↔array↔primitive shape change.
+    out.push({ path, kind: 'changed', before: a, after: b })
+  }
+}
+
 class JsonTidyTool extends HTMLElement {
   private indent: Indent = '2'
   private sort = false
@@ -478,6 +578,24 @@ class JsonTidyTool extends HTMLElement {
   private searchNextBtn!: HTMLButtonElement
   private searchClearBtn!: HTMLButtonElement
 
+  // Compare mode.
+  private mode: JtMode = 'format'
+  private cmpDebounce = 0
+  private diffRows: HTMLElement[] = []
+  private activeDiff = -1
+  private root!: HTMLElement
+  private modeFormatBtn!: HTMLButtonElement
+  private modeCompareBtn!: HTMLButtonElement
+  private cmpA!: HTMLTextAreaElement
+  private cmpB!: HTMLTextAreaElement
+  private cmpStatusA!: HTMLElement
+  private cmpStatusB!: HTMLElement
+  private diffSummaryEl!: HTMLElement
+  private diffEl!: HTMLElement
+  private diffPrevBtn!: HTMLButtonElement
+  private diffNextBtn!: HTMLButtonElement
+  private diffCopyBtn!: HTMLButtonElement
+
   connectedCallback() {
     this.indent = (this.readLS(LS_INDENT) as Indent) || '2'
     if (!['2', '3', '4', 'tab'].includes(this.indent)) this.indent = '2'
@@ -485,12 +603,18 @@ class JsonTidyTool extends HTMLElement {
     this.auto = this.readLS(LS_AUTO) === '1'
     this.view = this.readLS(LS_VIEW) === 'tree' ? 'tree' : 'text'
     this.query = this.readLS(LS_SEARCH) || ''
+    this.mode = this.readLS(LS_MODE) === 'compare' ? 'compare' : 'format'
 
     this.innerHTML = `
       <div data-type="tool-page" data-tool="json-tidy">
         <div data-type="tool-header">
           <h1>JSON Tidy</h1>
-          <p>Paste JSON to format, validate, minify, explore in a searchable collapsible tree, or convert it to YAML, CSV, or XML — instantly, in your browser. Errors are pinpointed by line and column; nothing is uploaded.</p>
+          <p>Paste JSON to format, validate, minify, explore in a searchable collapsible tree, convert it to YAML, CSV, or XML, or compare two documents to see exactly what changed — instantly, in your browser. Errors are pinpointed by line and column; nothing is uploaded.</p>
+        </div>
+
+        <div data-group="mode-toggle" role="group" aria-label="Tool mode">
+          <button data-mode-btn="format" type="button" aria-pressed="true">Format &amp; view</button>
+          <button data-mode-btn="compare" type="button" aria-pressed="false">Compare</button>
         </div>
 
         <div data-group="toolbar">
@@ -584,6 +708,65 @@ class JsonTidyTool extends HTMLElement {
             <div data-type="jt-tree" role="tree" aria-label="JSON tree view" hidden></div>
           </section>
         </div>
+
+        <div data-type="jt-compare">
+          <div data-type="jt-compare-inputs">
+            <section data-type="jt-pane" data-side="a">
+              <div data-type="jt-pane-head">
+                <span data-type="jt-pane-title">Input A · original</span>
+                <div data-group="pane-actions">
+                  <button data-action="cmp-swap" type="button" title="Swap A and B">Swap ⇄</button>
+                  <button data-action="cmp-clear" type="button">Clear both</button>
+                </div>
+              </div>
+              <textarea
+                data-type="jt-input"
+                data-control="cmp-a"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                aria-label="JSON input A (original)"
+                placeholder="Paste the original JSON here…"
+              ></textarea>
+              <div data-type="jt-statusbar">
+                <span data-type="jt-status" data-control="cmp-status-a" role="status" aria-live="polite"></span>
+              </div>
+            </section>
+
+            <section data-type="jt-pane" data-side="b">
+              <div data-type="jt-pane-head">
+                <span data-type="jt-pane-title">Input B · changed</span>
+                <div data-group="pane-actions">
+                  <button data-action="cmp-example" type="button">Load example</button>
+                </div>
+              </div>
+              <textarea
+                data-type="jt-input"
+                data-control="cmp-b"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                aria-label="JSON input B (changed)"
+                placeholder="Paste the JSON to compare against…"
+              ></textarea>
+              <div data-type="jt-statusbar">
+                <span data-type="jt-status" data-control="cmp-status-b" role="status" aria-live="polite"></span>
+              </div>
+            </section>
+          </div>
+
+          <div data-type="jt-diff-head">
+            <span data-type="jt-diff-summary" role="status" aria-live="polite"></span>
+            <div data-group="pane-actions">
+              <button data-action="diff-prev" type="button" aria-label="Previous difference" title="Previous difference" disabled>↑</button>
+              <button data-action="diff-next" type="button" aria-label="Next difference" title="Next difference" disabled>↓</button>
+              <button data-action="diff-copy" type="button" disabled>Copy diff</button>
+            </div>
+          </div>
+          <div data-type="jt-diff" tabindex="0" role="list" aria-label="Differences between A and B"></div>
+        </div>
       </div>
     `
 
@@ -605,10 +788,26 @@ class JsonTidyTool extends HTMLElement {
     this.searchPrevBtn = this.querySelector('[data-action="search-prev"]') as HTMLButtonElement
     this.searchNextBtn = this.querySelector('[data-action="search-next"]') as HTMLButtonElement
     this.searchClearBtn = this.querySelector('[data-action="search-clear"]') as HTMLButtonElement
+    this.root = this.querySelector('[data-type="tool-page"]') as HTMLElement
+    this.modeFormatBtn = this.querySelector('[data-mode-btn="format"]') as HTMLButtonElement
+    this.modeCompareBtn = this.querySelector('[data-mode-btn="compare"]') as HTMLButtonElement
+    this.cmpA = this.querySelector('[data-control="cmp-a"]') as HTMLTextAreaElement
+    this.cmpB = this.querySelector('[data-control="cmp-b"]') as HTMLTextAreaElement
+    this.cmpStatusA = this.querySelector('[data-control="cmp-status-a"]') as HTMLElement
+    this.cmpStatusB = this.querySelector('[data-control="cmp-status-b"]') as HTMLElement
+    this.diffSummaryEl = this.querySelector('[data-type="jt-diff-summary"]') as HTMLElement
+    this.diffEl = this.querySelector('[data-type="jt-diff"]') as HTMLElement
+    this.diffPrevBtn = this.querySelector('[data-action="diff-prev"]') as HTMLButtonElement
+    this.diffNextBtn = this.querySelector('[data-action="diff-next"]') as HTMLButtonElement
+    this.diffCopyBtn = this.querySelector('[data-action="diff-copy"]') as HTMLButtonElement
 
     // Restore prior session.
     const saved = this.readLS(LS_INPUT)
     if (saved) this.input.value = saved
+    const savedB = this.readLS(LS_INPUT_B)
+    if (savedB) this.cmpB.value = savedB
+    const savedA = this.readLS(LS_INPUT_A)
+    if (savedA) this.cmpA.value = savedA
     this.searchInput.value = this.query
     ;(this.querySelector('[data-control="indent"]') as HTMLSelectElement).value = this.indent
     ;(this.querySelector('[data-control="sort"]') as HTMLInputElement).checked = this.sort
@@ -619,11 +818,13 @@ class JsonTidyTool extends HTMLElement {
     this.validate()
     if (this.auto) this.maybeAutoFormat()
     this.setView(this.view)
+    this.setMode(this.mode, false)
   }
 
   disconnectedCallback() {
     if (this.debounce) clearTimeout(this.debounce)
     if (this.searchDebounce) clearTimeout(this.searchDebounce)
+    if (this.cmpDebounce) clearTimeout(this.cmpDebounce)
   }
 
   private wire() {
@@ -735,6 +936,47 @@ class JsonTidyTool extends HTMLElement {
       this.writeLS(LS_AUTO, this.auto ? '1' : '0')
       if (this.auto) this.produce('format', true)
     })
+
+    // ── Compare mode ──
+    this.modeFormatBtn.addEventListener('click', () => this.setMode('format'))
+    this.modeCompareBtn.addEventListener('click', () => this.setMode('compare'))
+    this.cmpA.addEventListener('input', () => this.scheduleCompare())
+    this.cmpB.addEventListener('input', () => this.scheduleCompare())
+    ;[this.cmpA, this.cmpB].forEach((ta) =>
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault()
+          this.insertInto(ta, '\t')
+        }
+      }),
+    )
+    this.querySelector('[data-action="cmp-example"]')!.addEventListener('click', () => {
+      this.cmpA.value = CMP_SAMPLE_A
+      this.cmpB.value = CMP_SAMPLE_B
+      this.persistCompare()
+      this.computeDiff()
+    })
+    this.querySelector('[data-action="cmp-clear"]')!.addEventListener('click', () => {
+      this.cmpA.value = ''
+      this.cmpB.value = ''
+      this.persistCompare()
+      this.computeDiff()
+      this.cmpA.focus()
+    })
+    this.querySelector('[data-action="cmp-swap"]')!.addEventListener('click', () => {
+      const tmp = this.cmpA.value
+      this.cmpA.value = this.cmpB.value
+      this.cmpB.value = tmp
+      this.persistCompare()
+      this.computeDiff()
+    })
+    this.diffPrevBtn.addEventListener('click', () => this.gotoDiff(-1))
+    this.diffNextBtn.addEventListener('click', () => this.gotoDiff(1))
+    this.diffCopyBtn.addEventListener('click', () => this.copyDiff())
+    this.diffEl.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); this.gotoDiff(1) }
+      else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); this.gotoDiff(-1) }
+    })
   }
 
   private insertAtCursor(text: string) {
@@ -744,6 +986,208 @@ class JsonTidyTool extends HTMLElement {
     el.value = el.value.slice(0, start) + text + el.value.slice(end)
     el.selectionStart = el.selectionEnd = start + text.length
     this.scheduleUpdate()
+  }
+
+  private insertInto(el: HTMLTextAreaElement, text: string) {
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    el.value = el.value.slice(0, start) + text + el.value.slice(end)
+    el.selectionStart = el.selectionEnd = start + text.length
+    this.scheduleCompare()
+  }
+
+  // ── Compare mode ─────────────────────────────────────────────
+  private setMode(mode: JtMode, persist = true) {
+    this.mode = mode
+    this.root.dataset.mode = mode
+    if (persist) this.writeLS(LS_MODE, mode)
+    const compare = mode === 'compare'
+    this.modeFormatBtn.setAttribute('aria-pressed', String(!compare))
+    this.modeCompareBtn.setAttribute('aria-pressed', String(compare))
+    if (compare) {
+      // Continuity: on a fresh compare, seed side A with whatever you were formatting.
+      if (!this.cmpA.value && !this.cmpB.value && this.input.value.trim()) {
+        this.cmpA.value = this.input.value
+        this.persistCompare()
+      }
+      this.computeDiff()
+    }
+  }
+
+  private scheduleCompare() {
+    if (this.cmpDebounce) clearTimeout(this.cmpDebounce)
+    this.cmpDebounce = window.setTimeout(() => {
+      this.cmpDebounce = 0
+      this.persistCompare()
+      this.computeDiff()
+    }, 200)
+  }
+
+  /** Validate one compare side, reflect its status line, and return the parsed value. */
+  private diffSide(src: string, statusEl: HTMLElement): { state: 'empty' | 'ok' | 'err'; value?: unknown } {
+    if (!src.trim()) {
+      statusEl.dataset.state = 'idle'
+      statusEl.textContent = 'Empty'
+      return { state: 'empty' }
+    }
+    const res = analyze(src)
+    if (res.ok) {
+      const keys = countKeys(res.value)
+      statusEl.dataset.state = 'ok'
+      statusEl.textContent = `Valid · ${keys} ${keys === 1 ? 'key' : 'keys'}`
+      return { state: 'ok', value: res.value }
+    }
+    const where = res.line ? `line ${res.line}, col ${res.col}` : 'parse error'
+    statusEl.dataset.state = 'err'
+    statusEl.textContent = `Invalid · ${where}`
+    return { state: 'err' }
+  }
+
+  private computeDiff() {
+    const a = this.diffSide(this.cmpA.value, this.cmpStatusA)
+    const b = this.diffSide(this.cmpB.value, this.cmpStatusB)
+    this.diffRows = []
+    this.activeDiff = -1
+
+    if (a.state === 'empty' || b.state === 'empty') {
+      this.diffNotice('Paste JSON into both panes to see what changed — or press “Load example”.')
+      this.setDiffSummary('', null)
+      this.updateDiffNav()
+      return
+    }
+    if (a.state === 'err' || b.state === 'err') {
+      const which =
+        a.state === 'err' && b.state === 'err' ? 'Both inputs are' : a.state === 'err' ? 'Input A is' : 'Input B is'
+      this.diffNotice(`${which} not valid JSON — fix it to compare. The line under each pane pinpoints the error.`)
+      this.setDiffSummary('', null)
+      this.updateDiffNav()
+      return
+    }
+
+    const entries: JtDiffEntry[] = []
+    jtDiff(a.value, b.value, '$', entries)
+    if (entries.length === 0) {
+      this.diffNotice('The two documents are identical — every key and value matches.')
+      this.setDiffSummary('Identical — no differences', 'same')
+      this.updateDiffNav()
+      return
+    }
+    this.renderDiff(entries)
+  }
+
+  private renderDiff(entries: JtDiffEntry[]) {
+    let added = 0, removed = 0, changed = 0
+    for (const e of entries) {
+      if (e.kind === 'added') added++
+      else if (e.kind === 'removed') removed++
+      else changed++
+    }
+    const total = entries.length
+    const capped = entries.slice(0, MAX_DIFF_ROWS)
+    const frag = document.createDocumentFragment()
+    for (const e of capped) frag.append(this.buildDiffRow(e))
+    this.diffEl.replaceChildren(frag)
+    if (total > capped.length) {
+      const more = document.createElement('div')
+      more.dataset.type = 'jt-diff-more'
+      more.textContent = `…and ${(total - capped.length).toLocaleString()} more (showing the first ${MAX_DIFF_ROWS.toLocaleString()}).`
+      this.diffEl.append(more)
+    }
+    this.diffRows = Array.from(this.diffEl.querySelectorAll<HTMLElement>('[data-type="jt-diff-row"]'))
+    this.activeDiff = this.diffRows.length ? 0 : -1
+    this.markActiveDiff()
+    this.setDiffSummary(
+      `${total} ${total === 1 ? 'difference' : 'differences'} · ${added} added · ${removed} removed · ${changed} changed`,
+      'diff',
+    )
+    this.updateDiffNav()
+  }
+
+  private buildDiffRow(e: JtDiffEntry): HTMLElement {
+    const row = document.createElement('div')
+    row.dataset.type = 'jt-diff-row'
+    row.dataset.kind = e.kind
+    row.setAttribute('role', 'listitem')
+    const sign = e.kind === 'added' ? '+' : e.kind === 'removed' ? '−' : '~'
+    row.append(makeSpan('jt-diff-sign', sign))
+    row.append(makeSpan('jt-diff-path', e.path))
+    const val = makeSpan('jt-diff-val')
+    if (e.kind === 'added') val.textContent = jtCompact(e.after)
+    else if (e.kind === 'removed') val.textContent = jtCompact(e.before)
+    else {
+      val.append(makeSpan('jt-diff-before', jtCompact(e.before)))
+      val.append(makeSpan('jt-diff-arrow', ' → '))
+      val.append(makeSpan('jt-diff-after', jtCompact(e.after)))
+    }
+    row.append(val)
+    return row
+  }
+
+  private diffNotice(msg: string) {
+    const div = document.createElement('div')
+    div.dataset.type = 'jt-diff-empty'
+    div.textContent = msg
+    this.diffEl.replaceChildren(div)
+    this.diffRows = []
+    this.activeDiff = -1
+  }
+
+  private setDiffSummary(text: string, state: 'diff' | 'same' | null) {
+    this.diffSummaryEl.textContent = text
+    if (state) this.diffSummaryEl.dataset.state = state
+    else this.diffSummaryEl.removeAttribute('data-state')
+  }
+
+  private markActiveDiff() {
+    this.diffRows.forEach((r, i) => {
+      if (i === this.activeDiff) r.dataset.active = ''
+      else r.removeAttribute('data-active')
+    })
+  }
+
+  private gotoDiff(dir: number) {
+    if (!this.diffRows.length) return
+    this.activeDiff = (this.activeDiff + dir + this.diffRows.length) % this.diffRows.length
+    this.markActiveDiff()
+    this.diffRows[this.activeDiff]?.scrollIntoView({ block: 'nearest' })
+    this.updateDiffNav()
+  }
+
+  private updateDiffNav() {
+    const has = this.diffRows.length > 0
+    this.diffPrevBtn.disabled = !has
+    this.diffNextBtn.disabled = !has
+    this.diffCopyBtn.disabled = !has
+  }
+
+  private async copyDiff() {
+    if (!this.diffRows.length) return
+    const lines = this.diffRows.map((r) => {
+      const sign = r.querySelector('[data-type="jt-diff-sign"]')?.textContent ?? ''
+      const path = r.querySelector('[data-type="jt-diff-path"]')?.textContent ?? ''
+      const val = r.querySelector('[data-type="jt-diff-val"]')?.textContent ?? ''
+      const joiner = r.dataset.kind === 'changed' ? ':' : ' ='
+      return `${sign} ${path}${joiner} ${val}`
+    })
+    const header = this.diffSummaryEl.textContent || 'JSON diff'
+    const text = `JSON diff (A → B)\n${header}\n\n${lines.join('\n')}\n`
+    try {
+      await navigator.clipboard.writeText(text)
+      this.flash(this.diffCopyBtn, 'Copied!')
+    } catch {
+      this.flash(this.diffCopyBtn, 'Copy failed')
+    }
+  }
+
+  private persistCompare() {
+    try {
+      const a = this.cmpA.value
+      const b = this.cmpB.value
+      if (a.length <= MAX_PERSIST) localStorage.setItem(LS_INPUT_A, a)
+      else localStorage.removeItem(LS_INPUT_A)
+      if (b.length <= MAX_PERSIST) localStorage.setItem(LS_INPUT_B, b)
+      else localStorage.removeItem(LS_INPUT_B)
+    } catch { /* ignore quota/private-mode errors */ }
   }
 
   private scheduleUpdate() {

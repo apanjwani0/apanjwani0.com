@@ -26,6 +26,7 @@
   --color-accent: #6a5bd0;   /* violet — links, markers, trail  */
   --color-error: #c0392b;    /* errors, incorrect input         */
   --color-success: #1e7d4f;  /* success, correct input          */
+  --color-shadow: rgba(0, 0, 0, 0.5); /* drop-shadow / elevation ink */
 
   /* ── Fonts ───────────────────────────────────────────────── */
   --font-serif: 'Source Serif 4', Georgia, serif;
