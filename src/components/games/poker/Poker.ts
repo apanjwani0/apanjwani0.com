@@ -23,6 +23,7 @@ import { decide, estimateEquity } from './engine/bots'
 import { evaluateBest, evaluateOmaha } from './engine/evaluator'
 import { seededRng, hashSeed } from './engine/cards'
 import type { LogEntry, Transport } from './engine/net-log'
+import { createPbSession, type PbSession } from './engine/net-pb'
 import { cardSvg, cardBackSvg, suitSvg } from './ui/cards-svg'
 import { avatarSvg, buttonSvg, timerPieSvg, iconSvg, crownSvg, wordmarkSvg, chipSvg } from './ui/assets-svg'
 import { VARIANTS, BOT_PERSONALITIES, LS, MAX_ROOMS, clamp } from './engine/types'
@@ -64,7 +65,7 @@ function makeSeed(): string {
 }
 
 class PokerGame extends HTMLElement {
-  private screen: 'home' | 'create' | 'room' | 'table' = 'home'
+  private screen: 'home' | 'create' | 'room' | 'table' | 'joining' = 'home'
   private roomId: string | null = null
   private room: Room | null = null
   private state: GameState | null = null
@@ -85,6 +86,8 @@ class PokerGame extends HTMLElement {
   // online swaps in a Trystero session. isHost runs the bots + seals the log;
   // online joiners only submit their own seat's moves. mySeat is set online.
   private transport: Transport | null = null
+  private pb: PbSession | null = null       // the online session (=== transport when online)
+  private peer = ''                          // stable per-client id for presence
   private online = false
   private isHost = true
   private mySeat: number | null = null
@@ -97,11 +100,13 @@ class PokerGame extends HTMLElement {
 
   connectedCallback() {
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    this.restoreSession()
     this.unsub = rooms.subscribe(() => {
       if (this.screen === 'home') this.renderHome()
       else if (this.screen === 'room') this.syncRoom()
     })
+    const join = new URLSearchParams(location.search).get('join')
+    if (join) { this.joinOnline(join.trim().toUpperCase()); return }
+    this.restoreSession()
     this.route()
   }
 
@@ -110,6 +115,7 @@ class PokerGame extends HTMLElement {
     this.clearTurnTimer()
     this.transport?.destroy()
     this.transport = null
+    this.pb = null
     this.unsub?.()
   }
 
@@ -443,7 +449,7 @@ class PokerGame extends HTMLElement {
         ${r.code ? `<section data-type="pk-panel">
           <h2>Invite</h2>
           <div data-type="pk-invite"><code data-type="pk-code">${esc(r.code)}</code><button id="pk-copy" type="button" data-variant="ghost">Copy link</button></div>
-          <p data-type="pk-note">Pass this device around for hotseat play. Online join via this code is in testing.</p>
+          <p data-type="pk-note">Share the link so friends join from their own device, or pass this one around for hotseat play.</p>
         </section>` : ''}
         <section data-type="pk-panel">
           <h2>Seats</h2>
@@ -451,6 +457,7 @@ class PokerGame extends HTMLElement {
         </section>
         <div data-type="pk-actions">
           <button id="pk-deal" type="button" data-variant="primary">Deal hand</button>
+          ${r.code ? '<button id="pk-online" type="button" data-variant="primary">Play online</button>' : ''}
           <button id="pk-back" type="button" data-variant="ghost">Home</button>
           <button id="pk-delete" type="button" data-variant="ghost">Delete table</button>
           <span data-type="pk-note" id="pk-room-note"></span>
@@ -459,6 +466,7 @@ class PokerGame extends HTMLElement {
     this.qa('[data-cycle]').forEach(b => b.addEventListener('click', () => this.cycleSeat(Number((b as HTMLElement).dataset.cycle))))
     this.qa('[data-rebuy]').forEach(b => b.addEventListener('click', () => this.rebuy(Number((b as HTMLElement).dataset.rebuy))))
     this.q('#pk-deal')?.addEventListener('click', () => this.deal())
+    this.q('#pk-online')?.addEventListener('click', () => this.goOnline())
     this.q('#pk-back')?.addEventListener('click', () => { this.screen = 'home'; this.route() })
     this.q('#pk-delete')?.addEventListener('click', () => { if (this.roomId) rooms.remove(this.roomId); this.roomId = null; this.screen = 'home'; this.route() })
     this.q('#pk-copy')?.addEventListener('click', () => {
@@ -564,9 +572,101 @@ class PokerGame extends HTMLElement {
     this.transport = { append: b => this.applyEntry({ ...b, seq: seq++ } as LogEntry), destroy: () => {} }
   }
 
+  /* ─────────────────────────  ONLINE  ─────────────────────────────── */
+
+  /** Stable per-sitting client id (used for presence). */
+  private peerId(): string {
+    if (!this.peer) this.peer = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `p${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+    return this.peer
+  }
+
+  /** Host this room online: open a PocketBase session, then deal. The host seals
+   *  every `deal` + bot action into the log; joiners arrive via the invite link and
+   *  drive only their own seat. `deal()`'s `ensureTransport()` is a no-op here since
+   *  we set `this.transport` first. Fresh room per session (a reused invite code
+   *  still holds its old log rows). */
+  private goOnline() {
+    const r = this.room
+    if (!r?.code || this.online) return
+    this.mySeat = r.seats.find(s => s.kind === 'human')?.index ?? 0
+    this.online = true
+    this.isHost = true
+    this.pb = createPbSession({
+      room: r.code, peer: this.peerId(), name: hostName(), seat: this.mySeat,
+      onEntry: e => this.applyEntry(e),
+    })
+    this.transport = this.pb
+    this.deal()
+  }
+
+  /** Join a table by invite code from a `?join=CODE` link — a non-host session that
+   *  holds no local Room. The table (and our seat) is synthesized from the first
+   *  `deal` on the wire (see joinFirstDeal); until then we show a waiting screen. */
+  private joinOnline(code: string) {
+    if (!code) { this.restoreSession(); this.route(); return }
+    this.online = true
+    this.isHost = false
+    this.mySeat = null
+    this.room = null
+    this.roomId = null
+    this.pb = createPbSession({
+      room: code, peer: this.peerId(), name: hostName(), seat: null,
+      onEntry: e => this.applyEntry(e),
+    })
+    this.transport = this.pb
+    try { history.replaceState({}, '', location.pathname) } catch { /* ignore */ }
+    this.renderJoining(code)
+  }
+
+  /** A joiner's first `deal`: build a throwaway Room from the wire, claim an open
+   *  human seat, and enter the table shell. Heads-up is exact; simultaneous multi-
+   *  joins can race for one seat — claim/ack is the upgrade (poker-build-log D7). */
+  private joinFirstDeal(e: Extract<LogEntry, { kind: 'deal' }>) {
+    const c = e.config
+    const humans = e.seats.filter(s => s.kind === 'human').map(s => s.index).sort((a, b) => a - b)
+    // ponytail: host = lowest human seat by convention; a lone joiner takes the next.
+    const hostSeat = humans[0] ?? 0
+    this.mySeat = humans.find(i => i !== hostSeat) ?? hostSeat
+    this.room = {
+      id: `online:${c.name}`, name: c.name,
+      createdAt: Date.now(), updatedAt: Date.now(),
+      config: {
+        variantId: c.variantId, seatCount: e.seats.length, startingStack: 0,
+        smallBlind: c.smallBlind, bigBlind: c.bigBlind, ante: c.ante,
+        botCount: e.seats.filter(s => s.kind === 'bot').length, botPersonality: 'mixed',
+      },
+      seats: e.seats.map(s => ({ index: s.index, kind: s.kind, name: s.name, chips: s.chips, personality: s.personality })),
+      handNumber: e.handNumber, buttonSeat: e.button, public: false,
+    }
+    this.screen = 'table'
+    this.enterTable()
+    this.pb?.setSeat(this.mySeat)   // advertise the claimed seat in presence
+  }
+
+  /** Waiting screen a joiner sees until the host deals the next hand. */
+  private renderJoining(code: string) {
+    this.screen = 'joining'
+    this.innerHTML = `
+      <div data-type="pk-game" data-screen="joining">
+        <header data-type="pk-home-top"><span data-type="pk-wordmark">${wordmarkSvg()}</span></header>
+        <section data-type="pk-panel">
+          <h2>Joining ${esc(code)}</h2>
+          <p data-type="pk-note">Connected — waiting for the host to deal the next hand…</p>
+          <div data-type="pk-actions"><button id="pk-join-cancel" type="button" data-variant="ghost">Cancel</button></div>
+        </section>
+      </div>`
+    this.q('#pk-join-cancel')?.addEventListener('click', () => this.leaveTable())
+  }
+
   /** Apply one sealed log entry to the engine — the single place hands advance,
    *  identical on every peer. `deal` (re)creates the seeded state; `action` steps it. */
   private applyEntry(e: LogEntry) {
+    // An online joiner holds no local Room until the first `deal` seals the table —
+    // synthesize it from the wire (config + seats), claim a seat, enter the shell,
+    // then fall through and replay this very deal like any peer.
+    if (e.kind === 'deal' && this.online && !this.isHost && !this.room) this.joinFirstDeal(e)
     if (this.screen !== 'table' || !this.room) return
     if (e.kind === 'deal') {
       // Config comes from the entry (not this.room) so an online joiner — who holds
@@ -669,16 +769,22 @@ class PokerGame extends HTMLElement {
     this.removeKeyHandler()
     this.transport?.destroy()
     this.transport = null
+    this.pb = null
+    const wasJoiner = this.online && !this.isHost
     this.online = false
     this.isHost = true
     this.mySeat = null
-    this.screen = 'room'
+    // A joiner never had a local room to return to → go home; a host returns to its room.
+    if (wasJoiner || !this.roomId) { this.room = null; this.roomId = null; this.screen = 'home' }
+    else this.screen = 'room'
     this.route()
   }
 
   private commitChips() {
     const s = this.state, r = this.room
     if (!s || !r) return
+    // A joiner's room is a synthetic wire replica — never persist it into their local list.
+    if (this.online && !this.isHost) return
     for (const seat of r.seats) if (s.stacks[seat.index] !== undefined) seat.chips = s.stacks[seat.index]
     rooms.save(r)
   }
@@ -691,6 +797,9 @@ class PokerGame extends HTMLElement {
   }
 
   private needsHotseatReveal(): boolean {
+    // Online, each device is its own player — show only the hero's cards, never the
+    // pass-the-device reveal (which would leak both hands onto one screen).
+    if (this.online) return false
     return this.tableSeats().filter(s => s.kind === 'human' && s.chips > 0).length > 1
   }
 

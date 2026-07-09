@@ -11,6 +11,42 @@ acknowledgements). Slices 1–3 (Home, public tables, odds pet) already shipped.
 
 ## Decisions
 
+### D9 — Online path built: net-pb PocketBase Transport + goOnline/joinOnline (2026-07-09)
+- Built the online transport the D8 plan called for. `engine/net-pb.ts`
+  (`createPbSession`) implements `Transport` against the PB sequencer: `append`
+  POSTs `{room, seq, body}` to `pk_actions` with a self-assigned `seq`; a single
+  `catchUp()` drains `seq > lastSeen` sorted by seq (never SSE arrival order) and is
+  nudged by the `pk_actions` SSE event + right after our own POST; presence is a 10 s
+  heartbeat upsert to `pk_presence` (seat `-1` = unclaimed, since PB reports an unset
+  number as 0 and 0 is a real seat). Plain `fetch` + `EventSource`, SSR-guarded.
+- **Key simplification (proven correct):** poker is strictly turn-based, so exactly
+  one participant is "to act" at any instant → exactly one writer produces the next
+  entry. Writes serialize for free; each client safely stamps `seq = lastSeen + 1`
+  with no coordination and no collision. Not a true relay — the host just seals every
+  `deal` + bot action; a joiner writes only its own seat's moves. Late/again: a joiner
+  can arrive anytime — the host's loop simply **pauses** at the joiner's seat (it's a
+  human seat the host doesn't control) until they connect and act. No stall, no
+  presence-gating needed.
+- **Poker.ts wiring:** `goOnline()` (host: open session, set online/isHost, then
+  `deal()` — its `ensureTransport()` is now a no-op); `joinOnline(code)` from the
+  `?join=CODE` link (non-host: no local Room → `joinFirstDeal` synthesizes it from the
+  first `deal`'s `config`+`seats`, claims an open human seat, enters the table);
+  `?join=` handled in `connectedCallback` (URL cleaned via `replaceState`); "Play
+  online" button on the room screen; `needsHotseatReveal()` forced false online (each
+  device shows only its own hero's cards); joiner's synthetic room never persisted.
+- **Verified in-sandbox:** build green; local Practice still runs the full loop
+  through the synchronous loopback (deal → call → fold → bots → showdown "Ace Ventura
+  +3,060" → Next hand → hand #2, chips conserved 7500, clean console); "Play online"
+  renders; `?join=ZZZTEST` renders the waiting screen, cleans the URL, Cancel → Home,
+  and the unreachable backend degrades silently (no console errors).
+- **NOT yet verified — needs the real machine:** the actual 2-device online game
+  (requires `npm run pb` on :8090 + two browsers/devices on the same PocketBase; the
+  sandbox can't reach :8090). **Contract:** use a fresh room per online session — a
+  reused invite code still holds its old `pk_actions` rows and would replay them.
+- **Known follow-ups (ponytail-marked):** simultaneous multi-joins can race for one
+  seat (heads-up is exact) → claim/ack; host-reload mid-game re-appends from seq 0 →
+  online session-resume; a full-page catch-up currently replays visibly.
+
 ### D0 — Autonomous mode + heartbeat (2026-07-09)
 - Enabled autonomous execution; 30-min `ScheduleWakeup` heartbeat re-enters the
   build each cycle, continues the next task, and stops itself when all are done.
