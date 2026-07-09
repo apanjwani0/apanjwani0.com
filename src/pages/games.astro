@@ -2,14 +2,32 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
-import { getGames } from '../lib/config'
+import { getSite, getGames } from '../lib/config'
 import { render } from '../lib/markdown'
+import { itemListJsonLd } from '../lib/jsonld'
 
-const games = (await getGames(Astro.locals)).filter(g => g.enabled)
+const [site, games] = await Promise.all([
+  getSite(Astro.locals),
+  getGames(Astro.locals).then(gs => gs.filter(g => g.enabled)),
+])
+
+const ldJson = itemListJsonLd(
+  'Games by Aman Panjwani',
+  games.map(g => ({ name: g.title, url: `${site.url}/games/${g.slug}` })),
+)
 ---
 
-<Base title="games">
+<Base
+  title="games"
+  description="Browser games and playable experiments by Aman Panjwani — Poker Together (local play-money Texas Hold'em / Omaha / Bomb Pot vs friends or bots), an interactive Conway's Game of Life, a seeded Flow Field generative-art toy, a Type Trial typing-speed race and a hex-colour guessing game. No downloads, no sign-up; everything runs right in your browser."
+  keywords="browser games, poker, texas hold'em, play money poker, poker vs bots, conway's game of life, cellular automaton, flow field generator, generative art, typing game, typing speed test, hex color game, playable experiments, no-download games"
+>
+  {games.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
   <h1>games</h1>
+  <p data-type="page-intro">
+    Browser games and playable experiments — little things I build for the fun of it.
+    The ones marked play are live now; the rest are on the way.
+  </p>
   {games.length === 0 ? (
     <p>Coming soon.</p>
   ) : (
@@ -19,7 +37,11 @@ const games = (await getGames(Astro.locals)).filter(g => g.enabled)
           <div data-type="project-header">
             <a href={`/games/${g.slug}`}>{g.title}</a>
             <span data-type="project-stats">
-              <span style="font-size: 0.75rem; border: 1px solid var(--color-border); padding: 0.15rem 0.45rem; border-radius: 0.2rem;">coming soon</span>
+              {g.interactive ? (
+                <span data-type="game-badge" data-live>play <span aria-hidden="true">&rsaquo;</span></span>
+              ) : (
+                <span data-type="game-badge">coming soon</span>
+              )}
             </span>
           </div>
           <div data-type="project-description" set:html={render(g.description)} />
@@ -28,3 +50,20 @@ const games = (await getGames(Astro.locals)).filter(g => g.enabled)
     </div>
   )}
 </Base>
+
+<style>
+  /* Status pill on each game card — replaces the previous duplicated inline
+     styles; live vs coming-soon differ only by colour. Tokens only. */
+  [data-type="game-badge"] {
+    font-size: var(--text-xs);
+    border: 1px solid var(--color-border);
+    padding: var(--space-2xs) var(--space-xs);
+    border-radius: var(--radius);
+    white-space: nowrap;
+  }
+
+  [data-type="game-badge"][data-live] {
+    color: var(--color-success);
+    border-color: var(--color-success);
+  }
+</style>

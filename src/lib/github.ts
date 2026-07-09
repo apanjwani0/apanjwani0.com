@@ -89,11 +89,9 @@ export async function getProjectStats(
   const updated: StatsCache = { ...cache }
   let dirty = false
 
-  // Parse URLs once, reuse for fetch and result building
-  const parsed = projects.map(p => ({ url: p.url, gh: parseGithubUrl(p.url) }))
-
   await Promise.all(
-    parsed.map(async ({ gh }) => {
+    projects.map(async ({ url }) => {
+      const gh = parseGithubUrl(url)
       if (!gh) return
       const key = `${gh.owner}/${gh.repo}`
       const fresh = await fetchStats(gh.owner, gh.repo)
@@ -111,17 +109,16 @@ export async function getProjectStats(
   memCache = updated
   memCacheTime = now
 
-  return buildResult(projects, updated, parsed)
+  return buildResult(projects, updated)
 }
 
 function buildResult(
   projects: { url: string }[],
-  cache: StatsCache,
-  parsed?: { url: string; gh: ReturnType<typeof parseGithubUrl> }[]
+  cache: StatsCache
 ): Record<string, GitHubStats> {
-  const entries = parsed ?? projects.map(p => ({ url: p.url, gh: parseGithubUrl(p.url) }))
   const result: Record<string, GitHubStats> = {}
-  for (const { url, gh } of entries) {
+  for (const { url } of projects) {
+    const gh = parseGithubUrl(url)
     if (!gh) continue
     const stats = cache[`${gh.owner}/${gh.repo}`]
     if (stats) result[url] = stats

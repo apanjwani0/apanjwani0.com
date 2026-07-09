@@ -52,6 +52,61 @@ export function blogPostingJsonLd(b: BlogPostingSchema): string {
   })
 }
 
+export interface ItemListEntry {
+  name: string
+  url: string
+}
+
+/**
+ * ItemList structured data for a listing/index page (e.g. /games, /tools).
+ * Gives search engines an explicit, ordered map of the items on the page —
+ * the listing-page counterpart to the per-item WebApplication schema.
+ */
+export function itemListJsonLd(name: string, items: ItemListEntry[]): string {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name,
+    numberOfItems: items.length,
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: it.name,
+      url: it.url,
+    })),
+  })
+}
+
+export interface WebSiteSchema {
+  name: string
+  url: string
+  description?: string
+  authorName?: string
+  authorUrl?: string
+}
+
+/**
+ * WebSite structured data for the home page. Declares the site as a single named
+ * entity so search engines connect every page under one site, and links it to
+ * its author via `publisher` — complements the page-level Person schema.
+ */
+export function webSiteJsonLd(w: WebSiteSchema): string {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: w.name,
+    url: w.url,
+    ...(w.description && { description: w.description }),
+    ...(w.authorName && {
+      publisher: {
+        '@type': 'Person',
+        name: w.authorName,
+        ...(w.authorUrl && { url: w.authorUrl }),
+      },
+    }),
+  })
+}
+
 export interface WebApplicationSchema {
   name: string
   description: string
@@ -59,6 +114,8 @@ export interface WebApplicationSchema {
   authorName: string
   authorUrl: string
   keywords?: string
+  /** schema.org applicationCategory — e.g. 'Game' (default) or 'DeveloperApplication'. */
+  applicationCategory?: string
 }
 
 export function webAppJsonLd(a: WebApplicationSchema): string {
@@ -68,7 +125,14 @@ export function webAppJsonLd(a: WebApplicationSchema): string {
     name: a.name,
     description: a.description,
     url: a.url,
-    applicationCategory: 'Game',
+    applicationCategory: a.applicationCategory ?? 'Game',
+    operatingSystem: 'Any',
+    // Free, browser-based — the price-0 offer is what marks it "free" for rich results.
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD',
+    },
     author: {
       '@type': 'Person',
       name: a.authorName,

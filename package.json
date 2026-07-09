@@ -10,7 +10,10 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "generate-types": "wrangler types"
+    "generate-types": "wrangler types",
+    "graph": "graphify update .",
+    "poker:catalogue": "npx tsx src/components/games/poker/ui/catalogue.gen.ts docs/poker-assets.html",
+    "pb": "bash pocketbase/run.sh"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^13.1.4",

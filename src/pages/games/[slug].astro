@@ -5,6 +5,11 @@ import Base from '../../layouts/Base.astro'
 import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import { webAppJsonLd } from '../../lib/jsonld'
+import '../../components/games/game-of-life/game-of-life.css'
+import '../../components/games/poker/poker.css'
+import '../../components/games/flow-field/flow-field.css'
+import '../../components/games/type-trial/type-trial.css'
+import '../../components/games/hue-hunt/hue-hunt.css'
 
 const { slug } = Astro.params
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
@@ -14,19 +19,68 @@ if (!game) {
   return new Response(null, { status: 404, statusText: 'Not Found' })
 }
 
+// For a "coming soon" page, point the visitor at a game that's actually
+// playable right now so the page is an invitation, not a dead end.
+const liveGame = games.find(g => g.enabled && g.interactive && g.slug !== slug)
+
 const ldJson = webAppJsonLd({
   name: game.title,
   description: game.description,
   url: `${site.url}/games/${game.slug}`,
   authorName: site.name,
   authorUrl: site.url,
+  applicationCategory: 'Game',
   keywords: game.keywords,
 })
 ---
 
-<Base title={game.title} description={game.description} keywords={game.keywords}>
+<Base title={game.title} description={game.description} keywords={game.keywords} bare={slug === 'poker'}>
   <script type="application/ld+json" set:html={ldJson} />
-  <h1>{game.title}</h1>
-  <h2 style="color: var(--color-muted); margin-bottom: 2rem;">Coming Soon</h2>
-  <div data-type="project-description" set:html={render(game.description)} />
+  {slug === 'poker' && (
+    <a data-type="pk-credit" href="/" aria-label="Built by Aman Panjwani — back to portfolio">by Aman</a>
+  )}
+  {game.interactive && slug === 'game-of-life' && (
+    <game-of-life-game data-game="game-of-life"></game-of-life-game>
+  )}
+  {game.interactive && slug === 'flow-field' && (
+    <flow-field-game data-game="flow-field"></flow-field-game>
+  )}
+  {game.interactive && slug === 'poker' && (
+    <poker-game data-game="poker"></poker-game>
+  )}
+  {game.interactive && slug === 'type-trial' && (
+    <type-trial-game data-game="type-trial"></type-trial-game>
+  )}
+  {game.interactive && slug === 'hue-hunt' && (
+    <hue-hunt-game data-game="hue-hunt"></hue-hunt-game>
+  )}
+  {!game.interactive && (
+    <>
+      <h1>{game.title}</h1>
+      <h2 style="color: var(--color-muted); margin-bottom: var(--space-section);">Coming Soon</h2>
+      <div data-type="project-description" set:html={render(game.description)} />
+      {liveGame && (
+        <p>
+          Want to play something now? <a href={`/games/${liveGame.slug}`}>{liveGame.title}</a> is live and ready.
+        </p>
+      )}
+    </>
+  )}
 </Base>
+
+{game.interactive && (
+  <script>
+    // Mount the game's controller on initial load AND after every View Transition
+    // navigation. Bundled scripts run only once per session, so without astro:page-load
+    // a game reached via in-site nav renders blank until a hard reload.
+    function mountGame() {
+      const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
+      if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
+      else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
+      else if (slug === 'poker') import('../../components/games/poker/Poker.ts')
+      else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')
+      else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
+    }
+    document.addEventListener('astro:page-load', mountGame)
+  </script>
+)}

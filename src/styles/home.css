@@ -1,0 +1,125 @@
+/* Home — single full-bleed interactive space hero. Colours come from the
+   shared theme tokens (shared.css), so re-theming is a tokens-only edit. */
+
+/* Let the home page escape the centered 768px column for a true full-bleed canvas. */
+body[data-bare] {
+  max-width: none;
+  padding: 0;
+}
+
+main[data-bare] {
+  padding: 0;
+}
+
+/* Minimal, transparent site nav — borderless, sits over the field. Pulls from
+   site.nav so it stays in sync; the standard bordered navbar is avoided here to
+   keep the hero immersive. */
+nav[data-type="hero-nav"] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(1rem, 4vw, 2rem);
+  padding: clamp(1.1rem, 3.5vw, 1.6rem) clamp(1.25rem, 5vw, 2rem);
+  /* let drags pass through the gaps to the canvas; links re-enable below */
+  pointer-events: none;
+}
+
+nav[data-type="hero-nav"] a {
+  pointer-events: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+nav[data-type="hero-nav"] a:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-underline-offset: 0.3em;
+}
+
+/* Star canvas: fixed, full viewport, behind the content. */
+[data-type="starfield"] {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  touch-action: none;
+}
+
+[data-type="starfield"] canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+section[data-type="hero"] {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  min-height: 100svh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  /* drags pass through to the canvas; links re-enable below */
+  pointer-events: none;
+}
+
+div[data-type="hero-content"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: clamp(0.85rem, 2.5vw, 1.3rem);
+  max-width: 42rem;
+}
+
+section[data-type="hero"] h1 {
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: normal;
+  margin: 0;
+  color: var(--color-text);
+}
+
+section[data-type="hero"] p[data-type="tagline"] {
+  font-family: var(--font-serif);
+  font-size: var(--text-lead);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 34rem;
+  color: var(--color-muted);
+}
+
+nav[data-type="hero-links"] {
+  display: flex;
+  gap: clamp(1rem, 4vw, 1.75rem);
+  margin-top: 0.4rem;
+}
+
+nav[data-type="hero-links"] a {
+  pointer-events: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.35em;
+}
+
+nav[data-type="hero-links"] a:hover {
+  text-decoration-thickness: 2px;
+}

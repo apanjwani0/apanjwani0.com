@@ -2,6 +2,7 @@ export const prerender = false
 
 import type { APIRoute } from 'astro'
 import { getSite, getPosts, getGames } from '../lib/config'
+import { tools } from '../config/tools'
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = await getSite(locals)
@@ -15,30 +16,44 @@ export const GET: APIRoute = async ({ locals }) => {
     return `${base}/${href}`
   }
 
+  // A sitemap entry: a location plus an optional last-modified date (W3C
+  // YYYY-MM-DD). Only blog posts carry a real authored date, so only they emit
+  // <lastmod> — search engines use it to prioritise re-crawls.
+  type SitemapUrl = { loc: string; lastmod?: string }
+
   // Static pages
-  const staticPages = [
-    '/',
-    '/experience',
-    '/projects',
-    '/blogs',
-    '/games',
-    '/tools',
-    '/tools/md-enhanced',
+  const staticPages: SitemapUrl[] = [
+    { loc: '/' },
+    { loc: '/experience' },
+    { loc: '/projects' },
+    { loc: '/blogs' },
+    { loc: '/games' },
+    { loc: '/tools' },
   ]
 
   // Dynamic pages from config
-  const blogPages = posts.map(p => {
+  const blogPages: SitemapUrl[] = posts.map(p => {
     const slug = p.href.replace(/^\/?(blogs\/)?/, '')
-    return `/blogs/${slug}`
+    return { loc: `/blogs/${slug}`, lastmod: p.date }
   })
 
-  const gamePages = games.map(g => `/games/${g.slug}`)
+  const gamePages: SitemapUrl[] = games.map(g => ({ loc: `/games/${g.slug}` }))
 
-  const allPages = [...staticPages, ...blogPages, ...gamePages]
+  // Only live tools have their own crawlable detail route (wip/external/disabled don't).
+  const toolPages: SitemapUrl[] = tools
+    .filter(t => t.status === 'live')
+    .map(t => ({ loc: `/tools/${t.slug}` }))
+
+  const allPages = [...staticPages, ...blogPages, ...gamePages, ...toolPages]
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${allPages.map(page => `  <url><loc>${normalize(page)}</loc></url>`).join('\n')}
+${allPages
+  .map(u => {
+    const lastmod = u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ''
+    return `  <url><loc>${normalize(u.loc)}</loc>${lastmod}</url>`
+  })
+  .join('\n')}
 </urlset>`
 
   return new Response(xml, {

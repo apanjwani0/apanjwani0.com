@@ -1,0 +1,74 @@
+/* =============================================================================
+   THEME — the single source of truth for the portfolio's visual design.
+
+   ┌───────────────────────────────────────────────────────────────────────────┐
+   │ To re-theme the whole site, edit ONLY the tokens below.                     │
+   │ Colours, fonts, type sizes and core spacing all read from these custom      │
+   │ properties, so a redesign is a tokens-only change — no page/component edits. │
+   └───────────────────────────────────────────────────────────────────────────┘
+
+   Rule for every other stylesheet (shared.css, global.css, home.css, component
+   CSS, scoped <style> blocks): reference these tokens — never hardcode a colour,
+   font, or type size.
+
+   Load order: theme.css → shared.css (base + header) → global.css (content pages)
+   / home.css (home hero) / component CSS. Light is the :root default; the dark
+   theme overrides the palette only.
+   ============================================================================= */
+
+:root {
+  /* ── Palette ─────────────────────────────────────────────── */
+  --color-bg: #ffffff;       /* page background                 */
+  --color-surface: #f6f6f6;  /* raised surface (menus, cards)   */
+  --color-text: #111111;     /* primary text                    */
+  --color-muted: #666666;    /* secondary text                  */
+  --color-border: #e8e8e8;   /* hairlines / dividers            */
+  --color-accent: #6a5bd0;   /* violet — links, markers, trail  */
+  --color-error: #c0392b;    /* errors, incorrect input         */
+  --color-success: #1e7d4f;  /* success, correct input          */
+  --color-shadow: rgba(0, 0, 0, 0.5); /* drop-shadow / elevation ink */
+
+  /* ── Fonts ───────────────────────────────────────────────── */
+  --font-serif: 'Source Serif 4', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ── Type scale ──────────────────────────────────────────── */
+  --text-xs: 0.8rem;      /* tags, stats, fine print            */
+  --text-sm: 0.9rem;      /* meta: dates, roles, captions       */
+  --text-base: 1rem;      /* body + section headings            */
+  --text-lg: 1.1rem;      /* large heading                      */
+  --text-title: 1.75rem;  /* page title (h1)                    */
+  --text-display: clamp(2rem, 7vw, 3.5rem);   /* home hero name  */
+  --text-lead: clamp(1rem, 2.7vw, 1.3rem);    /* home tagline    */
+  --text-label: clamp(0.72rem, 2vw, 0.8rem);  /* mono nav + small links */
+  --text-wordmark: clamp(1.05rem, 1rem + 0.6vw, 1.2rem);  /* header wordmark — fluid 1.05→1.2 */
+
+  /* ── Spacing ─────────────────────────────────────────────── */
+  --space-2xs: 0.15rem;     /* inline padding (badge y)          */
+  --space-xs: 0.45rem;      /* inline padding (badge x)          */
+  --space-page-x: 1.25rem;  /* page side gutter                 */
+  --space-section: 2.5rem;  /* vertical rhythm between blocks    */
+
+  /* ── Layout ──────────────────────────────────────────────── */
+  /* Radius scale — corner rounding from fine UI up to panels. Component CSS
+     references these rungs; never hardcode a px radius. */
+  --radius-sm: 0.125rem;    /* fine UI: focus rings (2px)        */
+  --radius: 0.2rem;         /* small controls, badges, chips (~3px) */
+  --radius-md: 0.25rem;     /* buttons, inputs, swatches (4px)   */
+  --radius-lg: 0.375rem;    /* cards, stages, panels (6px)       */
+  --radius-xl: 0.5rem;      /* large editor/output surfaces (8px) */
+  --radius-pill: 999px;     /* fully-rounded pills/badges        */
+  --max-width: 768px;       /* readable content column          */
+  --tool-width: clamp(1120px, 70vw, 1800px); /* ~70% of viewport on wide screens; floored so it never gets narrower than a laptop, capped so ultrawides stay readable */
+}
+
+[data-theme="dark"] {
+  --color-bg: #05070c;
+  --color-surface: #0b0f18;
+  --color-text: #dde6f2;
+  --color-muted: #73808f;
+  --color-border: #1a2132;
+  --color-accent: #9b8cff;
+  --color-error: #ff6b6b;
+  --color-success: #4ade80;
+}
