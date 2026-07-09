@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-07-09)
 
 ## Corpus Check
-- 83 files · ~188,545 words
+- 83 files · ~188,581 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1656 nodes · 2704 edges · 174 communities (52 shown, 122 thin omitted)
+- 1656 nodes · 2704 edges · 173 communities (52 shown, 121 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 39 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `23618772`
+- Built from commit: `5844a692`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -186,7 +186,6 @@
 - [[_COMMUNITY_Community 169|Community 169]]
 - [[_COMMUNITY_Community 170|Community 170]]
 - [[_COMMUNITY_Community 171|Community 171]]
-- [[_COMMUNITY_Community 172|Community 172]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `../../components/games/poker/Poker.ts` - 76 edges
@@ -222,7 +221,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (174 total, 122 thin omitted)
+## Communities (173 total, 121 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.07
@@ -317,8 +316,8 @@ Cohesion: 0.00
 Nodes (453): abs, Addr, AllHookFunc, and, AndOrExp, App, Attr, Attributes (+445 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.13
-Nodes (19): StartSeat, DealConfig, Peer, SeatSnapshot, Action, ActionRequest, ActionType, BotPersonality (+11 more)
+Cohesion: 0.09
+Nodes (24): StartSeat, DealConfig, Peer, SeatSnapshot, Action, ActionRequest, ActionType, BotPersonality (+16 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.10
@@ -337,8 +336,8 @@ Cohesion: 0.18
 Nodes (13): ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout), ToolBase.astro (tools layout), getGames(), getPosts(), getSite(), blogs/[slug].astro post detail page (+5 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.16
-Nodes (8): LayoutConfig, Renderer, SeatView, SUIT_COLOR, TableView, createRenderer(), readTheme(), Theme
+Cohesion: 0.18
+Nodes (6): currentActorKind(), fmtChips(), GameState, PlayerHand, SeatView, TableView
 
 ### Community 35 - "Community 35"
 Cohesion: 0.12
@@ -350,7 +349,7 @@ Nodes (19): ldJson, post, ../components/Avatar.astro, blogPostingJsonLd(), BlogP
 
 ### Community 37 - "Community 37"
 Cohesion: 0.12
-Nodes (7): currentActorKind(), fmtChips(), clamp(), GameState, esc(), makeInviteCode(), PokerGame
+Nodes (6): createPbSession(), clamp(), esc(), makeInviteCode(), makeSeed(), PokerGame
 
 ### Community 38 - "Community 38"
 Cohesion: 0.29
@@ -397,8 +396,8 @@ Cohesion: 0.29
 Nodes (6): Asset system — single source, referenced everywhere, Design language, Locked decisions (2026-07-09), Poker Together — design language & asset system, Product model (ideation capture, to be refined), Product stance (2026-07-09)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.12
-Nodes (23): bankroll(), BOT_NAMES, botName(), hostName(), makeSeats(), oddsPet(), Prefs, randomPersonality() (+15 more)
+Cohesion: 0.13
+Nodes (22): bankroll(), BOT_NAMES, botName(), hostName(), makeSeats(), oddsPet(), Prefs, randomPersonality() (+14 more)
 
 ### Community 51 - "Community 51"
 Cohesion: 0.33
@@ -427,14 +426,14 @@ Nodes (10): Account, apiHealth(), currentUser(), idEmail(), login(), logout(), p
 ## Knowledge Gaps
 - **730 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+725 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **122 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **121 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `fromFile()` connect `Content Types + AdminSavePlugin Dispatch` to `Community 31`?**
   _High betweenness centrality (0.298) - this node is a cross-community bridge._
-- **Why does `../../components/games/poker/Poker.ts` connect `Community 50` to `Community 34`, `Community 37`, `MdEnhanced Tool (markdown render)`, `Community 40`, `Community 171`, `Community 43`, `Community 172`, `Community 18`, `Community 29`?**
+- **Why does `../../components/games/poker/Poker.ts` connect `Community 50` to `Community 34`, `MdEnhanced Tool (markdown render)`, `Community 37`, `Community 40`, `Community 171`, `Community 43`, `Community 18`, `Community 29`?**
   _High betweenness centrality (0.195) - this node is a cross-community bridge._
 - **Why does `join` connect `Community 31` to `Content Types + AdminSavePlugin Dispatch`, `Community 28`?**
   _High betweenness centrality (0.160) - this node is a cross-community bridge._

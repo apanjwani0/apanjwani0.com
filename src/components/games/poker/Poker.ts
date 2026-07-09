@@ -652,7 +652,8 @@ class PokerGame extends HTMLElement {
       <div data-type="pk-game" data-screen="joining">
         <header data-type="pk-home-top"><span data-type="pk-wordmark">${wordmarkSvg()}</span></header>
         <section data-type="pk-panel">
-          <h2>Joining ${esc(code)}</h2>
+          <h2>Joining a table</h2>
+          <div data-type="pk-invite"><code data-type="pk-code">${esc(code)}</code></div>
           <p data-type="pk-note">Connected — waiting for the host to deal the next hand…</p>
           <div data-type="pk-actions"><button id="pk-join-cancel" type="button" data-variant="ghost">Cancel</button></div>
         </section>
@@ -990,9 +991,12 @@ class PokerGame extends HTMLElement {
       else {
         const actor = s.seatMeta[s.toActSeat]?.name
         const kind = currentActorKind(s)
-        msg.textContent = kind === 'human'
-          ? (!this.needsHotseatReveal() || this.cardsRevealedSeat === s.toActSeat ? `${actor}, your move` : `Pass to ${actor}, then reveal cards`)
-          : actor ? `${actor} is thinking…` : ''
+        msg.textContent = kind !== 'human'
+          ? (actor ? `${actor} is thinking…` : '')
+          // Online, a human turn that isn't my seat is a remote player — I'm waiting, not acting.
+          : (this.online && s.toActSeat !== this.mySeat) ? (actor ? `Waiting for ${actor}…` : '')
+          : (!this.needsHotseatReveal() || this.cardsRevealedSeat === s.toActSeat) ? `${actor}, your move`
+          : `Pass to ${actor}, then reveal cards`
       }
     }
     const books = this.q('#pk-books')
