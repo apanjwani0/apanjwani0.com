@@ -3,11 +3,23 @@ export const prerender = false
 
 import ToolBase from '../../layouts/ToolBase.astro'
 import { tools } from '../../config/tools'
+import { getSite } from '../../lib/config'
+import { webAppJsonLd } from '../../lib/jsonld'
 import { validateSession } from '../../lib/session'
 import '../../components/tools/md-enhanced/md-enhanced.css'
 import '../../components/tools/audio-transcriber/audio-transcriber.css'
+import '../../components/tools/pattern-forge/pattern-forge.css'
+import '../../components/tools/json-tidy/json-tidy.css'
 
 const { slug } = Astro.params
+
+// Tools that have moved elsewhere keep their old URL alive with a permanent
+// redirect, so existing links and search results don't 404. Type Trial graduated
+// from a tool to a game.
+const MOVED: Record<string, string> = { 'type-trial': '/games/type-trial' }
+const movedTo = MOVED[slug as string]
+if (movedTo) return Astro.redirect(movedTo, 301)
+
 const tool = tools.find(t => t.slug === slug)
 
 if (!tool || tool.status === 'external') {
@@ -25,23 +37,42 @@ if (tool.status === 'disabled') {
     return new Response(null, { status: 404, statusText: 'Not Found' })
   }
 }
+
+const site = await getSite(Astro.locals)
+const ldJson = webAppJsonLd({
+  name: tool.title,
+  description: tool.metaDescription || tool.description,
+  url: `${site.url}/tools/${tool.slug}`,
+  authorName: site.name,
+  authorUrl: site.url,
+  applicationCategory: 'DeveloperApplication',
+  keywords: tool.keywords,
+})
 ---
 
 <ToolBase
   toolTitle={tool.title}
   seoTitle={tool.seoTitle}
   metaDescription={tool.metaDescription}
+  keywords={tool.keywords}
 >
+  <script type="application/ld+json" set:html={ldJson} />
   {slug === 'md-enhanced' && <md-enhanced-tool data-tool="md-enhanced"></md-enhanced-tool>}
   {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
+  {slug === 'pattern-forge' && <pattern-forge-tool data-tool="pattern-forge"></pattern-forge-tool>}
+  {slug === 'json-tidy' && <json-tidy-tool data-tool="json-tidy"></json-tidy-tool>}
 </ToolBase>
 
 <script>
-  const slug = document.querySelector('[data-tool]')?.getAttribute('data-tool')
-  if (slug === 'md-enhanced') {
-    import('../../components/tools/md-enhanced/MdEnhanced.ts')
+  // Mount the tool's controller on initial load AND after every View Transition
+  // navigation. Bundled scripts run only once per session, so without astro:page-load
+  // a tool reached via in-site nav renders blank until a hard reload.
+  function mountTool() {
+    const slug = document.querySelector('[data-tool]')?.getAttribute('data-tool')
+    if (slug === 'md-enhanced') import('../../components/tools/md-enhanced/MdEnhanced.ts')
+    else if (slug === 'audio-transcriber') import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
+    else if (slug === 'pattern-forge') import('../../components/tools/pattern-forge/PatternForge.ts')
+    else if (slug === 'json-tidy') import('../../components/tools/json-tidy/JsonTidy.ts')
   }
-  if (slug === 'audio-transcriber') {
-    import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
-  }
+  document.addEventListener('astro:page-load', mountTool)
 </script>
