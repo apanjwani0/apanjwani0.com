@@ -1,15 +1,49 @@
-/* Tools directory listing */
-li[data-status="wip"] span[data-type="tool-name"] {
-  color: var(--color-muted);
+/* Tools directory listing — bordered rows with a prominent name and a muted
+   one-line description, matching the portfolio's projects/blogs listing rhythm
+   so a short hub still reads as a deliberate page, not a stranded few lines. */
+ul[data-type="preview-list"] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-span[data-type="tool-description"] {
+li[data-status] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1.15rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+li[data-status]:last-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+div[data-type="tool-head"] {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+div[data-type="tool-head"] > a,
+div[data-type="tool-head"] span[data-type="tool-name"] {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+li[data-status="wip"] span[data-type="tool-name"] {
   color: var(--color-muted);
 }
 
 span[data-type="tool-wip"] {
   color: var(--color-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+}
+
+span[data-type="tool-description"] {
+  color: var(--color-muted);
 }
 
 p[data-type="tool-description"] {
