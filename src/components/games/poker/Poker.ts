@@ -97,6 +97,10 @@ class PokerGame extends HTMLElement {
   private turnTick = 0
   private unsub: (() => void) | null = null
   private reduced = false
+  private shownBoard = 0        // community cards currently face-up in the UI
+  private revealing = false     // staging an all-in run-out (turn/river one at a time)
+  private explainerOpen = false // "How this works" bottom sheet — persists across home re-renders
+  private pending: 'fold' | 'check' | null = null // queued pre-action (pre-fold / pre-check)
 
   connectedCallback() {
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -123,8 +127,10 @@ class PokerGame extends HTMLElement {
 
   private restoreSession() {
     try {
+      // Always land on Home. A saved table is offered as a Resume card under
+      // "Your tables" — never drop a returning player into a mid-setup room.
       const j = JSON.parse(localStorage.getItem(LS.session) || '{}')
-      if (j.roomId && rooms.get(j.roomId)) { this.roomId = j.roomId; this.screen = 'room' }
+      if (j.roomId && rooms.get(j.roomId)) this.roomId = j.roomId
     } catch { /* ignore */ }
   }
   private saveSession() {
@@ -228,11 +234,19 @@ class PokerGame extends HTMLElement {
           </div>
         </div>
 
-        <details data-type="pk-explainer">
-          <summary>How this works</summary>
-          <p><strong>Practice</strong> seats you against bots (five personalities, from tight Rocks to loose Maniacs) that read the board with a real equity estimate — one tap, no setup. <strong>Friends table</strong> lets you build a private room and pass one device around: only the player whose turn it is sees their cards.</p>
-          <p>Everything is <strong>local-first</strong> — rooms and chips live in your browser, no server, no sign-up. The shuffle uses your device's cryptographic RNG (rejection-sampled, unbiased); the hand engine, Omaha's exactly-two rule and side pots all run on your machine.</p>
-        </details>
+        <div data-type="pk-explainer" data-open="${this.explainerOpen}" id="pk-explainer">
+          <div data-type="pk-explainer-scrim" id="pk-explainer-scrim"></div>
+          <section data-type="pk-explainer-sheet">
+            <button data-type="pk-explainer-tab" id="pk-explainer-tab" type="button" aria-expanded="${this.explainerOpen}" aria-controls="pk-explainer">
+              <span>How this works</span>
+              <span data-type="pk-explainer-chev" aria-hidden="true">⌃</span>
+            </button>
+            <div data-type="pk-explainer-body">
+              <p><strong>Practice</strong> seats you against bots (five personalities, from tight Rocks to loose Maniacs) that read the board with a real equity estimate — one tap, no setup. <strong>Friends table</strong> lets you build a private room and pass one device around: only the player whose turn it is sees their cards.</p>
+              <p>Everything is <strong>local-first</strong> — rooms and chips live in your browser, no server, no sign-up. The shuffle uses your device's cryptographic RNG (rejection-sampled, unbiased); the hand engine, Omaha's exactly-two rule and side pots all run on your machine.</p>
+            </div>
+          </section>
+        </div>
       </div>`
     this.wireHome()
   }
@@ -259,6 +273,11 @@ class PokerGame extends HTMLElement {
     }))
     this.qa('[data-open]').forEach(b => b.addEventListener('click', () => { this.roomId = (b as HTMLElement).dataset.open!; this.screen = 'room'; this.route() }))
     this.qa('[data-del]').forEach(b => b.addEventListener('click', () => { rooms.remove((b as HTMLElement).dataset.del!); this.renderHome() }))
+    // "How this works" bottom sheet: tab toggles, tapping the scrim closes.
+    const exp = this.q('#pk-explainer')
+    const setExp = (open: boolean) => { this.explainerOpen = open; if (exp) exp.dataset.open = String(open); this.q('#pk-explainer-tab')?.setAttribute('aria-expanded', String(open)) }
+    this.q('#pk-explainer-tab')?.addEventListener('click', () => setExp(!this.explainerOpen))
+    this.q('#pk-explainer-scrim')?.addEventListener('click', () => setExp(false))
   }
 
   /** Sit down at a fixed public table: resume its saved chips if we've played it
@@ -683,6 +702,9 @@ class PokerGame extends HTMLElement {
         rng: seededRng(hashSeed(e.seed)),
       })
       this.cardsRevealedSeat = null
+      this.shownBoard = 0
+      this.revealing = false
+      this.pending = null
       this.advance()
     } else if (e.kind === 'action' && this.state) {
       applyAction(this.state, e.action)
@@ -695,11 +717,18 @@ class PokerGame extends HTMLElement {
   private advance() {
     const s = this.state
     if (!s) return
+    // All-in run-out: the engine already dealt to showdown, but the player hasn't
+    // seen the last streets. Reveal them one at a time instead of jumping the board.
+    if (!this.revealing && s.complete && s.street === 'showdown' && s.board.length > this.shownBoard) {
+      this.runoutReveal()
+      return
+    }
     this.renderTable()
+    this.shownBoard = s.board.length
     if (s.complete) { this.handOver(); return }
     const kind = currentActorKind(s)
     if (kind === 'bot') {
-      this.hideControls()
+      this.waitingControls(s)
       if (!this.isHost) return
       const inp = botInputFor(s)
       const d = inp ? decide(inp) : { action: 'check' as const }
@@ -713,9 +742,15 @@ class PokerGame extends HTMLElement {
       if (this.controlsSeat(s.toActSeat)) {
         this.heroSeat = s.toActSeat
         this.cardsRevealedSeat = this.needsHotseatReveal() ? null : s.toActSeat
+        // Consume a queued pre-action. Pre-fold always plays; pre-check plays only
+        // if we can still check — a bet appearing since we queued it voids the pre-check.
+        const pre = this.pending
+        this.pending = null
+        if (pre === 'fold') { this.human({ type: 'fold' }); return }
+        if (pre === 'check' && legalActions(s)?.canCheck) { this.human({ type: 'check' }); return }
         this.showControls(s)
       } else {
-        this.hideControls()
+        this.waitingControls(s)
       }
     } else {
       this.handOver()
@@ -906,26 +941,41 @@ class PokerGame extends HTMLElement {
 
   /** TOP row — one column per seated player, drawn from the SVG asset catalogue. */
   private renderPlayers(view: TableView): string {
+    // Winner highlight, but never mid-run-out (that would reveal the winner before
+    // the river lands). Populated only once the result is final.
+    const winners = this.revealing ? new Set<number>() : new Set((this.state?.winners ?? []).map(w => w.seatIndex))
     return view.seats.map(seat => {
       const pie = seat.isTurn && !seat.folded ? `<span data-type="pk-pie">${timerPieSvg(0.6)}</span>` : ''
       const dealer = seat.isButton ? `<span data-type="pk-dbtn">${buttonSvg('D')}</span>` : ''
       const bet = seat.committed > 0 ? `<span data-type="pk-bet">${fmtChips(seat.committed)}</span>` : ''
       const bot = seat.isBot ? `<span data-type="pk-bot">BOT</span>` : ''
-      return `<div data-type="pk-seat" data-turn="${seat.isTurn}" data-folded="${seat.folded}" data-hero="${seat.isHero}">
+      // Opponents' hole cards — only when buildView has revealed them (showdown).
+      // The hero's own cards live in the bottom hole row, so never duplicate them here.
+      // `shown` = this seat's cards are face-up (hero always, opponents at showdown),
+      // used to lift it to full opacity so the reveal reads clearly.
+      const shown = seat.hole.some(c => c)
+      const won = winners.has(seat.index)
+      const cards = !seat.isHero && shown
+        ? `<span data-type="pk-oc">${seat.hole.map(c => (c ? cardSvg(c) : '')).join('')}</span>`
+        : ''
+      return `<div data-type="pk-seat" data-turn="${seat.isTurn}" data-folded="${seat.folded}" data-hero="${seat.isHero}" data-shown="${shown}" data-winner="${won}">
         ${pie}
         <span data-type="pk-ava">${avatarSvg(seat.index)}</span>
         <span data-type="pk-nm">${esc(seat.name)}</span>
         <span data-type="pk-st">${fmtChips(seat.chips)}</span>
-        ${bot}${bet}${dealer}
+        ${bot}${bet}${dealer}${cards}
       </div>`
     }).join('')
   }
 
   /** CENTER — five board slots; dealt cards face-up, the rest as card backs. */
   private renderBoard(view: TableView): string {
+    // During an all-in run-out only `shownBoard` cards are face-up; the rest stay
+    // as backs until their street is revealed. Normal play shows every dealt card.
+    const faceUp = this.revealing ? this.shownBoard : view.board.length
     let out = ''
     for (let i = 0; i < 5; i++) {
-      const card = view.board[i]
+      const card = i < faceUp ? view.board[i] : undefined
       out += `<span data-type="pk-card">${card ? cardSvg(card) : cardBackSvg()}</span>`
     }
     return out
@@ -944,6 +994,9 @@ class PokerGame extends HTMLElement {
     const s = this.state
     const hero = this.heroView(view)
     if (!s || !hero) return ''
+    // Hold the result box while the board is still running out, so the winner
+    // isn't spoiled before the river lands.
+    if (this.revealing) return ''
     if (s.complete) {
       const winner = s.winners.find(w => w.seatIndex === hero.index)
       if (winner) {
@@ -975,7 +1028,10 @@ class PokerGame extends HTMLElement {
     if (!s) return
     const view = this.buildView()
     const title = this.q('#pk-title'); if (title) title.textContent = `${VARIANTS[this.room!.config.variantId].name} · Hand #${s.handNumber}`
-    const street = this.q('#pk-street'); if (street) street.textContent = s.complete ? 'hand over' : s.street
+    const street = this.q('#pk-street')
+    if (street) street.textContent = this.revealing
+      ? (this.shownBoard >= 5 ? 'river' : this.shownBoard >= 4 ? 'turn' : 'flop')
+      : s.complete ? 'hand over' : s.street
     const players = this.q('#pk-players'); if (players) players.innerHTML = this.renderPlayers(view)
     const board = this.q('#pk-board'); if (board) board.innerHTML = this.renderBoard(view)
     const pot = this.q('#pk-pot'); if (pot) pot.textContent = fmtChips(view.pot)
@@ -987,7 +1043,8 @@ class PokerGame extends HTMLElement {
     }
     const msg = this.q('#pk-msg')
     if (msg) {
-      if (s.complete) msg.textContent = this.winnerLine(s)
+      if (this.revealing) msg.textContent = 'All in — running it out…'
+      else if (s.complete) msg.textContent = this.winnerLine(s)
       else {
         const actor = s.seatMeta[s.toActSeat]?.name
         const kind = currentActorKind(s)
@@ -1011,6 +1068,68 @@ class PokerGame extends HTMLElement {
   /* ── human controls ── */
 
   private hideControls() { this.clearTurnTimer(); this.removeKeyHandler(); const c = this.q('#pk-controls'); if (c) c.innerHTML = '' }
+
+  /** Not the hero's turn: keep the control bar in place so the table never reflows.
+   *  When the hero is still live it offers pre-fold / pre-check toggles that auto-play
+   *  the moment their turn arrives; otherwise it's an inert placeholder. */
+  private waitingControls(s: GameState) {
+    this.clearTurnTimer(); this.removeKeyHandler()
+    const ho = this.q('#pk-handover'); if (ho) (ho as HTMLElement).hidden = true
+    const c = this.q('#pk-controls'); if (!c) return
+    c.dataset.raise = 'off'
+    const actor = s.seatMeta[s.toActSeat]?.name ?? ''
+    const wait = `<div data-type="pk-clock"><span data-type="pk-wait">${actor ? esc(actor) + ' to act…' : ''}</span></div>`
+    const hero = s.players.find(p => p.seatIndex === this.heroSeat)
+    const canPre = !this.revealing && !this.needsHotseatReveal() && this.controlsSeat(this.heroSeat) && !!hero && !hero.folded && !hero.allIn
+    if (canPre) {
+      const sel = this.pending
+      c.innerHTML = `${wait}
+        <div data-type="pk-btns">
+          <button data-pre="fold" type="button" data-variant="danger" data-on="${sel === 'fold'}">Fold</button>
+          <button data-pre="check" type="button" data-on="${sel === 'check'}">Check</button>
+        </div>
+        <p data-type="pk-hint">${this.reduced ? 'Pre-select — plays on your turn' : 'Pre-select — auto-plays on your turn (void if a bet appears)'}</p>`
+      this.qa('[data-pre]').forEach(b => b.addEventListener('click', () => {
+        const v = (b as HTMLElement).dataset.pre as 'fold' | 'check'
+        this.pending = this.pending === v ? null : v
+        this.waitingControls(s)
+      }))
+      return
+    }
+    c.innerHTML = `${wait}
+      <div data-type="pk-btns" data-idle="true">
+        <button type="button" data-variant="danger" disabled>Fold</button>
+        <button type="button" disabled>Check</button>
+        <button type="button" data-variant="primary" disabled>Raise</button>
+      </div>`
+  }
+
+  /** All-in run-out: reveal the remaining community cards one street at a time
+   *  (opponents are already face-up), then show the result. Pure pacing — the
+   *  engine settled synchronously; this only stages what the player sees. */
+  private runoutReveal() {
+    const s = this.state!
+    this.revealing = true
+    this.waitingControls(s)
+    const target = s.board.length
+    const streets = [3, 4, 5].filter(n => n > this.shownBoard && n <= target)
+    const delay = this.reduced ? 220 : 850
+    this.renderTable()
+    const step = (i: number) => {
+      if (this.screen !== 'table' || this.state !== s) return
+      if (i >= streets.length) {
+        this.revealing = false
+        this.shownBoard = target
+        this.renderTable()
+        this.handOver()
+        return
+      }
+      this.shownBoard = streets[i]
+      this.renderTable()
+      this.botTimer = window.setTimeout(() => step(i + 1), delay)
+    }
+    this.botTimer = window.setTimeout(() => step(0), delay)
+  }
 
   /* ── per-turn action clock ── */
 
