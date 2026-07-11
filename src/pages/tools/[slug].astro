@@ -10,6 +10,7 @@ import '../../components/tools/md-enhanced/md-enhanced.css'
 import '../../components/tools/audio-transcriber/audio-transcriber.css'
 import '../../components/tools/pattern-forge/pattern-forge.css'
 import '../../components/tools/json-tidy/json-tidy.css'
+import '../../components/tools/list-forge/list-forge.css'
 
 const { slug } = Astro.params
 
@@ -61,6 +62,7 @@ const ldJson = webAppJsonLd({
   {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
   {slug === 'pattern-forge' && <pattern-forge-tool data-tool="pattern-forge"></pattern-forge-tool>}
   {slug === 'json-tidy' && <json-tidy-tool data-tool="json-tidy"></json-tidy-tool>}
+  {slug === 'list-forge' && <list-forge-tool data-tool="list-forge"></list-forge-tool>}
 </ToolBase>
 
 <script>
@@ -73,6 +75,7 @@ const ldJson = webAppJsonLd({
     else if (slug === 'audio-transcriber') import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
     else if (slug === 'pattern-forge') import('../../components/tools/pattern-forge/PatternForge.ts')
     else if (slug === 'json-tidy') import('../../components/tools/json-tidy/JsonTidy.ts')
+    else if (slug === 'list-forge') import('../../components/tools/list-forge/ListForge.ts')
   }
   document.addEventListener('astro:page-load', mountTool)
 </script>
