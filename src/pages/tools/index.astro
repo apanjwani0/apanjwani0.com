@@ -24,6 +24,7 @@ const ldJson = itemListJsonLd(
 ---
 
 <Base
+  wide
   title="tools"
   description="A growing set of fast, free developer tools that run entirely in your browser — a JSON formatter and tree viewer, a column-to-comma-separated-list converter, a generative wallpaper maker, and a markdown editor. No sign-up, no tracking, nothing uploaded."
   keywords="developer tools, online dev tools, json formatter, json viewer, column to comma separated list, comma separator, list to csv converter, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
@@ -36,7 +37,7 @@ const ldJson = itemListJsonLd(
     copy-first, keyboard-friendly, and runs entirely in your browser: no sign-ups,
     no tracking, nothing uploaded.
   </p>
-  <ul data-type="preview-list">
+  <ul data-type="card-grid">
     {tools.filter(t => t.status !== 'disabled').map(tool => (
       <li data-status={tool.status}>
         <div data-type="tool-head">

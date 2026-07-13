@@ -77,6 +77,30 @@ export function itemListJsonLd(name: string, items: ItemListEntry[]): string {
   })
 }
 
+export interface BreadcrumbEntry {
+  name: string
+  /** Absolute URL. The final (current-page) crumb still carries its own URL. */
+  url: string
+}
+
+/**
+ * BreadcrumbList structured data for a detail page (/tools/x, /games/x, /blogs/x).
+ * Must mirror the visible trail rendered by src/components/Breadcrumbs.astro —
+ * search engines only surface a breadcrumb path when the markup and the data agree.
+ */
+export function breadcrumbListJsonLd(items: BreadcrumbEntry[]): string {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: it.name,
+      item: it.url,
+    })),
+  })
+}
+
 export interface WebSiteSchema {
   name: string
   url: string

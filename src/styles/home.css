@@ -1,16 +1,6 @@
 /* Home — single full-bleed interactive space hero. Colours come from the
    shared theme tokens (shared.css), so re-theming is a tokens-only edit. */
 
-/* Let the home page escape the centered 768px column for a true full-bleed canvas. */
-body[data-bare] {
-  max-width: none;
-  padding: 0;
-}
-
-main[data-bare] {
-  padding: 0;
-}
-
 /* Minimal, transparent site nav — borderless, sits over the field. Pulls from
    site.nav so it stays in sync; the standard bordered navbar is avoided here to
    keep the hero immersive. */

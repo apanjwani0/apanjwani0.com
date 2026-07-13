@@ -3,8 +3,9 @@ export const prerender = false
 
 import { marked } from 'marked'
 import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { getSite, getPosts } from '../../lib/config'
-import { blogPostingJsonLd } from '../../lib/jsonld'
+import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
 
 const { slug } = Astro.params
 const [site, posts] = await Promise.all([getSite(Astro.locals), getPosts(Astro.locals)])
@@ -29,10 +30,24 @@ const ldJson = blogPostingJsonLd({
   authorUrl: site.url,
   keywords: post.keywords,
 })
+
+// Visible trail + matching BreadcrumbList (see src/components/Breadcrumbs.astro).
+const crumbs = [
+  { label: 'home', href: '/' },
+  { label: 'blogs', href: '/blogs' },
+  { label: post.title },
+]
+const breadcrumbLd = breadcrumbListJsonLd([
+  { name: 'Home', url: site.url },
+  { name: 'Blogs', url: `${site.url}/blogs` },
+  { name: post.title, url: canonicalUrl },
+])
 ---
 
 <Base title={post.title} description={post.summary} keywords={post.keywords} ogType="article" publishedTime={post.date}>
   <script type="application/ld+json" set:html={ldJson} />
+  <script type="application/ld+json" set:html={breadcrumbLd} />
+  <Breadcrumbs items={crumbs} />
   <article>
     <header>
       <h1>{post.title}</h1>

@@ -6,9 +6,24 @@ poker-game {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  min-height: 100dvh;
+  flex: 1;                 /* fill <main>, which fills the viewport below the nav */
+  min-height: 0;
   padding: clamp(0.75rem, 3.5vh, 3rem) clamp(0.6rem, 3vw, 2rem);
   background: radial-gradient(1100px 640px at 50% -8%, #17171a 0%, #070708 56%, #000 100%);
+}
+
+/* <main> must be a flex column so <poker-game> can grow to fill its height (poker
+   is reached via /games/poker → Base fluid, so it renders inside main[data-fluid]). */
+main:has(poker-game) {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The TABLE screen fills the whole stage as a felt; every other screen (home /
+   room / create / joining) keeps the centred card on the dark stage. */
+poker-game:has([data-screen="table"]) {
+  align-items: stretch;
+  padding: 0;
 }
 
 /* THE CARD — one surface, radius, font, width band and min-height floor shared by
@@ -30,24 +45,6 @@ div[data-type="pk-game"] {
   border: 1px solid #1b1b1f;
   border-radius: 22px;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-}
-
-/* Quiet "back to the developer" escape hatch on the standalone game page.
-   Fixed, tiny, muted — a player who came only to play is never hindered by it. */
-a[data-type="pk-credit"] {
-  position: fixed;
-  right: 0.75rem;
-  bottom: 0.6rem;
-  z-index: 20;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.03em;
-  color: color-mix(in srgb, var(--color-muted) 55%, transparent);
-  text-decoration: none;
-  padding: 0.2rem 0.4rem;
-}
-a[data-type="pk-credit"]:hover {
-  color: var(--color-text);
 }
 
 /* ── header ── */
@@ -362,9 +359,20 @@ div[data-type="pk-explainer-body"] strong { color: #fff; }
    lobby/room screens above) it hardcodes the mockup palette. Every card, avatar,
    dealer button and timer is an inline SVG from ui/cards-svg + ui/assets-svg,
    sized by its wrapper (the SVG fills it via `svg { width:100%; height:100% }`). */
+/* TABLE = a full-bleed felt: fill the stage (width + height), lose the card frame,
+   swap the dark surface for green felt. The flexible board-zone (below) absorbs all
+   slack so the layout never opens half-empty or jumps as controls/hand-over appear. */
 div[data-type="pk-game"][data-screen="table"] {
+  flex: 1;
+  align-self: stretch;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  background: radial-gradient(ellipse 130% 92% at 50% 30%, #1c6f47 0%, #0f4e2f 44%, #06271b 78%, #04160f 100%);
   gap: 0.85rem;
-  padding: 1rem 1rem 1.3rem;
+  padding: 1rem clamp(1rem, 4vw, 3rem) 1.3rem;
 }
 div[data-type="pk-game"][data-screen="table"] span[data-type="pk-ico"] { display: inline-flex; width: 16px; height: 16px; }
 div[data-type="pk-game"][data-screen="table"] span[data-type="pk-ico"] svg { width: 100%; height: 100%; display: block; }
@@ -412,7 +420,9 @@ div[data-type="pk-game"][data-screen="table"] div[data-type="pk-message"] {
 /* ── controls (restyled to the mockup; showControls wiring unchanged) ── */
 /* min-height reserves the action bar's footprint so the table never reflows as
    the turn passes between seats — active, inert, and run-out states all fit it. */
-div[data-type="pk-controls"] { display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; min-height: 104px; }
+/* Action bar — docked at the felt's foot, but constrained to a sensible width and
+   centred so the buttons don't stretch the full table on wide screens. */
+div[data-type="pk-controls"] { display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; min-height: 104px; width: 100%; max-width: 42rem; margin: 0 auto; }
 div[data-type="pk-clock"] { display: flex; justify-content: center; }
 span[data-type="pk-wait"] { font-size: 11px; color: #6b6b70; letter-spacing: 0.05em; }
 span[data-type="pk-timer"] {
@@ -632,7 +642,10 @@ div[data-type="pk-seat"][data-winner="true"] span[data-type="pk-nm"] { color: #3
 div[data-type="pk-seat"][data-winner="true"] span[data-type="pk-oc"] svg { filter: drop-shadow(0 0 5px rgba(55, 211, 155, 0.95)); }
 
 /* ── board + pot (CENTER) ── */
-div[data-type="pk-board-zone"] { display: flex; flex-direction: column; gap: 8px; padding: 0.3rem 0; }
+/* Board + pot sit in the felt's flexible middle: flex:1 makes this region absorb all
+   the spare height and centre the board, so the table fills top-to-bottom with no empty
+   gap and no mid-hand jump when the controls or hand-over box grow/shrink below it. */
+div[data-type="pk-board-zone"] { display: flex; flex-direction: column; justify-content: center; align-items: center; flex: 1; min-height: 0; gap: 12px; padding: 0.3rem 0; }
 div[data-type="pk-board"] { display: flex; justify-content: center; gap: 9px; }
 span[data-type="pk-card"] {
   display: block;
@@ -642,8 +655,7 @@ span[data-type="pk-card"] {
 span[data-type="pk-card"] svg { width: 100%; height: 100%; display: block; }
 div[data-type="pk-board"] span[data-type="pk-card"] { width: clamp(52px, 14vw, 60px); }
 span[data-type="pk-pot"] {
-  align-self: flex-end;
-  padding-right: 4px;
+  align-self: center;
   font-size: 28px;
   font-weight: 800;
   color: #fff;
@@ -761,9 +773,7 @@ ol[data-type="pk-log"] li[data-kind="deal"] { color: var(--color-text); }
 
   /* TABLE */
   div[data-type="pk-game"][data-screen="table"] {
-    max-width: 40rem;
-    width: 100%;
-    padding: 1.5rem 1.75rem 2rem;
+    padding: 1.5rem clamp(1.75rem, 6vw, 5rem) 2rem;
     gap: 1.05rem;
   }
   div[data-type="pk-game"][data-screen="table"] div[data-type="pk-board"] span[data-type="pk-card"] { width: clamp(60px, 8vw, 76px); }

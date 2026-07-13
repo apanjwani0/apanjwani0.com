@@ -10,12 +10,14 @@ interface Props {
   noindex?: boolean
   keywords?: string
   bare?: boolean
+  wide?: boolean
+  fluid?: boolean
   ogType?: 'website' | 'article'
   publishedTime?: string
 }
 
 const site = await getSite(Astro.locals)
-const { title, description = site.tagline, noindex = false, keywords, bare = false, ogType = 'website', publishedTime } = Astro.props
+const { title, description = site.tagline, noindex = false, keywords, bare = false, wide = false, fluid = false, ogType = 'website', publishedTime } = Astro.props
 // Home (no explicit title) gets a descriptive title with the role line so the
 // most-linked page's <title>/og:title isn't just a bare name.
 const pageTitle = title ? `${title} · ${site.name}` : `${site.name} · ${site.tagline}`
@@ -45,10 +47,16 @@ const ogImageHeight = 468
       publishedTime={publishedTime}
     />
   </head>
-  <body data-bare={bare ? '' : undefined}>
+  <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
     {!bare && <Nav site={site} />}
-    <main id="main-content" tabindex="-1" data-bare={bare ? '' : undefined}>
+    <main
+      id="main-content"
+      tabindex="-1"
+      data-bare={bare ? '' : undefined}
+      data-fluid={fluid ? '' : undefined}
+      data-width={wide ? 'wide' : undefined}
+    >
       <slot />
     </main>
     <script src="/oat.min.js" defer></script>

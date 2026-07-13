@@ -717,10 +717,11 @@ class PokerGame extends HTMLElement {
   private advance() {
     const s = this.state
     if (!s) return
-    // All-in run-out: the engine already dealt to showdown, but the player hasn't
-    // seen the last streets. Reveal them one at a time instead of jumping the board.
-    if (!this.revealing && s.complete && s.street === 'showdown' && s.board.length > this.shownBoard) {
-      this.runoutReveal()
+    // A new street was dealt (the board grew) — flip the new community card(s) one
+    // at a time before anyone acts, so the flop/turn/river never pops instantly.
+    // Covers both normal streets and an all-in run-out to showdown.
+    if (!this.revealing && s.board.length > this.shownBoard) {
+      this.revealBoard()
       return
     }
     this.renderTable()
@@ -1043,7 +1044,7 @@ class PokerGame extends HTMLElement {
     }
     const msg = this.q('#pk-msg')
     if (msg) {
-      if (this.revealing) msg.textContent = 'All in — running it out…'
+      if (this.revealing) msg.textContent = s.complete ? 'All in — running it out…' : 'Dealing…'
       else if (s.complete) msg.textContent = this.winnerLine(s)
       else {
         const actor = s.seatMeta[s.toActSeat]?.name
@@ -1104,31 +1105,34 @@ class PokerGame extends HTMLElement {
       </div>`
   }
 
-  /** All-in run-out: reveal the remaining community cards one street at a time
-   *  (opponents are already face-up), then show the result. Pure pacing — the
-   *  engine settled synchronously; this only stages what the player sees. */
-  private runoutReveal() {
+  /** Reveal newly-dealt community cards one at a time (a dealer flipping the board),
+   *  then re-enter advance() to continue — hand-over or the next actor's turn. Pure
+   *  pacing: the engine already settled synchronously; this only stages what the
+   *  player sees, so the flop/turn/river arrive with a beat instead of all at once.
+   *  An all-in run-out (hand already complete) flips a touch slower for drama. */
+  private revealBoard() {
     const s = this.state!
     this.revealing = true
     this.waitingControls(s)
     const target = s.board.length
-    const streets = [3, 4, 5].filter(n => n > this.shownBoard && n <= target)
-    const delay = this.reduced ? 220 : 850
-    this.renderTable()
-    const step = (i: number) => {
+    const delay = this.reduced ? 160 : (s.complete ? 520 : 300)
+    const step = () => {
       if (this.screen !== 'table' || this.state !== s) return
-      if (i >= streets.length) {
+      if (this.shownBoard >= target) {
         this.revealing = false
-        this.shownBoard = target
         this.renderTable()
-        this.handOver()
+        this.advance()
         return
       }
-      this.shownBoard = streets[i]
+      this.shownBoard++
       this.renderTable()
-      this.botTimer = window.setTimeout(() => step(i + 1), delay)
+      this.botTimer = window.setTimeout(step, delay)
     }
-    this.botTimer = window.setTimeout(() => step(0), delay)
+    // Paint the new "Dealing…"/run-out state at once (board still at the old
+    // count), then flip the first card after the initial beat — otherwise the
+    // message shows the previous actor's line until the first setTimeout fires.
+    this.renderTable()
+    this.botTimer = window.setTimeout(step, delay)
   }
 
   /* ── per-turn action clock ── */

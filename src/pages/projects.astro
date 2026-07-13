@@ -5,19 +5,32 @@ import Base from '../layouts/Base.astro'
 import ProjectCard from '../components/ProjectCard.astro'
 import { getProjects } from '../lib/config'
 import { getProjectStats } from '../lib/github'
+import { itemListJsonLd } from '../lib/jsonld'
 
 const projects = await getProjects(Astro.locals)
 const stats    = await getProjectStats(projects)
+
+// Structured item map for the listing, matching /tools and /games — search
+// engines get an explicit, ordered list of what's on the page.
+const ldJson = itemListJsonLd(
+  'Projects',
+  projects.map(p => ({ name: p.title, url: p.url })),
+)
 ---
 
 <Base
+  wide
   title="projects"
   description="Software projects by Aman Panjwani — payments infrastructure at scale, plus side projects and open-source experiments."
+  keywords="aman panjwani projects, open source projects, payments infrastructure, backend side projects, github projects, software engineer portfolio"
 >
+  {projects.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
   <h1>projects</h1>
   <p data-type="page-intro">
     Things I've shipped and things I tinker with — payments infrastructure by day,
     and side projects that exist mostly because I got curious.
   </p>
-  {projects.map(p => <ProjectCard project={p} stats={stats[p.url]} />)}
+  <div data-type="card-grid">
+    {projects.map(p => <ProjectCard project={p} stats={stats[p.url]} />)}
+  </div>
 </Base>
