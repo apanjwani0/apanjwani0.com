@@ -32,7 +32,7 @@ const DIRS = [
 ]
 
 /* Solve-overlay cell states. */
-const UNSEEN = 0, FRONTIER = 1, VISITED = 2
+const FRONTIER = 1, VISITED = 2
 
 const GEN_NAMES: Record<GenId, string> = {
   backtracker: 'Recursive Backtracker',
@@ -949,3 +949,5 @@ class MazeWeaverGame extends HTMLElement {
 if (!customElements.get('maze-weaver-game')) {
   customElements.define('maze-weaver-game', MazeWeaverGame)
 }
+
+export {}

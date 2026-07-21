@@ -40,7 +40,7 @@ const ldJson = itemListJsonLd(
       <li>
         <div data-type="writing-row">
           <time data-type="writing-date" datetime={p.date}>{p.date}</time>
-          <a href={formatHref(p.href)}>{p.title}</a>
+          <h2 data-type="card-title"><a href={formatHref(p.href)}>{p.title}</a></h2>
         </div>
         <div data-type="writing-summary" set:html={render(p.summary)} />
       </li>

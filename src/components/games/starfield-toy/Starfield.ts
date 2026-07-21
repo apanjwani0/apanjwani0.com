@@ -559,3 +559,5 @@ class StarfieldVoyagerGame extends HTMLElement {
 if (!customElements.get('starfield-voyager-game')) {
   customElements.define('starfield-voyager-game', StarfieldVoyagerGame)
 }
+
+export {}

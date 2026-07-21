@@ -27,8 +27,11 @@ const { pageTitle, description, canonicalURL, siteName, noindex = false, keyword
 <meta name="description" content={description} />
 <meta name="author" content={siteName} />
 {keywords && <meta name="keywords" content={keywords} />}
-{noindex && <meta name="robots" content="noindex, nofollow" />}
+{noindex
+  ? <meta name="robots" content="noindex, nofollow" />
+  : <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />}
 <link rel="canonical" href={canonicalURL} />
+<link rel="sitemap" type="application/xml" href="/sitemap.xml" />
 <title>{pageTitle}</title>
 
 <meta property="og:title" content={pageTitle} />

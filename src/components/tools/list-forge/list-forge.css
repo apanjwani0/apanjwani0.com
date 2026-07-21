@@ -31,15 +31,8 @@ div[data-tool="list-forge"] button:hover {
   border-color: var(--color-muted);
 }
 
-div[data-tool="list-forge"] button:focus-visible,
-div[data-tool="list-forge"] select:focus-visible,
-div[data-tool="list-forge"] input:focus-visible,
-div[data-tool="list-forge"] textarea:focus-visible,
-div[data-tool="list-forge"] summary:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
+/* Focus rings for buttons/selects/inputs/summaries come from the shared
+   tools-common.css so every tool matches. */
 
 span[data-type="lf-sep"] {
   width: 1px;

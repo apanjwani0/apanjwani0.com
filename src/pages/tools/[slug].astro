@@ -7,11 +7,14 @@ import { tools } from '../../config/tools'
 import { getSite } from '../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
 import { validateSession } from '../../lib/session'
+import '../../components/tools/tools-common.css'
 import '../../components/tools/md-enhanced/md-enhanced.css'
 import '../../components/tools/audio-transcriber/audio-transcriber.css'
 import '../../components/tools/pattern-forge/pattern-forge.css'
 import '../../components/tools/json-tidy/json-tidy.css'
 import '../../components/tools/list-forge/list-forge.css'
+import '../../components/tools/epoch-wizard/epoch-wizard.css'
+import '../../components/tools/chroma-lab/chroma-lab.css'
 
 const { slug } = Astro.params
 
@@ -79,6 +82,18 @@ const breadcrumbLd = breadcrumbListJsonLd([
   {slug === 'pattern-forge' && <pattern-forge-tool data-tool="pattern-forge"></pattern-forge-tool>}
   {slug === 'json-tidy' && <json-tidy-tool data-tool="json-tidy"></json-tidy-tool>}
   {slug === 'list-forge' && <list-forge-tool data-tool="list-forge"></list-forge-tool>}
+  {slug === 'epoch-wizard' && (
+    <epoch-wizard-tool data-tool="epoch-wizard">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </epoch-wizard-tool>
+  )}
+  {slug === 'chroma-lab' && (
+    <chroma-lab-tool data-tool="chroma-lab">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </chroma-lab-tool>
+  )}
 </ToolBase>
 
 <script>
@@ -92,6 +107,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
     else if (slug === 'pattern-forge') import('../../components/tools/pattern-forge/PatternForge.ts')
     else if (slug === 'json-tidy') import('../../components/tools/json-tidy/JsonTidy.ts')
     else if (slug === 'list-forge') import('../../components/tools/list-forge/ListForge.ts')
+    else if (slug === 'epoch-wizard') import('../../components/tools/epoch-wizard/EpochWizard.ts')
+    else if (slug === 'chroma-lab') import('../../components/tools/chroma-lab/ChromaLab.ts')
   }
   document.addEventListener('astro:page-load', mountTool)
 </script>

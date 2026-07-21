@@ -7,13 +7,16 @@ div[data-type="tool-head"] {
   gap: 0.6rem;
 }
 
-div[data-type="tool-head"] > a,
-div[data-type="tool-head"] span[data-type="tool-name"] {
+/* The tool name is a real <h2> (screen-reader heading nav); reset its block
+   sizing so it sits inline in the flex head exactly like the old bold link. */
+div[data-type="tool-head"] h2[data-type="tool-name"] {
   font-size: var(--text-lg);
   font-weight: 600;
+  margin: 0;
+  line-height: inherit;
 }
 
-li[data-status="wip"] span[data-type="tool-name"] {
+li[data-status="wip"] h2[data-type="tool-name"] {
   color: var(--color-muted);
 }
 

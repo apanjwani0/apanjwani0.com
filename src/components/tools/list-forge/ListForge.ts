@@ -696,3 +696,5 @@ class ListForgeTool extends HTMLElement {
 if (!customElements.get('list-forge-tool')) {
   customElements.define('list-forge-tool', ListForgeTool)
 }
+
+export {}

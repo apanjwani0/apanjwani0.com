@@ -1,0 +1,309 @@
+/* Epoch Wizard — a Unix timestamp converter. Tokens only (theme.css); no
+   hardcoded colours, fonts, or sizes. Structure mirrors the other tools so the
+   whole /tools hub reads as one family. */
+
+/* ── Buttons (shared with the other tools' language) ─────── */
+div[data-tool="epoch-wizard"] button {
+  padding: 0.32rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+div[data-tool="epoch-wizard"] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+/* Focus rings and <kbd> styling come from the shared tools-common.css. */
+
+/* ── Toolbar + preferences ───────────────────────────────── */
+div[data-tool="epoch-wizard"] [data-group="toolbar"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+
+details[data-type="ew-prefs"] {
+  margin-left: auto;
+}
+
+details[data-type="ew-prefs"] summary,
+details[data-type="ew-snippets"] summary,
+details[data-type="ew-explainer"] summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+details[data-type="ew-prefs"] summary:hover,
+details[data-type="ew-snippets"] summary:hover,
+details[data-type="ew-explainer"] summary:hover {
+  color: var(--color-text);
+}
+
+div[data-group="prefs"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  margin-top: 0.8rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* ── Fields (label wrapping a select) ────────────────────── */
+label[data-type="ew-field"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+div[data-tool="epoch-wizard"] select,
+div[data-tool="epoch-wizard"] input[type="text"] {
+  padding: 0.32rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* ── Cards ───────────────────────────────────────────────── */
+section[data-type="ew-card"] {
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem 1.15rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+section[data-type="ew-card"] h2 {
+  margin: 0 0 0.8rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+
+div[data-group="ew-inputrow"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+div[data-group="ew-inputrow"] input[type="text"] {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+/* ── The live clock ──────────────────────────────────────── */
+div[data-type="ew-clock"] {
+  display: grid;
+  gap: 0.5rem;
+}
+
+div[data-type="ew-clock-row"] {
+  display: grid;
+  grid-template-columns: 8rem 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+span[data-type="ew-clock-label"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+output[data-clock] {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ── Result lists ────────────────────────────────────────── */
+dl[data-type="ew-results"] {
+  margin: 0.9rem 0 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+div[data-type="ew-row"] {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  align-items: baseline;
+  gap: 0.4rem 0.9rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+}
+
+div[data-type="ew-row"]:last-child {
+  border-bottom: none;
+}
+
+div[data-type="ew-row"] dt {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+}
+
+div[data-type="ew-row"] dd {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+span[data-type="ew-val"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+span[data-type="ew-val"][data-muted] {
+  color: var(--color-muted);
+}
+
+div[data-type="ew-row"][data-error] span[data-type="ew-val"] {
+  color: var(--color-error);
+}
+
+div[data-type="ew-row"] dd button {
+  padding: 0.15rem 0.55rem;
+}
+
+/* ── Code snippets ───────────────────────────────────────── */
+details[data-type="ew-snippets"] {
+  margin-top: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.6rem 0.9rem 0.9rem;
+}
+
+div[data-type="ew-snippet-grid"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+button[data-type="ew-snippet"] {
+  display: grid;
+  gap: 0.3rem;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-bg);
+  position: relative;
+}
+
+span[data-type="ew-snippet-lang"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent);
+}
+
+button[data-type="ew-snippet"] code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+button[data-type="ew-snippet"][data-flash]::after {
+  content: attr(data-flash);
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-success);
+}
+
+/* ── Hints, status, explainer ────────────────────────────── */
+p[data-type="ew-hint"] {
+  margin: 0.6rem 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+p[data-type="ew-hint"] code,
+details[data-type="ew-explainer"] code {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+
+div[data-type="ew-statusbar"] {
+  margin-top: 1rem;
+  min-height: 1.2rem;
+}
+
+span[data-type="ew-status"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+details[data-type="ew-explainer"] {
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.6rem 0.9rem;
+}
+
+details[data-type="ew-explainer"] p {
+  margin: 0.75rem 0 0.25rem;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  max-width: 72ch;
+}
+
+/* ── Narrow screens ──────────────────────────────────────── */
+@media (max-width: 640px) {
+  div[data-type="ew-clock-row"] {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "label label"
+      "value copy";
+  }
+  span[data-type="ew-clock-label"] { grid-area: label; }
+  output[data-clock] { grid-area: value; font-size: var(--text-base); }
+  div[data-type="ew-clock-row"] button { grid-area: copy; }
+
+  div[data-type="ew-row"] {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}

@@ -117,8 +117,21 @@ section h2 {
   transition: border-color 0.15s ease;
 }
 
-[data-type="card-grid"] > *:hover {
+/* Card lights up on hover AND when a control inside it takes keyboard focus, so
+   the whole card responds to keyboard users the same way it does to the mouse. */
+[data-type="card-grid"] > *:hover,
+[data-type="card-grid"] > *:focus-within {
   border-color: var(--color-muted);
+}
+
+/* Listing card titles are real headings (<h2>) so screen readers can jump
+   between cards by heading; the reset makes the heading visually identical to
+   the former bold link — it just inherits the card's type scale. */
+[data-type="card-title"] {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 div[data-type="project-header"] {
@@ -128,7 +141,7 @@ div[data-type="project-header"] {
   gap: 1rem;
 }
 
-div[data-type="project-header"] > a {
+div[data-type="project-header"] > [data-type="card-title"] {
   font-weight: bold;
 }
 

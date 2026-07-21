@@ -21,7 +21,7 @@ export const games: Game[] = [
     "slug": "poker",
     "title": "Poker Together",
     "description": "A local-first, play-money poker room you host right in your browser. Create a table, fill the seats with friends (pass-the-device hotseat) or equity-aware bots, and deal — Texas Hold'em, Omaha or a Bomb Pot.\n\nRooms, chips and settings all save locally; nothing is uploaded and there's no sign-up. Under the hood: a cryptographically-shuffled deck, correct side pots and all-ins, an exact Omaha evaluator, and five bot personalities from tight Rocks to loose Maniacs. Open a second tab and the room list stays in sync.",
-    "enabled": true,
+    "enabled": false,
     "interactive": true,
     "keywords": "poker,texas hold'em,omaha poker,bomb pot,play money poker,browser poker,local multiplayer poker,poker bots,poker against ai,side pots,poker room"
   },
@@ -48,6 +48,14 @@ export const games: Game[] = [
     "enabled": true,
     "interactive": true,
     "keywords": "starfield,warp speed,hyperspace,star field animation,space flight simulation,interactive canvas art,generative art,mouse reactive,download png,star warp toy"
+  },
+  {
+    "slug": "murmuration",
+    "title": "Murmuration",
+    "description": "An interactive boids flocking simulation. A few hundred birds, each following just three local rules — steer apart, match your neighbours' heading, drift toward the group — and a living, swirling flock emerges with nobody in charge.\n\nDial the three rules from a marching grid to a nervous ball to a scattering cloud, tune how far each bird sees and how fast it flies, then make the pointer a magnet or a hawk and watch the murmuration split and re-form around it. Click to startle the flock, flip on trails to trace the flow, and download the frame you like as a PNG. Runs entirely in your browser.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "boids,flocking simulation,murmuration,craig reynolds boids,swarm simulation,emergent behavior,separation alignment cohesion,generative art,interactive canvas,download png,flocking algorithm"
   },
   {
     "slug": "type-trial",
