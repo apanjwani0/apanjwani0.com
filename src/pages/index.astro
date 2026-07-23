@@ -39,14 +39,6 @@ const siteLd = webSiteJsonLd({
   <script type="application/ld+json" set:html={ldJson} />
   <script type="application/ld+json" set:html={siteLd} />
 
-  <nav data-type="hero-nav" aria-label="Site sections">
-    {site.nav.flatMap((item) => ('children' in item ? item.children : [item])).map((link) => (
-      <a href={link.href}>{link.label}</a>
-    ))}
-  </nav>
-
-  <star-field data-type="starfield" aria-hidden="true"></star-field>
-
   <section data-type="hero" aria-label="Introduction">
     <div data-type="hero-content">
       <Avatar src={site.avatar} alt={site.name} />
@@ -55,17 +47,7 @@ const siteLd = webSiteJsonLd({
       <nav data-type="hero-links" aria-label="Links">
         <a href={site.social.github} target="_blank" rel="noopener noreferrer">github</a>
         <a href={site.social.linkedin} target="_blank" rel="noopener noreferrer">linkedin</a>
-        <a href="/experience">work</a>
       </nav>
     </div>
   </section>
 </Base>
-
-<script>
-  // Load the canvas controller on initial load and after every View Transition
-  // navigation — bundled scripts run only once per session otherwise, so the
-  // hero canvas would be missing when home is reached via in-site nav.
-  document.addEventListener('astro:page-load', () => {
-    import('../components/home/StarField.ts')
-  })
-</script>

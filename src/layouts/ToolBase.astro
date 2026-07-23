@@ -45,18 +45,45 @@ const ogImageHeight = 468
   </head>
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
+    <star-field data-type="starfield" aria-hidden="true"></star-field>
     <Nav site={site} />
     <main id="main-content" tabindex="-1">
       <slot />
     </main>
     <script src="/oat.min.js" defer></script>
+    <script>
+      function syncNavHeight() {
+        const nav = document.querySelector('[data-type="hero-nav"]')
+        if (nav) {
+          document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
+        }
+      }
+      let lastScroll = 0
+      function onScroll() {
+        const nav = document.querySelector('[data-type="hero-nav"]')
+        if (!nav) return
+        const current = window.scrollY
+        if (current > lastScroll && current > nav.offsetHeight + 20) {
+          nav.setAttribute('data-nav-hidden', '')
+        } else if (current < lastScroll) {
+          nav.removeAttribute('data-nav-hidden')
+        }
+        lastScroll = current
+      }
+      function setup() {
+        syncNavHeight()
+        import('../components/home/StarField.ts')
+        window.addEventListener('scroll', onScroll, { passive: true })
+        window.addEventListener('resize', syncNavHeight)
+      }
+      document.addEventListener('astro:page-load', setup)
+    </script>
   </body>
 </html>
 
 <style is:global>
   body {
     font-family: var(--font-serif);
-    background-color: var(--color-bg);
     color: var(--color-text);
     margin: 0;
     padding: 0;

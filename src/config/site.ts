@@ -8,29 +8,20 @@ export const site = {
   "avatar": "/avatar.webp",
   "nav": [
     {
-      "label": "experience",
-      "href": "/experience"
-    },
-    {
       "label": "projects",
       "href": "/projects"
     },
     {
-      "label": "others",
-      "children": [
-        {
-          "label": "tools",
-          "href": "/tools"
-        },
-        {
-          "label": "blogs",
-          "href": "/blogs"
-        },
-        {
-          "label": "games",
-          "href": "/games"
-        }
-      ]
+      "label": "tools",
+      "href": "/tools"
+    },
+    {
+      "label": "blogs",
+      "href": "/blogs"
+    },
+    {
+      "label": "games",
+      "href": "/games"
     }
   ],
   "social": {
@@ -40,6 +31,6 @@ export const site = {
   "sections": {
     "projects": true,
     "blogs": true,
-    "experience": true
+    "experience": false
   }
 } as const

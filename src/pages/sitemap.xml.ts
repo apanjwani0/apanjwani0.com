@@ -24,7 +24,6 @@ export const GET: APIRoute = async ({ locals }) => {
   // Static pages
   const staticPages: SitemapUrl[] = [
     { loc: '/' },
-    { loc: '/experience' },
     { loc: '/projects' },
     { loc: '/blogs' },
     { loc: '/games' },

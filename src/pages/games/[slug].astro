@@ -13,6 +13,7 @@ import '../../components/games/type-trial/type-trial.css'
 import '../../components/games/hue-hunt/hue-hunt.css'
 import '../../components/games/starfield-toy/starfield.css'
 import '../../components/games/murmuration/murmuration.css'
+import '../../components/games/lsystem/lsystem.css'
 
 const { slug } = Astro.params
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
@@ -79,6 +80,9 @@ const breadcrumbLd = breadcrumbListJsonLd([
       <div data-type="project-description" set:html={render(game.description)} />
     </murmuration-game>
   )}
+  {game.interactive && slug === 'lsystem-tree' && (
+    <lsystem-tree-game data-game="lsystem-tree"></lsystem-tree-game>
+  )}
   {!game.interactive && (
     <>
       <script type="application/ld+json" set:html={breadcrumbLd} />
@@ -93,23 +97,24 @@ const breadcrumbLd = breadcrumbListJsonLd([
       )}
     </>
   )}
-</Base>
 
-{game.interactive && (
-  <script>
-    // Mount the game's controller on initial load AND after every View Transition
-    // navigation. Bundled scripts run only once per session, so without astro:page-load
-    // a game reached via in-site nav renders blank until a hard reload.
-    function mountGame() {
-      const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
-      if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
-      else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
-      else if (slug === 'maze-weaver') import('../../components/games/maze-weaver/MazeWeaver.ts')
-      else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')
-      else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
-      else if (slug === 'starfield-toy') import('../../components/games/starfield-toy/Starfield.ts')
-      else if (slug === 'murmuration') import('../../components/games/murmuration/Murmuration.ts')
-    }
-    document.addEventListener('astro:page-load', mountGame)
-  </script>
-)}
+  {game.interactive && (
+    <script>
+      // Mount the game's controller on initial load AND after every View Transition
+      // navigation. Bundled scripts run only once per session, so without astro:page-load
+      // a game reached via in-site nav renders blank until a hard reload.
+      function mountGame() {
+        const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
+        if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
+        else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
+        else if (slug === 'maze-weaver') import('../../components/games/maze-weaver/MazeWeaver.ts')
+        else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')
+        else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
+        else if (slug === 'starfield-toy') import('../../components/games/starfield-toy/Starfield.ts')
+        else if (slug === 'murmuration') import('../../components/games/murmuration/Murmuration.ts')
+        else if (slug === 'lsystem-tree') import('../../components/games/lsystem/LSystem.ts')
+      }
+      document.addEventListener('astro:page-load', mountGame)
+    </script>
+  )}
+</Base>

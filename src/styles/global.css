@@ -18,8 +18,14 @@ main {
   width: 100%;
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: var(--space-section) var(--space-page-x);
   box-sizing: border-box;
+  /* top padding clears the fixed nav (live-measured via JS → --nav-h);
+     sides + bottom are the normal content rhythm.
+     Longhands avoid the shorthand from resetting shared.css's padding-top. */
+  padding-top: var(--nav-h, var(--space-header-offset));
+  padding-right: var(--space-page-x);
+  padding-bottom: var(--space-section);
+  padding-left: var(--space-page-x);
 }
 
 /* Listing/index pages fill a wider column. */
@@ -270,7 +276,10 @@ div[data-type="writing-summary"] {
      `1.5rem 0` would let text run to the screen edges. Full-bleed pages
      (main[data-bare]/[data-fluid]) still win via their higher-specificity rule. */
   main {
-    padding: 1.5rem var(--space-page-x);
+    padding-top: var(--nav-h, var(--space-header-offset));
+    padding-right: var(--space-page-x);
+    padding-bottom: 1.5rem;
+    padding-left: var(--space-page-x);
   }
 
   section {

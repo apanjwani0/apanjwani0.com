@@ -12,24 +12,23 @@ const current = Astro.url.pathname
 // other than home) sits within that section — e.g. /tools/json-tidy → tools.
 const isActive = (href: string) =>
   current === href || (href !== '/' && current.startsWith(href + '/'))
+
+// Flatten site.nav into a flat list of links (dropdown children become top-level
+// links), matching the home-screen hero-nav style.
+const links = site.nav.flatMap((item: any) =>
+  'children' in item ? item.children : [item]
+)
 ---
 
-<header>
-  <a href="/">{site.handle}</a>
-  <nav>
-    {site.nav.map((item: any) => (
-      'children' in item ? (
-        <div data-type="nav-dropdown">
-          <button data-type="nav-dropdown-trigger" aria-haspopup="true">{item.label}</button>
-          <div data-type="nav-dropdown-menu">
-            {item.children.map((child: any) => (
-              <a href={child.href} data-active={isActive(child.href) ? true : undefined} aria-current={isActive(child.href) ? 'page' : undefined}>{child.label}</a>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <a href={item.href} data-active={isActive(item.href) ? true : undefined} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
-      )
+<nav data-type="hero-nav" aria-label="Site sections">
+  <a href="/" data-type="hero-wordmark">{site.handle}</a>
+  <span data-type="hero-links">
+    {links.map((link: any) => (
+      <a
+        href={link.href}
+        data-active={isActive(link.href) ? true : undefined}
+        aria-current={isActive(link.href) ? 'page' : undefined}
+      >{link.label}</a>
     ))}
-  </nav>
-</header>
+  </span>
+</nav>

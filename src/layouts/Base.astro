@@ -49,7 +49,8 @@ const ogImageHeight = 468
   </head>
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
-    {!bare && <Nav site={site} />}
+    <star-field data-type="starfield" aria-hidden="true"></star-field>
+    <Nav site={site} />
     <main
       id="main-content"
       tabindex="-1"
@@ -60,5 +61,36 @@ const ogImageHeight = 468
       <slot />
     </main>
     <script src="/oat.min.js" defer></script>
+    <script>
+      // ── Nav: measure height → CSS variable so main padding stays in sync ──
+      function syncNavHeight() {
+        const nav = document.querySelector('[data-type="hero-nav"]')
+        if (nav) {
+          document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
+        }
+      }
+      // ── Nav: hide on scroll down, show on scroll up ──
+      let lastScroll = 0
+      function onScroll() {
+        const nav = document.querySelector('[data-type="hero-nav"]')
+        if (!nav) return
+        const current = window.scrollY
+        if (current > lastScroll && current > nav.offsetHeight + 20) {
+          nav.setAttribute('data-nav-hidden', '')
+        } else if (current < lastScroll) {
+          nav.removeAttribute('data-nav-hidden')
+        }
+        lastScroll = current
+      }
+      // ── Wire everything on initial load + after every View Transition ──
+      function setup() {
+        syncNavHeight()
+        import('../components/home/StarField.ts')
+        window.addEventListener('scroll', onScroll, { passive: true })
+        // Re-measure on resize in case the nav wraps to a second line
+        window.addEventListener('resize', syncNavHeight)
+      }
+      document.addEventListener('astro:page-load', setup)
+    </script>
   </body>
 </html>
