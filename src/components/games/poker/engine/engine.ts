@@ -366,6 +366,20 @@ function settle(s: GameState) {
       winners.push({ seatIndex: seat, amount: amt, rank: ranks[seat], potIndex })
     }
   })
+  // Safety net — chips can never vanish. If a theoretically-orphaned side pot
+  // (no showdown-eligible contenders) left anything undistributed, hand it to
+  // the first live player in button order so the room's books always balance.
+  let paid = 0
+  for (const w of winners) paid += w.amount
+  const potSum = potTotal(s)
+  if (paid < potSum) {
+    const recipient = order.find(seat => ranks[seat]) ?? order[0]
+    const leftover = potSum - paid
+    s.stacks[recipient] += leftover
+    winners.push({ seatIndex: recipient, amount: leftover, rank: ranks[recipient], potIndex: -1 })
+    log(s, 'system', `Returned undistributed ${leftover} to ${name(s, recipient)}.`)
+  }
+
   s.winners = winners
 
   const summary = winners

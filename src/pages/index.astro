@@ -4,7 +4,7 @@ export const prerender = false
 import Base from '../layouts/Base.astro'
 import Avatar from '../components/Avatar.astro'
 import { getSite } from '../lib/config'
-import { personJsonLd } from '../lib/jsonld'
+import { personJsonLd, webSiteJsonLd } from '../lib/jsonld'
 import '../styles/home.css'
 
 const site = await getSite(Astro.locals)
@@ -23,18 +23,21 @@ const ldJson = personJsonLd({
   sameAs,
   image: `${site.url}/avatar.webp`,
 })
+
+// Site-level entity for the home page: pairs with the Person schema so search
+// engines understand this as one named site authored by Aman.
+const siteLd = webSiteJsonLd({
+  name: site.name,
+  url: site.url,
+  description: site.bio,
+  authorName: site.name,
+  authorUrl: site.url,
+})
 ---
 
 <Base bare keywords={`${site.name}, ${site.handle}, portfolio, software engineer`}>
   <script type="application/ld+json" set:html={ldJson} />
-
-  <nav data-type="hero-nav" aria-label="Site sections">
-    {site.nav.flatMap((item) => ('children' in item ? item.children : [item])).map((link) => (
-      <a href={link.href}>{link.label}</a>
-    ))}
-  </nav>
-
-  <star-field data-type="starfield" aria-hidden="true"></star-field>
+  <script type="application/ld+json" set:html={siteLd} />
 
   <section data-type="hero" aria-label="Introduction">
     <div data-type="hero-content">
@@ -44,17 +47,7 @@ const ldJson = personJsonLd({
       <nav data-type="hero-links" aria-label="Links">
         <a href={site.social.github} target="_blank" rel="noopener noreferrer">github</a>
         <a href={site.social.linkedin} target="_blank" rel="noopener noreferrer">linkedin</a>
-        <a href="/experience">work</a>
       </nav>
     </div>
   </section>
 </Base>
-
-<script>
-  // Load the canvas controller on initial load and after every View Transition
-  // navigation — bundled scripts run only once per session otherwise, so the
-  // hero canvas would be missing when home is reached via in-site nav.
-  document.addEventListener('astro:page-load', () => {
-    import('../components/home/StarField.ts')
-  })
-</script>

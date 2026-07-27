@@ -2,23 +2,53 @@
 
 body {
   font-family: var(--font-serif);
-  max-width: var(--max-width);
-  margin: 0 auto;
-  padding: 0 var(--space-page-x);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
   background-color: var(--color-bg);
   color: var(--color-text);
 }
 
-/* portfolio body has horizontal padding, so header doesn't need it twice */
-header {
-  padding-left: 0;
-  padding-right: 0;
+/* The content column lives on <main>, not <body>, so the sticky header/nav spans
+   the FULL viewport width (matching home's nav) while text stays centered. Prose
+   pages use the readable --max-width; listings widen; games/home go full-bleed. */
+main {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  box-sizing: border-box;
+  /* top padding clears the fixed nav (live-measured via JS → --nav-h);
+     sides + bottom are the normal content rhythm.
+     Longhands avoid the shorthand from resetting shared.css's padding-top. */
+  padding-top: var(--nav-h, var(--space-header-offset));
+  padding-right: var(--space-page-x);
+  padding-bottom: var(--space-section);
+  padding-left: var(--space-page-x);
+}
+
+/* Listing/index pages fill a wider column. */
+main[data-width="wide"] {
+  max-width: var(--content-width);
+}
+
+/* Full-bleed content: interactive games (nav present, data-fluid) and the home
+   hero (no standard nav, data-bare). Both escape the centered column entirely. */
+main[data-bare],
+main[data-fluid] {
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 
 h1 {
   font-size: var(--text-title);
   letter-spacing: normal;
   margin-top: 0;
+  /* Even out multi-line headings so the last line isn't a lone orphan word.
+     Progressive enhancement — ignored by engines that don't support it. */
+  text-wrap: balance;
 }
 
 /* One-line lede that sits under a page's h1 to give listing pages context
@@ -29,11 +59,14 @@ p[data-type="page-intro"] {
   color: var(--color-muted);
   font-size: var(--text-base);
   line-height: 1.5;
+  /* Avoid ragged single-word last lines in the lede. */
+  text-wrap: pretty;
 }
 
 h2 {
   font-size: var(--text-lg);
   letter-spacing: normal;
+  text-wrap: balance;
 }
 
 hr {
@@ -49,10 +82,6 @@ a {
 a:hover {
   text-decoration: underline;
   text-decoration-color: var(--color-accent);
-}
-
-main {
-  padding: var(--space-section) 0;
 }
 
 section {
@@ -76,15 +105,45 @@ section h2 {
   margin-bottom: 1rem;
 }
 
-ul[data-type="preview-list"] {
+/* Listing cards — projects, games, blogs and tools all render as bordered cards
+   in a responsive grid, so a short listing fills the page instead of a stranded
+   single column. One token-driven idiom shared across all four hubs; the grid
+   collapses to a single column on narrow screens with no extra media query. */
+[data-type="card-grid"] {
   list-style: none;
+  margin: var(--space-section) 0 0;
   padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 1.25rem;
 }
 
-article[data-type="project"] {
-  border-top: 1px solid var(--color-border);
-  padding-top: 1.5rem;
-  margin-top: 1.5rem;
+[data-type="card-grid"] > * {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.15s ease;
+}
+
+/* Card lights up on hover AND when a control inside it takes keyboard focus, so
+   the whole card responds to keyboard users the same way it does to the mouse. */
+[data-type="card-grid"] > *:hover,
+[data-type="card-grid"] > *:focus-within {
+  border-color: var(--color-muted);
+}
+
+/* Listing card titles are real headings (<h2>) so screen readers can jump
+   between cards by heading; the reset makes the heading visually identical to
+   the former bold link — it just inherits the card's type scale. */
+[data-type="card-title"] {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 div[data-type="project-header"] {
@@ -94,7 +153,7 @@ div[data-type="project-header"] {
   gap: 1rem;
 }
 
-div[data-type="project-header"] > a {
+div[data-type="project-header"] > [data-type="card-title"] {
   font-weight: bold;
 }
 
@@ -196,22 +255,15 @@ article[data-type="experience"] > ul {
   font-size: var(--text-sm);
 }
 
-ul[data-type="writing-list"] {
-  list-style: none;
-  padding: 0;
-}
-
-ul[data-type="writing-list"] li {
-  margin-bottom: 1.5rem;
-}
-
 div[data-type="writing-row"] {
   display: flex;
   gap: 1rem;
   align-items: baseline;
 }
 
-span[data-type="writing-date"] {
+/* Element-agnostic: the listing date is a <time datetime> (machine-readable),
+   matching the post page — the selector must not be pinned to a <span>. */
+[data-type="writing-date"] {
   color: var(--color-muted);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -225,8 +277,15 @@ div[data-type="writing-summary"] {
 }
 
 @media (max-width: 560px) {
+  /* Keep the side gutter on mobile: since the content column moved from <body>
+     to <main>, the horizontal padding lives here (var(--space-page-x)) — a bare
+     `1.5rem 0` would let text run to the screen edges. Full-bleed pages
+     (main[data-bare]/[data-fluid]) still win via their higher-specificity rule. */
   main {
-    padding: 1.5rem 0;
+    padding-top: var(--nav-h, var(--space-header-offset));
+    padding-right: var(--space-page-x);
+    padding-bottom: 1.5rem;
+    padding-left: var(--space-page-x);
   }
 
   section {

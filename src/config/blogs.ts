@@ -12,8 +12,9 @@ export const posts: Post[] = [
     "title": "First Draft",
     "href": "/blogs/first-draft",
     "date": "2026-03-29",
-    "summary": "The day this portfolio went live",
-    "content": "...... soon to be added"
+    "summary": "The day this portfolio went live — and what's coming next",
+    "content": "This is the first entry — a placeholder marking the day the site went live. Proper posts (build notes, trips, and small experiments) are on the way.",
+    "keywords": "portfolio launch, first post, aman panjwani blog, build notes"
   },
   {
     "title": "Visit to Jawaharlal Nehru Planetarium Bengaluru",

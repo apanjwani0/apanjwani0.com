@@ -10,13 +10,17 @@ interface Props {
   noindex?: boolean
   keywords?: string
   bare?: boolean
+  wide?: boolean
+  fluid?: boolean
   ogType?: 'website' | 'article'
   publishedTime?: string
 }
 
 const site = await getSite(Astro.locals)
-const { title, description = site.tagline, noindex = false, keywords, bare = false, ogType = 'website', publishedTime } = Astro.props
-const pageTitle = title ? `${title} · ${site.name}` : site.name
+const { title, description = site.tagline, noindex = false, keywords, bare = false, wide = false, fluid = false, ogType = 'website', publishedTime } = Astro.props
+// Home (no explicit title) gets a descriptive title with the role line so the
+// most-linked page's <title>/og:title isn't just a bare name.
+const pageTitle = title ? `${title} · ${site.name}` : `${site.name} · ${site.tagline}`
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
 // Absolute URL for the social-share preview image (link cards on Slack, X, etc.).
 // Dimensions match public/avatar.webp (320×468) so scrapers get a complete
@@ -43,12 +47,50 @@ const ogImageHeight = 468
       publishedTime={publishedTime}
     />
   </head>
-  <body data-bare={bare ? '' : undefined}>
+  <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
-    {!bare && <Nav site={site} />}
-    <main id="main-content" tabindex="-1" data-bare={bare ? '' : undefined}>
+    <star-field data-type="starfield" aria-hidden="true"></star-field>
+    <Nav site={site} />
+    <main
+      id="main-content"
+      tabindex="-1"
+      data-bare={bare ? '' : undefined}
+      data-fluid={fluid ? '' : undefined}
+      data-width={wide ? 'wide' : undefined}
+    >
       <slot />
     </main>
     <script src="/oat.min.js" defer></script>
+    <script>
+      // ── Nav: measure height → CSS variable so main padding stays in sync ──
+      function syncNavHeight() {
+        const nav = document.querySelector('[data-type="hero-nav"]')
+        if (nav) {
+          document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
+        }
+      }
+      // ── Nav: hide on scroll down, show on scroll up ──
+      let lastScroll = 0
+      function onScroll() {
+        const nav = document.querySelector('[data-type="hero-nav"]')
+        if (!nav) return
+        const current = window.scrollY
+        if (current > lastScroll && current > nav.offsetHeight + 20) {
+          nav.setAttribute('data-nav-hidden', '')
+        } else if (current < lastScroll) {
+          nav.removeAttribute('data-nav-hidden')
+        }
+        lastScroll = current
+      }
+      // ── Wire everything on initial load + after every View Transition ──
+      function setup() {
+        syncNavHeight()
+        import('../components/home/StarField.ts')
+        window.addEventListener('scroll', onScroll, { passive: true })
+        // Re-measure on resize in case the nav wraps to a second line
+        window.addEventListener('resize', syncNavHeight)
+      }
+      document.addEventListener('astro:page-load', setup)
+    </script>
   </body>
 </html>

@@ -48,3 +48,32 @@ export function shuffle<T>(arr: readonly T[], rng?: () => number): T[] {
 export function cardLabel(c: Card): string {
   return `${RANK_LABEL[c.r]}${SUIT_SYMBOL[c.s]}`
 }
+
+/**
+ * Deterministic PRNG (mulberry32). The basis of log-replay multiplayer: every
+ * peer seeds `startHand` with the same value and deals the identical deck, so a
+ * hand is fully reproducible from one small number + the action list.
+ *
+ * ponytail: NOT cryptographically secure and the seed is shared, so any peer can
+ * derive the deck — that's the Phase-A privacy ceiling. Phase C (mental poker)
+ * removes the deck from the shared computation; this stays only as the test/replay rng.
+ */
+export function seededRng(seed: number): () => number {
+  return function () {
+    seed |= 0
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** FNV-1a hash of a string nonce → 32-bit int, so a shared hand-seed string can drive `seededRng`. */
+export function hashSeed(str: string): number {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}

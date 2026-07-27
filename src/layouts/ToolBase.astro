@@ -14,8 +14,19 @@ interface Props {
 const site = await getSite(Astro.locals)
 const { toolTitle, seoTitle, metaDescription, keywords } = Astro.props
 const pageTitle = seoTitle || (toolTitle ? `${toolTitle} · ${site.name}` : `${site.name} · tools`)
-const description = metaDescription || site.tagline
+// Fall back to a tool-appropriate sentence rather than the site's role line
+// (`site.tagline`), which reads as nonsense as a tool page's meta description.
+const description =
+  metaDescription ||
+  (toolTitle
+    ? `${toolTitle} — a fast, free, no-login tool that runs entirely in your browser, by ${site.name}.`
+    : `Fast, free, browser-based developer tools by ${site.name}.`)
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
+// Absolute URL + dimensions for the social-share preview image, matching
+// Base.astro so shared tool links render a preview card, not a bare link.
+const ogImage = new URL(site.avatar, site.url).href
+const ogImageWidth = 320
+const ogImageHeight = 468
 ---
 
 <!doctype html>
@@ -27,19 +38,52 @@ const canonicalURL = new URL(Astro.url.pathname, site.url).href
       canonicalURL={canonicalURL}
       siteName={site.name}
       keywords={keywords}
+      image={ogImage}
+      imageWidth={ogImageWidth}
+      imageHeight={ogImageHeight}
     />
   </head>
   <body>
+    <a href="#main-content" data-type="skip-link">Skip to content</a>
+    <star-field data-type="starfield" aria-hidden="true"></star-field>
     <Nav site={site} />
-    <slot />
+    <main id="main-content" tabindex="-1">
+      <slot />
+    </main>
     <script src="/oat.min.js" defer></script>
+    <script>
+      function syncNavHeight() {
+        const nav = document.querySelector('[data-type="hero-nav"]')
+        if (nav) {
+          document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
+        }
+      }
+      let lastScroll = 0
+      function onScroll() {
+        const nav = document.querySelector('[data-type="hero-nav"]')
+        if (!nav) return
+        const current = window.scrollY
+        if (current > lastScroll && current > nav.offsetHeight + 20) {
+          nav.setAttribute('data-nav-hidden', '')
+        } else if (current < lastScroll) {
+          nav.removeAttribute('data-nav-hidden')
+        }
+        lastScroll = current
+      }
+      function setup() {
+        syncNavHeight()
+        import('../components/home/StarField.ts')
+        window.addEventListener('scroll', onScroll, { passive: true })
+        window.addEventListener('resize', syncNavHeight)
+      }
+      document.addEventListener('astro:page-load', setup)
+    </script>
   </body>
 </html>
 
 <style is:global>
   body {
     font-family: var(--font-serif);
-    background-color: var(--color-bg);
     color: var(--color-text);
     margin: 0;
     padding: 0;
@@ -52,11 +96,5 @@ const canonicalURL = new URL(Astro.url.pathname, site.url).href
 
   a:hover {
     text-decoration: underline;
-  }
-
-  header {
-    max-width: var(--max-width);
-    margin-left: auto;
-    margin-right: auto;
   }
 </style>

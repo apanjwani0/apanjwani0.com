@@ -4,12 +4,17 @@ export const prerender = false
 import Base from '../../layouts/Base.astro'
 import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
-import { webAppJsonLd } from '../../lib/jsonld'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import '../../components/games/twenty48/twenty48.css'
 import '../../components/games/game-of-life/game-of-life.css'
-import '../../components/games/poker/poker.css'
 import '../../components/games/flow-field/flow-field.css'
+import '../../components/games/maze-weaver/maze-weaver.css'
 import '../../components/games/type-trial/type-trial.css'
 import '../../components/games/hue-hunt/hue-hunt.css'
+import '../../components/games/starfield-toy/starfield.css'
+import '../../components/games/murmuration/murmuration.css'
+import '../../components/games/lsystem/lsystem.css'
 
 const { slug } = Astro.params
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
@@ -32,18 +37,40 @@ const ldJson = webAppJsonLd({
   applicationCategory: 'Game',
   keywords: game.keywords,
 })
+
+// Visible trail + matching BreadcrumbList — emitted together, and only on the
+// non-interactive "coming soon" pages (which have normal page content to sit
+// above). Each interactive game mounts as a self-contained component with its
+// own heading, so no crumb is drawn there; the visible trail and its structured
+// data must always agree for a breadcrumb path to surface in search results.
+const crumbs = [
+  { label: 'home', href: '/' },
+  { label: 'games', href: '/games' },
+  { label: game.title },
+]
+const breadcrumbLd = breadcrumbListJsonLd([
+  { name: 'Home', url: site.url },
+  { name: 'Games', url: `${site.url}/games` },
+  { name: game.title, url: `${site.url}/games/${game.slug}` },
+])
 ---
 
 <Base title={game.title} description={game.description} keywords={game.keywords}>
   <script type="application/ld+json" set:html={ldJson} />
+  {game.interactive && slug === '2048' && (
+    <twenty48-game data-game="2048">
+      <h1>{game.title}</h1>
+      <div data-type="project-description" set:html={render(game.description)} />
+    </twenty48-game>
+  )}
   {game.interactive && slug === 'game-of-life' && (
     <game-of-life-game data-game="game-of-life"></game-of-life-game>
   )}
   {game.interactive && slug === 'flow-field' && (
     <flow-field-game data-game="flow-field"></flow-field-game>
   )}
-  {game.interactive && slug === 'poker' && (
-    <poker-game data-game="poker"></poker-game>
+  {game.interactive && slug === 'maze-weaver' && (
+    <maze-weaver-game data-game="maze-weaver"></maze-weaver-game>
   )}
   {game.interactive && slug === 'type-trial' && (
     <type-trial-game data-game="type-trial"></type-trial-game>
@@ -51,8 +78,22 @@ const ldJson = webAppJsonLd({
   {game.interactive && slug === 'hue-hunt' && (
     <hue-hunt-game data-game="hue-hunt"></hue-hunt-game>
   )}
+  {game.interactive && slug === 'starfield-toy' && (
+    <starfield-voyager-game data-game="starfield-toy"></starfield-voyager-game>
+  )}
+  {game.interactive && slug === 'murmuration' && (
+    <murmuration-game data-game="murmuration">
+      <h1>{game.title}</h1>
+      <div data-type="project-description" set:html={render(game.description)} />
+    </murmuration-game>
+  )}
+  {game.interactive && slug === 'lsystem-tree' && (
+    <lsystem-tree-game data-game="lsystem-tree"></lsystem-tree-game>
+  )}
   {!game.interactive && (
     <>
+      <script type="application/ld+json" set:html={breadcrumbLd} />
+      <Breadcrumbs items={crumbs} />
       <h1>{game.title}</h1>
       <h2 style="color: var(--color-muted); margin-bottom: var(--space-section);">Coming Soon</h2>
       <div data-type="project-description" set:html={render(game.description)} />
@@ -63,21 +104,25 @@ const ldJson = webAppJsonLd({
       )}
     </>
   )}
-</Base>
 
-{game.interactive && (
-  <script>
-    // Mount the game's controller on initial load AND after every View Transition
-    // navigation. Bundled scripts run only once per session, so without astro:page-load
-    // a game reached via in-site nav renders blank until a hard reload.
-    function mountGame() {
-      const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
-      if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
-      else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
-      else if (slug === 'poker') import('../../components/games/poker/Poker.ts')
-      else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')
-      else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
-    }
-    document.addEventListener('astro:page-load', mountGame)
-  </script>
-)}
+  {game.interactive && (
+    <script>
+      // Mount the game's controller on initial load AND after every View Transition
+      // navigation. Bundled scripts run only once per session, so without astro:page-load
+      // a game reached via in-site nav renders blank until a hard reload.
+      function mountGame() {
+        const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
+        if (slug === '2048') import('../../components/games/twenty48/Twenty48.ts')
+        else if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
+        else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
+        else if (slug === 'maze-weaver') import('../../components/games/maze-weaver/MazeWeaver.ts')
+        else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')
+        else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
+        else if (slug === 'starfield-toy') import('../../components/games/starfield-toy/Starfield.ts')
+        else if (slug === 'murmuration') import('../../components/games/murmuration/Murmuration.ts')
+        else if (slug === 'lsystem-tree') import('../../components/games/lsystem/LSystem.ts')
+      }
+      document.addEventListener('astro:page-load', mountGame)
+    </script>
+  )}
+</Base>

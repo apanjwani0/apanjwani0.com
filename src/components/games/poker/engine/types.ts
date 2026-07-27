@@ -250,6 +250,9 @@ export interface RoomConfig {
   ante: number
   botCount: number
   botPersonality: BotPersonality | 'mixed'
+  /** host flag: buy-ins/rebuys require an explicit real-money acknowledgement.
+   *  The platform still moves no money — this is bookkeeping consent only. */
+  realMoney?: boolean
 }
 
 export interface RoomSeat {
@@ -269,6 +272,13 @@ export interface Room {
   /** up to ROOM_SEAT_CAP entries (players + bots + spectators) */
   seats: RoomSeat[]
   handNumber: number
+  /** Last dealer-button seat; persisted so rotation survives leaving/reloading. */
+  buttonSeat?: number
+  /** A fixed public quick-play table (stable id). Excluded from the private-room
+   *  cap and from the home "your tables" list; not user-deletable. */
+  public?: boolean
+  /** Short shareable invite code for a private table (also the P2P room id). */
+  code?: string
 }
 
 /** rooms.ts must export a `rooms` object implementing this. */
@@ -297,6 +307,8 @@ export interface SeatView {
   isButton: boolean
   isTurn: boolean
   isHero: boolean
+  /** seat is played by a bot (drives the "BOT" tag on the table) */
+  isBot: boolean
   /** chips wagered in front on the current street */
   committed: number
   /** short status label e.g. "ALL IN", "FOLD", "RAISE 400" */
@@ -336,6 +348,7 @@ export const LS = {
   prefs: 'poker:prefs:v1',
   session: 'poker:session:v1',
   presence: 'poker:presence:v1',
+  auth: 'poker:auth:v1',
 } as const
 
 export function clamp(n: number, lo: number, hi: number): number {

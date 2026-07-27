@@ -65,13 +65,12 @@ function buildRemainingDeck(known: Card[]): Card[] {
 /**
  * Monte Carlo estimate of hero's equity against `activeOpponents` random
  * hands, given the known hole cards and (partial) board. Bounded simulation
- * count so this stays cheap even at a full ring table.
+ * count so this stays cheap even at a full ring table. Exported so the UI's
+ * odds "pet" can show the hero the same honest number the bots reason with —
+ * it only ever sees public board + the owner's own hole cards.
  */
-function estimateEquity(input: BotDecisionInput, rng: Rng): number {
-  const variant: VariantConfig = input.variant
-  const hole = input.hole ?? []
-  const board = input.board ?? []
-  const opponents = Math.max(0, Math.floor(input.activeOpponents))
+export function estimateEquity(variant: VariantConfig, hole: Card[], board: Card[], activeOpponents: number, rng: Rng = Math.random): number {
+  const opponents = Math.max(0, Math.floor(activeOpponents))
   const boardCardsNeeded = variant.boardCards ?? 5
   const holeCardsPerOpp = variant.holeCards ?? 2
 
@@ -223,7 +222,7 @@ export function decide(input: BotDecisionInput): BotDecision {
   const minRaiseTo = Number.isFinite(input.minRaiseTo) ? input.minRaiseTo : toCall
   const maxRaiseTo = Number.isFinite(input.maxRaiseTo) ? input.maxRaiseTo : minRaiseTo
 
-  const equity = clamp(estimateEquity(input, rng), 0, 1)
+  const equity = clamp(estimateEquity(input.variant, input.hole ?? [], input.board ?? [], input.activeOpponents, rng), 0, 1)
   const shortStacked = myChips <= bigBlind * 8
 
   // Effective raise ceiling never exceeds what the bot can actually put in.

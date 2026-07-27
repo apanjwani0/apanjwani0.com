@@ -16,7 +16,7 @@
  */
 
 type Indent = '2' | '3' | '4' | 'tab'
-type OutputKind = 'format' | 'minify' | 'stringify' | 'yaml' | 'csv' | 'xml'
+type OutputKind = 'format' | 'minify' | 'stringify' | 'yaml' | 'csv' | 'xml' | 'repair'
 type ViewMode = 'text' | 'tree'
 
 const LS_INPUT = 'json-tidy:input:v1'
@@ -63,6 +63,7 @@ const OUTPUT_META: Record<OutputKind, { title: string; ext: string; mime: string
   yaml: { title: 'YAML', ext: 'yaml', mime: 'text/yaml' },
   csv: { title: 'CSV', ext: 'csv', mime: 'text/csv' },
   xml: { title: 'XML', ext: 'xml', mime: 'application/xml' },
+  repair: { title: 'Repaired JSON', ext: 'json', mime: 'application/json' },
 }
 
 function indentString(i: Indent): string {
@@ -255,6 +256,215 @@ function analyze(src: string): ParseResult {
       }
     }
     return { ok: false, message: cleanMessage(raw), line, col }
+  }
+}
+
+// ── JSON repair (the "fixer") ────────────────────────────────
+/**
+ * A lenient, dependency-free JSON parser that accepts the malformed input
+ * people actually paste — single-quoted or smart-quoted strings, unquoted
+ * object keys, trailing/stray commas, missing commas, // and /* *\/ comments,
+ * Python/JS literals (True/False/None/NaN/Infinity/undefined), a leading +,
+ * hex numbers, and unterminated or unclosed structures — and reconstructs a
+ * plain JS value. Re-serialising that value with JSON.stringify then yields
+ * guaranteed-valid JSON, so the tool can repair rather than merely reject.
+ * It never throws for ordinary breakage; the only failure is genuinely
+ * unrecoverable input (empty, or nothing value-like at the top).
+ */
+interface RepairResult { ok: boolean; value?: unknown; fixes: string[]; error?: string }
+
+const RP_QUOTE_CLOSE: Record<string, string> = {
+  '"': '"', "'": "'", '`': '`',
+  '“': '”', '”': '”', // “ ”
+  '‘': '’', '’': '’', // ‘ ’
+}
+function rpIsQuote(c: string): boolean {
+  return c === '"' || c === "'" || c === '`' || c === '“' || c === '”' || c === '‘' || c === '’'
+}
+function rpIsWs(c: string): boolean {
+  return c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v' || c === ' ' || c === '﻿'
+}
+
+function repairJson(src: string): RepairResult {
+  if (!src.trim()) return { ok: false, fixes: [], error: 'Nothing to repair.' }
+  const fixes = new Set<string>()
+  let i = 0
+  const n = src.length
+  let steps = 0
+  const budget = n * 6 + 20000
+
+  const tick = () => { if (++steps > budget) throw new Error('Too tangled to repair automatically.') }
+
+  const skip = () => {
+    for (;;) {
+      tick()
+      while (i < n && rpIsWs(src[i])) i++
+      if (src[i] === '/' && src[i + 1] === '/') {
+        fixes.add('removed comments')
+        i += 2
+        while (i < n && src[i] !== '\n') i++
+      } else if (src[i] === '/' && src[i + 1] === '*') {
+        fixes.add('removed comments')
+        i += 2
+        while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++
+        i += 2
+      } else break
+    }
+  }
+
+  const parseString = (): string => {
+    const open = src[i]
+    const close = RP_QUOTE_CLOSE[open] ?? '"'
+    if (open === "'" || open === '`') fixes.add('normalised single quotes')
+    else if (open !== '"') fixes.add('normalised smart quotes')
+    i++
+    let out = ''
+    while (i < n) {
+      tick()
+      const c = src[i]
+      if (c === '\\') {
+        const e = src[i + 1]
+        i += 2
+        switch (e) {
+          case '"': out += '"'; break
+          case "'": out += "'"; break
+          case '\\': out += '\\'; break
+          case '/': out += '/'; break
+          case 'b': out += '\b'; break
+          case 'f': out += '\f'; break
+          case 'n': out += '\n'; break
+          case 'r': out += '\r'; break
+          case 't': out += '\t'; break
+          case 'u': {
+            const hex = src.slice(i, i + 4)
+            if (/^[0-9a-fA-F]{4}$/.test(hex)) { out += String.fromCharCode(parseInt(hex, 16)); i += 4 }
+            else out += 'u'
+            break
+          }
+          default: out += e ?? ''
+        }
+        continue
+      }
+      if (c === close || c === open) { i++; return out }
+      out += c
+      i++
+    }
+    fixes.add('closed an unterminated string')
+    return out
+  }
+
+  const literalOrBareword = (): unknown => {
+    const start = i
+    while (
+      i < n && !',}]:'.includes(src[i]) && !rpIsWs(src[i]) &&
+      !(src[i] === '/' && (src[i + 1] === '/' || src[i + 1] === '*'))
+    ) i++
+    const tok = src.slice(start, i)
+    if (tok === '') return undefined // signals "no progress" to the caller
+    if (tok === 'true') return true
+    if (tok === 'false') return false
+    if (tok === 'null') return null
+    if (/^(true|false)$/i.test(tok)) { fixes.add('normalised literals'); return /^t/i.test(tok) }
+    if (/^(null|none|nil|undefined)$/i.test(tok)) { fixes.add('normalised literals'); return null }
+    if (/^nan$/i.test(tok) || /^[-+]?infinity$/i.test(tok)) { fixes.add('normalised literals'); return null }
+    if (/^[-+]?0x[0-9a-fA-F]+$/.test(tok)) { fixes.add('converted hex numbers'); return parseInt(tok.replace('+', ''), 16) }
+    if (/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(tok)) {
+      const v = Number(tok)
+      if (Number.isFinite(v)) { if (tok[0] === '+') fixes.add('removed leading +'); return v }
+    }
+    fixes.add('quoted unquoted values')
+    return tok
+  }
+
+  const parseKey = (): string => {
+    skip()
+    if (rpIsQuote(src[i])) return parseString()
+    const start = i
+    while (i < n && !':,{}[]'.includes(src[i]) && !rpIsWs(src[i]) && !rpIsQuote(src[i])) i++
+    const raw = src.slice(start, i)
+    if (raw) fixes.add('quoted unquoted keys')
+    return raw
+  }
+
+  const value = (): unknown => {
+    skip()
+    if (i >= n) return null
+    const c = src[i]
+    if (c === '{') return object()
+    if (c === '[') return array()
+    if (rpIsQuote(c)) return parseString()
+    if (c === '}' || c === ']' || c === ',') return undefined // empty value slot
+    return literalOrBareword()
+  }
+
+  const atDelim = (): boolean => i >= n || src[i] === ',' || src[i] === '}' || src[i] === ']'
+
+  const object = (): Record<string, unknown> => {
+    i++ // {
+    const obj: Record<string, unknown> = {}
+    for (;;) {
+      tick()
+      skip()
+      if (i >= n) { fixes.add('auto-closed brackets'); break }
+      if (src[i] === '}') { i++; break }
+      if (src[i] === ',') { i++; fixes.add('removed stray commas'); continue }
+      const key = parseKey()
+      skip()
+      if (src[i] === ':') i++
+      else fixes.add('inserted missing colons')
+      const before = i
+      const v = value()
+      obj[key] = v
+      if (i === before && !atDelim()) i++ // guarantee forward progress on junk
+      skip()
+      if (src[i] === ',') {
+        i++
+        skip()
+        if (src[i] === '}') { i++; fixes.add('removed trailing commas'); break }
+        continue
+      }
+      if (src[i] === '}') { i++; break }
+      if (i >= n) { fixes.add('auto-closed brackets'); break }
+      fixes.add('inserted missing commas')
+    }
+    return obj
+  }
+
+  const array = (): unknown[] => {
+    i++ // [
+    const arr: unknown[] = []
+    for (;;) {
+      tick()
+      skip()
+      if (i >= n) { fixes.add('auto-closed brackets'); break }
+      if (src[i] === ']') { i++; break }
+      if (src[i] === ',') { i++; fixes.add('removed stray commas'); continue }
+      const before = i
+      const v = value()
+      arr.push(v)
+      if (i === before && !atDelim()) i++ // guarantee forward progress on junk
+      skip()
+      if (src[i] === ',') {
+        i++
+        skip()
+        if (src[i] === ']') { i++; fixes.add('removed trailing commas'); break }
+        continue
+      }
+      if (src[i] === ']') { i++; break }
+      if (i >= n) { fixes.add('auto-closed brackets'); break }
+      fixes.add('inserted missing commas')
+    }
+    return arr
+  }
+
+  try {
+    skip()
+    const v = value()
+    skip()
+    if (i < n) fixes.add('dropped trailing content')
+    return { ok: true, value: v, fixes: [...fixes] }
+  } catch (e) {
+    return { ok: false, fixes: [...fixes], error: e instanceof Error ? e.message : 'Could not repair the input.' }
   }
 }
 
@@ -563,6 +773,10 @@ class JsonTidyTool extends HTMLElement {
   private fileInput!: HTMLInputElement
   private statusEl!: HTMLElement
   private errorEl!: HTMLElement
+  private repairBtn!: HTMLButtonElement
+  private repairEl!: HTMLElement
+  private repairMsgEl!: HTMLElement
+  private repairApplyBtn!: HTMLButtonElement
   private metaEl!: HTMLElement
   private outEl!: HTMLElement
   private treeEl!: HTMLElement
@@ -609,7 +823,7 @@ class JsonTidyTool extends HTMLElement {
       <div data-type="tool-page" data-tool="json-tidy">
         <div data-type="tool-header">
           <h1>JSON Tidy</h1>
-          <p>Paste JSON to format, validate, minify, explore in a searchable collapsible tree, convert it to YAML, CSV, or XML, or compare two documents to see exactly what changed — instantly, in your browser. Errors are pinpointed by line and column; nothing is uploaded.</p>
+          <p>Paste JSON to format, validate, minify, repair broken JSON, explore in a searchable collapsible tree, convert it to YAML, CSV, or XML, or compare two documents to see exactly what changed — instantly, in your browser. Errors are pinpointed by line and column; nothing is uploaded.</p>
         </div>
 
         <div data-group="mode-toggle" role="group" aria-label="Tool mode">
@@ -621,6 +835,7 @@ class JsonTidyTool extends HTMLElement {
           <button data-action="format" type="button">Format</button>
           <button data-action="minify" type="button">Minify</button>
           <button data-action="stringify" type="button">Stringify</button>
+          <button data-action="repair" type="button" title="Fix common JSON mistakes — single quotes, trailing commas, unquoted keys, comments, Python True/False/None…  (Ctrl/Cmd + Shift + Enter)">Repair</button>
           <span data-type="jt-sep" aria-hidden="true"></span>
           <button data-action="to-yaml" type="button">→ YAML</button>
           <button data-action="to-csv" type="button">→ CSV</button>
@@ -670,6 +885,10 @@ class JsonTidyTool extends HTMLElement {
               <span data-type="jt-meta"></span>
             </div>
             <pre data-type="jt-error" hidden></pre>
+            <div data-type="jt-repair" hidden>
+              <span data-type="jt-repair-msg" role="status" aria-live="polite"></span>
+              <button data-action="repair-apply" type="button" title="Replace the input on the left with the repaired JSON">Apply to input ↩</button>
+            </div>
           </section>
 
           <section data-type="jt-pane" data-side="output">
@@ -774,6 +993,10 @@ class JsonTidyTool extends HTMLElement {
     this.fileInput = this.querySelector('[data-control="file"]') as HTMLInputElement
     this.statusEl = this.querySelector('[data-type="jt-status"]') as HTMLElement
     this.errorEl = this.querySelector('[data-type="jt-error"]') as HTMLElement
+    this.repairBtn = this.querySelector('[data-action="repair"]') as HTMLButtonElement
+    this.repairEl = this.querySelector('[data-type="jt-repair"]') as HTMLElement
+    this.repairMsgEl = this.querySelector('[data-type="jt-repair-msg"]') as HTMLElement
+    this.repairApplyBtn = this.querySelector('[data-action="repair-apply"]') as HTMLButtonElement
     this.metaEl = this.querySelector('[data-type="jt-meta"]') as HTMLElement
     this.outEl = this.querySelector('[data-type="jt-output"]') as HTMLElement
     this.treeEl = this.querySelector('[data-type="jt-tree"]') as HTMLElement
@@ -830,7 +1053,10 @@ class JsonTidyTool extends HTMLElement {
   private wire() {
     this.input.addEventListener('input', () => this.scheduleUpdate())
     this.input.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault()
+        this.repair()
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
         this.produce('format')
       } else if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -847,6 +1073,9 @@ class JsonTidyTool extends HTMLElement {
     op('[data-action="to-yaml"]', 'yaml')
     op('[data-action="to-csv"]', 'csv')
     op('[data-action="to-xml"]', 'xml')
+
+    this.repairBtn.addEventListener('click', () => this.repair())
+    this.repairApplyBtn.addEventListener('click', () => this.applyRepair())
 
     this.copyBtn.addEventListener('click', () => this.copy())
     this.downloadBtn.addEventListener('click', () => this.download())
@@ -902,6 +1131,7 @@ class JsonTidyTool extends HTMLElement {
 
     this.querySelector('[data-action="sample"]')!.addEventListener('click', () => {
       this.input.value = SAMPLE
+      this.hideRepair()
       this.persist()
       this.validate()
       this.input.focus()
@@ -911,6 +1141,7 @@ class JsonTidyTool extends HTMLElement {
     this.querySelector('[data-action="clear"]')!.addEventListener('click', () => {
       this.input.value = ''
       this.collapsed.clear()
+      this.hideRepair()
       this.persist()
       this.validate()
       this.setOutput('', null)
@@ -1191,6 +1422,8 @@ class JsonTidyTool extends HTMLElement {
   }
 
   private scheduleUpdate() {
+    // The repaired result is stale the moment the input changes.
+    this.hideRepair()
     if (this.debounce) clearTimeout(this.debounce)
     this.debounce = window.setTimeout(() => {
       this.debounce = 0
@@ -1209,7 +1442,8 @@ class JsonTidyTool extends HTMLElement {
 
   /** Re-run the current output operation when indent/sort change. */
   private reflowOutput() {
-    if (this.outputKind && this.input.value.trim()) this.produce(this.outputKind, true)
+    if (this.outputKind === 'repair' && this.repairEl && !this.repairEl.hidden) this.repair()
+    else if (this.outputKind && this.input.value.trim()) this.produce(this.outputKind, true)
     if (this.view === 'tree') this.renderTree()
   }
 
@@ -1262,12 +1496,74 @@ class JsonTidyTool extends HTMLElement {
     this.errorEl.hidden = false
   }
 
+  // ── Repair (the JSON "fixer") ─────────────────────────────────
+  /**
+   * Attempt to repair malformed JSON. Renders the fixed, formatted result into
+   * the output pane (never destructively — the input is only replaced when the
+   * user presses “Apply to input”). Valid JSON is simply formatted; genuinely
+   * unrecoverable input falls back to the live error pointer on the left.
+   */
+  private repair() {
+    const src = this.input.value
+    if (!src.trim()) { this.input.focus(); return }
+    const alreadyValid = analyze(src).ok
+    const res = repairJson(src)
+    if (!res.ok || res.value === undefined) {
+      this.hideRepair()
+      this.validate()
+      if (this.view !== 'text') this.setView('text')
+      this.flash(this.repairBtn, 'Can’t repair')
+      return
+    }
+    const value = this.sort ? sortDeep(res.value) : res.value
+    const out = JSON.stringify(value, null, indentString(this.indent))
+    if (alreadyValid && res.fixes.length === 0) {
+      // Nothing to fix — behave like Format so the button still does something useful.
+      this.setOutput(out, 'format')
+      if (this.view !== 'text') this.setView('text')
+      this.hideRepair()
+      this.flash(this.repairBtn, 'Already valid ✓')
+      return
+    }
+    const count = res.fixes.length
+    this.setOutput(out, 'repair', ` · ${count} ${count === 1 ? 'fix' : 'fixes'}`)
+    if (this.view !== 'text') this.setView('text')
+    this.showRepair(res.fixes)
+  }
+
+  private showRepair(fixes: string[]) {
+    const label = fixes.length
+      ? `Repaired — ${fixes.join(', ')}. Review the result on the right, then apply it.`
+      : 'Repaired the JSON. Review the result on the right, then apply it.'
+    this.repairMsgEl.textContent = label
+    this.repairApplyBtn.disabled = false
+    this.repairEl.hidden = false
+  }
+
+  private hideRepair() {
+    if (this.repairEl) this.repairEl.hidden = true
+  }
+
+  private applyRepair() {
+    if (this.outputKind !== 'repair' || !this.output) return
+    this.input.value = this.output
+    this.collapsed.clear()
+    this.persist()
+    this.validate() // input is now valid — the status line confirms it
+    if (this.view === 'tree') this.renderTree()
+    // Keep the banner as a confirmation; it clears on the next edit.
+    this.repairMsgEl.textContent = 'Applied — the repaired JSON is now your input.'
+    this.repairApplyBtn.disabled = true
+    this.input.focus()
+  }
+
   /**
    * Run an operation against the current input and render the result into the
    * output pane. `silent` skips the invalid-input flash (used for auto-format
    * and reflows, where surfacing the live status line is enough).
    */
   private produce(kind: OutputKind, silent = false) {
+    this.hideRepair()
     const src = this.input.value
     if (!src.trim()) {
       if (!silent) this.input.focus()
@@ -1652,6 +1948,7 @@ class JsonTidyTool extends HTMLElement {
     reader.onload = () => {
       this.input.value = typeof reader.result === 'string' ? reader.result : ''
       this.collapsed.clear()
+      this.hideRepair()
       this.persist()
       this.validate()
       this.maybeAutoFormat()

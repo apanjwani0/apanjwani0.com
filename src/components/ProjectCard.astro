@@ -1,7 +1,7 @@
 ---
 import type { Project } from '../config/projects'
 import type { GitHubStats } from '../lib/github'
-import { renderInline, render } from '../lib/markdown'
+import { render } from '../lib/markdown'
 
 interface Props {
   project: Project
@@ -13,7 +13,7 @@ const { project, stats } = Astro.props
 
 <article data-type="project">
   <div data-type="project-header">
-    <a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a>
+    <h2 data-type="card-title"><a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a></h2>
     {stats && (
       <span data-type="project-stats">
         <a

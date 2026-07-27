@@ -1,5 +1,7 @@
 /**
- * Poker Together — canvas renderer.
+ * Poker Together — canvas renderer. SUPERSEDED: the table screen now renders as
+ * DOM from the SVG asset catalogue (see Poker.ts renderTable/renderPlayers/…);
+ * this module is retained for reference only and is no longer imported anywhere.
  *
  * Dependency-free HTML5 canvas renderer for the poker table. Pure config in
  * (see `computeLayout`), pure repaint out (see `createRenderer`) — no
@@ -275,14 +277,13 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     const w = cssW
     const h = cssH
     const scale = Math.min(w, h)
-    const cardW = scale * 0.09
+    const cardW = scale * (mode === 'mobile' ? 0.115 : 0.09)
     const cardH = cardW * 1.4
     const gap = cardW * 0.18
     const n = Math.max(view.board.length, 5)
     const totalW = n * cardW + (n - 1) * gap
     const startX = w / 2 - totalW / 2
-    // On mobile the board drops to mid-table, below the packed opponent rows.
-    const y = h * (mode === 'mobile' ? 0.54 : 0.34) - cardH / 2
+    const y = h * (mode === 'mobile' ? 0.45 : 0.34) - cardH / 2
 
     for (let i = 0; i < 5; i++) {
       const x = startX + i * (cardW + gap)
@@ -456,11 +457,13 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     drawFelt()
     drawBoard(view, mode)
 
-    const layout = computeLayout(mode, Math.max(view.seats.length, 1))
-    view.seats.forEach((seat, i) => {
-      const pos = layout.seatPositions[i] ?? layout.seatPositions[layout.seatPositions.length - 1]
-      drawSeat(seat, pos, layout)
-    })
+    if (mode === 'desktop') {
+      const layout = computeLayout(mode, Math.max(view.seats.length, 1))
+      view.seats.forEach((seat, i) => {
+        const pos = layout.seatPositions[i] ?? layout.seatPositions[layout.seatPositions.length - 1]
+        drawSeat(seat, pos, layout)
+      })
+    }
 
     ctx!.restore()
   }

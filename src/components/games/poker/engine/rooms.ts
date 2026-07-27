@@ -44,6 +44,9 @@ export function botName(i: number): string {
 
 interface Prefs {
   name?: string
+  bankroll?: number
+  /** the odds "pet" (live win% in the equity box); on by default */
+  odds?: boolean
 }
 
 function readPrefs(): Prefs {
@@ -71,6 +74,33 @@ export function setHostName(name: string): void {
     if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return
     const prefs = readPrefs()
     prefs.name = name
+    window.localStorage.setItem(LS.prefs, JSON.stringify(prefs))
+  } catch {
+    // ignore — best-effort persistence only
+  }
+}
+
+/**
+ * The player's play-money wallet balance shown on the home screen.
+ * ponytail: display-only for now — buy-ins draw from a room's own stack, not this
+ * wallet. Debiting/crediting arrives with the books/ledger slice (real-money acks).
+ */
+export function bankroll(): number {
+  const b = readPrefs().bankroll
+  return typeof b === 'number' && b >= 0 ? b : 10000
+}
+
+/** Is the odds "pet" (live win% for the hero) enabled? Defaults on. */
+export function oddsPet(): boolean {
+  return readPrefs().odds !== false
+}
+
+/** Toggle the odds pet on/off (persisted). */
+export function setOddsPet(on: boolean): void {
+  try {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return
+    const prefs = readPrefs()
+    prefs.odds = on
     window.localStorage.setItem(LS.prefs, JSON.stringify(prefs))
   } catch {
     // ignore — best-effort persistence only
@@ -203,7 +233,7 @@ export const rooms: RoomsAPI = {
   create(name: string, config: RoomConfig): Room | { error: string } {
     try {
       const list = readRooms()
-      if (list.length >= MAX_ROOMS) {
+      if (list.filter((r) => !r.public).length >= MAX_ROOMS) {
         return { error: `Room limit reached (${MAX_ROOMS}).` }
       }
 

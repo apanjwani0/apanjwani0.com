@@ -34,10 +34,20 @@ data/*.json
 
 # agent / AI tooling
 .claude/
+.codex/
+.agents/
 
 # project docs not intended for public repo
 CLAUDE.md
 SECURITY_REVIEW.md
+
+# generated poker asset preview (regenerate with `npm run poker:catalogue`)
+docs/poker-assets.html
+
+# local PocketBase backend — binary is platform-specific, data is local state.
+# Reproducible via `npm run pb` (downloads binary) + committed pb_migrations/ schema.
+pocketbase/pocketbase
+pocketbase/pb_data/
 
 # graphify output — local-only generated code-graph (an AI navigation aid wired
 # via .claude/ hooks; regenerate locally with `graphify update .`, zero API cost).

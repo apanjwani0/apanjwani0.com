@@ -24,31 +24,38 @@ const ldJson = itemListJsonLd(
 ---
 
 <Base
+  wide
   title="tools"
-  description="A growing set of fast, free developer tools that run entirely in your browser — a JSON formatter and tree viewer, a generative wallpaper maker, and a markdown editor. No sign-up, no tracking, nothing uploaded."
-  keywords="developer tools, online dev tools, json formatter, json viewer, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
+  description="Free, browser-based developer tools — a JSON formatter, validator & repair tool, list and timestamp converters, a colour and contrast checker, a Base64/URL encoder, and more. No sign-up, nothing uploaded."
+  keywords="developer tools, online dev tools, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
 >
   {listed.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
   <h1>tools</h1>
   <p data-type="page-intro">
     Small, fast, single-purpose tools I built to scratch my own itches — a JSON
-    formatter, a generative-art maker, a markdown editor, and more. Each one is
-    copy-first, keyboard-friendly, and runs entirely in your browser: no sign-ups,
-    no tracking, nothing uploaded.
+    formatter, repairer, and tree viewer, a list converter, a Unix timestamp
+    converter, a colour converter and contrast checker, a Base64 and URL
+    encoder/decoder, a generative-art maker, and a markdown editor. Each one is
+    copy-first, keyboard-friendly, and runs entirely in your browser: no
+    sign-ups, no tracking, nothing uploaded.
   </p>
-  <ul data-type="preview-list">
+  <ul data-type="card-grid">
     {tools.filter(t => t.status !== 'disabled').map(tool => (
       <li data-status={tool.status}>
-        {tool.status === 'wip'
-          ? <span data-type="tool-name">{tool.title}</span>
-          : <a
-              href={tool.status === 'external' ? tool.href! : `/tools/${tool.slug}`}
-              {...(tool.status === 'external' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-            >{tool.title}</a>
-        }
-        {' — '}
+        <div data-type="tool-head">
+          <h2 data-type="tool-name">
+            {tool.status === 'wip'
+              ? tool.title
+              : <a
+                  href={tool.status === 'external' ? tool.href! : `/tools/${tool.slug}`}
+                  {...(tool.status === 'external' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                >{tool.title}</a>
+            }
+          </h2>
+          {tool.status === 'wip' && <span data-type="tool-wip">coming soon</span>}
+          {tool.status === 'external' && <span data-type="tool-wip">external ↗</span>}
+        </div>
         <span data-type="tool-description">{tool.description}</span>
-        {tool.status === 'wip' && <span data-type="tool-wip"> · coming soon</span>}
       </li>
     ))}
   </ul>

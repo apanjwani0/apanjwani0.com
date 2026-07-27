@@ -2,14 +2,20 @@
 export const prerender = false
 
 import ToolBase from '../../layouts/ToolBase.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { tools } from '../../config/tools'
 import { getSite } from '../../lib/config'
-import { webAppJsonLd } from '../../lib/jsonld'
+import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
 import { validateSession } from '../../lib/session'
+import '../../components/tools/tools-common.css'
 import '../../components/tools/md-enhanced/md-enhanced.css'
 import '../../components/tools/audio-transcriber/audio-transcriber.css'
 import '../../components/tools/pattern-forge/pattern-forge.css'
 import '../../components/tools/json-tidy/json-tidy.css'
+import '../../components/tools/list-forge/list-forge.css'
+import '../../components/tools/epoch-wizard/epoch-wizard.css'
+import '../../components/tools/chroma-lab/chroma-lab.css'
+import '../../components/tools/codec-forge/codec-forge.css'
 
 const { slug } = Astro.params
 
@@ -48,6 +54,19 @@ const ldJson = webAppJsonLd({
   applicationCategory: 'DeveloperApplication',
   keywords: tool.keywords,
 })
+
+// Visible trail + matching BreadcrumbList: gives the page an explicit way back up
+// to the hub and makes it eligible for a breadcrumb path in search results.
+const crumbs = [
+  { label: 'home', href: '/' },
+  { label: 'tools', href: '/tools' },
+  { label: tool.title },
+]
+const breadcrumbLd = breadcrumbListJsonLd([
+  { name: 'Home', url: site.url },
+  { name: 'Tools', url: `${site.url}/tools` },
+  { name: tool.title, url: `${site.url}/tools/${tool.slug}` },
+])
 ---
 
 <ToolBase
@@ -57,10 +76,41 @@ const ldJson = webAppJsonLd({
   keywords={tool.keywords}
 >
   <script type="application/ld+json" set:html={ldJson} />
+  <script type="application/ld+json" set:html={breadcrumbLd} />
+  <Breadcrumbs items={crumbs} inset />
   {slug === 'md-enhanced' && <md-enhanced-tool data-tool="md-enhanced"></md-enhanced-tool>}
   {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
   {slug === 'pattern-forge' && <pattern-forge-tool data-tool="pattern-forge"></pattern-forge-tool>}
-  {slug === 'json-tidy' && <json-tidy-tool data-tool="json-tidy"></json-tidy-tool>}
+  {slug === 'json-tidy' && (
+    <json-tidy-tool data-tool="json-tidy">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </json-tidy-tool>
+  )}
+  {slug === 'list-forge' && (
+    <list-forge-tool data-tool="list-forge">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </list-forge-tool>
+  )}
+  {slug === 'epoch-wizard' && (
+    <epoch-wizard-tool data-tool="epoch-wizard">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </epoch-wizard-tool>
+  )}
+  {slug === 'chroma-lab' && (
+    <chroma-lab-tool data-tool="chroma-lab">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </chroma-lab-tool>
+  )}
+  {slug === 'codec-forge' && (
+    <codec-forge-tool data-tool="codec-forge">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </codec-forge-tool>
+  )}
 </ToolBase>
 
 <script>
@@ -73,6 +123,10 @@ const ldJson = webAppJsonLd({
     else if (slug === 'audio-transcriber') import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
     else if (slug === 'pattern-forge') import('../../components/tools/pattern-forge/PatternForge.ts')
     else if (slug === 'json-tidy') import('../../components/tools/json-tidy/JsonTidy.ts')
+    else if (slug === 'list-forge') import('../../components/tools/list-forge/ListForge.ts')
+    else if (slug === 'epoch-wizard') import('../../components/tools/epoch-wizard/EpochWizard.ts')
+    else if (slug === 'chroma-lab') import('../../components/tools/chroma-lab/ChromaLab.ts')
+    else if (slug === 'codec-forge') import('../../components/tools/codec-forge/CodecForge.ts')
   }
   document.addEventListener('astro:page-load', mountTool)
 </script>

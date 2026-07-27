@@ -65,22 +65,74 @@ function generateGames(data) {
 export const games: Game[] = ${JSON.stringify(data, null, 2)}\n`
 }
 
+function generateTools(data) {
+  return `export type ToolStatus = 'live' | 'wip' | 'external' | 'disabled'
+
+export interface Tool {
+  slug: string
+  title: string
+  description: string
+  status: ToolStatus
+  href?: string  // required when status === 'external'
+  seoTitle?: string
+  metaDescription?: string
+  intro?: string
+  /** Comma-separated search terms — feeds the page <meta name="keywords"> and the WebApplication JSON-LD */
+  keywords?: string
+}
+
+export const tools: Tool[] = ${JSON.stringify(data, null, 2)}\n`
+}
+
 /** @type {import('vite').Plugin} */
 const adminSavePlugin = {
   name: 'admin-save',
   configureServer(server) {
-    // Auth is intentionally skipped here — this middleware only runs in local dev
-    // (npm run dev) and is never reachable from outside localhost. The production
-    // auth check lives in src/pages/api/admin/save.ts.
+    const maxBodyBytes = 1_000_000
+
     server.middlewares.use('/api/admin/save', (req, res) => {
       if (req.method !== 'POST') {
         res.writeHead(405)
         res.end()
         return
       }
+
+      const remote = req.socket.remoteAddress ?? ''
+      const isLoopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+      const origin = req.headers.origin
+      let isSameOrigin = !origin
+      if (origin) {
+        try {
+          isSameOrigin = new URL(origin).host === req.headers.host
+        } catch {
+          isSameOrigin = false
+        }
+      }
+      if (!isLoopback || !isSameOrigin) {
+        res.writeHead(403, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Local same-origin requests only.' }))
+        return
+      }
+
       let body = ''
-      req.on('data', chunk => { body += chunk })
+      let bodyBytes = 0
+      let bodyTooLarge = false
+      req.on('data', chunk => {
+        if (bodyTooLarge) return
+        bodyBytes += chunk.length
+        if (bodyBytes > maxBodyBytes) {
+          body = ''
+          bodyTooLarge = true
+          return
+        }
+        body += chunk
+      })
       req.on('end', async () => {
+        if (bodyTooLarge) {
+          res.writeHead(413, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Request body is too large.' }))
+          return
+        }
         try {
           const { type, data } = JSON.parse(body)
           let content, filename
@@ -104,6 +156,10 @@ const adminSavePlugin = {
             case 'games':
               content = generateGames(data)
               filename = 'games.ts'
+              break
+            case 'tools':
+              content = generateTools(data)
+              filename = 'tools.ts'
               break
             default:
               res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -129,6 +185,7 @@ const adminSavePlugin = {
 export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
+  devToolbar: { enabled: false },
   vite: {
     plugins: [adminSavePlugin],
   },

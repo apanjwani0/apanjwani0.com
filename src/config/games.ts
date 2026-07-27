@@ -18,10 +18,18 @@ export const games: Game[] = [
     "keywords": "game of life simulator,conway's game of life,cellular automaton,glider gun,life simulation,zero-player game"
   },
   {
+    "slug": "2048",
+    "title": "2048",
+    "description": "The classic sliding-tile puzzle, in your browser. Slide the whole board with the arrow keys, WASD or a swipe — every tile shoves as far as it can, and two equal numbers that collide fuse into one worth double.\n\nEach move drops a new tile, so it's a race to keep merging before the board clogs. Reach a 2048 tile to win, then keep going for a higher score. Play it three ways — a gentle 3×3, the classic 4×4 or a roomy 5×5 — each with its own saved game and its own best score. Take back a move with Undo, and everything is saved right in your browser, so a refresh picks up exactly where you left off.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "2048 game,2048 puzzle,sliding tile game,number puzzle,2048 online,play 2048,merge tiles game,2048 clone,browser puzzle game"
+  },
+  {
     "slug": "poker",
     "title": "Poker Together",
     "description": "A local-first, play-money poker room you host right in your browser. Create a table, fill the seats with friends (pass-the-device hotseat) or equity-aware bots, and deal — Texas Hold'em, Omaha or a Bomb Pot.\n\nRooms, chips and settings all save locally; nothing is uploaded and there's no sign-up. Under the hood: a cryptographically-shuffled deck, correct side pots and all-ins, an exact Omaha evaluator, and five bot personalities from tight Rocks to loose Maniacs. Open a second tab and the room list stays in sync.",
-    "enabled": true,
+    "enabled": false,
     "interactive": true,
     "keywords": "poker,texas hold'em,omaha poker,bomb pot,play money poker,browser poker,local multiplayer poker,poker bots,poker against ai,side pots,poker room"
   },
@@ -32,6 +40,38 @@ export const games: Game[] = [
     "enabled": true,
     "interactive": true,
     "keywords": "flow field generator,generative art,perlin noise art,particle flow,seeded art,algorithmic art,noise field,download png art"
+  },
+  {
+    "slug": "maze-weaver",
+    "title": "Maze Weaver",
+    "description": "A seeded maze generator and pathfinding visualizer. Weave a perfect maze — every two cells joined by exactly one corridor — then watch a solver hunt the route from start to goal.\n\nBuild it three ways (recursive backtracker, Prim's or Kruskal's) and search it three ways (breadth-first, A*, or depth-first), and compare how differently each one explores. Every maze is fixed by a single seed, so you can reproduce one exactly or reroll for a new one. Tune the size and speed, single-step the animation, click any cell to move the goal, and download the frame as a PNG. Runs entirely in your browser.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "maze generator,maze solver,pathfinding visualizer,breadth first search,a star algorithm,depth first search,recursive backtracker,prim's algorithm,kruskal's algorithm,bfs vs a star,seeded maze,algorithm visualization"
+  },
+  {
+    "slug": "starfield-toy",
+    "title": "Starfield Voyager",
+    "description": "A mouse-reactive warp-drive starfield you fly through in the browser. Point where you want to go and the field banks toward the cursor; click to punch the warp drive and watch the stars stretch into hyperspace streaks.\n\nGrown from the drifting stars on my home page into a full toy: tune the density, cruising speed, streak length, star size and spin, pick from six palettes, then download the frame you like as a PNG. Everything is drawn on a single canvas with no dependencies, remembers your settings, and runs entirely in your browser.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "starfield,warp speed,hyperspace,star field animation,space flight simulation,interactive canvas art,generative art,mouse reactive,download png,star warp toy"
+  },
+  {
+    "slug": "murmuration",
+    "title": "Murmuration",
+    "description": "An interactive boids flocking simulation. A few hundred birds, each following just three local rules — steer apart, match your neighbours' heading, drift toward the group — and a living, swirling flock emerges with nobody in charge.\n\nDial the three rules from a marching grid to a nervous ball to a scattering cloud, tune how far each bird sees and how fast it flies, then make the pointer a magnet or a hawk and watch the murmuration split and re-form around it. Click to startle the flock, flip on trails to trace the flow, and download the frame you like as a PNG. Runs entirely in your browser.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "boids,flocking simulation,murmuration,craig reynolds boids,swarm simulation,emergent behavior,separation alignment cohesion,generative art,interactive canvas,download png,flocking algorithm"
+  },
+  {
+    "slug": "lsystem-tree",
+    "title": "Fractal Garden",
+    "description": "Plants that draw themselves. Each one is an L-system — a tiny rewriting grammar: start from a short seed string, replace every symbol with new symbols a few times over, then read the result as turtle graphics — step forward, turn, branch — and a whole tree falls out of the maths with nobody drawing a single leaf.\n\nGrow seven species, from a Barnsley fractal plant and a bushy weed to the Koch, Dragon and Sierpinski curves. Bend the branch angle, add organic wobble, thicken the trunk and toggle leaf blossoms; the branches are shaded trunk-to-tip and the geometric curves along their length. A text seed makes any plant reproducible, and you can download the frame you like as a PNG. Runs entirely in your browser.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "l-system,lindenmayer system,fractal plant,fractal tree generator,generative art,turtle graphics,koch curve,dragon curve,sierpinski,barnsley fern,procedural plants,download png"
   },
   {
     "slug": "type-trial",

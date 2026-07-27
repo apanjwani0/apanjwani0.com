@@ -11,19 +11,23 @@
     "preview": "astro preview",
     "astro": "astro",
     "generate-types": "wrangler types",
-    "graph": "graphify update ."
+    "graph": "graphify update .",
+    "poker:catalogue": "npx tsx src/components/games/poker/ui/catalogue.gen.ts docs/poker-assets.html",
+    "pb": "bash pocketbase/run.sh"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^13.1.4",
-    "@astrojs/node": "^10.0.4",
-    "astro": "^6.1.1",
-    "dompurify": "^3.3.3",
+    "@astrojs/cloudflare": "^13.7.0",
+    "@astrojs/node": "^10.1.4",
+    "astro": "^6.4.8",
+    "dompurify": "^3.4.12",
     "html2canvas": "^1.4.1",
     "marked": "^17.0.5",
-    "wrangler": "^4.78.0"
+    "wrangler": "^4.112.0"
   },
   "overrides": {
-    "vite": "^7"
+    "defu": "^6.1.7",
+    "postcss": "^8.5.20",
+    "vite": "^7.3.6"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",

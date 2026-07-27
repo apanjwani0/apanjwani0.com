@@ -2,7 +2,9 @@
 import Base from '../layouts/Base.astro'
 ---
 
-<Base title="404" description="That page wandered off — here are a few good places to land instead.">
+<!-- noindex: an error page should never enter the index (it can be served for any
+     unknown URL, and an indexed 404 is a soft-404 in Search Console). -->
+<Base title="404" description="That page wandered off — here are a few good places to land instead." noindex>
   <section data-type="notfound" aria-labelledby="nf-title">
     <p data-type="nf-code">404</p>
     <h1 id="nf-title">This page drifted off into space.</h1>
@@ -14,6 +16,7 @@ import Base from '../layouts/Base.astro'
       <a href="/">home</a>
       <a href="/projects">projects</a>
       <a href="/tools">tools</a>
+      <a href="/blogs">blogs</a>
       <a href="/games">games</a>
     </nav>
   </section>
