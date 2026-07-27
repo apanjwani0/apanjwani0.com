@@ -96,7 +96,9 @@ const { items, inset = false } = Astro.props
     color: var(--color-text);
   }
 
+  /* Muted (not hairline) so the "/" stays legible on the dark theme, where
+     --color-border sits very close to the page background. */
   nav[data-type="breadcrumb"] [data-type="breadcrumb-sep"] {
-    color: var(--color-border);
+    color: var(--color-muted);
   }
 </style>

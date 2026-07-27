@@ -6,6 +6,7 @@ import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import '../../components/games/twenty48/twenty48.css'
 import '../../components/games/game-of-life/game-of-life.css'
 import '../../components/games/flow-field/flow-field.css'
 import '../../components/games/maze-weaver/maze-weaver.css'
@@ -56,6 +57,12 @@ const breadcrumbLd = breadcrumbListJsonLd([
 
 <Base title={game.title} description={game.description} keywords={game.keywords}>
   <script type="application/ld+json" set:html={ldJson} />
+  {game.interactive && slug === '2048' && (
+    <twenty48-game data-game="2048">
+      <h1>{game.title}</h1>
+      <div data-type="project-description" set:html={render(game.description)} />
+    </twenty48-game>
+  )}
   {game.interactive && slug === 'game-of-life' && (
     <game-of-life-game data-game="game-of-life"></game-of-life-game>
   )}
@@ -105,7 +112,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
       // a game reached via in-site nav renders blank until a hard reload.
       function mountGame() {
         const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
-        if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
+        if (slug === '2048') import('../../components/games/twenty48/Twenty48.ts')
+        else if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
         else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
         else if (slug === 'maze-weaver') import('../../components/games/maze-weaver/MazeWeaver.ts')
         else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')

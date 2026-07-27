@@ -261,6 +261,58 @@ span[data-type="jt-caret"] {
   font-weight: 700;
 }
 
+/* ── Repair banner (the JSON "fixer" result) ─────────────────── */
+div[data-type="jt-repair"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+div[data-type="jt-repair"][hidden] {
+  display: none;
+}
+
+span[data-type="jt-repair-msg"] {
+  flex: 1 1 12rem;
+  min-width: 0;
+  color: var(--color-text);
+}
+
+div[data-type="jt-repair"] button[data-action="repair-apply"] {
+  flex-shrink: 0;
+  padding: 0.3rem 0.85rem;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s, opacity 0.15s;
+}
+
+div[data-type="jt-repair"] button[data-action="repair-apply"]:hover:not(:disabled) {
+  color: var(--color-bg);
+  background: var(--color-accent);
+}
+
+div[data-type="jt-repair"] button[data-action="repair-apply"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ── Output view toggle (Text / Tree) ────────────────────── */
 div[data-tool="json-tidy"] [data-group="view-toggle"] {
   display: inline-flex;
