@@ -1,0 +1,850 @@
+/* ══════════════════ THE STAGE ══════════════════
+   One dark backdrop at EVERY width that centres the game card. Screens swap
+   inside this frame and never restyle the stage, so the frame never moves,
+   resizes, or strands the card in a void — desktop or phone. */
+poker-game {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex: 1;                 /* fill <main>, which fills the viewport below the nav */
+  min-height: 0;
+  padding: clamp(0.75rem, 3.5vh, 3rem) clamp(0.6rem, 3vw, 2rem);
+  background: radial-gradient(1100px 640px at 50% -8%, #17171a 0%, #070708 56%, #000 100%);
+}
+
+/* <main> must be a flex column so <poker-game> can grow to fill its height (poker
+   is reached via /games/poker → Base fluid, so it renders inside main[data-fluid]). */
+main:has(poker-game) {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The TABLE screen fills the whole stage as a felt; every other screen (home /
+   room / create / joining) keeps the centred card on the dark stage. */
+poker-game:has([data-screen="table"]) {
+  align-items: stretch;
+  padding: 0;
+}
+
+/* THE CARD — one surface, radius, font, width band and min-height floor shared by
+   EVERY screen (home / table / room / create / joining). A screen changes only its
+   own contents; navigating never re-places or resizes the frame. Per-screen rules
+   below tune internal padding/gap and desktop width — never the frame identity. */
+div[data-type="pk-game"] {
+  width: 100%;
+  max-width: 30rem;
+  min-height: min(85vh, 720px);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1.35rem 1.2rem 1.7rem;
+  box-sizing: border-box;
+  background: #0b0b0d;
+  color: #fff;
+  border: 1px solid #1b1b1f;
+  border-radius: 22px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+}
+
+/* ── header ── */
+div[data-type="pk-titlebar"] {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.25rem;
+}
+div[data-type="pk-titlebar"] h1 { margin: 0; }
+span[data-type="pk-badge"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.55rem;
+  white-space: nowrap;
+}
+div[data-type="pk-header"] p {
+  margin-top: 0;
+  color: var(--color-muted);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+
+/* ── panels ── */
+section[data-type="pk-panel"] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: 1rem 1.1rem;
+  margin: 1rem 0;
+}
+section[data-type="pk-panel"] h2 {
+  margin: 0 0 0.75rem;
+  font-size: var(--text-lg);
+}
+
+/* ── form fields ── */
+div[data-type="pk-form"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+label[data-type="pk-field"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+label[data-type="pk-field"] > span {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+label[data-type="pk-field"] input,
+label[data-type="pk-field"] select {
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.4rem 0.55rem;
+}
+label[data-type="pk-field"] input:focus-visible,
+label[data-type="pk-field"] select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ── buttons ── */
+div[data-type="pk-game"] button {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+div[data-type="pk-game"] button:hover { color: var(--color-text); border-color: var(--color-muted); }
+div[data-type="pk-game"] button[data-variant="primary"] {
+  color: var(--color-bg); background: var(--color-text); border-color: var(--color-text); font-weight: 600;
+}
+div[data-type="pk-game"] button[data-variant="primary"]:hover { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+div[data-type="pk-game"] button[data-variant="ghost"] { font-size: var(--text-xs); padding: 0.3rem 0.6rem; }
+div[data-type="pk-game"] button[data-variant="danger"]:hover { color: var(--color-error); border-color: var(--color-error); }
+
+div[data-type="pk-actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+span[data-type="pk-note"] { font-size: var(--text-xs); color: var(--color-muted); font-family: var(--font-mono); }
+p[data-type="pk-err"] { color: var(--color-error); font-size: var(--text-sm); margin: 0.5rem 0 0; }
+
+/* ── room list ── */
+div[data-type="pk-room-list"] { display: flex; flex-direction: column; gap: 0.6rem; }
+article[data-type="pk-room-card"] {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  padding: 0.6rem 0.8rem; background: var(--color-bg);
+}
+div[data-type="pk-room-main"] { display: flex; flex-direction: column; gap: 0.15rem; }
+span[data-type="pk-room-meta"] { font-size: var(--text-xs); color: var(--color-muted); font-family: var(--font-mono); }
+div[data-type="pk-room-actions"] { display: flex; gap: 0.4rem; }
+
+/* ── seat roster ── */
+div[data-type="pk-seat-list"] { display: flex; flex-direction: column; gap: 0.35rem; }
+div[data-type="pk-seat-row"] {
+  display: grid; grid-template-columns: 2rem 6rem 1fr auto auto; align-items: center; gap: 0.6rem;
+  padding: 0.35rem 0.5rem; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-bg); font-size: var(--text-sm);
+}
+div[data-type="pk-seat-row"][data-kind="empty"] { opacity: 0.6; }
+span[data-type="pk-seat-no"] { font-family: var(--font-mono); color: var(--color-muted); font-size: var(--text-xs); }
+span[data-type="pk-seat-name"] { color: var(--color-text); }
+span[data-type="pk-seat-chips"] { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); text-align: right; }
+
+/* ══════════════════ HOME SCREEN — black, card-forward ══════════════════
+   The product's front door shares the table's dark world. Its signature is the
+   pair of mode tiles: tilted white playing cards ("everything is a card"). */
+div[data-type="pk-game"][data-screen="home"] {
+  gap: 1.4rem;
+  padding: 1.5rem 1.35rem 3.75rem;  /* extra bottom clearance for the fixed "How this works" tab */
+}
+
+/* top: wordmark + honesty badge */
+header[data-type="pk-home-top"] { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+span[data-type="pk-wordmark"] { display: block; width: 150px; }
+span[data-type="pk-wordmark"] svg { width: 100%; height: auto; display: block; }
+div[data-type="pk-game"][data-screen="home"] span[data-type="pk-badge"] {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #37d39b;
+  border: 1px solid rgba(55, 211, 155, 0.5);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  white-space: nowrap;
+}
+div[data-type="pk-home-right"] { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-acct"] {
+  padding: 3px 11px;
+  background: transparent;
+  border: 1px solid #242426;
+  border-radius: 999px;
+  color: #8a8a8f;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-acct"]:hover { color: #fff; border-color: #37d39b; }
+
+/* inline sign-in panel (optional accounts) */
+section[data-type="pk-auth"] {
+  display: flex; flex-direction: column; gap: 0.7rem;
+  padding: 1rem 1.1rem;
+  background: #0d0d0f;
+  border: 1px solid #242426;
+  border-radius: 16px;
+}
+section[data-type="pk-auth"] h2 { margin: 0; font-size: 1rem; color: #fff; }
+section[data-type="pk-auth"] label[data-type="pk-field"] > span { color: #8a8a8f; }
+section[data-type="pk-auth"] input {
+  background: #000; border: 1px solid #242426; border-radius: 10px; color: #fff;
+  font-family: inherit; font-size: 0.95rem; padding: 0.5rem 0.65rem;
+}
+section[data-type="pk-auth"] input:focus-visible { outline: 2px solid #37d39b; outline-offset: 1px; }
+section[data-type="pk-auth"] p[data-type="pk-note"] { color: #6b6b70; }
+
+/* two-column body: stacked on mobile, a dashboard on desktop (see @media below) */
+div[data-type="pk-home-body"] { display: flex; flex-direction: column; gap: 1.4rem; }
+div[data-type="pk-home-main"], div[data-type="pk-home-side"] { display: flex; flex-direction: column; gap: 1.4rem; min-width: 0; }
+
+/* bankroll — the wallet, front and centre */
+section[data-type="pk-bankroll"] { display: flex; flex-direction: column; gap: 2px; }
+span[data-type="pk-bankroll-label"] { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: #8a8a8f; }
+span[data-type="pk-bankroll-val"] { display: inline-flex; align-items: center; gap: 9px; font-size: 2.4rem; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+span[data-type="pk-chip"] { width: 34px; height: 34px; display: inline-block; }
+span[data-type="pk-chip"] svg { width: 100%; height: 100%; display: block; }
+
+/* mode tiles — tilted playing cards. Scoped under [data-screen="home"] so they
+   beat the token `div[data-type="pk-game"] button` base rule (specificity). */
+div[data-type="pk-modes"] { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-mode"] {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  aspect-ratio: 3 / 3.4;
+  padding: 15px;
+  background: #f7f7f5;
+  color: #16161a;
+  border: none;
+  border-radius: 18px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-mode"][data-suit="spade"] { transform: rotate(-3deg); }
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-mode"][data-suit="heart"] { transform: rotate(3deg); }
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-mode"]:hover,
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-mode"]:focus-visible { transform: rotate(0) translateY(-4px); box-shadow: 0 16px 30px rgba(0, 0, 0, 0.55); border-color: transparent; }
+span[data-type="pk-mode-pip"] { position: absolute; right: -12px; bottom: -14px; width: 96px; height: 96px; opacity: 0.13; }
+span[data-type="pk-mode-pip"] svg { width: 100%; height: 100%; display: block; }
+span[data-type="pk-mode-name"] { position: relative; z-index: 1; white-space: normal; font-size: 1.15rem; font-weight: 800; color: #16161a; }
+span[data-type="pk-mode-sub"] { position: relative; z-index: 1; white-space: normal; font-size: 0.78rem; color: #55555c; line-height: 1.3; }
+
+/* resume list — dark room cards */
+section[data-type="pk-tables"] h2 { margin: 0 0 0.55rem; font-size: 0.95rem; font-weight: 700; color: #cfcfcf; }
+div[data-type="pk-game"][data-screen="home"] article[data-type="pk-room-card"] { background: #111113; border-color: #242426; }
+div[data-type="pk-game"][data-screen="home"] article[data-type="pk-room-card"] strong { color: #fff; }
+div[data-type="pk-game"][data-screen="home"] span[data-type="pk-room-meta"] { color: #8a8a8f; }
+
+/* public tables — a horizontal strip of always-live quick-play tables */
+div[data-type="pk-pub-strip"] { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+div[data-type="pk-pub-strip"]::-webkit-scrollbar { display: none; }
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-pub"] {
+  flex: 0 0 auto;
+  width: 8.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 13px;
+  background: #111113;
+  border: 1px solid #242426;
+  border-radius: 14px;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-pub"]:hover,
+div[data-type="pk-game"][data-screen="home"] button[data-type="pk-pub"]:focus-visible { border-color: #37d39b; transform: translateY(-2px); outline: none; }
+span[data-type="pk-pub-code"] { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.09em; color: #37d39b; }
+span[data-type="pk-pub-tier"] { font-size: 1.05rem; font-weight: 800; color: #fff; }
+span[data-type="pk-pub-stakes"] { font-size: 0.8rem; color: #cfcfcf; font-variant-numeric: tabular-nums; }
+span[data-type="pk-pub-live"] { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: 0.66rem; color: #8a8a8f; }
+span[data-type="pk-pub-dot"] { width: 6px; height: 6px; border-radius: 50%; background: #37d39b; }
+
+/* onboarding: one optional name field */
+label[data-type="pk-name-inline"] { display: flex; align-items: center; gap: 0.7rem; }
+label[data-type="pk-name-inline"] > span { font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: #8a8a8f; white-space: nowrap; }
+label[data-type="pk-name-inline"] input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  background: #111113;
+  border: 1px solid #242426;
+  border-radius: 12px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+label[data-type="pk-name-inline"] input:focus-visible { outline: 2px solid #37d39b; outline-offset: 1px; }
+
+/* ── "How this works" bottom sheet — fixed to the screen footer. Only a slim tab
+   peeks when closed; tapping slides the panel up as an overlay (behind a scrim) so
+   it never grows the home frame. ── */
+div[data-type="pk-explainer"] { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+div[data-type="pk-explainer-scrim"] {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0; transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+div[data-type="pk-explainer"][data-open="true"] div[data-type="pk-explainer-scrim"] { opacity: 1; pointer-events: auto; cursor: pointer; }
+
+section[data-type="pk-explainer-sheet"] {
+  position: absolute; left: 50%; bottom: 0;
+  width: min(100% - 1.5rem, 30rem);
+  display: flex; flex-direction: column;
+  background: #0d0d0f;
+  border: 1px solid #242426; border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.55);
+  transform: translate(-50%, calc(100% - 47px));
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+}
+div[data-type="pk-explainer"][data-open="true"] section[data-type="pk-explainer-sheet"] { transform: translate(-50%, 0); }
+
+button[data-type="pk-explainer-tab"] {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 47px; flex: none;
+  background: none; border: none; cursor: pointer;
+  color: #cfcfcf; font-family: inherit; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.01em;
+}
+span[data-type="pk-explainer-chev"] { color: #8a8a8f; font-size: 0.9rem; transition: transform 0.3s ease; }
+div[data-type="pk-explainer"][data-open="true"] span[data-type="pk-explainer-chev"] { transform: rotate(180deg); }
+
+div[data-type="pk-explainer-body"] { max-height: min(52vh, 320px); overflow-y: auto; padding: 0 1.2rem 1.4rem; }
+div[data-type="pk-explainer-body"] p { margin: 0 0 0.85rem; font-size: 0.85rem; line-height: 1.6; color: #8a8a8f; }
+div[data-type="pk-explainer-body"] p:last-child { margin-bottom: 0; }
+div[data-type="pk-explainer-body"] strong { color: #fff; }
+
+/* ══════════════════ TABLE SCREEN — pure-black minimal ══════════════════
+   The table commits to a single dark visual world, so (unlike the token-driven
+   lobby/room screens above) it hardcodes the mockup palette. Every card, avatar,
+   dealer button and timer is an inline SVG from ui/cards-svg + ui/assets-svg,
+   sized by its wrapper (the SVG fills it via `svg { width:100%; height:100% }`). */
+/* TABLE = a full-bleed felt: fill the stage (width + height), lose the card frame,
+   swap the dark surface for green felt. The flexible board-zone (below) absorbs all
+   slack so the layout never opens half-empty or jumps as controls/hand-over appear. */
+div[data-type="pk-game"][data-screen="table"] {
+  flex: 1;
+  align-self: stretch;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  background: radial-gradient(ellipse 130% 92% at 50% 30%, #1c6f47 0%, #0f4e2f 44%, #06271b 78%, #04160f 100%);
+  gap: 0.85rem;
+  padding: 1rem clamp(1rem, 4vw, 3rem) 1.3rem;
+}
+div[data-type="pk-game"][data-screen="table"] span[data-type="pk-ico"] { display: inline-flex; width: 16px; height: 16px; }
+div[data-type="pk-game"][data-screen="table"] span[data-type="pk-ico"] svg { width: 100%; height: 100%; display: block; }
+
+/* top bar */
+div[data-type="pk-table-bar"] { display: flex; align-items: center; gap: 0.6rem; }
+div[data-type="pk-game"][data-screen="table"] button#pk-leave {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] button#pk-leave span[data-type="pk-ico"] { width: 20px; height: 20px; }
+div[data-type="pk-game"][data-screen="table"] span[data-type="pk-table-title"] { font-size: 0.8rem; font-weight: 700; color: #cfcfcf; }
+div[data-type="pk-table-bar"] span[data-type="pk-note"] {
+  margin-left: auto;
+  padding: 0.16rem 0.6rem;
+  text-transform: capitalize;
+  font-family: inherit;
+  font-size: 0.72rem;
+  color: #8a8a8f;
+  border: 1px solid #2a2a2e;
+  border-radius: 999px;
+  background: transparent;
+}
+
+/* polite status / a11y line under the board */
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-message"] {
+  min-height: 1rem;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: #8a8a8f;
+  background: transparent;
+  border: none;
+}
+
+/* ── controls (restyled to the mockup; showControls wiring unchanged) ── */
+/* min-height reserves the action bar's footprint so the table never reflows as
+   the turn passes between seats — active, inert, and run-out states all fit it. */
+/* Action bar — docked at the felt's foot, but constrained to a sensible width and
+   centred so the buttons don't stretch the full table on wide screens. */
+div[data-type="pk-controls"] { display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; min-height: 104px; width: 100%; max-width: 42rem; margin: 0 auto; }
+div[data-type="pk-clock"] { display: flex; justify-content: center; }
+span[data-type="pk-wait"] { font-size: 11px; color: #6b6b70; letter-spacing: 0.05em; }
+span[data-type="pk-timer"] {
+  font-size: 11px;
+  color: #8a8a8f;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+span[data-type="pk-timer"][data-low="true"] { color: #f0473b; }
+
+/* default = outline pills; entering raise mode swaps them for the raise panel */
+div[data-type="pk-btns"] { display: flex; gap: 12px; }
+div[data-type="pk-controls"][data-raise="on"] div[data-type="pk-btns"] { display: none; }
+div[data-type="pk-controls"][data-raise="off"] div[data-type="pk-raise"] { display: none; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 4px;
+  background: transparent;
+  color: #fff;
+  border: 1px solid #333;
+  border-radius: 16px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button:hover { border-color: #555; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button[data-variant="danger"] { color: #f0473b; border-color: rgba(240, 71, 59, 0.45); }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button[data-variant="danger"]:hover { border-color: #f0473b; }
+/* inert bar shown when it isn't the hero's turn — visible but non-interactive */
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button:disabled { opacity: 0.32; cursor: default; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button:disabled:hover { border-color: #333; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button[data-variant="danger"]:disabled:hover { border-color: rgba(240, 71, 59, 0.45); }
+/* queued pre-action, highlighted while it waits for the hero's turn */
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button[data-on="true"] { border-color: #37d39b; color: #37d39b; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button[data-pre="fold"][data-on="true"] { border-color: #f0473b; color: #f0473b; }
+
+div[data-type="pk-raise"] { display: flex; flex-direction: column; gap: 12px; }
+div[data-type="pk-raise-row"] { display: flex; align-items: center; gap: 12px; }
+span[data-type="pk-amt"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 54px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+span[data-type="pk-amt"] span[data-type="pk-ico"] { width: 15px; height: 15px; opacity: 0.7; }
+div[data-type="pk-game"][data-screen="table"] input[type="range"] {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 4px;
+  background: #2a2a2a;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] input[type="range"]::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] button[data-type="pk-rcircle"] {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  color: #000;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] button[data-type="pk-rcircle"]:hover { background: #e7e7e7; }
+button[data-type="pk-rcircle"] svg { width: 22px; height: 22px; display: block; }
+div[data-type="pk-presets"] { display: flex; flex-wrap: wrap; gap: 10px; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-presets"] button {
+  flex: 1 1 3.2rem;
+  padding: 13px 4px;
+  background: #151515;
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-presets"] button:hover { background: #1f1f1f; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-presets"] button[data-type="pk-cancel"] {
+  flex: 0 0 3rem;
+  background: transparent;
+  color: #bbb;
+  display: grid;
+  place-items: center;
+}
+button[data-type="pk-cancel"] svg { width: 18px; height: 18px; display: block; }
+p[data-type="pk-hint"] { font-size: 11px; color: #6b6b70; margin: 0; text-align: center; }
+
+/* hotseat pass-the-device gate */
+div[data-type="pk-pass"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #262626;
+  border-radius: 16px;
+}
+div[data-type="pk-pass"] strong { color: #fff; font-size: 15px; font-weight: 700; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-pass"] button {
+  padding: 12px 18px;
+  background: #fff;
+  color: #000;
+  border: none;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ── players row (TOP) ── */
+div[data-type="pk-players"] {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 1.4rem 2px 0.2rem;
+  overflow-x: auto;
+}
+div[data-type="pk-seat"] {
+  position: relative;
+  flex: 1 0 auto;
+  min-width: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.32;
+  transition: opacity 0.3s;
+}
+div[data-type="pk-seat"][data-turn="true"] { opacity: 1; }
+div[data-type="pk-seat"][data-folded="true"] { opacity: 0.3; }
+/* face-up seats (hero always, opponents at showdown) read at full strength */
+div[data-type="pk-seat"][data-shown="true"] { opacity: 1; }
+span[data-type="pk-ava"] { width: 52px; height: 52px; display: block; }
+span[data-type="pk-ava"] svg { width: 100%; height: 100%; display: block; border-radius: 50%; }
+span[data-type="pk-nm"] {
+  max-width: 66px;
+  font-size: 12.5px;
+  color: #cfcfcf;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+div[data-type="pk-seat"][data-turn="true"] span[data-type="pk-nm"] { color: #fff; }
+span[data-type="pk-st"] { font-size: 16px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+span[data-type="pk-pie"] {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 16px;
+}
+span[data-type="pk-pie"] svg { width: 100%; height: 100%; display: block; }
+span[data-type="pk-dbtn"] { position: absolute; top: 34px; left: calc(50% + 8px); width: 18px; height: 18px; }
+span[data-type="pk-dbtn"] svg { width: 100%; height: 100%; display: block; }
+span[data-type="pk-bet"] {
+  padding: 3px 10px;
+  background: #191919;
+  color: #f5c542;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+span[data-type="pk-bot"] {
+  padding: 1px 6px;
+  border: 1px solid #2a2a2e;
+  border-radius: 20px;
+  color: #8a8a8f;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/* opponents' revealed hole cards (shown under the seat at showdown / all-in) */
+span[data-type="pk-oc"] { display: flex; gap: 2px; margin-top: 4px; }
+span[data-type="pk-oc"] svg { width: 26px; height: auto; display: block; border-radius: 2px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
+
+/* winner highlight at showdown — green ring on the avatar, name, and a glow on
+   the revealed cards so the result seat is unmistakable. */
+div[data-type="pk-seat"][data-winner="true"] span[data-type="pk-ava"] { border-radius: 50%; box-shadow: 0 0 0 2px #37d39b, 0 0 12px rgba(55, 211, 155, 0.5); }
+div[data-type="pk-seat"][data-winner="true"] span[data-type="pk-nm"] { color: #37d39b; }
+div[data-type="pk-seat"][data-winner="true"] span[data-type="pk-oc"] svg { filter: drop-shadow(0 0 5px rgba(55, 211, 155, 0.95)); }
+
+/* ── board + pot (CENTER) ── */
+/* Board + pot sit in the felt's flexible middle: flex:1 makes this region absorb all
+   the spare height and centre the board, so the table fills top-to-bottom with no empty
+   gap and no mid-hand jump when the controls or hand-over box grow/shrink below it. */
+div[data-type="pk-board-zone"] { display: flex; flex-direction: column; justify-content: center; align-items: center; flex: 1; min-height: 0; gap: 12px; padding: 0.3rem 0; }
+div[data-type="pk-board"] { display: flex; justify-content: center; gap: 9px; }
+span[data-type="pk-card"] {
+  display: block;
+  aspect-ratio: 60 / 84;
+  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.55));
+}
+span[data-type="pk-card"] svg { width: 100%; height: 100%; display: block; }
+div[data-type="pk-board"] span[data-type="pk-card"] { width: clamp(52px, 14vw, 60px); }
+span[data-type="pk-pot"] {
+  align-self: center;
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── hero cards + result box (BOTTOM) ── */
+div[data-type="pk-foot"] { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+div[data-type="pk-hole"] { display: flex; }
+div[data-type="pk-hole"] span[data-type="pk-card"] { width: clamp(58px, 18vw, 74px); }
+div[data-type="pk-hole"] span[data-type="pk-card"]:not(:first-child) { margin-left: -30px; }
+div[data-type="pk-eq"] {
+  flex: 0 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 12px;
+  background: #161616;
+  border: 1.5px solid #37d39b;
+  border-radius: 20px;
+  text-align: center;
+}
+span[data-type="pk-eq-label"] { font-size: 13px; font-weight: 600; color: #9a9a9a; }
+strong[data-type="pk-eq-name"] { font-size: clamp(17px, 4.8vw, 23px); font-weight: 800; line-height: 1.15; color: #fff; }
+strong[data-type="pk-eq-name"][data-mut="true"] { color: #9a9a9a; }
+span[data-type="pk-eq-amt"] { font-size: 26px; font-weight: 800; color: #37d39b; font-variant-numeric: tabular-nums; }
+span[data-type="pk-eq-crown"] { width: 30px; height: 30px; display: block; }
+span[data-type="pk-eq-crown"] svg { width: 100%; height: 100%; display: block; }
+span[data-type="pk-eq-win"] { font-size: clamp(26px, 8vw, 34px); font-weight: 800; line-height: 1; color: #37d39b; font-variant-numeric: tabular-nums; }
+div[data-type="pk-game"][data-screen="table"] button[data-type="pk-eq-toggle"] {
+  margin-top: 5px;
+  padding: 3px 11px;
+  background: transparent;
+  border: 1px solid #2a2a2e;
+  border-radius: 999px;
+  color: #8a8a8f;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] button[data-type="pk-eq-toggle"]:hover { color: #fff; border-color: #444; }
+
+/* ── hand over (result line + next-hand actions) ── */
+div[data-type="pk-handover"] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+}
+div[data-type="pk-result"] { margin: 0; text-align: center; font-size: 14px; color: #cfcfcf; }
+div[data-type="pk-result"] strong { color: #fff; font-weight: 700; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-handover"] div[data-type="pk-actions"] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-handover"] button {
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+  color: #cfe9dd;
+  border: 1px solid #262626;
+  border-radius: 16px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-handover"] button:hover { border-color: #3a3a3a; }
+div[data-type="pk-game"][data-screen="table"] div[data-type="pk-handover"] button[data-variant="primary"] {
+  background: #fff;
+  color: #000;
+  border-color: #fff;
+  font-weight: 800;
+}
+
+/* ── log ── */
+details[data-type="pk-log-wrap"] { margin-top: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); padding: 0 0.9rem; }
+details[data-type="pk-log-wrap"] > summary { cursor: pointer; padding: 0.6rem 0; font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-text); }
+ol[data-type="pk-log"] { list-style: none; margin: 0 0 0.75rem; padding: 0; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.2rem; }
+ol[data-type="pk-log"] li { font-size: var(--text-xs); color: var(--color-muted); font-family: var(--font-mono); }
+ol[data-type="pk-log"] li[data-kind="showdown"] { color: var(--color-accent); }
+ol[data-type="pk-log"] li[data-kind="deal"] { color: var(--color-text); }
+
+/* ══════════════════ DESKTOP / WIDE — use the extra room ══════════════════
+   The game is phone-first; on wider viewports we frame it on a soft radial
+   backdrop and let the black card world breathe (wider boxes, bigger cards)
+   rather than stranding a narrow column in a void. Mobile is untouched. */
+@media (min-width: 768px) {
+  poker-game { padding: 2.5rem 1.5rem 3rem; }
+
+  /* HOME */
+  div[data-type="pk-game"][data-screen="home"] {
+    max-width: 46rem;
+    min-height: auto;
+    width: 100%;
+    padding: 2rem 2.25rem 2.5rem;
+  }
+  div[data-type="pk-game"][data-screen="home"] span[data-type="pk-wordmark"] { width: 190px; }
+  div[data-type="pk-game"][data-screen="home"] span[data-type="pk-bankroll-val"] { font-size: 3rem; }
+  div[data-type="pk-game"][data-screen="home"] span[data-type="pk-chip"] { width: 42px; height: 42px; }
+  div[data-type="pk-game"][data-screen="home"] div[data-type="pk-modes"] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; }
+  div[data-type="pk-game"][data-screen="home"] button[data-type="pk-mode"] { aspect-ratio: auto; min-height: 11rem; padding: 20px; }
+  div[data-type="pk-game"][data-screen="home"] span[data-type="pk-mode-name"] { font-size: 1.35rem; }
+  div[data-type="pk-game"][data-screen="home"] span[data-type="pk-mode-sub"] { font-size: 0.85rem; }
+  div[data-type="pk-game"][data-screen="home"] span[data-type="pk-mode-pip"] { width: 120px; height: 120px; }
+  div[data-type="pk-game"][data-screen="home"] button[data-type="pk-pub"] { width: 9.2rem; }
+
+  /* TABLE */
+  div[data-type="pk-game"][data-screen="table"] {
+    padding: 1.5rem clamp(1.75rem, 6vw, 5rem) 2rem;
+    gap: 1.05rem;
+  }
+  div[data-type="pk-game"][data-screen="table"] div[data-type="pk-board"] span[data-type="pk-card"] { width: clamp(60px, 8vw, 76px); }
+  div[data-type="pk-game"][data-screen="table"] div[data-type="pk-hole"] span[data-type="pk-card"] { width: clamp(74px, 10vw, 92px); }
+  div[data-type="pk-game"][data-screen="table"] div[data-type="pk-hole"] span[data-type="pk-card"]:not(:first-child) { margin-left: -38px; }
+  div[data-type="pk-game"][data-screen="table"] span[data-type="pk-pot"] { font-size: 34px; }
+  div[data-type="pk-game"][data-screen="table"] span[data-type="pk-ava"] { width: 60px; height: 60px; }
+  div[data-type="pk-game"][data-screen="table"] div[data-type="pk-eq"] { flex-basis: 240px; }
+}
+@media (min-width: 900px) {
+  /* HOME → a real two-column dashboard: identity + actions | tables */
+  div[data-type="pk-game"][data-screen="home"] { max-width: 60rem; }
+  div[data-type="pk-home-body"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 1.6rem 2.2rem;
+    align-items: start;
+  }
+  /* public tables → a 2-up card grid in the side column (no scroll strip) */
+  div[data-type="pk-game"][data-screen="home"] div[data-type="pk-pub-strip"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+  div[data-type="pk-game"][data-screen="home"] button[data-type="pk-pub"] { width: auto; }
+}
+@media (min-width: 1100px) {
+  poker-game { padding-top: 3.5rem; }
+  div[data-type="pk-game"][data-screen="home"] { max-width: 64rem; }
+}
+
+@media (max-width: 560px) {
+  /* room roster: drop the chips column on narrow screens */
+  div[data-type="pk-seat-row"] { grid-template-columns: 1.5rem 5rem 1fr auto; }
+  div[data-type="pk-seat-row"] span[data-type="pk-seat-chips"] { display: none; }
+}
+
+@media (max-width: 420px) {
+  div[data-type="pk-game"][data-screen="table"] { padding: 0.75rem 0.7rem 1rem; }
+  div[data-type="pk-btns"] { gap: 8px; }
+  div[data-type="pk-game"][data-screen="table"] div[data-type="pk-btns"] button { padding: 14px 2px; font-size: 15px; }
+  div[data-type="pk-presets"] { gap: 8px; }
+}
+
+/* ── real-money flag + invite code (create / room screens) ── */
+label[data-type="pk-check"] { display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.85rem; font-size: var(--text-sm); color: var(--color-muted); cursor: pointer; }
+label[data-type="pk-check"] input { margin-top: 0.2rem; flex: none; }
+span[data-type="pk-badge"][data-money="true"] { color: var(--color-error); border-color: var(--color-error); }
+div[data-type="pk-invite"] { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+code[data-type="pk-code"] {
+  font-family: var(--font-mono); font-size: var(--text-lg); letter-spacing: 0.14em;
+  color: var(--color-text); background: var(--color-bg);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.35rem 0.7rem;
+}
+
+/* ── real-money acknowledgement modal ── */
+div[data-type="pk-ack"] { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 1.2rem; background: rgba(0, 0, 0, 0.72); }
+div[data-type="pk-ack-card"] {
+  max-width: 22rem; display: flex; flex-direction: column; gap: 0.7rem;
+  padding: 1.25rem; background: #141416; border: 1px solid #333; border-radius: 18px; color: #fff;
+}
+div[data-type="pk-ack-card"] strong { font-size: 1.05rem; }
+div[data-type="pk-ack-card"] p { margin: 0; font-size: 0.9rem; line-height: 1.5; color: #b7b7bd; }
+div[data-type="pk-ack-btns"] { display: flex; gap: 0.6rem; justify-content: flex-end; }
+div[data-type="pk-ack-btns"] button {
+  padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #333;
+  background: transparent; color: #cfcfcf; font-family: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+}
+div[data-type="pk-ack-btns"] button[data-variant="primary"] { background: #fff; color: #000; border-color: #fff; }
+
+/* ── audit books (standings, inside the table log panel) ── */
+div[data-type="pk-books"] { display: flex; flex-direction: column; gap: 2px; margin-bottom: 0.6rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-border); }
+div[data-type="pk-book-row"] { display: flex; justify-content: space-between; gap: 0.75rem; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
+div[data-type="pk-book-row"] span:last-child { color: var(--color-text); font-variant-numeric: tabular-nums; }
