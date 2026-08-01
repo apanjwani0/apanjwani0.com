@@ -13,6 +13,11 @@ const site = await getSite(Astro.locals)
 // for SEO/meta and the rest of the site.
 const heroTagline =
   'I build software for a living and for fun — payments at scale by day; apps, tools and games by night.'
+// The home page has no page title, so without this it would fall back to the bare
+// role line (`site.tagline`) as its meta/OG/Twitter description — a thin snippet
+// for the most-linked page. This describes what the site actually offers.
+const homeDescription =
+  `${site.name} builds payments infrastructure by day, and apps, tools and games by night — explore free, browser-based developer tools and playable experiments.`
 
 const sameAs = [site.social.github, site.social.linkedin].filter(Boolean)
 const ldJson = personJsonLd({
@@ -35,13 +40,13 @@ const siteLd = webSiteJsonLd({
 })
 ---
 
-<Base bare keywords={`${site.name}, ${site.handle}, portfolio, software engineer`}>
+<Base bare description={homeDescription} keywords={`${site.name}, ${site.handle}, portfolio, software engineer, developer tools, browser games`}>
   <script type="application/ld+json" set:html={ldJson} />
   <script type="application/ld+json" set:html={siteLd} />
 
   <section data-type="hero" aria-label="Introduction">
     <div data-type="hero-content">
-      <Avatar src={site.avatar} alt={site.name} />
+      <Avatar src={site.avatar} alt={`Portrait of ${site.name}`} />
       <h1>{site.name}</h1>
       <p data-type="tagline">{heroTagline}</p>
       <nav data-type="hero-links" aria-label="Links">

@@ -1,7 +1,12 @@
 {
   "name": "Aman Panjwani",
   "short_name": "apanjwani0",
+  "description": "Aman Panjwani's portfolio — free, browser-based developer tools and playable game experiments, plus projects and writing.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -16,7 +21,7 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
+  "theme_color": "#05070c",
+  "background_color": "#05070c",
   "display": "standalone"
 }

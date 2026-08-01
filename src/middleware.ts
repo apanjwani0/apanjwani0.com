@@ -43,8 +43,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
     } else if (context.request.method === 'GET' && response.status === 200) {
       // Public, successful page → cacheable. s-maxage drives the CDN edge;
       // stale-while-revalidate lets it refresh in the background so no visitor
-      // ever blocks on the (slow, distant) origin.
-      response.headers.set('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=86400')
+      // ever blocks on the (slow, distant) origin. The sitemap changes far less
+      // often than page content, so it gets a longer fresh window (1 h vs 10 m)
+      // to cut origin hits from crawlers while still refreshing within the day.
+      const isSitemap = pathname === '/sitemap.xml'
+      response.headers.set(
+        'Cache-Control',
+        `public, ${isSitemap ? 'max-age=3600, s-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
+      )
     }
   }
 

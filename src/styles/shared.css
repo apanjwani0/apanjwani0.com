@@ -97,6 +97,14 @@ nav[data-type="hero-nav"][data-nav-hidden] {
   transform: translateY(-100%);
 }
 
+/* A keyboard user can tab into the nav while it's scrolled out of view (the JS
+   only hides it visually — the links stay in the DOM and focusable). Reveal it
+   whenever focus lands inside, so the focused link is never off-screen. Equal
+   specificity to the rule above but declared after, so it wins when both match. */
+nav[data-type="hero-nav"]:focus-within {
+  transform: none;
+}
+
 /* serif wordmark — first grid column, pinned left */
 a[data-type="hero-wordmark"] {
   pointer-events: auto;

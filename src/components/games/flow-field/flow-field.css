@@ -51,11 +51,6 @@ canvas[data-type="ff-canvas"] {
   cursor: crosshair;
 }
 
-canvas[data-type="ff-canvas"]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
-}
-
 div[data-type="ff-controls"] {
   display: flex;
   flex-direction: column;
@@ -168,11 +163,6 @@ div[data-group="seed"] input[type="text"] {
   border-radius: var(--radius-md);
   padding: 0.28rem 0.5rem;
   width: 11ch;
-}
-
-div[data-group="seed"] input[type="text"]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
 }
 
 /* ── "How it works" explainer ── */

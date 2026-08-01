@@ -16,13 +16,22 @@ Two kinds of game live here:
 ## Current games
 
 - **game-of-life** — Conway's Game of Life, interactive canvas. Live.
+- **2048** — sliding-tile puzzle with 3×3, 4×4, and 5×5 boards. Live.
+- **quintle** — daily and practice five-letter word game. Live.
+- **flow-field** — seeded particle-flow art toy. Live.
+- **maze-weaver** — seeded maze generator and pathfinding visualizer. Live.
+- **starfield-toy** — interactive warp-speed starfield. Live.
+- **murmuration** — interactive boids flocking simulation. Live.
+- **lsystem-tree** — seeded L-system fractal garden. Live.
+- **wallpaper-forge** — seeded generative wallpaper maker. Live.
 - **type-trial** — typing-speed / WPM game with per-category bests. Live. (Moved
   here from `/tools`; `/tools/type-trial` 301-redirects to `/games/type-trial`.)
 - **hue-hunt** — hex-colour guessing game (pick or type a hex, scored on
   perceptual closeness, with an R/G/B breakdown on reveal). Live.
+- **poker** — local-first Poker Together subsystem. Disabled while its online
+  room flow remains experimental.
 - **flash-cricket** — 2D arcade cricket (C++/Raylib → WASM). Enabled in config but
-  not yet embedded — shows "coming soon". Source + `build.sh` + headless test
-  harness live in `/flash-cricket/`.
+  not yet embedded — shows "coming soon".
 
 ## Adding a new game (TypeScript / Canvas — the common path)
 

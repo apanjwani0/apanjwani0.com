@@ -26,6 +26,14 @@ export const games: Game[] = [
     "keywords": "2048 game,2048 puzzle,sliding tile game,number puzzle,2048 online,play 2048,merge tiles game,2048 clone,browser puzzle game"
   },
   {
+    "slug": "quintle",
+    "title": "Quintle",
+    "description": "A daily five-letter word guessing game. You get six tries to find the hidden word; after each guess the tiles light up — right letter in the right place, right letter in the wrong place, or not in the word at all — and you close in from there.\n\nA fresh puzzle drops every day, the same word for everyone, and it picks up right where you left off if you close the tab. Not enough? Switch to Practice for an endless run of random words, or flip on Hard mode, where every clue you uncover has to be reused. Type on your keyboard or tap the on-screen one, watch your win streak and guess distribution build up, and share your result as a spoiler-free emoji grid. Everything is saved in your browser — no sign-up, nothing uploaded.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "word game,word guessing game,five letter word game,daily word puzzle,wordle style game,guess the word,vocabulary game,browser word game,unlimited word game,hard mode word game,quintle"
+  },
+  {
     "slug": "poker",
     "title": "Poker Together",
     "description": "A local-first, play-money poker room you host right in your browser. Create a table, fill the seats with friends (pass-the-device hotseat) or equity-aware bots, and deal — Texas Hold'em, Omaha or a Bomb Pot.\n\nRooms, chips and settings all save locally; nothing is uploaded and there's no sign-up. Under the hood: a cryptographically-shuffled deck, correct side pots and all-ins, an exact Omaha evaluator, and five bot personalities from tight Rocks to loose Maniacs. Open a second tab and the room list stays in sync.",
@@ -72,6 +80,14 @@ export const games: Game[] = [
     "enabled": true,
     "interactive": true,
     "keywords": "l-system,lindenmayer system,fractal plant,fractal tree generator,generative art,turtle graphics,koch curve,dragon curve,sierpinski,barnsley fern,procedural plants,download png"
+  },
+  {
+    "slug": "wallpaper-forge",
+    "title": "Wallpaper Forge",
+    "description": "A seeded generative wallpaper maker, right in your browser. Choose an engine — glowing gradient Aurora, layered Waves, Topographic noise contours, woven Truchet tiles, or scattered Terrazzo chips — then dial the density, detail and grain until it looks right.\n\nEvery piece is fixed by its settings and seed, so copy the seed to revisit one with the same settings or reroll for a fresh one. Pick a size for your phone, desktop, tablet or a square, and download a crisp, full-resolution PNG rendered at that exact device resolution — the preview and the download are the same picture. Seven palettes, everything drawn on one canvas with no dependencies, your settings saved in your browser, and nothing uploaded.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "wallpaper generator,generative wallpaper,phone wallpaper maker,desktop wallpaper maker,generative art,seeded art,gradient wallpaper,mesh gradient,topographic art,truchet tiles,terrazzo pattern,download png wallpaper,make your own wallpaper,abstract wallpaper generator"
   },
   {
     "slug": "type-trial",

@@ -174,7 +174,9 @@ export function legalActions(s: GameState): ActionRequest | null {
   const maxRaiseTo = p.committed + myStack
   const canCheck = toCall === 0
   const canBet = s.betToMatch === 0 && myStack > 0
-  const canRaise = s.betToMatch > 0 && myStack > toCall
+  // A short all-in increases the amount to call but does not reopen raising
+  // for players who already acted. Full raises reset their acted flag below.
+  const canRaise = s.betToMatch > 0 && myStack > toCall && !p.actedThisRound
   let minRaiseTo = s.betToMatch === 0
     ? Math.min(s.config.bigBlind, maxRaiseTo)
     : s.betToMatch + s.minRaise
@@ -204,17 +206,20 @@ export function applyAction(s: GameState, a: Action): GameState {
     commit(s, p, req.toCall)
     p.lastAction = 'call'
     log(s, 'action', `${name(s, p.seatIndex)} calls ${req.toCall}${p.allIn ? ' (all in)' : ''}.`)
-  } else if (a.type === 'bet' || a.type === 'raise') {
+  } else if ((a.type === 'bet' && req.canBet) || (a.type === 'raise' && req.canRaise)) {
     // clamp requested total into the legal window; an all-in below min is allowed
     let target = a.amount ?? req.minRaiseTo
     target = clamp(target, Math.min(req.minRaiseTo, req.maxRaiseTo), req.maxRaiseTo)
-    const inc = target - s.betToMatch
+    const previousBet = s.betToMatch
+    const previousMinRaise = s.minRaise
+    const inc = target - previousBet
+    const reopensBetting = previousBet === 0 || inc >= previousMinRaise
     commit(s, p, target - p.committed)
-    if (target > s.betToMatch) {
-      s.minRaise = Math.max(inc, s.config.bigBlind)
+    if (target > previousBet) {
+      if (reopensBetting) s.minRaise = Math.max(inc, s.config.bigBlind)
       s.betToMatch = target
       s.lastAggressorSeat = p.seatIndex
-      aggressed = true
+      aggressed = reopensBetting
     }
     const verb = req.canBet ? 'bets' : 'raises to'
     p.lastAction = req.canBet ? 'bet' : 'raise'
@@ -416,6 +421,8 @@ export function botInputFor(s: GameState): BotDecisionInput | null {
     myChips: stack(s, p.seatIndex),
     bigBlind: s.config.bigBlind,
     canCheck: req.canCheck,
+    canBet: req.canBet,
+    canRaise: req.canRaise,
     minRaiseTo: req.minRaiseTo,
     maxRaiseTo: req.maxRaiseTo,
     activeOpponents,

@@ -4,35 +4,8 @@ div[data-type="tool-page"][data-tool="list-forge"] {
   --lf-pane-h: clamp(20rem, 56vh, 44rem);
 }
 
-/* ── Toolbar ─────────────────────────────────────────────── */
-div[data-tool="list-forge"] [data-group="toolbar"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0 1rem;
-}
-
-div[data-tool="list-forge"] button {
-  padding: 0.32rem 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
-}
-
-div[data-tool="list-forge"] button:hover {
-  color: var(--color-text);
-  border-color: var(--color-muted);
-}
-
-/* Focus rings for buttons/selects/inputs/summaries come from the shared
-   tools-common.css so every tool matches. */
+/* Toolbar layout, button chrome, and focus rings all come from the shared
+   tools-common.css (hoisted; identical across the tool family). */
 
 span[data-type="lf-sep"] {
   width: 1px;

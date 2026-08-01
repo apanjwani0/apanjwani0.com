@@ -6,6 +6,7 @@ import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import '../../components/games/games-common.css'
 import '../../components/games/twenty48/twenty48.css'
 import '../../components/games/game-of-life/game-of-life.css'
 import '../../components/games/flow-field/flow-field.css'
@@ -15,6 +16,8 @@ import '../../components/games/hue-hunt/hue-hunt.css'
 import '../../components/games/starfield-toy/starfield.css'
 import '../../components/games/murmuration/murmuration.css'
 import '../../components/games/lsystem/lsystem.css'
+import '../../components/games/quintle/quintle.css'
+import '../../components/games/wallpaper-forge/wallpaper-forge.css'
 
 const { slug } = Astro.params
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
@@ -63,6 +66,12 @@ const breadcrumbLd = breadcrumbListJsonLd([
       <div data-type="project-description" set:html={render(game.description)} />
     </twenty48-game>
   )}
+  {game.interactive && slug === 'quintle' && (
+    <quintle-game data-game="quintle">
+      <h1>{game.title}</h1>
+      <div data-type="project-description" set:html={render(game.description)} />
+    </quintle-game>
+  )}
   {game.interactive && slug === 'game-of-life' && (
     <game-of-life-game data-game="game-of-life"></game-of-life-game>
   )}
@@ -90,12 +99,18 @@ const breadcrumbLd = breadcrumbListJsonLd([
   {game.interactive && slug === 'lsystem-tree' && (
     <lsystem-tree-game data-game="lsystem-tree"></lsystem-tree-game>
   )}
+  {game.interactive && slug === 'wallpaper-forge' && (
+    <wallpaper-forge-game data-game="wallpaper-forge">
+      <h1>{game.title}</h1>
+      <div data-type="project-description" set:html={render(game.description)} />
+    </wallpaper-forge-game>
+  )}
   {!game.interactive && (
     <>
       <script type="application/ld+json" set:html={breadcrumbLd} />
       <Breadcrumbs items={crumbs} />
       <h1>{game.title}</h1>
-      <h2 style="color: var(--color-muted); margin-bottom: var(--space-section);">Coming Soon</h2>
+      <h2 data-type="coming-soon">Coming Soon</h2>
       <div data-type="project-description" set:html={render(game.description)} />
       {liveGame && (
         <p>
@@ -112,7 +127,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
       // a game reached via in-site nav renders blank until a hard reload.
       function mountGame() {
         const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
-        if (slug === '2048') import('../../components/games/twenty48/Twenty48.ts')
+        if (slug === 'quintle') import('../../components/games/quintle/Quintle.ts')
+        else if (slug === '2048') import('../../components/games/twenty48/Twenty48.ts')
         else if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
         else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
         else if (slug === 'maze-weaver') import('../../components/games/maze-weaver/MazeWeaver.ts')
@@ -121,8 +137,20 @@ const breadcrumbLd = breadcrumbListJsonLd([
         else if (slug === 'starfield-toy') import('../../components/games/starfield-toy/Starfield.ts')
         else if (slug === 'murmuration') import('../../components/games/murmuration/Murmuration.ts')
         else if (slug === 'lsystem-tree') import('../../components/games/lsystem/LSystem.ts')
+        else if (slug === 'wallpaper-forge') import('../../components/games/wallpaper-forge/WallpaperForge.ts')
       }
       document.addEventListener('astro:page-load', mountGame)
     </script>
   )}
 </Base>
+
+<style>
+  /* "Coming soon" subheading on the non-interactive game pages — muted, with
+     space before the description. Was an inline style; moved here to a scoped
+     data-type rule to match the project's no-inline-styles convention. Tokens
+     only, so it renders identically. */
+  h2[data-type="coming-soon"] {
+    color: var(--color-muted);
+    margin-bottom: var(--space-section);
+  }
+</style>

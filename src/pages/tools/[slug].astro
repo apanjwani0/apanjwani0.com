@@ -16,6 +16,7 @@ import '../../components/tools/list-forge/list-forge.css'
 import '../../components/tools/epoch-wizard/epoch-wizard.css'
 import '../../components/tools/chroma-lab/chroma-lab.css'
 import '../../components/tools/codec-forge/codec-forge.css'
+import '../../components/tools/hash-smith/hash-smith.css'
 
 const { slug } = Astro.params
 
@@ -111,6 +112,12 @@ const breadcrumbLd = breadcrumbListJsonLd([
       <p>{tool.intro || tool.description}</p>
     </codec-forge-tool>
   )}
+  {slug === 'hash-smith' && (
+    <hash-smith-tool data-tool="hash-smith">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </hash-smith-tool>
+  )}
 </ToolBase>
 
 <script>
@@ -127,6 +134,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
     else if (slug === 'epoch-wizard') import('../../components/tools/epoch-wizard/EpochWizard.ts')
     else if (slug === 'chroma-lab') import('../../components/tools/chroma-lab/ChromaLab.ts')
     else if (slug === 'codec-forge') import('../../components/tools/codec-forge/CodecForge.ts')
+    else if (slug === 'hash-smith') import('../../components/tools/hash-smith/HashSmith.ts')
   }
   document.addEventListener('astro:page-load', mountTool)
 </script>

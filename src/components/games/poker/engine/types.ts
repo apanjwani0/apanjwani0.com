@@ -210,6 +210,8 @@ export interface BotDecisionInput {
   myChips: number
   bigBlind: number
   canCheck: boolean
+  canBet: boolean
+  canRaise: boolean
   minRaiseTo: number
   maxRaiseTo: number
   activeOpponents: number

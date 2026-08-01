@@ -49,11 +49,6 @@ canvas[data-type="fg-canvas"] {
   height: auto;
 }
 
-canvas[data-type="fg-canvas"]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
-}
-
 div[data-type="fg-controls"] {
   display: flex;
   flex-direction: column;
@@ -141,8 +136,7 @@ div[data-group="seed"] input[type="text"] {
 }
 
 div[data-group="seed"] input[type="text"]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
+  /* outline + offset come from games-common.css; keep the bespoke border tint */
   border-color: var(--color-accent);
 }
 
