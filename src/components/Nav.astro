@@ -15,15 +15,13 @@ const isActive = (href: string) =>
 
 // Flatten site.nav into a flat list of links (dropdown children become top-level
 // links), matching the home-screen hero-nav style.
-const links = site.nav.flatMap((item: any) =>
-  'children' in item ? item.children : [item]
-)
+const links = site.nav.flatMap((item) => item.children ?? [item])
 ---
 
 <nav data-type="hero-nav" aria-label="Site sections">
   <a href="/" data-type="hero-wordmark">{site.handle}</a>
   <span data-type="hero-links">
-    {links.map((link: any) => (
+    {links.map((link) => (
       <a
         href={link.href}
         data-active={isActive(link.href) ? true : undefined}
