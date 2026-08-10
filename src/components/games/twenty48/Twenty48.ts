@@ -171,8 +171,8 @@ class Twenty48Game extends HTMLElement {
         </div>
         <div data-type="tw-controls">
           <div data-group="transport" role="group" aria-label="Actions">
-            <button data-action="new" type="button" title="Start a fresh board (N)">New game</button>
-            <button data-action="undo" type="button" title="Take back the last move (U)">Undo</button>
+            <button data-action="new" type="button" aria-label="New game — start a fresh board (N)" title="Start a fresh board (N)">New game</button>
+            <button data-action="undo" type="button" aria-label="Undo — take back the last move (U)" title="Take back the last move (U)">Undo</button>
           </div>
           <div data-group="size" role="group" aria-label="Board size">
             <span data-type="tw-group-label">Size</span>

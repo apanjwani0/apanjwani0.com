@@ -38,6 +38,9 @@ npm run graph          # graphify update . — refresh the local code-graph
 
 There is no unit-test suite; **`npm run build` is the green-bar gate**. For
 UI/route changes, also run `/browser-debug` against the dev server.
+The production GitHub deploy builds a Docker image on `main`, restarts the OCI
+container from the self-hosted runner, then fetches `/` inside the container
+before reporting success.
 
 ## Configuration
 
@@ -84,6 +87,8 @@ admin-only `/api/admin/analytics` endpoint powers the `/admin` analytics tab.
 This intentionally stores counts and timing sums only — no user ids, IPs, raw
 referrers, or session traces. Counts are best-effort read-modify-write rollups;
 use Durable Objects/PostHog if exact high-traffic analytics becomes important.
+Cloudflare Web Analytics auto-injection should stay disabled in the Cloudflare
+dashboard; do not weaken the CSP just to allow the blocked Cloudflare beacon.
 
 ## Key Conventions
 
@@ -91,6 +96,9 @@ use Durable Objects/PostHog if exact high-traffic analytics becomes important.
 - **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
 - **SEO support copy**: Tool and game detail pages may render `seoContent` markdown from config under the interactive app for how-to, FAQ, privacy, and strategy copy. Keep the app first; this block is for search context and users who scroll.
+- **Decorative StarField**: Keep the home/background star canvas off tool and game detail pages. Lighthouse showed it spending CPU before the game became useful; detail pages should prioritize the interactive app.
+- **Fonts on tools/games**: Tool and game detail pages pass `loadFonts={false}` to `Head`. This avoids mobile CLS and a render-blocking third-party font request on utility pages; fallback system fonts are acceptable there.
+- **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
 - **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
 - **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed.

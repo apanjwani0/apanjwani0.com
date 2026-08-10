@@ -17,9 +17,26 @@ interface Props {
   ogType?: 'website' | 'article'
   /** ISO date (YYYY-MM-DD) for article:published_time; only used when ogType === 'article'. */
   publishedTime?: string
+  loadFonts?: boolean
+  clientRouter?: boolean
 }
 
-const { pageTitle, description, canonicalURL, siteName, noindex = false, keywords, image, imageWidth, imageHeight, ogType = 'website', publishedTime, handle } = Astro.props
+const {
+  pageTitle,
+  description,
+  canonicalURL,
+  siteName,
+  noindex = false,
+  keywords,
+  image,
+  imageWidth,
+  imageHeight,
+  ogType = 'website',
+  publishedTime,
+  handle,
+  loadFonts = true,
+  clientRouter = true,
+} = Astro.props
 // The share image is a portrait cut-out; describe it rather than repeating the
 // bare name so the alt text is meaningful to screen readers and image search.
 const imageAlt = `Portrait of ${siteName}`
@@ -63,23 +80,27 @@ const twitterHandle = handle ? `@${handle.replace(/^@/, '')}` : undefined
 {image && <meta name="twitter:image" content={image} />}
 {image && <meta name="twitter:image:alt" content={imageAlt} />}
 
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<!-- dns-prefetch fallback for the font origins: some engines drop a preconnect
-     under load or don't support it, so this is cheap insurance that the DNS is
-     still resolved early. Ignored where the preconnect above already applies. -->
-<link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-<link rel="dns-prefetch" href="https://fonts.gstatic.com" />
-<!-- Plain stylesheet load keeps CSP script attributes locked down. `display=swap`
-     already shows fallback text immediately, so there is no invisible-text flash. -->
-<link
-  href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
-  rel="stylesheet"
-/>
+{loadFonts && (
+  <>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- dns-prefetch fallback for the font origins: some engines drop a preconnect
+         under load or don't support it, so this is cheap insurance that the DNS is
+         still resolved early. Ignored where the preconnect above already applies. -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <!-- Plain stylesheet load keeps CSP script attributes locked down. `display=swap`
+         already shows fallback text immediately, so there is no invisible-text flash. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+  </>
+)}
 <link rel="icon" href="/favicon.ico" sizes="48x48" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="icon" href="/favicon-96x96.png" type="image/png" sizes="96x96" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <link rel="manifest" href="/site.webmanifest" />
 <link rel="stylesheet" href="/oat.min.css" />
-<ClientRouter />
+{clientRouter && <ClientRouter />}

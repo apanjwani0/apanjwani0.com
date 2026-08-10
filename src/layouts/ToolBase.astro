@@ -42,11 +42,12 @@ const ogImageHeight = 468
       imageWidth={ogImageWidth}
       imageHeight={ogImageHeight}
       handle={site.handle}
+      loadFonts={false}
+      clientRouter={false}
     />
   </head>
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
-    <star-field data-type="starfield" aria-hidden="true"></star-field>
     <Nav site={site} />
     <main id="main-content" tabindex="-1">
       <slot />

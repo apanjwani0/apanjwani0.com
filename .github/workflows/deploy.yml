@@ -82,5 +82,17 @@ jobs:
             -e ADMIN_SECRET="$ADMIN_SECRET" \
             "$DOCKER_IMAGE"
 
+          for i in {1..20}; do
+            if docker exec portfolio node -e "fetch('http://127.0.0.1:4321/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"; then
+              echo "✓ Container health check passed"
+              break
+            fi
+            if [ "$i" -eq 20 ]; then
+              docker logs --tail 200 portfolio || true
+              exit 1
+            fi
+            sleep 1
+          done
+
           docker image prune -f
           echo "✓ Deployed $DOCKER_IMAGE"
