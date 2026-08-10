@@ -79,6 +79,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
     <button class="tab" data-tab="blogs">blogs</button>
     <button class="tab" data-tab="games">games</button>
     <button class="tab" data-tab="tools">tools</button>
+    <button class="tab" data-tab="analytics">analytics</button>
   </div>
 
   <!-- Site -->
@@ -187,7 +188,11 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
         <div class="item">
           <label>title<input name="title" value={g.title} /></label>
           <label>slug<input name="slug" value={g.slug} /></label>
+          <label>seo title<input name="seoTitle" value={g.seoTitle ?? ''} /></label>
+          <label>meta description<input name="metaDescription" value={g.metaDescription ?? ''} /></label>
           <label>description<textarea name="description">{g.description}</textarea></label>
+          <label>intro (optional)<textarea name="intro">{g.intro ?? ''}</textarea></label>
+          <label>seo content (markdown)<textarea name="seoContent" rows="8">{g.seoContent ?? ''}</textarea></label>
           <label>keywords (optional seo)<input name="keywords" value={g.keywords ?? ''} /></label>
           <label class="toggle-label">
             enabled
@@ -216,6 +221,34 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
         </li>
       ))}
     </ul>
+  </section>
+
+  <!-- Analytics -->
+  <section id="tab-analytics" class="tab-panel hidden">
+    <div class="form-actions">
+      <button type="button" id="refresh-analytics" class="add-btn">refresh analytics</button>
+      <span class="analytics-note">aggregate tool/game views only — no ids, ips, or raw referrers</span>
+    </div>
+    <div class="analytics-table-wrap">
+      <table class="analytics-table">
+        <thead>
+          <tr>
+            <th>type</th>
+            <th>slug</th>
+            <th>views</th>
+            <th>direct</th>
+            <th>direct %</th>
+            <th>avg load</th>
+            <th>avg route</th>
+            <th>avg lcp</th>
+            <th>avg ttfb</th>
+          </tr>
+        </thead>
+        <tbody id="analytics-body">
+          <tr><td colspan="9" class="analytics-empty">open this tab to load analytics</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <div id="toast" class="toast hidden"></div>
@@ -552,6 +585,30 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
     color: var(--color-error);
     border-color: var(--color-error);
   }
+
+  .analytics-note,
+  .analytics-empty {
+    color: var(--color-muted);
+    font-size: 0.85rem;
+  }
+
+  .analytics-table-wrap {
+    overflow-x: auto;
+  }
+
+  .analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .analytics-table th,
+  .analytics-table td {
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.45rem 0.55rem;
+    text-align: left;
+    white-space: nowrap;
+  }
 </style>
 
 <script>
@@ -608,6 +665,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'))
       btn.classList.add('active')
       document.getElementById(`tab-${btn.dataset.tab}`)?.classList.remove('hidden')
+      if (btn.dataset.tab === 'analytics') loadAnalytics()
     })
   })
 
@@ -636,6 +694,78 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
     toast.className = `toast ${isError ? 'error' : 'success'}`
     setTimeout(() => { toast.className = 'toast hidden' }, 3000)
   }
+
+  type AnalyticsRow = {
+    kind: string
+    slug: string
+    views: number
+    directEntries: number
+    directRate: number
+    avgLoadMs: number | null
+    avgRouteMs: number | null
+    avgLcpMs: number | null
+    avgTtfbMs: number | null
+  }
+
+  let analyticsLoaded = false
+
+  function formatMs(value: number | null) {
+    return value === null ? '—' : `${Math.round(value)} ms`
+  }
+
+  function addAnalyticsCell(row: HTMLTableRowElement, value: string | number) {
+    const cell = document.createElement('td')
+    cell.textContent = String(value)
+    row.appendChild(cell)
+  }
+
+  function renderAnalyticsRows(rows: AnalyticsRow[]) {
+    const body = document.getElementById('analytics-body')!
+    body.replaceChildren()
+
+    if (rows.length === 0) {
+      const row = document.createElement('tr')
+      const cell = document.createElement('td')
+      cell.colSpan = 9
+      cell.className = 'analytics-empty'
+      cell.textContent = 'no tool or game views recorded yet'
+      row.appendChild(cell)
+      body.appendChild(row)
+      return
+    }
+
+    for (const item of rows) {
+      const row = document.createElement('tr')
+      addAnalyticsCell(row, item.kind)
+      addAnalyticsCell(row, item.slug)
+      addAnalyticsCell(row, item.views)
+      addAnalyticsCell(row, item.directEntries)
+      addAnalyticsCell(row, `${item.directRate}%`)
+      addAnalyticsCell(row, formatMs(item.avgLoadMs))
+      addAnalyticsCell(row, formatMs(item.avgRouteMs))
+      addAnalyticsCell(row, formatMs(item.avgLcpMs))
+      addAnalyticsCell(row, formatMs(item.avgTtfbMs))
+      body.appendChild(row)
+    }
+  }
+
+  async function loadAnalytics(force = false) {
+    if (analyticsLoaded && !force) return
+    const body = document.getElementById('analytics-body')!
+    body.innerHTML = '<tr><td colspan="9" class="analytics-empty">loading analytics...</td></tr>'
+
+    try {
+      const res = await fetch('/api/admin/analytics')
+      if (!res.ok) throw new Error()
+      const json = await res.json()
+      renderAnalyticsRows(Array.isArray(json.rows) ? json.rows : [])
+      analyticsLoaded = true
+    } catch {
+      body.innerHTML = '<tr><td colspan="9" class="analytics-empty">failed to load analytics</td></tr>'
+    }
+  }
+
+  document.getElementById('refresh-analytics')?.addEventListener('click', () => loadAnalytics(true))
 
   // Save
   async function save(type: string, data: unknown) {
@@ -859,7 +989,11 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
     return `<div class="item">
       <label>title<input name="title" value="" /></label>
       <label>slug<input name="slug" value="" /></label>
+      <label>seo title<input name="seoTitle" value="" /></label>
+      <label>meta description<input name="metaDescription" value="" /></label>
       <label>description<textarea name="description"></textarea></label>
+      <label>intro (optional)<textarea name="intro"></textarea></label>
+      <label>seo content (markdown)<textarea name="seoContent" rows="8"></textarea></label>
       <label>keywords (optional seo)<input name="keywords" value="" /></label>
       <label class="toggle-label">
         enabled
@@ -881,7 +1015,11 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
     const data = Array.from(items).map(item => ({
       slug: (item.querySelector('[name="slug"]') as HTMLInputElement).value,
       title: (item.querySelector('[name="title"]') as HTMLInputElement).value,
+      seoTitle: (item.querySelector('[name="seoTitle"]') as HTMLInputElement).value.trim() || undefined,
+      metaDescription: (item.querySelector('[name="metaDescription"]') as HTMLInputElement).value.trim() || undefined,
       description: (item.querySelector('[name="description"]') as HTMLTextAreaElement).value,
+      intro: (item.querySelector('[name="intro"]') as HTMLTextAreaElement).value.trim() || undefined,
+      seoContent: (item.querySelector('[name="seoContent"]') as HTMLTextAreaElement).value.trim() || undefined,
       enabled: (item.querySelector('[name="enabled"]') as HTMLInputElement).checked,
       keywords: (item.querySelector('[name="keywords"]') as HTMLInputElement).value.trim() || undefined,
       interactive: (item.querySelector('[name="interactive"]') as HTMLInputElement).checked || undefined,

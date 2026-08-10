@@ -162,8 +162,12 @@ export function webAppJsonLd(a: WebApplicationSchema): string {
     name: a.name,
     description: a.description,
     url: a.url,
+    mainEntityOfPage: a.url,
     applicationCategory: a.applicationCategory ?? 'Game',
     operatingSystem: 'Any',
+    inLanguage: 'en',
+    isAccessibleForFree: true,
+    browserRequirements: 'Requires JavaScript. Runs in a modern browser.',
     // Free, browser-based — the price-0 offer is what marks it "free" for rich results.
     offers: {
       '@type': 'Offer',

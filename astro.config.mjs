@@ -62,6 +62,10 @@ function generateGames(data) {
   title: string
   description: string
   enabled: boolean
+  seoTitle?: string
+  metaDescription?: string
+  intro?: string
+  seoContent?: string
   keywords?: string
   /** true = ships a playable in-browser component; false/undefined = "coming soon" placeholder */
   interactive?: boolean
@@ -83,6 +87,7 @@ export interface Tool {
   seoTitle?: string
   metaDescription?: string
   intro?: string
+  seoContent?: string
   /** Comma-separated search terms — feeds the page <meta name="keywords"> and the WebApplication JSON-LD */
   keywords?: string
 }

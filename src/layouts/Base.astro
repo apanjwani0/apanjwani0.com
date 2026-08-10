@@ -66,7 +66,9 @@ const ogImageHeight = 468
       // Nav height sync, hide-on-scroll, and StarField mount — shared verbatim
       // with ToolBase.astro, so it lives in one module (src/lib/nav-ui.ts).
       import { initNav } from '../lib/nav-ui.ts'
+      import { initAnalytics } from '../lib/analytics-client.ts'
       initNav()
+      initAnalytics()
     </script>
   </body>
 </html>

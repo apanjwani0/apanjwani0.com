@@ -104,6 +104,10 @@ function validGames(value: unknown): boolean {
     && isString(game.title)
     && isString(game.description)
     && typeof game.enabled === 'boolean'
+    && optionalString(game.seoTitle)
+    && optionalString(game.metaDescription)
+    && optionalString(game.intro)
+    && optionalString(game.seoContent)
     && optionalString(game.keywords)
     && (game.interactive === undefined || typeof game.interactive === 'boolean')
   )
@@ -122,6 +126,7 @@ function validTools(value: unknown): boolean {
     && optionalString(tool.seoTitle)
     && optionalString(tool.metaDescription)
     && optionalString(tool.intro)
+    && optionalString(tool.seoContent)
     && optionalString(tool.keywords)
   )
 }
