@@ -67,7 +67,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
 ])
 ---
 
-<Base title={pageTitle} description={pageDescription} keywords={game.keywords} noindex={!game.interactive}>
+<Base title={pageTitle} description={pageDescription} keywords={game.keywords} noindex={!game.interactive} starfield={false} loadFonts={false} clientRouter={false}>
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   {game.interactive && slug === '2048' && (
     <twenty48-game data-game="2048">

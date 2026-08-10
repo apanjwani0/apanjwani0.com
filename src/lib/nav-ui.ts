@@ -21,6 +21,7 @@
  * to repeat per page.
  */
 let wired = false
+let starFieldImportQueued = false
 
 function syncNavHeight() {
   const nav = document.querySelector('[data-type="hero-nav"]') as HTMLElement | null
@@ -42,6 +43,26 @@ function onScroll() {
   lastScroll = current
 }
 
+function mountStarField() {
+  if (starFieldImportQueued) return
+  if (!document.querySelector('star-field')) return
+  starFieldImportQueued = true
+  const run = () => import('../components/home/StarField.ts')
+  const requestIdle = (window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+  }).requestIdleCallback
+  if (requestIdle) {
+    requestIdle(run, { timeout: 1200 })
+    return
+  }
+  setTimeout(run, 800)
+}
+
+function pageSetup() {
+  syncNavHeight()
+  mountStarField()
+}
+
 export function initNav() {
   if (wired) return
   wired = true
@@ -49,9 +70,8 @@ export function initNav() {
   window.addEventListener('scroll', onScroll, { passive: true })
   window.addEventListener('resize', syncNavHeight)
   // Per-page work: re-measure the nav and (re)mount the hero canvas after every
-  // View Transition, plus the initial load.
-  document.addEventListener('astro:page-load', () => {
-    syncNavHeight()
-    import('../components/home/StarField.ts')
-  })
+  // View Transition. Also run once immediately for shells that intentionally
+  // skip ClientRouter on direct tool/game loads.
+  pageSetup()
+  document.addEventListener('astro:page-load', pageSetup)
 }

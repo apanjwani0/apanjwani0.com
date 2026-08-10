@@ -1,3 +1,7 @@
+twenty48-game[data-game="2048"] {
+  min-height: 44rem;
+}
+
 div[data-type="tw-game"] {
   width: min(100%, calc(100vw - 2 * var(--space-page-x)));
   max-width: var(--max-width);
@@ -260,6 +264,10 @@ p[data-type="tw-try"] {
 }
 
 @media (max-width: 420px) {
+  twenty48-game[data-game="2048"] {
+    min-height: 52rem;
+  }
+
   div[data-type="tw-scores"] {
     width: 100%;
   }
