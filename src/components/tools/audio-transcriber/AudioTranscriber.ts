@@ -224,3 +224,5 @@ class AudioTranscriberTool extends HTMLElement {
 }
 
 customElements.define('audio-transcriber-tool', AudioTranscriberTool)
+
+export {}

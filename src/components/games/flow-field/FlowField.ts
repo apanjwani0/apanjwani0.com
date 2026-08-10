@@ -536,3 +536,5 @@ class FlowFieldGame extends HTMLElement {
 if (!customElements.get('flow-field-game')) {
   customElements.define('flow-field-game', FlowFieldGame)
 }
+
+export {}

@@ -63,35 +63,10 @@ const ogImageHeight = 468
     </main>
     <script src="/oat.min.js" defer></script>
     <script>
-      // ── Nav: measure height → CSS variable so main padding stays in sync ──
-      function syncNavHeight() {
-        const nav = document.querySelector('[data-type="hero-nav"]')
-        if (nav) {
-          document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
-        }
-      }
-      // ── Nav: hide on scroll down, show on scroll up ──
-      let lastScroll = 0
-      function onScroll() {
-        const nav = document.querySelector('[data-type="hero-nav"]')
-        if (!nav) return
-        const current = window.scrollY
-        if (current > lastScroll && current > nav.offsetHeight + 20) {
-          nav.setAttribute('data-nav-hidden', '')
-        } else if (current < lastScroll) {
-          nav.removeAttribute('data-nav-hidden')
-        }
-        lastScroll = current
-      }
-      // ── Wire everything on initial load + after every View Transition ──
-      function setup() {
-        syncNavHeight()
-        import('../components/home/StarField.ts')
-        window.addEventListener('scroll', onScroll, { passive: true })
-        // Re-measure on resize in case the nav wraps to a second line
-        window.addEventListener('resize', syncNavHeight)
-      }
-      document.addEventListener('astro:page-load', setup)
+      // Nav height sync, hide-on-scroll, and StarField mount — shared verbatim
+      // with ToolBase.astro, so it lives in one module (src/lib/nav-ui.ts).
+      import { initNav } from '../lib/nav-ui.ts'
+      initNav()
     </script>
   </body>
 </html>

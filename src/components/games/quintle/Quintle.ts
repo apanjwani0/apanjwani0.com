@@ -876,3 +876,5 @@ function q_winPhrase(tries: number): string {
 if (!customElements.get('quintle-game')) {
   customElements.define('quintle-game', QuintleGame)
 }
+
+export {}

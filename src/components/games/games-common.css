@@ -10,6 +10,12 @@
    Every interactive game element carries `data-game`, so `[data-game] canvas`
    reaches each toy's main canvas and any future canvas game gets the ring free. */
 
+[data-game] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* Main game canvas: inset ring so it isn't clipped by the surrounding frame. */
 [data-game] canvas:focus-visible {
   outline: 2px solid var(--color-accent);

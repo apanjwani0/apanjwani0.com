@@ -49,8 +49,13 @@ const [site, projects, experience, posts, games] = blocked
       getGames(Astro.locals),
     ])
 
-const navJson = blocked ? '{}' : JSON.stringify(site!.nav)
-const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
+const siteConfig = site!
+const projectItems = projects!
+const companyItems = experience!
+const postItems = posts!
+const gameItems = games!
+const navJson = blocked ? '{}' : JSON.stringify(siteConfig.nav)
+const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
 ---
 
 {blocked ? (
@@ -93,19 +98,19 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     <form id="form-site">
       <input type="hidden" name="nav" value={navJson} />
       <input type="hidden" name="sections" value={sectionsJson} />
-      <label>name<input name="name" value={site.name} /></label>
-      <label>handle<input name="handle" value={site.handle} /></label>
-      <label>tagline<input name="tagline" value={site.tagline} /></label>
-      <label>bio<textarea name="bio">{site.bio}</textarea></label>
-      <label>avatar path<input name="avatar" value={site.avatar} /></label>
+      <label>name<input name="name" value={siteConfig.name} /></label>
+      <label>handle<input name="handle" value={siteConfig.handle} /></label>
+      <label>tagline<input name="tagline" value={siteConfig.tagline} /></label>
+      <label>bio<textarea name="bio">{siteConfig.bio}</textarea></label>
+      <label>avatar path<input name="avatar" value={siteConfig.avatar} /></label>
       <label>theme
         <select name="theme">
-          <option value="light" selected={site.theme === 'light'}>light</option>
-          <option value="dark" selected={site.theme === 'dark'}>dark</option>
+          <option value="light" selected={siteConfig.theme === 'light'}>light</option>
+          <option value="dark" selected={siteConfig.theme === 'dark'}>dark</option>
         </select>
       </label>
-      <label>github<input name="github" value={site.social.github} /></label>
-      <label>linkedin<input name="linkedin" value={site.social.linkedin} /></label>
+      <label>github<input name="github" value={siteConfig.social.github} /></label>
+      <label>linkedin<input name="linkedin" value={siteConfig.social.linkedin} /></label>
       <div class="form-actions">
         <button type="submit">save site</button>
       </div>
@@ -115,7 +120,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   <!-- Projects -->
   <section id="tab-projects" class="tab-panel hidden">
     <div id="projects-list">
-      {projects.map((p) => (
+      {projectItems.map((p) => (
         <div class="item">
           <div class="drag-handle" title="drag to reorder">⠿</div>
           <label>title<input name="title" value={p.title} /></label>
@@ -136,7 +141,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   <!-- Experience -->
   <section id="tab-experience" class="tab-panel hidden">
     <div id="experience-list">
-      {experience.map((company) => (
+      {companyItems.map((company) => (
         <div class="company-item">
           <div class="company-header">
             <label>company<input name="company-name" value={company.name} /></label>
@@ -168,7 +173,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   <!-- Writing -->
   <section id="tab-blogs" class="tab-panel hidden">
     <div id="blogs-list">
-      {posts.map((p) => (
+      {postItems.map((p) => (
         <div class="item">
           <label>title<input name="title" value={p.title} /></label>
           <label>href<input name="href" value={p.href} /></label>
@@ -189,7 +194,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   <!-- Games -->
   <section id="tab-games" class="tab-panel hidden">
     <div id="games-list">
-      {games!.map((g) => (
+      {gameItems.map((g) => (
         <div class="item">
           <label>title<input name="title" value={g.title} /></label>
           <label>slug<input name="slug" value={g.slug} /></label>
@@ -450,7 +455,11 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
 
   .toast.hidden { display: none; }
   .toast.success { background: var(--color-text); color: var(--color-bg); }
-  .toast.error { background: #c00; color: #fff; }
+  /* Error surfaces read from the theme's error/bg tokens instead of a hardcoded
+     red, so they track the active theme (dark: light-red on near-black) and stay
+     legible in both themes — near-black on the dark-red light theme, near-black
+     on the light-red dark theme. */
+  .toast.error { background: var(--color-error); color: var(--color-bg); }
 
   #auth-gate {
     display: flex;
@@ -461,7 +470,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   }
 
   #login-error {
-    color: #c00;
+    color: var(--color-error);
     font-size: 0.85rem;
     margin: 0;
   }
@@ -551,8 +560,8 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   }
 
   .tool-status--disabled {
-    color: #c0392b;
-    border-color: #c0392b;
+    color: var(--color-error);
+    border-color: var(--color-error);
   }
 </style>
 
@@ -892,4 +901,3 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
 
   } // end admin guard
 </script>
-

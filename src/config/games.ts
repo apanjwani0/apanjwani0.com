@@ -74,20 +74,20 @@ export const games: Game[] = [
     "keywords": "boids,flocking simulation,murmuration,craig reynolds boids,swarm simulation,emergent behavior,separation alignment cohesion,generative art,interactive canvas,download png,flocking algorithm"
   },
   {
+    "slug": "turing-bloom",
+    "title": "Turing Bloom",
+    "description": "An interactive reaction-diffusion playground. Two make-believe chemicals spread and react across a grid, and from a few painted specks the self-organising patterns Alan Turing proposed for animal markings bloom on their own — spots, stripes, coral, mazes, and cells that endlessly divide.\n\nPick a regime, nudge the feed and kill rates to melt one pattern into another, and paint on the canvas to grow a bloom from your own strokes. Eight presets, seven palettes, a reproducible seed and one-click PNG export — all drawn on a single canvas with no dependencies, and it runs entirely in your browser.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "reaction diffusion,gray-scott,turing pattern,turing bloom,morphogenesis,cellular pattern simulation,generative art,coral pattern,mitosis simulation,paint simulation,download png,interactive canvas"
+  },
+  {
     "slug": "lsystem-tree",
     "title": "Fractal Garden",
     "description": "Plants that draw themselves. Each one is an L-system — a tiny rewriting grammar: start from a short seed string, replace every symbol with new symbols a few times over, then read the result as turtle graphics — step forward, turn, branch — and a whole tree falls out of the maths with nobody drawing a single leaf.\n\nGrow seven species, from a Barnsley fractal plant and a bushy weed to the Koch, Dragon and Sierpinski curves. Bend the branch angle, add organic wobble, thicken the trunk and toggle leaf blossoms; the branches are shaded trunk-to-tip and the geometric curves along their length. A text seed makes any plant reproducible, and you can download the frame you like as a PNG. Runs entirely in your browser.",
     "enabled": true,
     "interactive": true,
     "keywords": "l-system,lindenmayer system,fractal plant,fractal tree generator,generative art,turtle graphics,koch curve,dragon curve,sierpinski,barnsley fern,procedural plants,download png"
-  },
-  {
-    "slug": "wallpaper-forge",
-    "title": "Wallpaper Forge",
-    "description": "A seeded generative wallpaper maker, right in your browser. Choose an engine — glowing gradient Aurora, layered Waves, Topographic noise contours, woven Truchet tiles, or scattered Terrazzo chips — then dial the density, detail and grain until it looks right.\n\nEvery piece is fixed by its settings and seed, so copy the seed to revisit one with the same settings or reroll for a fresh one. Pick a size for your phone, desktop, tablet or a square, and download a crisp, full-resolution PNG rendered at that exact device resolution — the preview and the download are the same picture. Seven palettes, everything drawn on one canvas with no dependencies, your settings saved in your browser, and nothing uploaded.",
-    "enabled": true,
-    "interactive": true,
-    "keywords": "wallpaper generator,generative wallpaper,phone wallpaper maker,desktop wallpaper maker,generative art,seeded art,gradient wallpaper,mesh gradient,topographic art,truchet tiles,terrazzo pattern,download png wallpaper,make your own wallpaper,abstract wallpaper generator"
   },
   {
     "slug": "type-trial",

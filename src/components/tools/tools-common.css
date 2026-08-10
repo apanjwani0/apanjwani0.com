@@ -5,8 +5,14 @@
 
    Every tool renders a `div[data-type="tool-page"]` root, so these rules reach
    all of them (json-tidy / list-forge / epoch-wizard / chroma-lab /
-   codec-forge / hash-smith / pattern-forge / md-enhanced /
+   codec-forge / hash-smith / wallpaper-forge / md-enhanced /
    audio-transcriber). */
+
+[data-tool] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
 
 /* Keyboard focus ring for interactive controls — one accessible outline so
    tab users always see where they are. This also gives json-tidy's toolbar
@@ -36,7 +42,7 @@ div[data-type="tool-page"] kbd {
 
    Kept as an explicit selector list — NOT a blanket div[data-type="tool-page"]
    rule — so the tools with their own button language are untouched: json-tidy
-   scopes buttons to its toolbar, and pattern-forge / md-enhanced /
+   scopes buttons to its toolbar, and wallpaper-forge / md-enhanced /
    audio-transcriber style their own controls. Specificity is byte-identical to
    the per-tool rules this replaces, and this file loads BEFORE the per-tool
    stylesheets, so every higher-specificity or later per-tool override (the
@@ -47,7 +53,9 @@ div[data-tool="list-forge"] [data-group="toolbar"],
 div[data-tool="epoch-wizard"] [data-group="toolbar"],
 div[data-tool="chroma-lab"] [data-group="toolbar"],
 div[data-tool="codec-forge"] [data-group="toolbar"],
-div[data-tool="hash-smith"] [data-group="toolbar"] {
+div[data-tool="hash-smith"] [data-group="toolbar"],
+div[data-tool="cron-whisperer"] [data-group="toolbar"],
+div[data-tool="regex-lab"] [data-group="toolbar"] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -59,7 +67,9 @@ div[data-tool="list-forge"] button,
 div[data-tool="epoch-wizard"] button,
 div[data-tool="chroma-lab"] button,
 div[data-tool="codec-forge"] button,
-div[data-tool="hash-smith"] button {
+div[data-tool="hash-smith"] button,
+div[data-tool="cron-whisperer"] button,
+div[data-tool="regex-lab"] button {
   padding: 0.32rem 0.85rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -76,7 +86,44 @@ div[data-tool="list-forge"] button:hover,
 div[data-tool="epoch-wizard"] button:hover,
 div[data-tool="chroma-lab"] button:hover,
 div[data-tool="codec-forge"] button:hover,
-div[data-tool="hash-smith"] button:hover {
+div[data-tool="hash-smith"] button:hover,
+div[data-tool="cron-whisperer"] button:hover,
+div[data-tool="regex-lab"] button:hover {
   color: var(--color-text);
   border-color: var(--color-muted);
+}
+
+/* Card container — the surfaced panel treatment shared byte-for-byte across the
+   tools that group their controls into cards (chroma-lab / epoch-wizard /
+   cron-whisperer). Hoisted here from three identical per-tool copies. Same
+   specificity as the rules it replaces, and this file loads BEFORE the per-tool
+   sheets, so each tool's higher-specificity extras (cron-whisperer's
+   [data-card="input"] accent border) and its own card <h2> rule still apply.
+   A new card-based tool opts in by adding its selector below. Tokens only. */
+section[data-type="cl-card"],
+section[data-type="ew-card"],
+section[data-type="cw-card"],
+section[data-type="rl-card"] {
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem 1.15rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+/* Card <h2> — the mono, uppercase label shared byte-for-byte across the
+   card-based tools (chroma-lab / epoch-wizard / cron-whisperer). Hoisted here
+   from three identical per-tool copies; only the bottom margin stays bespoke
+   (chroma-lab 0.9rem, epoch-wizard / cron-whisperer 0.8rem) and is declared in
+   each tool's own sheet, which loads after this one. Same specificity, tokens
+   only. A new card-based tool opts in by adding its selector below. */
+section[data-type="cl-card"] h2,
+section[data-type="ew-card"] h2,
+section[data-type="cw-card"] h2,
+section[data-type="rl-card"] h2 {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text);
 }

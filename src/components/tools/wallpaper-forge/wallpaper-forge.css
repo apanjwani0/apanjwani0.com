@@ -1,4 +1,4 @@
-div[data-type="wf-game"] {
+div[data-tool="wallpaper-forge"] {
   max-width: var(--max-width);
   margin: 0 auto;
 }
@@ -68,6 +68,7 @@ div[data-type="wf-controls"] [data-group] {
 }
 
 div[data-type="wf-controls"] button {
+  min-height: 2.75rem;
   padding: 0.32rem 0.7rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -84,16 +85,28 @@ div[data-type="wf-controls"] button:hover {
   border-color: var(--color-muted);
 }
 
-/* Primary action: Download stands out */
-div[data-type="wf-controls"] [data-group="transport"] button[data-action="download"] {
+/* Export actions stand out from regeneration and configuration. */
+div[data-type="wf-controls"] [data-group="transport"] button:is([data-action="download-image"], [data-action="download-gif"]) {
   color: var(--color-bg);
   background: var(--color-text);
   border-color: var(--color-text);
 }
 
-div[data-type="wf-controls"] [data-group="transport"] button[data-action="download"]:hover {
+div[data-type="wf-controls"] [data-group="transport"] button:is([data-action="download-image"], [data-action="download-gif"]):hover {
   background: var(--color-accent);
   border-color: var(--color-accent);
+}
+
+div[data-type="wf-controls"] button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+output[data-type="wf-export-status"] {
+  min-height: 1lh;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 /* Pattern / aspect / palette pressed state */
@@ -166,12 +179,12 @@ div[data-type="wf-slider"] output {
   text-align: right;
 }
 
-div[data-group="seed"] {
+div[data-tool="wallpaper-forge"] div[data-group="seed"] {
   font-size: var(--text-xs);
   color: var(--color-muted);
 }
 
-div[data-group="seed"] input[type="text"] {
+div[data-tool="wallpaper-forge"] div[data-group="seed"] input[type="text"] {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-text);
@@ -242,8 +255,18 @@ p[data-type="wf-hint"] {
   color: var(--color-muted);
 }
 
-@media (max-width: 560px) {
+@media (max-width: 720px) {
   div[data-type="wf-sliders"] {
     grid-template-columns: 1fr;
+  }
+
+  div[data-type="wf-controls"] [data-group="transport"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  div[data-type="wf-controls"] [data-group="transport"] button[data-action="regen"],
+  output[data-type="wf-export-status"] {
+    grid-column: 1 / -1;
   }
 }

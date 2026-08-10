@@ -19,7 +19,7 @@ portfolio-apanjwani0/
 │   │   ├── experience.ts    # Work history (role, company, period, bullets)
 │   │   ├── blogs.ts         # Blog/writing entries
 │   │   ├── games.ts         # Games index (game-of-life, type-trial, hue-hunt, …)
-│   │   └── tools.ts         # Tools index (json-tidy, pattern-forge, md-enhanced, …)
+│   │   └── tools.ts         # Tools index (json-tidy, wallpaper-forge, md-enhanced, …)
 │   │
 │   ├── layouts/
 │   │   ├── Base.astro       # Root HTML shell: Oat CSS/JS, meta, nav, footer
@@ -30,7 +30,7 @@ portfolio-apanjwani0/
 │   │   ├── Head.astro       # <head> meta + SEO/OG tags
 │   │   ├── Avatar.astro / ProjectCard.astro / ExperienceItem.astro / SocialLinks.astro
 │   │   ├── home/            # Home hero pieces (star canvas, …)
-│   │   ├── tools/           # Tool WebComponents (json-tidy/, pattern-forge/, md-enhanced/, …)
+│   │   ├── tools/           # Tool WebComponents (json-tidy/, wallpaper-forge/, md-enhanced/, …)
 │   │   └── games/           # Game WebComponents (game-of-life/, type-trial/, hue-hunt/)
 │   │
 │   ├── lib/

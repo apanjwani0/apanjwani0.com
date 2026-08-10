@@ -245,3 +245,5 @@ class StarField extends HTMLElement {
 if (!customElements.get('star-field')) {
   customElements.define('star-field', StarField)
 }
+
+export {}

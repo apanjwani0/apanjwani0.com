@@ -515,3 +515,5 @@ class TypeTrialTool extends HTMLElement {
 if (!customElements.get('type-trial-game')) {
   customElements.define('type-trial-game', TypeTrialTool)
 }
+
+export {}

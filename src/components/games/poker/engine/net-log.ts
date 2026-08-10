@@ -34,7 +34,9 @@ export type LogEntry =
   | { seq: number; kind: 'action'; seat: number; action: Action }
 
 /** An entry minus the transport-assigned `seq` — what callers submit to `append`. */
-export type EntryBody = Omit<LogEntry, 'seq'>
+export type EntryBody =
+  | Omit<Extract<LogEntry, { kind: 'deal' }>, 'seq'>
+  | Omit<Extract<LogEntry, { kind: 'action' }>, 'seq'>
 
 /** A connected participant. `seat` is the seat they control; null = spectator. */
 export interface Peer {

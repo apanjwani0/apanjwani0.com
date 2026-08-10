@@ -19,7 +19,7 @@ const links = site.nav.flatMap((item) => item.children ?? [item])
 ---
 
 <nav data-type="hero-nav" aria-label="Site sections">
-  <a href="/" data-type="hero-wordmark">{site.handle}</a>
+  <a href="/" data-type="hero-wordmark" aria-label={`${site.name} — home`}>{site.handle}</a>
   <span data-type="hero-links">
     {links.map((link) => (
       <a

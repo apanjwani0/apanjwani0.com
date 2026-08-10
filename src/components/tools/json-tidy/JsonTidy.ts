@@ -2026,3 +2026,5 @@ class JsonTidyTool extends HTMLElement {
 if (!customElements.get('json-tidy-tool')) {
   customElements.define('json-tidy-tool', JsonTidyTool)
 }
+
+export {}

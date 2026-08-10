@@ -23,7 +23,6 @@ Two kinds of game live here:
 - **starfield-toy** — interactive warp-speed starfield. Live.
 - **murmuration** — interactive boids flocking simulation. Live.
 - **lsystem-tree** — seeded L-system fractal garden. Live.
-- **wallpaper-forge** — seeded generative wallpaper maker. Live.
 - **type-trial** — typing-speed / WPM game with per-category bests. Live. (Moved
   here from `/tools`; `/tools/type-trial` 301-redirects to `/games/type-trial`.)
 - **hue-hunt** — hex-colour guessing game (pick or type a hex, scored on
@@ -48,3 +47,6 @@ Two kinds of game live here:
 It then appears on the `/games` index and in the sitemap automatically (both
 iterate `getGames`). For a WASM game instead, build its output into
 `public/games/{slug}/` and embed that from the render branch.
+
+Wallpaper Forge is a tool at `/tools/wallpaper-forge`; its former game URL
+permanently redirects there.

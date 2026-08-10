@@ -81,7 +81,10 @@ export interface NavItem {
  * Nav's flatMap badly enough that the call sites fell back to `any`. Widen `nav`
  * once here, at the boundary where the override actually happens.
  */
-export type Site = Omit<typeof staticSite, 'nav'> & { nav: NavItem[] }
+export type Site = Omit<typeof staticSite, 'nav' | 'theme'> & {
+  nav: NavItem[]
+  theme: 'light' | 'dark'
+}
 
 export async function getSite(locals: unknown): Promise<Site> {
   return getConfig(locals, 'site', staticSite as unknown as Site)

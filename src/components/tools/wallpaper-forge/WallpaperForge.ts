@@ -1,13 +1,17 @@
 /**
- * Wallpaper Forge — a seeded generative wallpaper maker on a 2D canvas, zero
- * dependencies. Five distinct generative engines produce a static, download-ready
- * wallpaper; nothing animates, so it renders instantly and needs no motion budget.
+ * Wallpaper Forge — one seeded tool for wallpapers, patterns, PNGs and GIFs.
+ * Nine engines share one deterministic render path, so preview, still export and
+ * every animation frame are generated from the same settings.
  *
  *   • Aurora     — soft glowing mesh-gradient blobs (additive light).
  *   • Waves      — smooth layered bands with wavy, sine-woven crests.
  *   • Topographic — iso-contour linework traced from fractal value noise.
  *   • Truchet    — a grid of two-arc tiles that weave into flowing maze lines.
  *   • Terrazzo   — scattered organic chips (circles / triangles / quads / pills).
+ *   • Flow Field — particle trails following a seeded vector field.
+ *   • Harmonograph — layered damped-pendulum curves.
+ *   • Mosaic     — pulsing geometric colour tiles.
+ *   • Constellation — connected points moving in small seeded orbits.
  *
  * Everything is deterministic from the settings plus an integer SEED: type a
  * seed to reproduce a piece with the same settings, or hit Regenerate for a new one. The composition is
@@ -17,11 +21,14 @@
  * tablet). Density, Detail and Grain sliders, palette, aspect and pattern are all
  * persisted in localStorage.
  *
+ * GIFs use a bounded 24-frame loop so exports stay practical on phones.
  * Colours are DATA (the palettes), matching the sibling generative toys; the
  * "Theme" palette is resolved from the theme.css tokens at mount so it tracks the
  * site's accent. No animation loop exists (static art); the initial sizing frame
  * and ResizeObserver are both torn down if the component is removed.
  */
+
+import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 
 interface Palette {
   id: string
@@ -41,7 +48,16 @@ const WF_PALETTES: Palette[] = [
   { id: 'mono', name: 'Mono', bg: '#090909', colors: ['#f2f2f2', '#c4c4c4', '#8f8f8f', '#5c5c5c', '#d9d9d9'] },
 ]
 
-type PatternId = 'aurora' | 'waves' | 'topo' | 'truchet' | 'terrazzo'
+type PatternId =
+  | 'aurora'
+  | 'waves'
+  | 'topo'
+  | 'truchet'
+  | 'terrazzo'
+  | 'flow'
+  | 'harmonograph'
+  | 'mosaic'
+  | 'constellation'
 
 const WF_PATTERNS: { id: PatternId; name: string; blurb: string }[] = [
   { id: 'aurora', name: 'Aurora', blurb: 'glowing gradient mesh' },
@@ -49,6 +65,10 @@ const WF_PATTERNS: { id: PatternId; name: string; blurb: string }[] = [
   { id: 'topo', name: 'Topographic', blurb: 'noise contour lines' },
   { id: 'truchet', name: 'Truchet', blurb: 'woven arc tiles' },
   { id: 'terrazzo', name: 'Terrazzo', blurb: 'scattered chips' },
+  { id: 'flow', name: 'Flow Field', blurb: 'seeded particle trails' },
+  { id: 'harmonograph', name: 'Harmonograph', blurb: 'damped pendulum curves' },
+  { id: 'mosaic', name: 'Mosaic', blurb: 'geometric colour tiles' },
+  { id: 'constellation', name: 'Constellation', blurb: 'connected star maps' },
 ]
 
 type AspectId = 'phone' | 'desktop' | 'square' | 'tablet'
@@ -69,6 +89,15 @@ const LS_ASPECT = 'wf:aspect'
 const LS_SEED = 'wf:seed'
 
 const TAU = Math.PI * 2
+
+const LEGACY_PALETTE: Record<string, string> = {
+  ember: 'ember',
+  tide: 'ocean',
+  bloom: 'sunset',
+  sand: 'ember',
+  mono: 'mono',
+  aurora: 'ocean',
+}
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
@@ -99,6 +128,31 @@ function writeStored(key: string, value: string) {
 
 function randomSeed() {
   return Math.floor(Math.random() * 900000) + 100000
+}
+
+function seedFromText(text: string): number {
+  let h = 1779033703 ^ text.length
+  for (let i = 0; i < text.length; i++) {
+    h = Math.imul(h ^ text.charCodeAt(i), 3432918353)
+    h = (h << 13) | (h >>> 19)
+  }
+  return (h ^ (h >>> 16)) >>> 0 || randomSeed()
+}
+
+function readLegacyPatternForgeHash(hash: string) {
+  const parts = hash.replace(/^#/, '').split('.')
+  if (parts.length < 4) return null
+  const [pattern, oldPalette, density, seed] = parts
+  if (!WF_PATTERNS.some(p => p.id === pattern)) return null
+  const palette = LEGACY_PALETTE[oldPalette]
+  if (!palette || !WF_PALETTES.some(p => p.id === palette)) return null
+  const densityRaw = clamp(Number(density), 0, 100)
+  return {
+    pattern: pattern as PatternId,
+    palette,
+    densityRaw: Number.isFinite(densityRaw) ? densityRaw : 50,
+    seed: seedFromText(seed),
+  }
 }
 
 /* Deterministic PRNG (mulberry32) — same seed, same stream. */
@@ -187,12 +241,13 @@ function ramp(cols: [number, number, number][], t: number): [number, number, num
   return mix(cols[i], cols[i + 1], x - i)
 }
 
-class WallpaperForgeGame extends HTMLElement {
+class WallpaperForgeTool extends HTMLElement {
   private canvas!: HTMLCanvasElement
   private ctx!: CanvasRenderingContext2D
   private ro?: ResizeObserver
   private pendingFrame = 0
   private copyTimer = 0
+  private exportToken = 0
 
   // tunables
   private pattern: PatternId = 'aurora'
@@ -221,35 +276,50 @@ class WallpaperForgeGame extends HTMLElement {
     this.grainRaw = clamp(readStoredNumber(LS_GRAIN, 12), 0, 100)
     const savedSeed = Math.floor(readStoredNumber(LS_SEED, 0))
     this.seed = Number.isSafeInteger(savedSeed) && savedSeed > 0 ? savedSeed : randomSeed()
+
+    const legacy = readLegacyPatternForgeHash(location.hash)
+    if (legacy) {
+      this.pattern = legacy.pattern
+      this.palette = WF_PALETTES.find(p => p.id === legacy.palette) || this.palette
+      this.densityRaw = legacy.densityRaw
+      this.seed = legacy.seed
+      writeStored(LS_PATTERN, this.pattern)
+      writeStored(LS_PALETTE, this.palette.id)
+      writeStored(LS_DENSITY, String(this.densityRaw))
+      writeStored(LS_SEED, String(this.seed))
+      history.replaceState(null, '', location.pathname + location.search)
+    }
     writeStored(LS_SEED, String(this.seed))
 
     this.innerHTML = `
-      <div data-type="wf-game">
+      <div data-type="tool-page" data-tool="wallpaper-forge">
         <div data-type="wf-header">
           <div data-type="wf-titlebar">
             <h1>Wallpaper Forge</h1>
-            <span data-type="wf-badge">seeded generative art</span>
+            <span data-type="wf-badge">image + GIF studio</span>
           </div>
-          <p>Forge a one-of-a-kind wallpaper in the browser. Pick an engine — glowing gradients, flowing waves, noise contours, woven tiles or scattered chips — dial the density, detail and grain, then download a crisp, full-resolution PNG sized for your phone, desktop, tablet or a square. Every piece is fixed by its settings and seed, so copy the seed to revisit one with the same settings or reroll for a fresh one.</p>
+          <p>Make seeded wallpapers and looping generative patterns in one place. Choose an engine, size and palette, tune the detail, then export a full-resolution PNG or a mobile-safe animated GIF. The same settings and seed always reproduce the same piece.</p>
         </div>
         <div data-type="wf-stage">
           <canvas data-type="wf-canvas" tabindex="0" role="img"
-            aria-label="Generative wallpaper preview. Regenerate for a new seed, or download it as a PNG."></canvas>
+            aria-label="Generative wallpaper preview. Regenerate for a new seed, then export an image or animated GIF."></canvas>
         </div>
         <div data-type="wf-controls">
           <div data-group="transport" role="group" aria-label="Actions">
-            <button data-action="regen" type="button" title="New random seed (R)">Regenerate</button>
-            <button data-action="download" type="button" title="Save the wallpaper as a full-resolution PNG (D)">Download PNG</button>
+            <button data-action="regen" type="button" aria-keyshortcuts="R">Regenerate</button>
+            <button data-action="download-image" type="button" aria-keyshortcuts="D">Export image</button>
+            <button data-action="download-gif" type="button" aria-keyshortcuts="G">Export GIF</button>
+            <output data-type="wf-export-status" aria-live="polite"></output>
           </div>
           <div data-group="pattern" role="group" aria-label="Pattern engine">
             <span data-type="wf-group-label">Pattern</span>
             ${WF_PATTERNS.map(p => `
-              <button data-pattern="${p.id}" type="button" aria-pressed="${p.id === this.pattern}" title="${p.name} — ${p.blurb}">${p.name}</button>`).join('')}
+              <button data-pattern="${p.id}" type="button" aria-pressed="${p.id === this.pattern}" aria-description="${p.blurb}">${p.name}</button>`).join('')}
           </div>
           <div data-group="aspect" role="group" aria-label="Resolution and shape">
             <span data-type="wf-group-label">Size</span>
             ${WF_ASPECTS.map(a => `
-              <button data-aspect="${a.id}" type="button" aria-pressed="${a.id === this.aspect}" title="${a.name} — ${a.w}×${a.h}px">${a.name} <span data-type="wf-dim" aria-hidden="true">${a.w}×${a.h}</span></button>`).join('')}
+              <button data-aspect="${a.id}" type="button" aria-pressed="${a.id === this.aspect}">${a.name} <span data-type="wf-dim">${a.w}×${a.h}</span></button>`).join('')}
           </div>
           <div data-type="wf-sliders">
             <div data-type="wf-slider">
@@ -271,24 +341,24 @@ class WallpaperForgeGame extends HTMLElement {
           <div data-group="palette" role="group" aria-label="Colour palette">
             <span data-type="wf-group-label">Palette</span>
             ${WF_PALETTES.map(p => `
-              <button data-palette="${p.id}" type="button" aria-pressed="${p.id === this.palette.id}" title="${p.name} palette">
+              <button data-palette="${p.id}" type="button" aria-pressed="${p.id === this.palette.id}" aria-label="${p.name} palette">
                 <span data-type="wf-swatch" aria-hidden="true">${(p.colors.length ? p.colors : ['var(--color-accent)', 'var(--color-text)', 'var(--color-muted)']).slice(0, 4).map(c => `<i style="background:${c}"></i>`).join('')}</span>${p.name}
               </button>`).join('')}
           </div>
           <div data-group="seed">
             <label for="wf-seed">Seed</label>
-            <input id="wf-seed" type="text" inputmode="numeric" spellcheck="false" value="${this.seed}"
+            <input id="wf-seed" type="text" inputmode="numeric" maxlength="10" spellcheck="false" value="${this.seed}"
               aria-label="Seed — type a number and press Enter to reproduce a wallpaper" />
-            <button data-action="copy-seed" type="button" title="Copy this seed">Copy</button>
+            <button data-action="copy-seed" type="button" aria-label="Copy seed">Copy</button>
           </div>
         </div>
         <details data-type="wf-explainer">
           <summary>How the engines work</summary>
-          <p><strong>Everything is seeded.</strong> A single number drives a deterministic random stream, so the same settings and seed always forge the exact same wallpaper — the preview you see and the PNG you download are one and the same picture, just rendered at your device's resolution.</p>
-          <p><strong>Aurora</strong> stacks soft radial gradients with additive light for a glowing mesh. <strong>Waves</strong> fills layered bands whose crests are woven from stacked sine curves. <strong>Topographic</strong> traces iso-contour lines through a field of fractal value noise, like a map's elevation rings. <strong>Truchet</strong> drops one of two quarter-arc tiles into each grid cell, and the arcs join up into endless flowing lines. <strong>Terrazzo</strong> scatters little chips across the ground.</p>
+          <p><strong>Everything is seeded.</strong> A single number drives a deterministic random stream, so the same settings and seed always forge the exact same piece. PNG keeps the selected device resolution; GIF creates a compact two-second loop.</p>
+          <p><strong>Aurora</strong> glows, <strong>Waves</strong> layers flowing bands, <strong>Topographic</strong> traces noise contours, <strong>Truchet</strong> weaves arc tiles, and <strong>Terrazzo</strong> scatters chips. <strong>Flow Field</strong>, <strong>Harmonograph</strong>, <strong>Mosaic</strong>, and <strong>Constellation</strong> preserve the useful engines from the old Pattern Forge tool.</p>
           <p data-type="wf-try"><strong>Try this:</strong> switch to <em>Topographic</em>, push <em>Detail</em> high and <em>Density</em> low, add a touch of <em>Grain</em>, then <em>Regenerate</em> until a seed grabs you — and <em>Copy</em> it. <em>Density</em> and <em>Detail</em> mean something a little different in each engine (the readout tells you what Density controls).</p>
         </details>
-        <p data-type="wf-hint">Shortcuts: R = regenerate · D = download. Pick a Size, then Download for a full-resolution wallpaper.</p>
+        <p data-type="wf-hint">Shortcuts: R = regenerate · D = image · G = GIF. PNG uses the selected resolution; GIF is capped at 640px to protect mobile memory.</p>
       </div>
     `
 
@@ -307,6 +377,7 @@ class WallpaperForgeGame extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this.exportToken++
     this.ro?.disconnect()
     if (this.pendingFrame) window.cancelAnimationFrame(this.pendingFrame)
     if (this.copyTimer) window.clearTimeout(this.copyTimer)
@@ -350,12 +421,19 @@ class WallpaperForgeGame extends HTMLElement {
       case 'topo': return 6 + Math.round(d * 30)
       case 'truchet': return 4 + Math.round(d * 20)
       case 'terrazzo': return 40 + Math.round(d * 400)
+      case 'flow': return 250 + Math.round(d * 1250)
+      case 'harmonograph': return 2 + Math.round(d * 5)
+      case 'mosaic': return 6 + Math.round(d * 28)
+      case 'constellation': return 30 + Math.round(d * 170)
     }
   }
 
   private densityLabel(): string {
     const n = this.densityCount()
-    const unit = { aurora: 'blobs', waves: 'layers', topo: 'lines', truchet: 'tiles', terrazzo: 'chips' }[this.pattern]
+    const unit = {
+      aurora: 'blobs', waves: 'layers', topo: 'lines', truchet: 'tiles', terrazzo: 'chips',
+      flow: 'trails', harmonograph: 'layers', mosaic: 'tiles', constellation: 'stars',
+    }[this.pattern]
     return `${n} ${unit}`
   }
 
@@ -399,7 +477,7 @@ class WallpaperForgeGame extends HTMLElement {
 
   /* ── the composition (deterministic; used by preview AND export) ── */
 
-  private renderTo(ctx: CanvasRenderingContext2D, W: number, H: number) {
+  private renderTo(ctx: CanvasRenderingContext2D, W: number, H: number, phase = 0) {
     ctx.save()
     ctx.globalCompositeOperation = 'source-over'
     ctx.globalAlpha = 1
@@ -409,23 +487,29 @@ class WallpaperForgeGame extends HTMLElement {
     const rnd = mulberry32(this.seed)
     const e = this.detailRaw / 100
     switch (this.pattern) {
-      case 'aurora': this.drawAurora(ctx, W, H, cols, rnd, e); break
-      case 'waves': this.drawWaves(ctx, W, H, cols, rnd, e); break
-      case 'topo': this.drawTopo(ctx, W, H, cols, e); break
-      case 'truchet': this.drawTruchet(ctx, W, H, cols, rnd, e); break
-      case 'terrazzo': this.drawTerrazzo(ctx, W, H, cols, rnd, e); break
+      case 'aurora': this.drawAurora(ctx, W, H, cols, rnd, e, phase); break
+      case 'waves': this.drawWaves(ctx, W, H, cols, rnd, e, phase); break
+      case 'topo': this.drawTopo(ctx, W, H, cols, e, phase); break
+      case 'truchet': this.drawTruchet(ctx, W, H, cols, rnd, e, phase); break
+      case 'terrazzo': this.drawTerrazzo(ctx, W, H, cols, rnd, e, phase); break
+      case 'flow': this.drawFlow(ctx, W, H, cols, rnd, e, phase); break
+      case 'harmonograph': this.drawHarmonograph(ctx, W, H, cols, rnd, e, phase); break
+      case 'mosaic': this.drawMosaic(ctx, W, H, cols, rnd, e, phase); break
+      case 'constellation': this.drawConstellation(ctx, W, H, cols, rnd, e, phase); break
     }
     if (this.grainRaw > 0) this.applyGrain(ctx, W, H)
     ctx.restore()
   }
 
-  private drawAurora(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number) {
+  private drawAurora(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number, phase: number) {
     const minDim = Math.min(W, H)
     const n = this.densityCount()
     ctx.globalCompositeOperation = 'lighter'
     for (let i = 0; i < n; i++) {
-      const cx = rnd() * W
-      const cy = rnd() * H
+      const orbit = minDim * (0.02 + rnd() * 0.05)
+      const angle = rnd() * TAU
+      const cx = rnd() * W + Math.cos(angle + phase) * orbit
+      const cy = rnd() * H + Math.sin(angle + phase) * orbit
       const c = cols[(rnd() * cols.length) | 0]
       const r = lerp(0.55, 0.24, e) * minDim * (0.6 + rnd() * 1.0)
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
@@ -438,7 +522,7 @@ class WallpaperForgeGame extends HTMLElement {
     ctx.globalCompositeOperation = 'source-over'
   }
 
-  private drawWaves(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number) {
+  private drawWaves(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number, phase: number) {
     const layers = this.densityCount()
     const baseAmp = H * 0.035 * (1 + e * 1.8)
     // three harmonics per layer, seeded phases/frequencies
@@ -465,9 +549,9 @@ class WallpaperForgeGame extends HTMLElement {
         const x = (s / steps) * W
         const u = (s / steps) * TAU
         const y = yBase
-          + a1 * Math.sin(u * f1 + p1)
-          + a2 * Math.sin(u * f2 + p2)
-          + a3 * Math.sin(u * f3 + p3)
+          + a1 * Math.sin(u * f1 + p1 + phase)
+          + a2 * Math.sin(u * f2 + p2 - phase)
+          + a3 * Math.sin(u * f3 + p3 + phase * 2)
         ctx.lineTo(x, y)
       }
       ctx.lineTo(W, H)
@@ -476,7 +560,7 @@ class WallpaperForgeGame extends HTMLElement {
     }
   }
 
-  private drawTopo(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], e: number) {
+  private drawTopo(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], e: number, phase: number) {
     const levels = this.densityCount()
     const gridCols = 90 + Math.round(e * 100)
     const gridRows = Math.max(4, Math.round(gridCols * (H / W)))
@@ -488,7 +572,12 @@ class WallpaperForgeGame extends HTMLElement {
     const field: number[] = new Array((gridCols + 1) * (gridRows + 1))
     for (let y = 0; y <= gridRows; y++) {
       for (let x = 0; x <= gridCols; x++) {
-        field[y * (gridCols + 1) + x] = fbm(x * cw * freq, y * ch * freq, this.seed, octaves)
+        field[y * (gridCols + 1) + x] = fbm(
+          x * cw * freq + Math.cos(phase) * 0.28,
+          y * ch * freq + Math.sin(phase) * 0.28,
+          this.seed,
+          octaves,
+        )
       }
     }
     const at = (x: number, y: number) => field[y * (gridCols + 1) + x]
@@ -521,7 +610,7 @@ class WallpaperForgeGame extends HTMLElement {
     }
   }
 
-  private drawTruchet(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number) {
+  private drawTruchet(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number, phase: number) {
     const across = this.densityCount()
     const tile = W / across
     const rows = Math.ceil(H / tile) + 1
@@ -531,7 +620,8 @@ class WallpaperForgeGame extends HTMLElement {
     for (let gy = 0; gy < rows; gy++) {
       for (let gx = 0; gx < across; gx++) {
         const ox = gx * tile, oy = gy * tile
-        ctx.strokeStyle = rgba(cols[(rnd() * cols.length) | 0], 0.95)
+        const alpha = 0.7 + 0.25 * (0.5 + 0.5 * Math.sin(phase + gx * 0.5 + gy * 0.35))
+        ctx.strokeStyle = rgba(cols[(rnd() * cols.length) | 0], alpha)
         ctx.beginPath()
         if (rnd() < 0.5) {
           // arcs at top-left and bottom-right corners
@@ -549,7 +639,7 @@ class WallpaperForgeGame extends HTMLElement {
     }
   }
 
-  private drawTerrazzo(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number) {
+  private drawTerrazzo(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number, phase: number) {
     const chips = this.densityCount()
     const minDim = Math.min(W, H)
     const base = minDim * lerp(0.03, 0.011, e)
@@ -557,7 +647,7 @@ class WallpaperForgeGame extends HTMLElement {
       const cx = rnd() * W
       const cy = rnd() * H
       const sz = base * (0.45 + rnd() * 1.1)
-      const rot = rnd() * TAU
+      const rot = rnd() * TAU + phase * (rnd() < 0.5 ? -1 : 1)
       ctx.save()
       ctx.translate(cx, cy)
       ctx.rotate(rot)
@@ -585,6 +675,122 @@ class WallpaperForgeGame extends HTMLElement {
       }
       ctx.fill()
       ctx.restore()
+    }
+  }
+
+  private drawFlow(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number, phase: number) {
+    const count = this.densityCount()
+    const step = Math.max(1.5, Math.min(W, H) * lerp(0.006, 0.0025, e))
+    ctx.lineCap = 'round'
+    for (let i = 0; i < count; i++) {
+      let x = rnd() * W
+      let y = rnd() * H
+      ctx.strokeStyle = rgba(cols[(rnd() * cols.length) | 0], 0.08 + rnd() * 0.12)
+      ctx.lineWidth = Math.max(0.6, Math.min(W, H) * (0.0008 + rnd() * 0.0012))
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      for (let s = 0; s < 70; s++) {
+        const angle = fbm((x / W) * 3, (y / H) * 3, this.seed, 3) * TAU * 2 + phase
+        x += Math.cos(angle) * step
+        y += Math.sin(angle) * step
+        if (x < 0 || x > W || y < 0 || y > H) break
+        ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+    }
+  }
+
+  private drawHarmonograph(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, _e: number, phase: number) {
+    const cx = W / 2
+    const cy = H / 2
+    const radius = Math.min(W, H) * 0.42
+    const layers = this.densityCount()
+    for (let layer = 0; layer < layers; layer++) {
+      const f1 = 1 + Math.floor(rnd() * 5)
+      const f2 = 1 + Math.floor(rnd() * 5)
+      const f3 = 1 + Math.floor(rnd() * 5)
+      const f4 = 1 + Math.floor(rnd() * 5)
+      const p1 = rnd() * TAU + phase
+      const p2 = rnd() * TAU - phase
+      const d1 = 0.0008 + rnd() * 0.0022
+      const d2 = 0.0008 + rnd() * 0.0022
+      ctx.strokeStyle = rgba(cols[(rnd() * cols.length) | 0], 0.5)
+      ctx.lineWidth = Math.max(0.7, Math.min(W, H) * 0.001)
+      ctx.beginPath()
+      for (let t = 0; t < 1800; t++) {
+        const e1 = Math.exp(-d1 * t)
+        const e2 = Math.exp(-d2 * t)
+        const x = cx + radius * e1 * Math.sin(t * 0.02 * f1 + p1) + radius * 0.35 * e2 * Math.sin(t * 0.02 * f3 + phase)
+        const y = cy + radius * e1 * Math.sin(t * 0.02 * f2 + p2) + radius * 0.35 * e2 * Math.sin(t * 0.02 * f4 - phase)
+        if (t === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+    }
+  }
+
+  private drawMosaic(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, _e: number, phase: number) {
+    const across = this.densityCount()
+    const tile = W / across
+    const rows = Math.ceil(H / tile)
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < across; col++) {
+        const x = col * tile
+        const y = row * tile
+        const pulse = 0.62 + 0.34 * (0.5 + 0.5 * Math.sin(phase + row * 0.45 + col * 0.35))
+        ctx.fillStyle = rgba(cols[(rnd() * cols.length) | 0], pulse)
+        ctx.beginPath()
+        if (rnd() > 0.5) {
+          ctx.moveTo(x, y); ctx.lineTo(x + tile, y); ctx.lineTo(x, y + tile)
+        } else {
+          ctx.moveTo(x + tile, y); ctx.lineTo(x + tile, y + tile); ctx.lineTo(x, y + tile)
+        }
+        ctx.closePath()
+        ctx.fill()
+        ctx.fillStyle = rgba(cols[(rnd() * cols.length) | 0], pulse * 0.78)
+        ctx.beginPath()
+        if (rnd() > 0.5) {
+          ctx.moveTo(x + tile, y); ctx.lineTo(x + tile, y + tile); ctx.lineTo(x, y + tile)
+        } else {
+          ctx.moveTo(x, y); ctx.lineTo(x + tile, y); ctx.lineTo(x, y + tile)
+        }
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+  }
+
+  private drawConstellation(ctx: CanvasRenderingContext2D, W: number, H: number, cols: [number, number, number][], rnd: () => number, e: number, phase: number) {
+    const count = this.densityCount()
+    const minDim = Math.min(W, H)
+    const points = Array.from({ length: count }, () => {
+      const orbit = minDim * (0.004 + rnd() * 0.012)
+      const angle = rnd() * TAU
+      return {
+        x: rnd() * W + Math.cos(angle + phase) * orbit,
+        y: rnd() * H + Math.sin(angle + phase) * orbit,
+        color: cols[(rnd() * cols.length) | 0],
+        size: 1 + rnd() * Math.max(1.5, minDim * 0.004),
+      }
+    })
+    const maxDist = minDim * lerp(0.2, 0.08, e)
+    ctx.lineWidth = Math.max(0.7, minDim * 0.0008)
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
+        const distance = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y)
+        if (distance >= maxDist) continue
+        ctx.strokeStyle = rgba(points[i].color, (1 - distance / maxDist) * 0.45)
+        ctx.beginPath()
+        ctx.moveTo(points[i].x, points[i].y)
+        ctx.lineTo(points[j].x, points[j].y)
+        ctx.stroke()
+      }
+    }
+    for (const point of points) {
+      ctx.fillStyle = rgba(point.color, 0.95)
+      ctx.beginPath()
+      ctx.arc(point.x, point.y, point.size, 0, TAU)
+      ctx.fill()
     }
   }
 
@@ -619,7 +825,8 @@ class WallpaperForgeGame extends HTMLElement {
 
   private wire() {
     this.querySelector('[data-action="regen"]')?.addEventListener('click', () => this.regenerate())
-    this.querySelector('[data-action="download"]')?.addEventListener('click', () => this.download())
+    this.querySelector('[data-action="download-image"]')?.addEventListener('click', () => this.exportImage())
+    this.querySelector('[data-action="download-gif"]')?.addEventListener('click', () => this.exportGif())
     this.querySelector('[data-action="copy-seed"]')?.addEventListener('click', () => this.copySeed())
 
     this.querySelectorAll<HTMLButtonElement>('[data-pattern]').forEach(btn => {
@@ -670,7 +877,7 @@ class WallpaperForgeGame extends HTMLElement {
     const seedInput = this.querySelector('#wf-seed') as HTMLInputElement
     const applySeed = () => {
       const n = parseInt(seedInput.value.replace(/[^0-9]/g, ''), 10)
-      if (Number.isFinite(n) && n > 0) {
+      if (Number.isSafeInteger(n) && n > 0 && n <= 0xffffffff) {
         this.seed = n
         seedInput.value = String(this.seed)
         writeStored(LS_SEED, String(this.seed))
@@ -701,7 +908,8 @@ class WallpaperForgeGame extends HTMLElement {
   private onKey(e: KeyboardEvent) {
     switch (e.key) {
       case 'r': case 'R': e.preventDefault(); this.regenerate(); break
-      case 'd': case 'D': e.preventDefault(); this.download(); break
+      case 'd': case 'D': e.preventDefault(); this.exportImage(); break
+      case 'g': case 'G': e.preventDefault(); this.exportGif(); break
     }
   }
 
@@ -736,29 +944,85 @@ class WallpaperForgeGame extends HTMLElement {
     }, 1200)
   }
 
-  private download() {
+  private setExportStatus(message: string) {
+    const output = this.querySelector('[data-type="wf-export-status"]')
+    if (output) output.textContent = message
+  }
+
+  private downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  private async exportImage() {
     const t = this.target()
     const off = document.createElement('canvas')
     off.width = t.w
     off.height = t.h
     const octx = off.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.renderTo(octx, t.w, t.h)
+    this.setExportStatus('Rendering image…')
+    const blob = await new Promise<Blob | null>(resolve => off.toBlob(resolve, 'image/png'))
+    if (!blob) {
+      this.setExportStatus('Image export failed')
+      return
+    }
+    this.downloadBlob(blob, `wallpaper-${this.pattern}-${this.aspect}-${this.seed}.png`)
+    this.setExportStatus('Image downloaded')
+  }
+
+  private async exportGif() {
+    const button = this.querySelector('[data-action="download-gif"]') as HTMLButtonElement | null
+    if (!button || button.disabled) return
+    button.disabled = true
+    const token = ++this.exportToken
+
     try {
-      const url = off.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `wallpaper-${this.pattern}-${this.aspect}-${this.seed}.png`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
+      const target = this.target()
+      // ponytail: GIFs are capped at 640px and 24 frames; raise only after mobile memory profiling.
+      const scale = Math.min(1, 640 / Math.max(target.w, target.h))
+      const width = Math.max(2, Math.round(target.w * scale))
+      const height = Math.max(2, Math.round(target.h * scale))
+      const frames = 24
+      const off = document.createElement('canvas')
+      off.width = width
+      off.height = height
+      const ctx = off.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
+      const gif = GIFEncoder()
+
+      for (let frame = 0; frame < frames; frame++) {
+        if (token !== this.exportToken || !this.isConnected) return
+        this.setExportStatus(`Rendering GIF ${frame + 1}/${frames}`)
+        this.renderTo(ctx, width, height, (frame / frames) * TAU)
+        const rgbaPixels = ctx.getImageData(0, 0, width, height).data
+        const palette = quantize(rgbaPixels, 256)
+        const indexedPixels = applyPalette(rgbaPixels, palette)
+        gif.writeFrame(indexedPixels, width, height, { palette, delay: 83, repeat: 0 })
+        if (frame % 2 === 1) await new Promise(resolve => window.setTimeout(resolve, 0))
+      }
+
+      gif.finish()
+      const bytes = gif.bytes()
+      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+      const blob = new Blob([buffer], { type: 'image/gif' })
+      this.downloadBlob(blob, `wallpaper-${this.pattern}-${this.aspect}-${this.seed}.gif`)
+      this.setExportStatus(`GIF downloaded · ${width}×${height}`)
     } catch {
-      /* toDataURL can throw on a tainted canvas — never taints here (no external images) */
+      this.setExportStatus('GIF export failed')
+    } finally {
+      if (this.isConnected && token === this.exportToken) button.disabled = false
     }
   }
 }
 
-if (!customElements.get('wallpaper-forge-game')) {
-  customElements.define('wallpaper-forge-game', WallpaperForgeGame)
+if (!customElements.get('wallpaper-forge-tool')) {
+  customElements.define('wallpaper-forge-tool', WallpaperForgeTool)
 }
 
 export {}

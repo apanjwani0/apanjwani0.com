@@ -65,6 +65,11 @@ const twitterHandle = handle ? `@${handle.replace(/^@/, '')}` : undefined
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- dns-prefetch fallback for the font origins: some engines drop a preconnect
+     under load or don't support it, so this is cheap insurance that the DNS is
+     still resolved early. Ignored where the preconnect above already applies. -->
+<link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+<link rel="dns-prefetch" href="https://fonts.gstatic.com" />
 <!-- Load the webfont CSS without blocking first paint: request it as `print`
      (non-render-blocking), then flip to `all` once it arrives; a <noscript>
      fallback keeps fonts working with JS disabled. `display=swap` already shows

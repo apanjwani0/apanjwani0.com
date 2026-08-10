@@ -15,11 +15,13 @@ import '../../components/games/type-trial/type-trial.css'
 import '../../components/games/hue-hunt/hue-hunt.css'
 import '../../components/games/starfield-toy/starfield.css'
 import '../../components/games/murmuration/murmuration.css'
+import '../../components/games/turing-bloom/turing-bloom.css'
 import '../../components/games/lsystem/lsystem.css'
 import '../../components/games/quintle/quintle.css'
-import '../../components/games/wallpaper-forge/wallpaper-forge.css'
 
 const { slug } = Astro.params
+if (slug === 'wallpaper-forge') return Astro.redirect('/tools/wallpaper-forge', 301)
+
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
 const game = games.find(g => g.slug === slug && g.enabled)
 
@@ -96,14 +98,14 @@ const breadcrumbLd = breadcrumbListJsonLd([
       <div data-type="project-description" set:html={render(game.description)} />
     </murmuration-game>
   )}
-  {game.interactive && slug === 'lsystem-tree' && (
-    <lsystem-tree-game data-game="lsystem-tree"></lsystem-tree-game>
-  )}
-  {game.interactive && slug === 'wallpaper-forge' && (
-    <wallpaper-forge-game data-game="wallpaper-forge">
+  {game.interactive && slug === 'turing-bloom' && (
+    <turing-bloom-game data-game="turing-bloom">
       <h1>{game.title}</h1>
       <div data-type="project-description" set:html={render(game.description)} />
-    </wallpaper-forge-game>
+    </turing-bloom-game>
+  )}
+  {game.interactive && slug === 'lsystem-tree' && (
+    <lsystem-tree-game data-game="lsystem-tree"></lsystem-tree-game>
   )}
   {!game.interactive && (
     <>
@@ -136,10 +138,11 @@ const breadcrumbLd = breadcrumbListJsonLd([
         else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
         else if (slug === 'starfield-toy') import('../../components/games/starfield-toy/Starfield.ts')
         else if (slug === 'murmuration') import('../../components/games/murmuration/Murmuration.ts')
+        else if (slug === 'turing-bloom') import('../../components/games/turing-bloom/TuringBloom.ts')
         else if (slug === 'lsystem-tree') import('../../components/games/lsystem/LSystem.ts')
-        else if (slug === 'wallpaper-forge') import('../../components/games/wallpaper-forge/WallpaperForge.ts')
       }
       document.addEventListener('astro:page-load', mountGame)
+      mountGame()
     </script>
   )}
 </Base>

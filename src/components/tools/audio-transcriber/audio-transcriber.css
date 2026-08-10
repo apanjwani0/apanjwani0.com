@@ -76,14 +76,14 @@ button[data-type="at-mic"]:hover {
 }
 
 button[data-type="at-mic"][data-recording="true"] {
-  border-color: #c0392b;
-  color: #c0392b;
+  border-color: var(--color-error);
+  color: var(--color-error);
   animation: mic-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes mic-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.3); }
-  50% { box-shadow: 0 0 0 12px rgba(192, 57, 43, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-error) 30%, transparent); }
+  50% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--color-error) 0%, transparent); }
 }
 
 /* ── Transcript output ── */

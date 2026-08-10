@@ -61,21 +61,11 @@ div[data-tool="epoch-wizard"] input[type="text"] {
 }
 
 /* ── Cards ───────────────────────────────────────────────── */
-section[data-type="ew-card"] {
-  margin-top: 1.25rem;
-  padding: 1rem 1.1rem 1.15rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--color-surface);
-}
-
+/* The card container and the card <h2> label styling both come from the shared
+   tools-common.css (identical across the card-based tools); only this tool's
+   card <h2> bottom margin is bespoke. */
 section[data-type="ew-card"] h2 {
   margin: 0 0 0.8rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--color-text);
 }
 
 div[data-group="ew-inputrow"] {

@@ -693,3 +693,5 @@ class HueHuntGame extends HTMLElement {
 if (!customElements.get('hue-hunt-game')) {
   customElements.define('hue-hunt-game', HueHuntGame)
 }
+
+export {}
