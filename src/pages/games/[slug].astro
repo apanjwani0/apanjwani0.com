@@ -6,6 +6,8 @@ import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import '../../styles/seo-support.css'
+import '../../components/games/games-common.css'
 import '../../components/games/twenty48/twenty48.css'
 import '../../components/games/game-of-life/game-of-life.css'
 import '../../components/games/flow-field/flow-field.css'
@@ -14,10 +16,15 @@ import '../../components/games/type-trial/type-trial.css'
 import '../../components/games/hue-hunt/hue-hunt.css'
 import '../../components/games/starfield-toy/starfield.css'
 import '../../components/games/murmuration/murmuration.css'
+import '../../components/games/turing-bloom/turing-bloom.css'
 import '../../components/games/lsystem/lsystem.css'
+import '../../components/games/quintle/quintle.css'
 
 const { slug } = Astro.params
+if (slug === 'wallpaper-forge') return Astro.redirect('/tools/wallpaper-forge', 301)
+
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 const game = games.find(g => g.slug === slug && g.enabled)
 
 if (!game) {
@@ -27,10 +34,15 @@ if (!game) {
 // For a "coming soon" page, point the visitor at a game that's actually
 // playable right now so the page is an invitation, not a dead end.
 const liveGame = games.find(g => g.enabled && g.interactive && g.slug !== slug)
+const pageTitle = game.seoTitle || game.title
+const pageDescription = game.metaDescription || game.description
+const gameIntro = game.intro || game.description
+const gameIntroHtml = render(gameIntro)
+const gameSeoContentHtml = game.seoContent ? render(game.seoContent) : ''
 
 const ldJson = webAppJsonLd({
   name: game.title,
-  description: game.description,
+  description: pageDescription,
   url: `${site.url}/games/${game.slug}`,
   authorName: site.name,
   authorUrl: site.url,
@@ -55,13 +67,19 @@ const breadcrumbLd = breadcrumbListJsonLd([
 ])
 ---
 
-<Base title={game.title} description={game.description} keywords={game.keywords}>
-  <script type="application/ld+json" set:html={ldJson} />
+<Base title={pageTitle} description={pageDescription} keywords={game.keywords} noindex={!game.interactive}>
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   {game.interactive && slug === '2048' && (
     <twenty48-game data-game="2048">
       <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={render(game.description)} />
+      <div data-type="project-description" set:html={gameIntroHtml} />
     </twenty48-game>
+  )}
+  {game.interactive && slug === 'quintle' && (
+    <quintle-game data-game="quintle">
+      <h1>{game.title}</h1>
+      <div data-type="project-description" set:html={gameIntroHtml} />
+    </quintle-game>
   )}
   {game.interactive && slug === 'game-of-life' && (
     <game-of-life-game data-game="game-of-life"></game-of-life-game>
@@ -84,19 +102,25 @@ const breadcrumbLd = breadcrumbListJsonLd([
   {game.interactive && slug === 'murmuration' && (
     <murmuration-game data-game="murmuration">
       <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={render(game.description)} />
+      <div data-type="project-description" set:html={gameIntroHtml} />
     </murmuration-game>
+  )}
+  {game.interactive && slug === 'turing-bloom' && (
+    <turing-bloom-game data-game="turing-bloom">
+      <h1>{game.title}</h1>
+      <div data-type="project-description" set:html={gameIntroHtml} />
+    </turing-bloom-game>
   )}
   {game.interactive && slug === 'lsystem-tree' && (
     <lsystem-tree-game data-game="lsystem-tree"></lsystem-tree-game>
   )}
   {!game.interactive && (
     <>
-      <script type="application/ld+json" set:html={breadcrumbLd} />
+      <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
       <Breadcrumbs items={crumbs} />
       <h1>{game.title}</h1>
-      <h2 style="color: var(--color-muted); margin-bottom: var(--space-section);">Coming Soon</h2>
-      <div data-type="project-description" set:html={render(game.description)} />
+      <h2 data-type="coming-soon">Coming Soon</h2>
+      <div data-type="project-description" set:html={gameIntroHtml} />
       {liveGame && (
         <p>
           Want to play something now? <a href={`/games/${liveGame.slug}`}>{liveGame.title}</a> is live and ready.
@@ -104,6 +128,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
       )}
     </>
   )}
+  {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
 
   {game.interactive && (
     <script>
@@ -112,7 +137,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
       // a game reached via in-site nav renders blank until a hard reload.
       function mountGame() {
         const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
-        if (slug === '2048') import('../../components/games/twenty48/Twenty48.ts')
+        if (slug === 'quintle') import('../../components/games/quintle/Quintle.ts')
+        else if (slug === '2048') import('../../components/games/twenty48/Twenty48.ts')
         else if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
         else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
         else if (slug === 'maze-weaver') import('../../components/games/maze-weaver/MazeWeaver.ts')
@@ -120,9 +146,22 @@ const breadcrumbLd = breadcrumbListJsonLd([
         else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
         else if (slug === 'starfield-toy') import('../../components/games/starfield-toy/Starfield.ts')
         else if (slug === 'murmuration') import('../../components/games/murmuration/Murmuration.ts')
+        else if (slug === 'turing-bloom') import('../../components/games/turing-bloom/TuringBloom.ts')
         else if (slug === 'lsystem-tree') import('../../components/games/lsystem/LSystem.ts')
       }
       document.addEventListener('astro:page-load', mountGame)
+      mountGame()
     </script>
   )}
 </Base>
+
+<style>
+  /* "Coming soon" subheading on the non-interactive game pages — muted, with
+     space before the description. Was an inline style; moved here to a scoped
+     data-type rule to match the project's no-inline-styles convention. Tokens
+     only, so it renders identically. */
+  h2[data-type="coming-soon"] {
+    color: var(--color-muted);
+    margin-bottom: var(--space-section);
+  }
+</style>

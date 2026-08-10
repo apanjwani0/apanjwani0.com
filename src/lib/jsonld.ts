@@ -3,6 +3,19 @@
  * Used by pages to inject <script type="application/ld+json"> into <head>.
  */
 
+/**
+ * JSON.stringify for a `set:html` <script> body.
+ *
+ * Every helper here is injected raw into `<script type="application/ld+json">`,
+ * and JSON.stringify does not escape `<`. A value containing `</script>` — a
+ * blog headline, a person's name — therefore closed the tag and everything after
+ * it became live markup. Escaping `<` keeps the JSON valid (< decodes back
+ * to `<`) while making the sequence impossible to write.
+ */
+function serialize(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
 export interface PersonSchema {
   name: string
   url: string
@@ -13,7 +26,7 @@ export interface PersonSchema {
 }
 
 export function personJsonLd(p: PersonSchema): string {
-  return JSON.stringify({
+  return serialize({
     '@context': 'https://schema.org',
     '@type': 'Person',
     name: p.name,
@@ -36,7 +49,7 @@ export interface BlogPostingSchema {
 }
 
 export function blogPostingJsonLd(b: BlogPostingSchema): string {
-  return JSON.stringify({
+  return serialize({
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
     headline: b.headline,
@@ -63,7 +76,7 @@ export interface ItemListEntry {
  * the listing-page counterpart to the per-item WebApplication schema.
  */
 export function itemListJsonLd(name: string, items: ItemListEntry[]): string {
-  return JSON.stringify({
+  return serialize({
     '@context': 'https://schema.org',
     '@type': 'ItemList',
     name,
@@ -89,7 +102,7 @@ export interface BreadcrumbEntry {
  * search engines only surface a breadcrumb path when the markup and the data agree.
  */
 export function breadcrumbListJsonLd(items: BreadcrumbEntry[]): string {
-  return JSON.stringify({
+  return serialize({
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: items.map((it, i) => ({
@@ -115,7 +128,7 @@ export interface WebSiteSchema {
  * its author via `publisher` — complements the page-level Person schema.
  */
 export function webSiteJsonLd(w: WebSiteSchema): string {
-  return JSON.stringify({
+  return serialize({
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: w.name,
@@ -143,14 +156,18 @@ export interface WebApplicationSchema {
 }
 
 export function webAppJsonLd(a: WebApplicationSchema): string {
-  return JSON.stringify({
+  return serialize({
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
     name: a.name,
     description: a.description,
     url: a.url,
+    mainEntityOfPage: a.url,
     applicationCategory: a.applicationCategory ?? 'Game',
     operatingSystem: 'Any',
+    inLanguage: 'en',
+    isAccessibleForFree: true,
+    browserRequirements: 'Requires JavaScript. Runs in a modern browser.',
     // Free, browser-based — the price-0 offer is what marks it "free" for rich results.
     offers: {
       '@type': 'Offer',

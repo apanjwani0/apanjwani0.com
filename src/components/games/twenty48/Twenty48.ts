@@ -385,7 +385,7 @@ class Twenty48Game extends HTMLElement {
         if (!tile) continue
         const { far, next } = this.findFarthest(r, c, v)
         const target = next ? this.cells[next.r][next.c] : null
-        if (target && target.value === tile.value && !target.mergedFrom) {
+        if (next && target && target.value === tile.value && !target.mergedFrom) {
           // merge: a new doubled tile takes the cell; both sources animate into it
           const merged: TwTile = {
             id: this.nextId++, value: tile.value * 2, row: next.r, col: next.c,

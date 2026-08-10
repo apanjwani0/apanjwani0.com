@@ -3,29 +3,38 @@ export const prerender = false
 
 import ToolBase from '../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
-import { tools } from '../../config/tools'
-import { getSite } from '../../lib/config'
+import { getSite, getTools } from '../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import { render } from '../../lib/markdown'
 import { validateSession } from '../../lib/session'
+import '../../styles/seo-support.css'
 import '../../components/tools/tools-common.css'
 import '../../components/tools/md-enhanced/md-enhanced.css'
 import '../../components/tools/audio-transcriber/audio-transcriber.css'
-import '../../components/tools/pattern-forge/pattern-forge.css'
+import '../../components/tools/wallpaper-forge/wallpaper-forge.css'
 import '../../components/tools/json-tidy/json-tidy.css'
 import '../../components/tools/list-forge/list-forge.css'
 import '../../components/tools/epoch-wizard/epoch-wizard.css'
 import '../../components/tools/chroma-lab/chroma-lab.css'
 import '../../components/tools/codec-forge/codec-forge.css'
+import '../../components/tools/hash-smith/hash-smith.css'
+import '../../components/tools/cron-whisperer/cron-whisperer.css'
+import '../../components/tools/regex-lab/regex-lab.css'
 
 const { slug } = Astro.params
 
 // Tools that have moved elsewhere keep their old URL alive with a permanent
 // redirect, so existing links and search results don't 404. Type Trial graduated
 // from a tool to a game.
-const MOVED: Record<string, string> = { 'type-trial': '/games/type-trial' }
+const MOVED: Record<string, string> = {
+  'type-trial': '/games/type-trial',
+  'pattern-forge': '/tools/wallpaper-forge',
+}
 const movedTo = MOVED[slug as string]
 if (movedTo) return Astro.redirect(movedTo, 301)
 
+const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 const tool = tools.find(t => t.slug === slug)
 
 if (!tool || tool.status === 'external') {
@@ -44,7 +53,6 @@ if (tool.status === 'disabled') {
   }
 }
 
-const site = await getSite(Astro.locals)
 const ldJson = webAppJsonLd({
   name: tool.title,
   description: tool.metaDescription || tool.description,
@@ -67,6 +75,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
   { name: 'Tools', url: `${site.url}/tools` },
   { name: tool.title, url: `${site.url}/tools/${tool.slug}` },
 ])
+const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
 ---
 
 <ToolBase
@@ -75,12 +84,22 @@ const breadcrumbLd = breadcrumbListJsonLd([
   metaDescription={tool.metaDescription}
   keywords={tool.keywords}
 >
-  <script type="application/ld+json" set:html={ldJson} />
-  <script type="application/ld+json" set:html={breadcrumbLd} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
-  {slug === 'md-enhanced' && <md-enhanced-tool data-tool="md-enhanced"></md-enhanced-tool>}
+  {slug === 'md-enhanced' && (
+    <md-enhanced-tool data-tool="md-enhanced">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </md-enhanced-tool>
+  )}
   {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
-  {slug === 'pattern-forge' && <pattern-forge-tool data-tool="pattern-forge"></pattern-forge-tool>}
+  {slug === 'wallpaper-forge' && (
+    <wallpaper-forge-tool data-tool="wallpaper-forge">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </wallpaper-forge-tool>
+  )}
   {slug === 'json-tidy' && (
     <json-tidy-tool data-tool="json-tidy">
       <h1>{tool.title}</h1>
@@ -111,6 +130,25 @@ const breadcrumbLd = breadcrumbListJsonLd([
       <p>{tool.intro || tool.description}</p>
     </codec-forge-tool>
   )}
+  {slug === 'hash-smith' && (
+    <hash-smith-tool data-tool="hash-smith">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </hash-smith-tool>
+  )}
+  {slug === 'cron-whisperer' && (
+    <cron-whisperer-tool data-tool="cron-whisperer">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </cron-whisperer-tool>
+  )}
+  {slug === 'regex-lab' && (
+    <regex-lab-tool data-tool="regex-lab">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </regex-lab-tool>
+  )}
+  {toolSeoContentHtml && <section data-type="seo-support" set:html={toolSeoContentHtml} />}
 </ToolBase>
 
 <script>
@@ -121,12 +159,16 @@ const breadcrumbLd = breadcrumbListJsonLd([
     const slug = document.querySelector('[data-tool]')?.getAttribute('data-tool')
     if (slug === 'md-enhanced') import('../../components/tools/md-enhanced/MdEnhanced.ts')
     else if (slug === 'audio-transcriber') import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
-    else if (slug === 'pattern-forge') import('../../components/tools/pattern-forge/PatternForge.ts')
+    else if (slug === 'wallpaper-forge') import('../../components/tools/wallpaper-forge/WallpaperForge.ts')
     else if (slug === 'json-tidy') import('../../components/tools/json-tidy/JsonTidy.ts')
     else if (slug === 'list-forge') import('../../components/tools/list-forge/ListForge.ts')
     else if (slug === 'epoch-wizard') import('../../components/tools/epoch-wizard/EpochWizard.ts')
     else if (slug === 'chroma-lab') import('../../components/tools/chroma-lab/ChromaLab.ts')
     else if (slug === 'codec-forge') import('../../components/tools/codec-forge/CodecForge.ts')
+    else if (slug === 'hash-smith') import('../../components/tools/hash-smith/HashSmith.ts')
+    else if (slug === 'cron-whisperer') import('../../components/tools/cron-whisperer/CronWhisperer.ts')
+    else if (slug === 'regex-lab') import('../../components/tools/regex-lab/RegexLab.ts')
   }
   document.addEventListener('astro:page-load', mountTool)
+  mountTool()
 </script>

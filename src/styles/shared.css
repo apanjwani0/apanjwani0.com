@@ -73,28 +73,39 @@ main[id="main-content"] {
   }
 }
 
-/* ── Unified hero-nav (transparent, fixed, auto-hides on scroll) — the site's
+/* ── Unified hero-nav (fixed, auto-hides on scroll) — the site's
    only navigation. Fixed to the viewport top, slides out of view when scrolling
    down and back when scrolling up. Three-column grid: wordmark left, section
-   links truly centred, empty third column for balance. Borderless — blends
-   seamlessly with the starfield and page content beneath. */
+   links truly centred, empty third column for balance. */
 nav[data-type="hero-nav"] {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 3;
+  z-index: 10;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
+  column-gap: 1rem;
   align-items: center;
   padding: clamp(1rem, 3.5vw, 1.4rem) clamp(1.25rem, 5vw, 2rem);
+  /* Same background token as the page, and no bottom rule: the nav reads as part
+     of the page rather than a separate bar, so no divider is needed. It stays
+     opaque (not transparent) so content scrolling under it never shows through. */
+  background: var(--color-bg);
   transition: transform 0.3s ease;
-  /* let drags pass through the gaps to the canvas; children re-enable below */
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 nav[data-type="hero-nav"][data-nav-hidden] {
   transform: translateY(-100%);
+}
+
+/* A keyboard user can tab into the nav while it's scrolled out of view (the JS
+   only hides it visually — the links stay in the DOM and focusable). Reveal it
+   whenever focus lands inside, so the focused link is never off-screen. Equal
+   specificity to the rule above but declared after, so it wins when both match. */
+nav[data-type="hero-nav"]:focus-within {
+  transform: none;
 }
 
 /* serif wordmark — first grid column, pinned left */
@@ -145,6 +156,23 @@ nav[data-type="hero-nav"] a[data-active] {
   text-underline-offset: 0.3em;
 }
 
+@media (max-width: 640px) {
+  nav[data-type="hero-nav"] {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    row-gap: var(--space-xs);
+    padding: 0.75rem var(--space-page-x);
+  }
+
+  a[data-type="hero-wordmark"] {
+    justify-self: center;
+  }
+
+  span[data-type="hero-links"] {
+    gap: 0.75rem 1.2rem;
+  }
+}
+
 /* ── Starfield canvas — fixed, full viewport, behind everything. ── */
 [data-type="starfield"] {
   position: fixed;
@@ -161,13 +189,15 @@ nav[data-type="hero-nav"] a[data-active] {
   touch-action: none;
 }
 
-/* Layering: content sits above the starfield. Top padding matches the fixed
-   nav height (measured live by JS and stored in --nav-h). Falls back to a
-   reasonable static value so the page isn't broken before JS runs. */
+/* Layering: content sits above the starfield. Top padding clears the fixed nav
+   (height measured live by JS into --nav-h, with a token fallback so the page
+   isn't broken before JS runs) PLUS one rhythm step — without that step the
+   first heading starts on the exact pixel the nav ends and every page reads as
+   stacked against the top. Owned here so both layouts share one value. */
 main {
   position: relative;
   z-index: 1;
-  padding-top: var(--nav-h, 3.5rem);
+  padding-top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-section));
 }
 
 /* Every tool workbench shares one width + side gutter so all tools line up.
@@ -180,4 +210,3 @@ main {
   padding: 2rem var(--space-page-x);
   box-sizing: border-box;
 }
-

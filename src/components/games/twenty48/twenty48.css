@@ -1,4 +1,5 @@
 div[data-type="tw-game"] {
+  width: min(100%, calc(100vw - 2 * var(--space-page-x)));
   max-width: var(--max-width);
   margin: 0 auto;
 }
@@ -85,11 +86,6 @@ canvas[data-type="tw-canvas"] {
   height: auto;
   touch-action: none; /* let a swipe drive the board without panning the page */
   cursor: pointer;
-}
-
-canvas[data-type="tw-canvas"]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
 }
 
 /* ── win / game-over overlay ── */

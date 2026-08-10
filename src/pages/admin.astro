@@ -2,55 +2,48 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
-import { getSite, getProjects, getExperience, getPosts, getGames } from '../lib/config'
+import { getSite, getProjects, getExperience, getPosts, getGames, getTools } from '../lib/config'
 import { validateSession } from '../lib/session'
-import { tools } from '../config/tools'
+import { getAdminSecret, getRuntimeEnv, getSessionToken, isAdminRequestAllowed } from '../lib/security'
 
 // Auth: read secret from Cloudflare env (prod) or process.env/.env (dev/Node)
-const runtimeEnv = (Astro.locals as any).runtime?.env
-const secret = runtimeEnv?.ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? import.meta.env.ADMIN_SECRET
+const runtimeEnv = getRuntimeEnv(Astro.locals)
+const secret = getAdminSecret(Astro.locals)
 
 // In dev with no secret configured, allow through without auth
 const bypassAuth = import.meta.env.DEV && !secret
 
 // In production: 404 unless the request IP is in the whitelist
 // Set ADMIN_IP_WHITELIST as a comma-separated list of allowed IPs in your environment variables
-let blocked = false
-if (!import.meta.env.DEV) {
-  const whitelist = (runtimeEnv?.ADMIN_IP_WHITELIST ?? process.env.ADMIN_IP_WHITELIST ?? import.meta.env.ADMIN_IP_WHITELIST ?? '')
-    .split(',').map((ip: string) => ip.trim()).filter(Boolean)
-
-  const clientIp =
-    Astro.request.headers.get('cf-connecting-ip') ??
-    Astro.request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
-    ''
-
-  if (!whitelist.includes(clientIp)) {
-    blocked = true
-    Astro.response.status = 404
-  }
-}
+const blocked = !isAdminRequestAllowed(Astro.request, Astro.locals)
+if (blocked) Astro.response.status = 404
 
 // Skip all data loading for blocked requests
-const cookie = blocked ? '' : (Astro.request.headers.get('cookie') ?? '')
-const token = blocked ? undefined : cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
+const token = blocked ? undefined : getSessionToken(Astro.request)
 const isAuth = !blocked && (bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG))
 
 const loginError = blocked ? null : Astro.url.searchParams.get('error')
 
 // Load from KV (or fallback to bundled TS) so admin always shows live values
-const [site, projects, experience, posts, games] = blocked
-  ? [null, null, null, null, null]
+const [site, projects, experience, posts, games, toolItems] = blocked
+  ? [null, null, null, null, null, null]
   : await Promise.all([
       getSite(Astro.locals),
       getProjects(Astro.locals),
       getExperience(Astro.locals),
       getPosts(Astro.locals),
       getGames(Astro.locals),
+      getTools(Astro.locals),
     ])
 
-const navJson = blocked ? '{}' : JSON.stringify(site!.nav)
-const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
+const siteConfig = site!
+const projectItems = projects!
+const companyItems = experience!
+const postItems = posts!
+const gameItems = games!
+const tools = toolItems!
+const navJson = blocked ? '{}' : JSON.stringify(siteConfig.nav)
+const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
 ---
 
 {blocked ? (
@@ -86,6 +79,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     <button class="tab" data-tab="blogs">blogs</button>
     <button class="tab" data-tab="games">games</button>
     <button class="tab" data-tab="tools">tools</button>
+    <button class="tab" data-tab="analytics">analytics</button>
   </div>
 
   <!-- Site -->
@@ -93,19 +87,20 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     <form id="form-site">
       <input type="hidden" name="nav" value={navJson} />
       <input type="hidden" name="sections" value={sectionsJson} />
-      <label>name<input name="name" value={site.name} /></label>
-      <label>handle<input name="handle" value={site.handle} /></label>
-      <label>tagline<input name="tagline" value={site.tagline} /></label>
-      <label>bio<textarea name="bio">{site.bio}</textarea></label>
-      <label>avatar path<input name="avatar" value={site.avatar} /></label>
+      <label>name<input name="name" value={siteConfig.name} /></label>
+      <label>handle<input name="handle" value={siteConfig.handle} /></label>
+      <label>site url<input name="url" value={siteConfig.url} /></label>
+      <label>tagline<input name="tagline" value={siteConfig.tagline} /></label>
+      <label>bio<textarea name="bio">{siteConfig.bio}</textarea></label>
+      <label>avatar path<input name="avatar" value={siteConfig.avatar} /></label>
       <label>theme
         <select name="theme">
-          <option value="light" selected={site.theme === 'light'}>light</option>
-          <option value="dark" selected={site.theme === 'dark'}>dark</option>
+          <option value="light" selected={siteConfig.theme === 'light'}>light</option>
+          <option value="dark" selected={siteConfig.theme === 'dark'}>dark</option>
         </select>
       </label>
-      <label>github<input name="github" value={site.social.github} /></label>
-      <label>linkedin<input name="linkedin" value={site.social.linkedin} /></label>
+      <label>github<input name="github" value={siteConfig.social.github} /></label>
+      <label>linkedin<input name="linkedin" value={siteConfig.social.linkedin} /></label>
       <div class="form-actions">
         <button type="submit">save site</button>
       </div>
@@ -115,7 +110,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   <!-- Projects -->
   <section id="tab-projects" class="tab-panel hidden">
     <div id="projects-list">
-      {projects.map((p) => (
+      {projectItems.map((p) => (
         <div class="item">
           <div class="drag-handle" title="drag to reorder">⠿</div>
           <label>title<input name="title" value={p.title} /></label>
@@ -136,7 +131,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   <!-- Experience -->
   <section id="tab-experience" class="tab-panel hidden">
     <div id="experience-list">
-      {experience.map((company) => (
+      {companyItems.map((company) => (
         <div class="company-item">
           <div class="company-header">
             <label>company<input name="company-name" value={company.name} /></label>
@@ -168,7 +163,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   <!-- Writing -->
   <section id="tab-blogs" class="tab-panel hidden">
     <div id="blogs-list">
-      {posts.map((p) => (
+      {postItems.map((p) => (
         <div class="item">
           <label>title<input name="title" value={p.title} /></label>
           <label>href<input name="href" value={p.href} /></label>
@@ -189,11 +184,15 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   <!-- Games -->
   <section id="tab-games" class="tab-panel hidden">
     <div id="games-list">
-      {games!.map((g) => (
+      {gameItems.map((g) => (
         <div class="item">
           <label>title<input name="title" value={g.title} /></label>
           <label>slug<input name="slug" value={g.slug} /></label>
+          <label>seo title<input name="seoTitle" value={g.seoTitle ?? ''} /></label>
+          <label>meta description<input name="metaDescription" value={g.metaDescription ?? ''} /></label>
           <label>description<textarea name="description">{g.description}</textarea></label>
+          <label>intro (optional)<textarea name="intro">{g.intro ?? ''}</textarea></label>
+          <label>seo content (markdown)<textarea name="seoContent" rows="8">{g.seoContent ?? ''}</textarea></label>
           <label>keywords (optional seo)<input name="keywords" value={g.keywords ?? ''} /></label>
           <label class="toggle-label">
             enabled
@@ -222,6 +221,34 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
         </li>
       ))}
     </ul>
+  </section>
+
+  <!-- Analytics -->
+  <section id="tab-analytics" class="tab-panel hidden">
+    <div class="form-actions">
+      <button type="button" id="refresh-analytics" class="add-btn">refresh analytics</button>
+      <span class="analytics-note">aggregate tool/game views only — no ids, ips, or raw referrers</span>
+    </div>
+    <div class="analytics-table-wrap">
+      <table class="analytics-table">
+        <thead>
+          <tr>
+            <th>type</th>
+            <th>slug</th>
+            <th>views</th>
+            <th>direct</th>
+            <th>direct %</th>
+            <th>avg load</th>
+            <th>avg route</th>
+            <th>avg lcp</th>
+            <th>avg ttfb</th>
+          </tr>
+        </thead>
+        <tbody id="analytics-body">
+          <tr><td colspan="9" class="analytics-empty">open this tab to load analytics</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <div id="toast" class="toast hidden"></div>
@@ -450,7 +477,11 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
 
   .toast.hidden { display: none; }
   .toast.success { background: var(--color-text); color: var(--color-bg); }
-  .toast.error { background: #c00; color: #fff; }
+  /* Error surfaces read from the theme's error/bg tokens instead of a hardcoded
+     red, so they track the active theme (dark: light-red on near-black) and stay
+     legible in both themes — near-black on the dark-red light theme, near-black
+     on the light-red dark theme. */
+  .toast.error { background: var(--color-error); color: var(--color-bg); }
 
   #auth-gate {
     display: flex;
@@ -461,7 +492,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   }
 
   #login-error {
-    color: #c00;
+    color: var(--color-error);
     font-size: 0.85rem;
     margin: 0;
   }
@@ -551,8 +582,32 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
   }
 
   .tool-status--disabled {
-    color: #c0392b;
-    border-color: #c0392b;
+    color: var(--color-error);
+    border-color: var(--color-error);
+  }
+
+  .analytics-note,
+  .analytics-empty {
+    color: var(--color-muted);
+    font-size: 0.85rem;
+  }
+
+  .analytics-table-wrap {
+    overflow-x: auto;
+  }
+
+  .analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .analytics-table th,
+  .analytics-table td {
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.45rem 0.55rem;
+    text-align: left;
+    white-space: nowrap;
   }
 </style>
 
@@ -610,6 +665,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'))
       btn.classList.add('active')
       document.getElementById(`tab-${btn.dataset.tab}`)?.classList.remove('hidden')
+      if (btn.dataset.tab === 'analytics') loadAnalytics()
     })
   })
 
@@ -638,6 +694,78 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     toast.className = `toast ${isError ? 'error' : 'success'}`
     setTimeout(() => { toast.className = 'toast hidden' }, 3000)
   }
+
+  type AnalyticsRow = {
+    kind: string
+    slug: string
+    views: number
+    directEntries: number
+    directRate: number
+    avgLoadMs: number | null
+    avgRouteMs: number | null
+    avgLcpMs: number | null
+    avgTtfbMs: number | null
+  }
+
+  let analyticsLoaded = false
+
+  function formatMs(value: number | null) {
+    return value === null ? '—' : `${Math.round(value)} ms`
+  }
+
+  function addAnalyticsCell(row: HTMLTableRowElement, value: string | number) {
+    const cell = document.createElement('td')
+    cell.textContent = String(value)
+    row.appendChild(cell)
+  }
+
+  function renderAnalyticsRows(rows: AnalyticsRow[]) {
+    const body = document.getElementById('analytics-body')!
+    body.replaceChildren()
+
+    if (rows.length === 0) {
+      const row = document.createElement('tr')
+      const cell = document.createElement('td')
+      cell.colSpan = 9
+      cell.className = 'analytics-empty'
+      cell.textContent = 'no tool or game views recorded yet'
+      row.appendChild(cell)
+      body.appendChild(row)
+      return
+    }
+
+    for (const item of rows) {
+      const row = document.createElement('tr')
+      addAnalyticsCell(row, item.kind)
+      addAnalyticsCell(row, item.slug)
+      addAnalyticsCell(row, item.views)
+      addAnalyticsCell(row, item.directEntries)
+      addAnalyticsCell(row, `${item.directRate}%`)
+      addAnalyticsCell(row, formatMs(item.avgLoadMs))
+      addAnalyticsCell(row, formatMs(item.avgRouteMs))
+      addAnalyticsCell(row, formatMs(item.avgLcpMs))
+      addAnalyticsCell(row, formatMs(item.avgTtfbMs))
+      body.appendChild(row)
+    }
+  }
+
+  async function loadAnalytics(force = false) {
+    if (analyticsLoaded && !force) return
+    const body = document.getElementById('analytics-body')!
+    body.innerHTML = '<tr><td colspan="9" class="analytics-empty">loading analytics...</td></tr>'
+
+    try {
+      const res = await fetch('/api/admin/analytics')
+      if (!res.ok) throw new Error()
+      const json = await res.json()
+      renderAnalyticsRows(Array.isArray(json.rows) ? json.rows : [])
+      analyticsLoaded = true
+    } catch {
+      body.innerHTML = '<tr><td colspan="9" class="analytics-empty">failed to load analytics</td></tr>'
+    }
+  }
+
+  document.getElementById('refresh-analytics')?.addEventListener('click', () => loadAnalytics(true))
 
   // Save
   async function save(type: string, data: unknown) {
@@ -672,6 +800,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     await save('site', {
       name: fd.get('name'),
       handle: fd.get('handle'),
+      url: fd.get('url'),
       theme,
       tagline: fd.get('tagline'),
       bio: fd.get('bio'),
@@ -860,7 +989,11 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     return `<div class="item">
       <label>title<input name="title" value="" /></label>
       <label>slug<input name="slug" value="" /></label>
+      <label>seo title<input name="seoTitle" value="" /></label>
+      <label>meta description<input name="metaDescription" value="" /></label>
       <label>description<textarea name="description"></textarea></label>
+      <label>intro (optional)<textarea name="intro"></textarea></label>
+      <label>seo content (markdown)<textarea name="seoContent" rows="8"></textarea></label>
       <label>keywords (optional seo)<input name="keywords" value="" /></label>
       <label class="toggle-label">
         enabled
@@ -882,7 +1015,11 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
     const data = Array.from(items).map(item => ({
       slug: (item.querySelector('[name="slug"]') as HTMLInputElement).value,
       title: (item.querySelector('[name="title"]') as HTMLInputElement).value,
+      seoTitle: (item.querySelector('[name="seoTitle"]') as HTMLInputElement).value.trim() || undefined,
+      metaDescription: (item.querySelector('[name="metaDescription"]') as HTMLInputElement).value.trim() || undefined,
       description: (item.querySelector('[name="description"]') as HTMLTextAreaElement).value,
+      intro: (item.querySelector('[name="intro"]') as HTMLTextAreaElement).value.trim() || undefined,
+      seoContent: (item.querySelector('[name="seoContent"]') as HTMLTextAreaElement).value.trim() || undefined,
       enabled: (item.querySelector('[name="enabled"]') as HTMLInputElement).checked,
       keywords: (item.querySelector('[name="keywords"]') as HTMLInputElement).value.trim() || undefined,
       interactive: (item.querySelector('[name="interactive"]') as HTMLInputElement).checked || undefined,
@@ -892,4 +1029,3 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(site!.sections)
 
   } // end admin guard
 </script>
-

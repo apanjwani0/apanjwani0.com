@@ -231,7 +231,7 @@ export function decide(input: BotDecisionInput): BotDecision {
   if (input.canCheck && toCall === 0) {
     const wantsValueBet = equity >= profile.valueThreshold
     const wantsBluff = !wantsValueBet && rng() < profile.bluffChance
-    if (wantsValueBet || wantsBluff) {
+    if (input.canBet && (wantsValueBet || wantsBluff)) {
       // If we can't legally reach a raise, just check instead of jamming pointlessly.
       if (hardMax <= 0) {
         return { action: 'check', think: think(rng) }
@@ -268,7 +268,7 @@ export function decide(input: BotDecisionInput): BotDecision {
   const wantsValueRaise = equity >= profile.valueThreshold
   const wantsBluffRaise = !wantsValueRaise && rng() < profile.bluffChance
 
-  if (wantsValueRaise || wantsBluffRaise) {
+  if (input.canRaise && (wantsValueRaise || wantsBluffRaise)) {
     // If calling would already commit us fully, or raise room has collapsed
     // to "can only shove", treat a raise-intent as a call/all-in situation.
     if (toCall >= myChips) {

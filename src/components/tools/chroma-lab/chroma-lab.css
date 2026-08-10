@@ -4,52 +4,17 @@
    (the whole point of the tool). Structure mirrors the other tools so the
    /tools hub reads as one family. */
 
-/* ── Buttons (shared language) ───────────────────────────── */
-div[data-tool="chroma-lab"] button {
-  padding: 0.32rem 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
-}
+/* Button chrome, focus rings, and <kbd> styling all come from the shared
+   tools-common.css (hoisted; identical across the tool family). */
 
-div[data-tool="chroma-lab"] button:hover {
-  color: var(--color-text);
-  border-color: var(--color-muted);
-}
-
-/* Focus rings and <kbd> styling come from the shared tools-common.css. */
-
-/* ── Toolbar ─────────────────────────────────────────────── */
-div[data-tool="chroma-lab"] [data-group="toolbar"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0 1rem;
-}
+/* Toolbar layout comes from the shared tools-common.css. */
 
 /* ── Cards ───────────────────────────────────────────────── */
-section[data-type="cl-card"] {
-  margin-top: 1.25rem;
-  padding: 1rem 1.1rem 1.15rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--color-surface);
-}
-
+/* The card container and the card <h2> label styling both come from the shared
+   tools-common.css (identical across the card-based tools); only this tool's
+   card <h2> bottom margin is bespoke. */
 section[data-type="cl-card"] h2 {
   margin: 0 0 0.9rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--color-text);
 }
 
 div[data-type="cl-harmony-block"] h3 {

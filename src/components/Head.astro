@@ -11,13 +11,20 @@ interface Props {
   image?: string
   imageWidth?: number
   imageHeight?: number
+  /** X/Twitter handle (without @) for card attribution, e.g. 'apanjwani0'. */
+  handle?: string
   /** Open Graph object type — 'website' for most pages, 'article' for blog posts. */
   ogType?: 'website' | 'article'
   /** ISO date (YYYY-MM-DD) for article:published_time; only used when ogType === 'article'. */
   publishedTime?: string
 }
 
-const { pageTitle, description, canonicalURL, siteName, noindex = false, keywords, image, imageWidth, imageHeight, ogType = 'website', publishedTime } = Astro.props
+const { pageTitle, description, canonicalURL, siteName, noindex = false, keywords, image, imageWidth, imageHeight, ogType = 'website', publishedTime, handle } = Astro.props
+// The share image is a portrait cut-out; describe it rather than repeating the
+// bare name so the alt text is meaningful to screen readers and image search.
+const imageAlt = `Portrait of ${siteName}`
+// X/Twitter wants an @-prefixed handle for creator/site attribution.
+const twitterHandle = handle ? `@${handle.replace(/^@/, '')}` : undefined
 ---
 
 <meta charset="UTF-8" />
@@ -43,35 +50,32 @@ const { pageTitle, description, canonicalURL, siteName, noindex = false, keyword
 <meta property="og:site_name" content={siteName} />
 <meta property="og:locale" content="en_US" />
 {image && <meta property="og:image" content={image} />}
-{image && <meta property="og:image:alt" content={siteName} />}
+{image && <meta property="og:image:alt" content={imageAlt} />}
 {image && imageWidth && <meta property="og:image:width" content={String(imageWidth)} />}
 {image && imageHeight && <meta property="og:image:height" content={String(imageHeight)} />}
 {image && <meta property="og:image:type" content="image/webp" />}
 
 <meta name="twitter:card" content="summary" />
+{twitterHandle && <meta name="twitter:site" content={twitterHandle} />}
+{twitterHandle && <meta name="twitter:creator" content={twitterHandle} />}
 <meta name="twitter:title" content={pageTitle} />
 <meta name="twitter:description" content={description} />
 {image && <meta name="twitter:image" content={image} />}
-{image && <meta name="twitter:image:alt" content={siteName} />}
+{image && <meta name="twitter:image:alt" content={imageAlt} />}
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<!-- Load the webfont CSS without blocking first paint: request it as `print`
-     (non-render-blocking), then flip to `all` once it arrives; a <noscript>
-     fallback keeps fonts working with JS disabled. `display=swap` already shows
-     fallback text immediately, so there is no invisible-text flash. -->
+<!-- dns-prefetch fallback for the font origins: some engines drop a preconnect
+     under load or don't support it, so this is cheap insurance that the DNS is
+     still resolved early. Ignored where the preconnect above already applies. -->
+<link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+<link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+<!-- Plain stylesheet load keeps CSP script attributes locked down. `display=swap`
+     already shows fallback text immediately, so there is no invisible-text flash. -->
 <link
   href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
   rel="stylesheet"
-  media="print"
-  onload="this.media='all'"
 />
-<noscript>
-  <link
-    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
-    rel="stylesheet"
-  />
-</noscript>
 <link rel="icon" href="/favicon.ico" sizes="48x48" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="icon" href="/favicon-96x96.png" type="image/png" sizes="96x96" />

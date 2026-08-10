@@ -1,53 +1,56 @@
 ---
-export const prerender = true
-
 import Base from '../../layouts/Base.astro'
-import { site } from '../../config/site'
-import { tools } from '../../config/tools'
+import { getSite, getTools } from '../../lib/config'
 import { itemListJsonLd } from '../../lib/jsonld'
+import { safeExternalUrl } from '../../lib/security'
 import '../../styles/tools.css'
-
-// Prerendered page: KV isn't available at build time, so read the static config
-// directly (same reason `tools` is imported statically, not via getTools()).
 
 // Map the navigable tools (live pages + external links; skip wip placeholders and
 // disabled tools) to an ItemList so search engines get an explicit, ordered map of
 // the hub — the listing-page counterpart to each tool's WebApplication schema.
+const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 const listed = tools.filter(t => t.status === 'live' || t.status === 'external')
 const ldJson = itemListJsonLd(
   'Tools by Aman Panjwani',
-  listed.map(t => ({
-    name: t.title,
-    url: t.status === 'external' ? t.href! : `${site.url}/tools/${t.slug}`,
-  })),
+  listed.flatMap(t => {
+    const url = t.status === 'external' ? safeExternalUrl(t.href) : `${site.url}/tools/${t.slug}`
+    return url ? [{ name: t.title, url }] : []
+  }),
 )
+const cards = tools.filter(t => t.status !== 'disabled').map(tool => ({
+  tool,
+  href: tool.status === 'external' ? safeExternalUrl(tool.href) : `/tools/${tool.slug}`,
+}))
 ---
 
 <Base
   wide
   title="tools"
-  description="Free, browser-based developer tools — a JSON formatter, validator & repair tool, list and timestamp converters, a colour and contrast checker, a Base64/URL encoder, and more. No sign-up, nothing uploaded."
-  keywords="developer tools, online dev tools, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
+  description="Free browser tools — JSON repair, list and timestamp converters, colour and contrast checks, Base64/URL encoding, hashes and UUIDs, a cron expression explainer, a live regex tester, a seeded wallpaper and looping GIF maker, and a live markdown editor. No sign-up, nothing uploaded."
+  keywords="developer tools, online dev tools, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, sha256 hash generator, hmac generator, checksum verifier, uuid generator, guid generator, cron expression explainer, crontab explainer, cron to english, cron next run, regex tester, regular expression tester, regex replace, regex online, wallpaper generator, gif generator, pattern generator, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
 >
-  {listed.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
+  {listed.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>tools</h1>
   <p data-type="page-intro">
     Small, fast, single-purpose tools I built to scratch my own itches — a JSON
     formatter, repairer, and tree viewer, a list converter, a Unix timestamp
     converter, a colour converter and contrast checker, a Base64 and URL
-    encoder/decoder, a generative-art maker, and a markdown editor. Each one is
-    copy-first, keyboard-friendly, and runs entirely in your browser: no
-    sign-ups, no tracking, nothing uploaded.
+    encoder/decoder, a SHA/HMAC hash and UUID generator, a cron expression
+    explainer, a live regex tester, a seeded wallpaper and looping GIF maker,
+    and a markdown editor.
+    Each one is copy-first, keyboard-friendly, and runs
+    entirely in your browser: no sign-ups, no tracking, nothing uploaded.
   </p>
   <ul data-type="card-grid">
-    {tools.filter(t => t.status !== 'disabled').map(tool => (
+    {cards.map(({ tool, href }) => (
       <li data-status={tool.status}>
         <div data-type="tool-head">
           <h2 data-type="tool-name">
-            {tool.status === 'wip'
+            {tool.status === 'wip' || !href
               ? tool.title
               : <a
-                  href={tool.status === 'external' ? tool.href! : `/tools/${tool.slug}`}
+                  href={href}
                   {...(tool.status === 'external' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 >{tool.title}</a>
             }

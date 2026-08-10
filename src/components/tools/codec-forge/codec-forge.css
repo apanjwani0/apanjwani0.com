@@ -39,37 +39,8 @@ div[data-tool="codec-forge"] [data-tab-btn][data-active] {
   background: var(--color-surface);
 }
 
-/* ── Toolbar ──────────────────────────────────────────────── */
-div[data-tool="codec-forge"] [data-group="toolbar"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0 1rem;
-}
-
-div[data-tool="codec-forge"] button {
-  padding: 0.32rem 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
-}
-
-div[data-tool="codec-forge"] button:hover {
-  color: var(--color-text);
-  border-color: var(--color-muted);
-}
-
-/* The tab buttons opt out of the generic button chrome above. */
-div[data-tool="codec-forge"] [data-tab-btn] {
-  border-bottom: none;
-}
+/* Toolbar layout and button chrome come from the shared tools-common.css
+   (hoisted; identical across the tool family). */
 
 span[data-type="cf-sep"] {
   width: 1px;

@@ -524,3 +524,5 @@ class GameOfLifeGame extends HTMLElement {
 if (!customElements.get('game-of-life-game')) {
   customElements.define('game-of-life-game', GameOfLifeGame)
 }
+
+export {}

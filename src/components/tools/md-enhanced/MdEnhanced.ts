@@ -218,3 +218,5 @@ class MdEnhancedTool extends HTMLElement {
 }
 
 customElements.define('md-enhanced-tool', MdEnhancedTool)
+
+export {}

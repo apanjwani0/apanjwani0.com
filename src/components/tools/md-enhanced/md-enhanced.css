@@ -136,6 +136,9 @@ textarea[data-type="md-input"]:focus {
 div[data-type="md-preview"] {
   height: var(--md-pane-h);
   border: 1px solid var(--color-border);
+  /* Opaque, matching the textarea it sits beside. Both panes are reading/writing
+     surfaces, so neither may let the starfield show through behind the text. */
+  background: var(--color-bg);
   padding: 0.75rem 1rem;
   overflow-y: auto;
   line-height: 1.7;

@@ -2,6 +2,7 @@
 import type { Project } from '../config/projects'
 import type { GitHubStats } from '../lib/github'
 import { render } from '../lib/markdown'
+import { appendPathToExternalUrl, safeExternalUrl } from '../lib/security'
 
 interface Props {
   project: Project
@@ -9,15 +10,22 @@ interface Props {
 }
 
 const { project, stats } = Astro.props
+const projectUrl = safeExternalUrl(project.url)
+const stargazersUrl = appendPathToExternalUrl(project.url, 'stargazers')
+const forksUrl = appendPathToExternalUrl(project.url, 'forks')
 ---
 
 <article data-type="project">
   <div data-type="project-header">
-    <h2 data-type="card-title"><a href={project.url} target="_blank" rel="noopener noreferrer">{project.title}</a></h2>
-    {stats && (
+    <h2 data-type="card-title">
+      {projectUrl
+        ? <a href={projectUrl} target="_blank" rel="noopener noreferrer">{project.title}</a>
+        : project.title}
+    </h2>
+    {stats && stargazersUrl && forksUrl && (
       <span data-type="project-stats">
         <a
-          href={`${project.url}/stargazers`}
+          href={stargazersUrl}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`${stats.stars.toLocaleString()} stargazers on GitHub`}
@@ -25,7 +33,7 @@ const { project, stats } = Astro.props
           <span aria-hidden="true">★ {stats.stars.toLocaleString()}</span>
         </a>
         <a
-          href={`${project.url}/forks`}
+          href={forksUrl}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`${stats.forks.toLocaleString()} forks on GitHub`}

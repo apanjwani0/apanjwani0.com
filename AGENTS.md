@@ -10,7 +10,7 @@ projects / experience / blogs / games / tools sections. All personal content is
 KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 
 **Stack**
-- **Astro 6**, fully SSR (`export const prerender = false` on every page).
+- **Astro 7**, fully SSR (`export const prerender = false` on every page).
 - **Adapter**: `@astrojs/node` is active; `@astrojs/cloudflare` is the swap-in for
   Workers deploys. `astro.config.mjs` is the *only* deployment-specific file.
 - **Oat UI** — a forked WebComponents-based design system (no React/Vue/Svelte).
@@ -74,11 +74,23 @@ cached copy until the TTL expires. To see changes immediately, purge via
 Cloudflare → Caching → Configuration → Purge Everything. Verify caching with
 `curl -sSI https://apanjwani0.com/ | grep cf-cache-status` (want `HIT`).
 
+## Analytics
+
+Tool and game detail pages send one first-party aggregate event from
+`src/lib/analytics-client.ts` to `/api/analytics/event`. The server stores daily
+rollups in `SITE_ANALYTICS` when present, otherwise under `analytics:*` keys in
+`SITE_CONFIG`, and falls back to `data/analytics.json` on Node/local dev. The
+admin-only `/api/admin/analytics` endpoint powers the `/admin` analytics tab.
+This intentionally stores counts and timing sums only — no user ids, IPs, raw
+referrers, or session traces. Counts are best-effort read-modify-write rollups;
+use Durable Objects/PostHog if exact high-traffic analytics becomes important.
+
 ## Key Conventions
 
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
-- **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time. The lone exception is `src/pages/tools/index.astro` (`prerender = true`), which reads only the static `tools` config, so it ships as a static file (and is served by the static handler, bypassing `src/middleware.ts` at runtime).
+- **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
+- **SEO support copy**: Tool and game detail pages may render `seoContent` markdown from config under the interactive app for how-to, FAQ, privacy, and strategy copy. Keep the app first; this block is for search context and users who scroll.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
 - **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
 - **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed.

@@ -127,12 +127,52 @@ export function runReplayCheck(hands = 20000): number {
   return hands
 }
 
+/** A short all-in raise must allow calls without reopening a completed action. */
+export function runShortAllInReopenCheck(): void {
+  const state = startHand({
+    seats: [
+      { index: 0, kind: 'bot', name: 'Button', chips: 1000 },
+      { index: 1, kind: 'bot', name: 'Small blind', chips: 1000 },
+      { index: 2, kind: 'bot', name: 'Big blind', chips: 130 },
+    ],
+    variant: VARIANTS.holdem,
+    smallBlind: 10,
+    bigBlind: 20,
+    ante: 0,
+    buttonSeat: 0,
+    handNumber: 1,
+    rng: seededRng(1),
+  })
+
+  applyAction(state, { type: 'raise', amount: 100 })
+  applyAction(state, { type: 'call' })
+  applyAction(state, { type: 'raise', amount: 130 })
+
+  const buttonRequest = legalActions(state)
+  if (!buttonRequest || buttonRequest.seatIndex !== 0 || buttonRequest.toCall !== 30 || buttonRequest.canRaise) {
+    throw new Error('SHORT ALL-IN REOPEN VIOLATED — button should only be able to call or fold')
+  }
+  const snapshot = projection(state)
+  applyAction(state, { type: 'raise', amount: 300 })
+  if (projection(state) !== snapshot) {
+    throw new Error('SHORT ALL-IN REOPEN VIOLATED — an illegal re-raise changed state')
+  }
+
+  applyAction(state, { type: 'call' })
+  const smallBlindRequest = legalActions(state)
+  if (!smallBlindRequest || smallBlindRequest.seatIndex !== 1 || smallBlindRequest.toCall !== 30 || smallBlindRequest.canRaise) {
+    throw new Error('SHORT ALL-IN REOPEN VIOLATED — small blind should only be able to call or fold')
+  }
+}
+
 // Run when invoked directly (tsx/node), stay silent when imported.
 // import.meta.main is set by tsx/bun; fall back to a filename check for node.
 const invokedDirectly =
   (import.meta as unknown as { main?: boolean }).main === true ||
   (typeof process !== 'undefined' && process.argv[1]?.endsWith('engine.selfcheck.ts'))
 if (invokedDirectly) {
+  runShortAllInReopenCheck()
+  console.log('✓ short all-in raises do not reopen completed action')
   const c = runConservationCheck()
   console.log(`✓ chip conservation holds across ${c} random hands`)
   const r = runReplayCheck()

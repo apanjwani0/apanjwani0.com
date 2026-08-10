@@ -19,10 +19,9 @@ main {
   max-width: var(--max-width);
   margin: 0 auto;
   box-sizing: border-box;
-  /* top padding clears the fixed nav (live-measured via JS → --nav-h);
-     sides + bottom are the normal content rhythm.
+  /* padding-top is owned by shared.css (nav clearance + one rhythm step) so both
+     layouts stay in step; only the sides and bottom are set here.
      Longhands avoid the shorthand from resetting shared.css's padding-top. */
-  padding-top: var(--nav-h, var(--space-header-offset));
   padding-right: var(--space-page-x);
   padding-bottom: var(--space-section);
   padding-left: var(--space-page-x);

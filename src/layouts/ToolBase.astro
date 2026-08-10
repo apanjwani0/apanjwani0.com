@@ -41,6 +41,7 @@ const ogImageHeight = 468
       image={ogImage}
       imageWidth={ogImageWidth}
       imageHeight={ogImageHeight}
+      handle={site.handle}
     />
   </head>
   <body>
@@ -52,31 +53,12 @@ const ogImageHeight = 468
     </main>
     <script src="/oat.min.js" defer></script>
     <script>
-      function syncNavHeight() {
-        const nav = document.querySelector('[data-type="hero-nav"]')
-        if (nav) {
-          document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
-        }
-      }
-      let lastScroll = 0
-      function onScroll() {
-        const nav = document.querySelector('[data-type="hero-nav"]')
-        if (!nav) return
-        const current = window.scrollY
-        if (current > lastScroll && current > nav.offsetHeight + 20) {
-          nav.setAttribute('data-nav-hidden', '')
-        } else if (current < lastScroll) {
-          nav.removeAttribute('data-nav-hidden')
-        }
-        lastScroll = current
-      }
-      function setup() {
-        syncNavHeight()
-        import('../components/home/StarField.ts')
-        window.addEventListener('scroll', onScroll, { passive: true })
-        window.addEventListener('resize', syncNavHeight)
-      }
-      document.addEventListener('astro:page-load', setup)
+      // Nav height sync, hide-on-scroll, and StarField mount — shared verbatim
+      // with Base.astro, so it lives in one module (src/lib/nav-ui.ts).
+      import { initNav } from '../lib/nav-ui.ts'
+      import { initAnalytics } from '../lib/analytics-client.ts'
+      initNav()
+      initAnalytics()
     </script>
   </body>
 </html>
@@ -85,6 +67,11 @@ const ogImageHeight = 468
   body {
     font-family: var(--font-serif);
     color: var(--color-text);
+    /* Match Base.astro's global.css body: paint the themed background token so
+       tool pages show the correct dark surface before the fixed starfield canvas
+       mounts (and if JS is disabled), instead of the UA default. The canvas is a
+       fixed child that paints over this, so it's purely a pre-paint fallback. */
+    background-color: var(--color-bg);
     margin: 0;
     padding: 0;
   }

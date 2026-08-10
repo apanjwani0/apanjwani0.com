@@ -1,0 +1,29 @@
+/* Shared primitives for every /games detail page. Imported once by
+   games/[slug].astro AHEAD of the per-game stylesheets, so the whole lane
+   shares one focus-ring treatment instead of each game redefining it.
+   Tokens only (theme.css) — no hardcoded colours/fonts/sizes.
+
+   Note: shared.css already ships a site-wide `:focus-visible` ring at
+   outline-offset 3px. The two rules below are deliberate OFFSET OVERRIDES for
+   the canvas toys — a 3px OUTSET ring gets clipped on an edge-flush <canvas>
+   (and on the tight seed inputs), so those elements pull the ring inward.
+   Every interactive game element carries `data-game`, so `[data-game] canvas`
+   reaches each toy's main canvas and any future canvas game gets the ring free. */
+
+[data-game] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Main game canvas: inset ring so it isn't clipped by the surrounding frame. */
+[data-game] canvas:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* Seed text inputs (flow-field / maze-weaver / fractal-garden): tighter ring. */
+[data-game] div[data-group="seed"] input[type="text"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}

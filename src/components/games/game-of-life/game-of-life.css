@@ -51,11 +51,6 @@ canvas[data-type="gol-canvas"] {
   touch-action: none; /* let pointer-drawing work without the page panning */
 }
 
-canvas[data-type="gol-canvas"]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
-}
-
 div[data-type="gol-controls"] {
   display: flex;
   flex-direction: column;

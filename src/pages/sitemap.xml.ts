@@ -1,13 +1,13 @@
 export const prerender = false
 
 import type { APIRoute } from 'astro'
-import { getSite, getPosts, getGames } from '../lib/config'
-import { tools } from '../config/tools'
+import { getSite, getPosts, getGames, getTools } from '../lib/config'
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = await getSite(locals)
   const posts = await getPosts(locals)
-  const games = (await getGames(locals)).filter(g => g.enabled)
+  const games = (await getGames(locals)).filter(g => g.enabled && g.interactive)
+  const tools = await getTools(locals)
   const base = site.url.replace(/\/$/, '')
 
   const normalize = (href: string) => {
@@ -58,7 +58,6 @@ ${allPages
   return new Response(xml, {
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
     },
   })
 }

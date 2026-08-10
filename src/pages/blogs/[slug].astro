@@ -1,14 +1,15 @@
 ---
 export const prerender = false
 
-import { marked } from 'marked'
 import Base from '../../layouts/Base.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { getSite, getPosts } from '../../lib/config'
 import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
+import { render } from '../../lib/markdown'
 
 const { slug } = Astro.params
 const [site, posts] = await Promise.all([getSite(Astro.locals), getPosts(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 
 // Robust matching: normalize both the href from config and the URL slug
 // so "/blogs/foo", "blogs/foo", and "foo" all match the slug "foo".
@@ -19,7 +20,7 @@ if (!post) {
   return new Response(null, { status: 404, statusText: 'Not Found' })
 }
 
-const contentHtml = post.content ? marked(post.content) : null
+const contentHtml = post.content ? render(post.content) : null
 const canonicalUrl = `${site.url}/blogs/${normalize(post.href)}`
 const ldJson = blogPostingJsonLd({
   headline: post.title,
@@ -45,8 +46,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
 ---
 
 <Base title={post.title} description={post.summary} keywords={post.keywords} ogType="article" publishedTime={post.date}>
-  <script type="application/ld+json" set:html={ldJson} />
-  <script type="application/ld+json" set:html={breadcrumbLd} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} />
   <article>
     <header>

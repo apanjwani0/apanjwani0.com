@@ -8,7 +8,7 @@
  * Usage in any Astro page, layout, or component:
  *   const site = await getSite(Astro.locals)
  *
- * Keys: 'site' | 'projects' | 'experience' | 'blogs' | 'games'
+ * Keys: 'site' | 'projects' | 'experience' | 'blogs' | 'games' | 'tools'
  */
 
 import { readFile } from 'node:fs/promises'
@@ -18,11 +18,14 @@ import { projects as staticProjects } from '../config/projects'
 import { experience as staticExperience } from '../config/experience'
 import { posts as staticPosts } from '../config/blogs'
 import { games as staticGames } from '../config/games'
+import { tools as staticTools } from '../config/tools'
+import { validateConfigData } from './config-schema'
 
 import type { Company } from '../config/experience'
 import type { Project } from '../config/projects'
 import type { Post } from '../config/blogs'
 import type { Game } from '../config/games'
+import type { Tool } from '../config/tools'
 
 type KVStore = { get(key: string, type: 'json'): Promise<unknown> }
 
@@ -60,12 +63,36 @@ async function fromFile<T>(key: string, fallback: T): Promise<T> {
 
 async function getConfig<T>(locals: unknown, key: string, fallback: T): Promise<T> {
   const kv = getKV(locals)
-  if (kv) return fromKV(kv, key, fallback)       // Cloudflare Workers
-  return fromFile(key, fallback)                   // Node.js / Docker
+  const config = kv
+    ? await fromKV(kv, key, fallback)       // Cloudflare Workers
+    : await fromFile(key, fallback)         // Node.js / Docker
+  return validateConfigData(key, config) ? config : fallback
 }
 
-export async function getSite(locals: unknown) {
-  return getConfig(locals, 'site', staticSite as typeof staticSite)
+/** One nav entry. `children` renders as a dropdown and is flattened by Nav.astro. */
+export interface NavItem {
+  label: string
+  href: string
+  children?: NavItem[]
+}
+
+/**
+ * The site config as callers actually receive it.
+ *
+ * `staticSite` is declared `as const`, so its `nav` infers as a readonly tuple of
+ * readonly literal objects. That is false precision — at runtime the value can come
+ * from KV or data/site.json and carry any valid nav, including entries with
+ * `children`, which the literal type has no room for. It also broke narrowing in
+ * Nav's flatMap badly enough that the call sites fell back to `any`. Widen `nav`
+ * once here, at the boundary where the override actually happens.
+ */
+export type Site = Omit<typeof staticSite, 'nav' | 'theme'> & {
+  nav: NavItem[]
+  theme: 'light' | 'dark'
+}
+
+export async function getSite(locals: unknown): Promise<Site> {
+  return getConfig(locals, 'site', staticSite as unknown as Site)
 }
 
 export async function getProjects(locals: unknown): Promise<Project[]> {
@@ -82,5 +109,9 @@ export async function getPosts(locals: unknown): Promise<Post[]> {
 
 export async function getGames(locals: unknown): Promise<Game[]> {
   return (await getConfig(locals, 'games', staticGames as Game[]))
-    .filter(game => game.slug !== 'poker')
+    .filter(game => game.slug !== 'poker' && game.slug !== 'wallpaper-forge')
+}
+
+export async function getTools(locals: unknown): Promise<Tool[]> {
+  return getConfig(locals, 'tools', staticTools as Tool[])
 }

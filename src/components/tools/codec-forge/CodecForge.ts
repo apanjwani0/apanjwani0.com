@@ -764,11 +764,13 @@ class CodecForgeTool extends HTMLElement {
     if (!b64.trim()) {
       this.flash(btn, 'Nothing to save')
       return
-    }
-    try {
-      const bytes = cfDecodeBytes(b64)
-      const type = this.lastFileType || 'application/octet-stream'
-      const blob = new Blob([bytes], { type })
+      }
+      try {
+        const bytes = cfDecodeBytes(b64)
+        const type = this.lastFileType || 'application/octet-stream'
+        const data = new ArrayBuffer(bytes.byteLength)
+        new Uint8Array(data).set(bytes)
+        const blob = new Blob([data], { type })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

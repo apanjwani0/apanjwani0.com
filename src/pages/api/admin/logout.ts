@@ -1,12 +1,14 @@
 import type { APIRoute } from 'astro'
 import { deleteSession } from '../../../lib/session'
+import { adminNotFound, getRuntimeEnv, getSessionToken, isAdminRequestAllowed } from '../../../lib/security'
 
 export const prerender = false
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const runtimeEnv = (locals as any).runtime?.env
-  const cookie = request.headers.get('cookie') ?? ''
-  const token = cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
+  if (!isAdminRequestAllowed(request, locals)) return adminNotFound()
+
+  const runtimeEnv = getRuntimeEnv(locals)
+  const token = getSessionToken(request)
   await deleteSession(token, runtimeEnv?.SITE_CONFIG)
 
   const isHttps = request.headers.get('x-forwarded-proto') === 'https' || new URL(request.url).protocol === 'https:'

@@ -6,10 +6,12 @@ import node from '@astrojs/node';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+/** @param {unknown} data */
 function generateSite(data) {
   return `export const site = ${JSON.stringify(data, null, 2)} as const\n`
 }
 
+/** @param {unknown} data */
 function generateProjects(data) {
   return `export interface Project {
   title: string
@@ -22,6 +24,7 @@ function generateProjects(data) {
 export const projects: Project[] = ${JSON.stringify(data, null, 2)}\n`
 }
 
+/** @param {unknown} data */
 function generateExperience(data) {
   return `export interface Role {
   title: string
@@ -38,6 +41,7 @@ export interface Company {
 export const experience: Company[] = ${JSON.stringify(data, null, 2)}\n`
 }
 
+/** @param {unknown} data */
 function generateBlogs(data) {
   return `export interface Post {
   title: string
@@ -51,12 +55,17 @@ function generateBlogs(data) {
 export const posts: Post[] = ${JSON.stringify(data, null, 2)}\n`
 }
 
+/** @param {unknown} data */
 function generateGames(data) {
   return `export interface Game {
   slug: string
   title: string
   description: string
   enabled: boolean
+  seoTitle?: string
+  metaDescription?: string
+  intro?: string
+  seoContent?: string
   keywords?: string
   /** true = ships a playable in-browser component; false/undefined = "coming soon" placeholder */
   interactive?: boolean
@@ -65,6 +74,7 @@ function generateGames(data) {
 export const games: Game[] = ${JSON.stringify(data, null, 2)}\n`
 }
 
+/** @param {unknown} data */
 function generateTools(data) {
   return `export type ToolStatus = 'live' | 'wip' | 'external' | 'disabled'
 
@@ -77,6 +87,7 @@ export interface Tool {
   seoTitle?: string
   metaDescription?: string
   intro?: string
+  seoContent?: string
   /** Comma-separated search terms — feeds the page <meta name="keywords"> and the WebApplication JSON-LD */
   keywords?: string
 }

@@ -670,11 +670,11 @@ class HueHuntGame extends HTMLElement {
     if (e.metaKey || e.ctrlKey || e.altKey) return
 
     // Next colour
+    // The on-screen hint says N jumps to the next colour, with no "once you've
+    // answered" caveat — so it does, answered or not (skipping forfeits the round).
     if ((e.key === 'n' || e.key === 'N') && !inInput) {
-      if (this.answered) {
-        e.preventDefault()
-        this.newRound()
-      }
+      e.preventDefault()
+      this.newRound()
       return
     }
 
@@ -693,3 +693,5 @@ class HueHuntGame extends HTMLElement {
 if (!customElements.get('hue-hunt-game')) {
   customElements.define('hue-hunt-game', HueHuntGame)
 }
+
+export {}

@@ -1,0 +1,272 @@
+div[data-tool="wallpaper-forge"] {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+div[data-type="wf-titlebar"] {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.25rem;
+}
+
+div[data-type="wf-titlebar"] h1 {
+  margin: 0;
+}
+
+span[data-type="wf-badge"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.55rem;
+  white-space: nowrap;
+}
+
+div[data-type="wf-header"] p {
+  margin-top: 0;
+  color: var(--color-muted);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+
+div[data-type="wf-stage"] {
+  width: 100%;
+  margin: 0.5rem 0 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 6rem;
+}
+
+canvas[data-type="wf-canvas"] {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  touch-action: manipulation;
+  cursor: default;
+}
+
+div[data-type="wf-controls"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+div[data-type="wf-controls"] [data-group] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+div[data-type="wf-controls"] button {
+  min-height: 2.75rem;
+  padding: 0.32rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-serif);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+div[data-type="wf-controls"] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+/* Export actions stand out from regeneration and configuration. */
+div[data-type="wf-controls"] [data-group="transport"] button:is([data-action="download-image"], [data-action="download-gif"]) {
+  color: var(--color-bg);
+  background: var(--color-text);
+  border-color: var(--color-text);
+}
+
+div[data-type="wf-controls"] [data-group="transport"] button:is([data-action="download-image"], [data-action="download-gif"]):hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+div[data-type="wf-controls"] button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+output[data-type="wf-export-status"] {
+  min-height: 1lh;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Pattern / aspect / palette pressed state */
+div[data-type="wf-controls"] [data-pattern][aria-pressed="true"],
+div[data-type="wf-controls"] [data-aspect][aria-pressed="true"],
+div[data-type="wf-controls"] [data-palette][aria-pressed="true"] {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+span[data-type="wf-dim"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  margin-left: 0.35rem;
+}
+
+div[data-type="wf-controls"] [data-aspect][aria-pressed="true"] span[data-type="wf-dim"] {
+  color: var(--color-accent);
+}
+
+span[data-type="wf-swatch"] {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+span[data-type="wf-swatch"] i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+div[data-type="wf-controls"] label,
+span[data-type="wf-group-label"] {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+div[data-type="wf-sliders"] {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem 1.25rem;
+}
+
+div[data-type="wf-slider"] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+div[data-type="wf-slider"] label {
+  min-width: 3.6rem;
+}
+
+div[data-type="wf-slider"] input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--color-text);
+  cursor: pointer;
+}
+
+div[data-type="wf-slider"] output {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  min-width: 6ch;
+  text-align: right;
+}
+
+div[data-tool="wallpaper-forge"] div[data-group="seed"] {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+div[data-tool="wallpaper-forge"] div[data-group="seed"] input[type="text"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.28rem 0.5rem;
+  width: 11ch;
+}
+
+/* ── "How it works" explainer ── */
+details[data-type="wf-explainer"] {
+  margin-top: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: 0 1rem;
+}
+
+details[data-type="wf-explainer"] > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.75rem 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+details[data-type="wf-explainer"] > summary::-webkit-details-marker {
+  display: none;
+}
+
+details[data-type="wf-explainer"] > summary::before {
+  content: "›";
+  display: inline-block;
+  color: var(--color-accent);
+  transition: transform 0.15s ease;
+}
+
+details[data-type="wf-explainer"][open] > summary::before {
+  transform: rotate(90deg);
+}
+
+details[data-type="wf-explainer"] p {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+details[data-type="wf-explainer"] strong {
+  color: var(--color-text);
+}
+
+p[data-type="wf-try"] {
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-bg);
+  border-radius: var(--radius);
+}
+
+p[data-type="wf-hint"] {
+  margin-top: 1rem;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+@media (max-width: 720px) {
+  div[data-type="wf-sliders"] {
+    grid-template-columns: 1fr;
+  }
+
+  div[data-type="wf-controls"] [data-group="transport"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  div[data-type="wf-controls"] [data-group="transport"] button[data-action="regen"],
+  output[data-type="wf-export-status"] {
+    grid-column: 1 / -1;
+  }
+}
