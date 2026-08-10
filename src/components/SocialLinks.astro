@@ -1,5 +1,6 @@
 ---
 import { getSite } from '../lib/config'
+import { safeExternalUrl } from '../lib/security'
 
 interface Props {
   site?: Awaited<ReturnType<typeof getSite>>
@@ -7,14 +8,16 @@ interface Props {
 
 const { site: siteProp } = Astro.props
 const site = siteProp ?? await getSite(Astro.locals)
-const links = Object.entries(site.social).filter(([, url]) => url)
+const links = Object.entries(site.social)
+  .map(([platform, url]) => [platform, safeExternalUrl(url)] as const)
+  .filter(([, url]) => url)
 ---
 
 {links.length > 0 && (
   <p>
     {links.map(([platform, url], i) => (
       <>
-        <a href={url as string} target="_blank" rel="noopener noreferrer">{platform}</a>
+        <a href={url} target="_blank" rel="noopener noreferrer">{platform}</a>
         {i < links.length - 1 && ' · '}
       </>
     ))}

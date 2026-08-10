@@ -5,13 +5,20 @@ import Base from '../layouts/Base.astro'
 import { getSite, getPosts } from '../lib/config'
 import { itemListJsonLd } from '../lib/jsonld'
 import { render } from '../lib/markdown'
+import { safeExternalUrl, safeInternalPath } from '../lib/security'
 
 const [site, posts] = await Promise.all([getSite(Astro.locals), getPosts(Astro.locals)])
 
 const formatHref = (href: string) => {
-  if (href.startsWith('http') || href.startsWith('/')) return href
-  if (href.startsWith('blogs/')) return '/' + href
-  return '/blogs/' + href
+  const external = safeExternalUrl(href)
+  if (external) return external
+  const internal = safeInternalPath(href)
+  if (internal) return internal
+  if (/^[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)?$/i.test(href)) {
+    if (href.startsWith('blogs/')) return '/' + href
+    return '/blogs/' + href
+  }
+  return '/blogs'
 }
 
 // Structured item map for the listing, matching /tools and /games.

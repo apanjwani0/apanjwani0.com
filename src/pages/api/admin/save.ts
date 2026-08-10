@@ -2,6 +2,16 @@ import type { APIRoute } from 'astro'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { validateSession } from '../../../lib/session'
+import { isConfigType, validateConfigData } from '../../../lib/config-schema'
+import {
+  BodyTooLargeError,
+  adminNotFound,
+  getAdminSecret,
+  getRuntimeEnv,
+  getSessionToken,
+  isAdminRequestAllowed,
+  readLimitedJson,
+} from '../../../lib/security'
 
 export const prerender = false
 
@@ -10,12 +20,12 @@ export const prerender = false
 // Production Cloudflare Workers:      writes to KV binding SITE_CONFIG
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const runtimeEnv = (locals as any).runtime?.env
+  const runtimeEnv = getRuntimeEnv(locals)
+  if (!isAdminRequestAllowed(request, locals)) return adminNotFound()
 
   // Auth
-  const secret = runtimeEnv?.ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? import.meta.env.ADMIN_SECRET
-  const cookie = request.headers.get('cookie') ?? ''
-  const token = cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
+  const secret = getAdminSecret(locals)
+  const token = getSessionToken(request)
   const bypassAuth = import.meta.env.DEV && !secret
   if (!bypassAuth && !(await validateSession(token, runtimeEnv?.SITE_CONFIG))) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -27,20 +37,26 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // Parse body
   let type: string, data: unknown
   try {
-    const body = await request.json()
-    type = body?.type
+    const body = await readLimitedJson(request) as { type?: unknown; data?: unknown }
+    if (typeof body?.type !== 'string' || body.data === undefined) throw new Error()
+    type = body.type
     data = body?.data
-    if (!type || data === undefined) throw new Error()
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid body — expected { type, data }' }), {
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error instanceof BodyTooLargeError ? 'Request body is too large.' : 'Invalid body — expected { type, data }' }), {
+      status: error instanceof BodyTooLargeError ? 413 : 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (!isConfigType(type)) {
+    return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })
   }
 
-  const allowed = ['site', 'projects', 'experience', 'blogs', 'games', 'tools']
-  if (!allowed.includes(type)) {
-    return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
+  if (!validateConfigData(type, data)) {
+    return new Response(JSON.stringify({ error: `Invalid ${type} data` }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })

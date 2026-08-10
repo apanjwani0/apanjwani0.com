@@ -2,51 +2,38 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
-import { getSite, getProjects, getExperience, getPosts, getGames } from '../lib/config'
+import { getSite, getProjects, getExperience, getPosts, getGames, getTools } from '../lib/config'
 import { validateSession } from '../lib/session'
-import { tools } from '../config/tools'
+import { getAdminSecret, getRuntimeEnv, getSessionToken, isAdminRequestAllowed } from '../lib/security'
 
 // Auth: read secret from Cloudflare env (prod) or process.env/.env (dev/Node)
-const runtimeEnv = (Astro.locals as any).runtime?.env
-const secret = runtimeEnv?.ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? import.meta.env.ADMIN_SECRET
+const runtimeEnv = getRuntimeEnv(Astro.locals)
+const secret = getAdminSecret(Astro.locals)
 
 // In dev with no secret configured, allow through without auth
 const bypassAuth = import.meta.env.DEV && !secret
 
 // In production: 404 unless the request IP is in the whitelist
 // Set ADMIN_IP_WHITELIST as a comma-separated list of allowed IPs in your environment variables
-let blocked = false
-if (!import.meta.env.DEV) {
-  const whitelist = (runtimeEnv?.ADMIN_IP_WHITELIST ?? process.env.ADMIN_IP_WHITELIST ?? import.meta.env.ADMIN_IP_WHITELIST ?? '')
-    .split(',').map((ip: string) => ip.trim()).filter(Boolean)
-
-  const clientIp =
-    Astro.request.headers.get('cf-connecting-ip') ??
-    Astro.request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
-    ''
-
-  if (!whitelist.includes(clientIp)) {
-    blocked = true
-    Astro.response.status = 404
-  }
-}
+const blocked = !isAdminRequestAllowed(Astro.request, Astro.locals)
+if (blocked) Astro.response.status = 404
 
 // Skip all data loading for blocked requests
-const cookie = blocked ? '' : (Astro.request.headers.get('cookie') ?? '')
-const token = blocked ? undefined : cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
+const token = blocked ? undefined : getSessionToken(Astro.request)
 const isAuth = !blocked && (bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG))
 
 const loginError = blocked ? null : Astro.url.searchParams.get('error')
 
 // Load from KV (or fallback to bundled TS) so admin always shows live values
-const [site, projects, experience, posts, games] = blocked
-  ? [null, null, null, null, null]
+const [site, projects, experience, posts, games, toolItems] = blocked
+  ? [null, null, null, null, null, null]
   : await Promise.all([
       getSite(Astro.locals),
       getProjects(Astro.locals),
       getExperience(Astro.locals),
       getPosts(Astro.locals),
       getGames(Astro.locals),
+      getTools(Astro.locals),
     ])
 
 const siteConfig = site!
@@ -54,6 +41,7 @@ const projectItems = projects!
 const companyItems = experience!
 const postItems = posts!
 const gameItems = games!
+const tools = toolItems!
 const navJson = blocked ? '{}' : JSON.stringify(siteConfig.nav)
 const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
 ---

@@ -13,17 +13,16 @@
     "generate-types": "wrangler types",
     "graph": "graphify update .",
     "poker:catalogue": "npx tsx src/components/games/poker/ui/catalogue.gen.ts docs/poker-assets.html",
-    "pb": "bash pocketbase/run.sh"
+    "pb": "bash pocketbase/run.sh",
+    "security:smoke": "tsx scripts/security-smoke.mjs"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^13.7.0",
     "@astrojs/node": "^10.1.4",
     "astro": "^6.4.8",
     "dompurify": "^3.4.12",
     "gifenc": "^1.0.3",
     "html2canvas": "^1.4.1",
-    "marked": "^17.0.5",
-    "wrangler": "^4.112.0"
+    "marked": "^17.0.5"
   },
   "overrides": {
     "defu": "^6.1.7",
@@ -32,8 +31,11 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",
+    "@astrojs/cloudflare": "^13.7.0",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^25.5.0",
-    "typescript": "^5.9.3"
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.112.0"
   }
 }

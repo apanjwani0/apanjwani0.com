@@ -21,11 +21,16 @@ RUN npm ci --omit=dev
 
 # data/ is mounted as a volume at runtime — JSON config written by /admin
 # persists here across container restarts and image upgrades.
-RUN mkdir -p data
+RUN addgroup -S portfolio \
+  && adduser -S portfolio -G portfolio \
+  && mkdir -p data \
+  && chown -R portfolio:portfolio /app
 
 EXPOSE 4321
 ENV HOST=0.0.0.0
 ENV PORT=4321
 ENV NODE_ENV=production
+
+USER portfolio
 
 CMD ["node", "dist/server/entry.mjs"]

@@ -5,6 +5,7 @@ import Base from '../layouts/Base.astro'
 import Avatar from '../components/Avatar.astro'
 import { getSite } from '../lib/config'
 import { personJsonLd, webSiteJsonLd } from '../lib/jsonld'
+import { safeExternalUrl } from '../lib/security'
 import '../styles/home.css'
 
 const site = await getSite(Astro.locals)
@@ -19,7 +20,9 @@ const heroTagline =
 const homeDescription =
   `${site.name} builds payments infrastructure by day, and apps, tools and games by night — explore free, browser-based developer tools and playable experiments.`
 
-const sameAs = [site.social.github, site.social.linkedin].filter(Boolean)
+const githubUrl = safeExternalUrl(site.social.github)
+const linkedinUrl = safeExternalUrl(site.social.linkedin)
+const sameAs = [githubUrl, linkedinUrl].filter((url): url is string => Boolean(url))
 const ldJson = personJsonLd({
   name: site.name,
   url: site.url,
@@ -50,8 +53,8 @@ const siteLd = webSiteJsonLd({
       <h1>{site.name}</h1>
       <p data-type="tagline">{heroTagline}</p>
       <nav data-type="hero-links" aria-label="Social profiles">
-        <a href={site.social.github} target="_blank" rel="me noopener noreferrer">github</a>
-        <a href={site.social.linkedin} target="_blank" rel="me noopener noreferrer">linkedin</a>
+        {githubUrl && <a href={githubUrl} target="_blank" rel="me noopener noreferrer">github</a>}
+        {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="me noopener noreferrer">linkedin</a>}
       </nav>
     </div>
   </section>

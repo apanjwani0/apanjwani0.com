@@ -6,6 +6,7 @@ import ProjectCard from '../components/ProjectCard.astro'
 import { getProjects } from '../lib/config'
 import { getProjectStats } from '../lib/github'
 import { itemListJsonLd } from '../lib/jsonld'
+import { safeExternalUrl } from '../lib/security'
 
 const projects = await getProjects(Astro.locals)
 const stats    = await getProjectStats(projects)
@@ -14,7 +15,10 @@ const stats    = await getProjectStats(projects)
 // engines get an explicit, ordered list of what's on the page.
 const ldJson = itemListJsonLd(
   'Projects',
-  projects.map(p => ({ name: p.title, url: p.url })),
+  projects.flatMap(p => {
+    const url = safeExternalUrl(p.url)
+    return url ? [{ name: p.title, url }] : []
+  }),
 )
 ---
 

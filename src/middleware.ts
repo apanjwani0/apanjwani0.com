@@ -40,7 +40,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       response.headers.set('X-Robots-Tag', 'noindex, nofollow')
     } else if (hasAdminSession) {
       response.headers.set('Cache-Control', 'no-store')
-    } else if (context.request.method === 'GET' && response.status === 200) {
+    } else if ((context.request.method === 'GET' || context.request.method === 'HEAD') && response.status === 200) {
       // Public, successful page → cacheable. s-maxage drives the CDN edge;
       // stale-while-revalidate lets it refresh in the background so no visitor
       // ever blocks on the (slow, distant) origin. The sitemap changes far less

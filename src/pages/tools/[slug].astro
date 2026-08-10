@@ -3,8 +3,7 @@ export const prerender = false
 
 import ToolBase from '../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
-import { tools } from '../../config/tools'
-import { getSite } from '../../lib/config'
+import { getSite, getTools } from '../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
 import { validateSession } from '../../lib/session'
 import '../../components/tools/tools-common.css'
@@ -32,6 +31,7 @@ const MOVED: Record<string, string> = {
 const movedTo = MOVED[slug as string]
 if (movedTo) return Astro.redirect(movedTo, 301)
 
+const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
 const tool = tools.find(t => t.slug === slug)
 
 if (!tool || tool.status === 'external') {
@@ -50,7 +50,6 @@ if (tool.status === 'disabled') {
   }
 }
 
-const site = await getSite(Astro.locals)
 const ldJson = webAppJsonLd({
   name: tool.title,
   description: tool.metaDescription || tool.description,
