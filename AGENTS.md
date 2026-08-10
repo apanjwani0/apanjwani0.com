@@ -10,7 +10,7 @@ projects / experience / blogs / games / tools sections. All personal content is
 KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 
 **Stack**
-- **Astro 6**, fully SSR (`export const prerender = false` on every page).
+- **Astro 7**, fully SSR (`export const prerender = false` on every page).
 - **Adapter**: `@astrojs/node` is active; `@astrojs/cloudflare` is the swap-in for
   Workers deploys. `astro.config.mjs` is the *only* deployment-specific file.
 - **Oat UI** — a forked WebComponents-based design system (no React/Vue/Svelte).

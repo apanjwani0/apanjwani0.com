@@ -9,6 +9,7 @@ import { render } from '../../lib/markdown'
 
 const { slug } = Astro.params
 const [site, posts] = await Promise.all([getSite(Astro.locals), getPosts(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 
 // Robust matching: normalize both the href from config and the URL slug
 // so "/blogs/foo", "blogs/foo", and "foo" all match the slug "foo".
@@ -45,8 +46,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
 ---
 
 <Base title={post.title} description={post.summary} keywords={post.keywords} ogType="article" publishedTime={post.date}>
-  <script type="application/ld+json" set:html={ldJson} />
-  <script type="application/ld+json" set:html={breadcrumbLd} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} />
   <article>
     <header>

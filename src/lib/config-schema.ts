@@ -51,7 +51,7 @@ function validSite(value: unknown): boolean {
     && isString(value.bio)
     && safeInternalPath(value.avatar) !== null
     && (value.theme === 'light' || value.theme === 'dark')
-    && optionalSafeExternalUrl(value.url)
+    && safeExternalUrl(value.url) !== null
     && optionalSafeExternalUrl(value.social.github)
     && optionalSafeExternalUrl(value.social.linkedin)
     && Array.isArray(value.nav)

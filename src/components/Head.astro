@@ -70,22 +70,12 @@ const twitterHandle = handle ? `@${handle.replace(/^@/, '')}` : undefined
      still resolved early. Ignored where the preconnect above already applies. -->
 <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
 <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
-<!-- Load the webfont CSS without blocking first paint: request it as `print`
-     (non-render-blocking), then flip to `all` once it arrives; a <noscript>
-     fallback keeps fonts working with JS disabled. `display=swap` already shows
-     fallback text immediately, so there is no invisible-text flash. -->
+<!-- Plain stylesheet load keeps CSP script attributes locked down. `display=swap`
+     already shows fallback text immediately, so there is no invisible-text flash. -->
 <link
   href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
   rel="stylesheet"
-  media="print"
-  onload="this.media='all'"
 />
-<noscript>
-  <link
-    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
-    rel="stylesheet"
-  />
-</noscript>
 <link rel="icon" href="/favicon.ico" sizes="48x48" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="icon" href="/favicon-96x96.png" type="image/png" sizes="96x96" />

@@ -10,6 +10,7 @@ import { safeExternalUrl } from '../lib/security'
 
 const projects = await getProjects(Astro.locals)
 const stats    = await getProjectStats(projects)
+const cspNonce = (Astro.locals as any).cspNonce
 
 // Structured item map for the listing, matching /tools and /games — search
 // engines get an explicit, ordered list of what's on the page.
@@ -28,7 +29,7 @@ const ldJson = itemListJsonLd(
   description="Software projects by Aman Panjwani — payments infrastructure at scale, plus side projects and open-source experiments."
   keywords="aman panjwani projects, open source projects, payments infrastructure, backend side projects, github projects, software engineer portfolio"
 >
-  {projects.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
+  {projects.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>projects</h1>
   <p data-type="page-intro">
     Things I've shipped and things I tinker with — payments infrastructure by day,

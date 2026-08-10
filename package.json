@@ -17,8 +17,8 @@
     "security:smoke": "tsx scripts/security-smoke.mjs"
   },
   "dependencies": {
-    "@astrojs/node": "^10.1.4",
-    "astro": "^6.4.8",
+    "@astrojs/node": "^11.1.0",
+    "astro": "^7.2.0",
     "dompurify": "^3.4.12",
     "gifenc": "^1.0.3",
     "html2canvas": "^1.4.1",
@@ -27,11 +27,11 @@
   "overrides": {
     "defu": "^6.1.7",
     "postcss": "^8.5.20",
-    "vite": "^7.3.6"
+    "sharp": "0.35.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",
-    "@astrojs/cloudflare": "^13.7.0",
+    "@astrojs/cloudflare": "^14.2.0",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^25.5.0",
     "tsx": "^4.23.12",

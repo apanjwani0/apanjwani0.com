@@ -10,6 +10,7 @@ const [site, games] = await Promise.all([
   getSite(Astro.locals),
   getGames(Astro.locals).then(gs => gs.filter(g => g.enabled)),
 ])
+const cspNonce = (Astro.locals as any).cspNonce
 
 const ldJson = itemListJsonLd(
   'Games by Aman Panjwani',
@@ -23,7 +24,7 @@ const ldJson = itemListJsonLd(
   description="Free browser games and playable experiments — Quintle (a daily five-letter word puzzle), 2048, Conway's Game of Life, a boids flocking sim, a reaction-diffusion Turing-pattern playground, an L-system fractal garden, a self-solving maze, a warp-speed starfield, a hex-colour guessing game, and a typing race. No downloads, no sign-up."
   keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, conway's game of life, cellular automaton, flow field generator, generative art, starfield, warp speed, boids, flocking simulation, murmuration, swarm, reaction diffusion, gray-scott, turing pattern, morphogenesis, l-system, lindenmayer system, fractal plant, fractal tree, koch curve, dragon curve, sierpinski, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, hex color game, playable experiments, no-download games"
 >
-  {games.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
+  {games.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>games</h1>
   <p data-type="page-intro">
     Browser games and playable experiments — a daily five-letter word puzzle, a game of 2048, a maze that solves itself,

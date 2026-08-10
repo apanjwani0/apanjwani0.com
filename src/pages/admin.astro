@@ -88,6 +88,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
       <input type="hidden" name="sections" value={sectionsJson} />
       <label>name<input name="name" value={siteConfig.name} /></label>
       <label>handle<input name="handle" value={siteConfig.handle} /></label>
+      <label>site url<input name="url" value={siteConfig.url} /></label>
       <label>tagline<input name="tagline" value={siteConfig.tagline} /></label>
       <label>bio<textarea name="bio">{siteConfig.bio}</textarea></label>
       <label>avatar path<input name="avatar" value={siteConfig.avatar} /></label>
@@ -669,6 +670,7 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
     await save('site', {
       name: fd.get('name'),
       handle: fd.get('handle'),
+      url: fd.get('url'),
       theme,
       tagline: fd.get('tagline'),
       bio: fd.get('bio'),

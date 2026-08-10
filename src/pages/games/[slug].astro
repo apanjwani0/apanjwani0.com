@@ -23,6 +23,7 @@ const { slug } = Astro.params
 if (slug === 'wallpaper-forge') return Astro.redirect('/tools/wallpaper-forge', 301)
 
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 const game = games.find(g => g.slug === slug && g.enabled)
 
 if (!game) {
@@ -61,7 +62,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
 ---
 
 <Base title={game.title} description={game.description} keywords={game.keywords}>
-  <script type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   {game.interactive && slug === '2048' && (
     <twenty48-game data-game="2048">
       <h1>{game.title}</h1>
@@ -109,7 +110,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
   )}
   {!game.interactive && (
     <>
-      <script type="application/ld+json" set:html={breadcrumbLd} />
+      <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
       <Breadcrumbs items={crumbs} />
       <h1>{game.title}</h1>
       <h2 data-type="coming-soon">Coming Soon</h2>

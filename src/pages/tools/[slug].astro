@@ -32,6 +32,7 @@ const movedTo = MOVED[slug as string]
 if (movedTo) return Astro.redirect(movedTo, 301)
 
 const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 const tool = tools.find(t => t.slug === slug)
 
 if (!tool || tool.status === 'external') {
@@ -80,8 +81,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
   metaDescription={tool.metaDescription}
   keywords={tool.keywords}
 >
-  <script type="application/ld+json" set:html={ldJson} />
-  <script type="application/ld+json" set:html={breadcrumbLd} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
   {slug === 'md-enhanced' && <md-enhanced-tool data-tool="md-enhanced"></md-enhanced-tool>}
   {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}

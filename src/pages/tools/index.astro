@@ -9,6 +9,7 @@ import '../../styles/tools.css'
 // disabled tools) to an ItemList so search engines get an explicit, ordered map of
 // the hub — the listing-page counterpart to each tool's WebApplication schema.
 const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 const listed = tools.filter(t => t.status === 'live' || t.status === 'external')
 const ldJson = itemListJsonLd(
   'Tools by Aman Panjwani',
@@ -29,7 +30,7 @@ const cards = tools.filter(t => t.status !== 'disabled').map(tool => ({
   description="Free browser tools — JSON repair, list and timestamp converters, colour and contrast checks, Base64/URL encoding, hashes and UUIDs, a cron expression explainer, a live regex tester, a seeded wallpaper and looping GIF maker, and a live markdown editor. No sign-up, nothing uploaded."
   keywords="developer tools, online dev tools, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, sha256 hash generator, hmac generator, checksum verifier, uuid generator, guid generator, cron expression explainer, crontab explainer, cron to english, cron next run, regex tester, regular expression tester, regex replace, regex online, wallpaper generator, gif generator, pattern generator, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
 >
-  {listed.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
+  {listed.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>tools</h1>
   <p data-type="page-intro">
     Small, fast, single-purpose tools I built to scratch my own itches — a JSON

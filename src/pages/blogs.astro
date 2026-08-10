@@ -8,6 +8,7 @@ import { render } from '../lib/markdown'
 import { safeExternalUrl, safeInternalPath } from '../lib/security'
 
 const [site, posts] = await Promise.all([getSite(Astro.locals), getPosts(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
 
 const formatHref = (href: string) => {
   const external = safeExternalUrl(href)
@@ -37,7 +38,7 @@ const ldJson = itemListJsonLd(
   description="Writing by Aman Panjwani on software engineering, payments, and side projects."
   keywords="aman panjwani blog, engineering notes, payments engineering, build notes, side project writing"
 >
-  {posts.length > 0 && <script type="application/ld+json" set:html={ldJson} />}
+  {posts.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>blogs</h1>
   <p data-type="page-intro">
     Occasional notes on engineering, payments, and whatever I'm currently nerding out about.
