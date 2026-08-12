@@ -173,3 +173,42 @@ These apply to every change, on top of the conventions above:
    orphaned config keys, or superseded CSS overrides behind. Delete what a
    change makes obsolete rather than letting it accumulate.
 4. **`npm run build` stays green.** Never commit a change that breaks the build.
+
+## The bar for a new tool or game
+
+Owner feedback, 2026-08-12: the existing set reads beginner-level. The code isn't
+the problem — the *category* is. Every tool shipped so far (Chroma Lab, Regex Lab,
+Hash Smith, JSON Tidy, Codec Forge, Epoch Wizard, List Forge, Wallpaper Forge) is a
+box that transforms text in the browser, and every game (2048, Game of Life,
+Starfield, Murmuration, L-system, Maze Weaver, Quintle) is a single-player
+reimplementation of something famous, with no state that outlives the tab. Each is a
+tutorial-weekend project, so ten of them still read as a tutorial shelf.
+
+**The rule: a tool must do something a static HTML page cannot.** This site is
+`output: 'server'` on a standalone Node adapter in Docker, with API routes under
+`src/pages/api/` — it already pays for a server that not one tool uses. That gap is
+the whole quality problem, and it is also the fix.
+
+A candidate must clear at least two of these:
+
+- **It owns a URL other software talks to** — the reference standard is
+  webhook.cool: you get an endpoint, it captures real requests, you watch them
+  arrive. Trivial UI, genuinely useful, impossible without a server.
+- **State outlives the tab** — a permalink someone can send to a colleague, a
+  saved run, a daily seed everyone gets the same.
+- **It's correct about something people get wrong** — DST-aware cron previews,
+  JWT *signature verification* against a pasted JWK (decoding one is the beginner
+  version), spec-conformant `.ics`/vCard emission.
+- **It fits a real debugging loop** — HTTP echo with injectable status/latency for
+  testing client retries, an SSE/WebSocket echo target for streaming clients.
+
+**Do not ship** another formatter, converter, encoder, color picker, regex tester,
+or canvas screensaver. That shelf is full and it is what prompted this section.
+
+**Games:** the beginner tell is single-player + no persistence + a famous clone.
+Next level is a shared daily seed, a server-side leaderboard, or a replay permalink.
+One game with a daily seed beats five clones — and prefer *deepening one* of the
+existing games over adding a fourteenth.
+
+Ship fewer, larger things. One tool that a stranger would bookmark is worth more
+than the whole current list.
