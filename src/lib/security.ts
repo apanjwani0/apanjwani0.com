@@ -82,10 +82,13 @@ export function getAdminSecret(locals: unknown): string | undefined {
   return typeof secret === 'string' && secret ? secret : undefined
 }
 
+// Only cf-connecting-ip is trustworthy here: Cloudflare overwrites it on every
+// request, while x-forwarded-for is client-authored and was letting anyone who
+// could reach the Node origin directly forge a whitelisted IP. Returning '' when
+// it is absent fails the whitelist closed, which is what unproxied traffic
+// already did before it learned to send the header.
 export function getClientIp(request: Request): string {
-  return request.headers.get('cf-connecting-ip')
-    ?? request.headers.get('x-forwarded-for')?.split(',')[0].trim()
-    ?? ''
+  return request.headers.get('cf-connecting-ip') ?? ''
 }
 
 export function isAdminRequestAllowed(request: Request, locals: unknown): boolean {
