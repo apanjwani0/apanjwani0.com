@@ -30,10 +30,23 @@ function syncNavHeight() {
   }
 }
 
+/**
+ * Flags whether anything has scrolled, which is the only situation where page
+ * text can pass beneath the fixed nav. The CSS uses it to swap the nav from
+ * transparent (hero runs through it unbroken) to frosted (links stay legible
+ * over content). Kept separate from onScroll so page load can set the initial
+ * state without disturbing the hide-on-scroll bookkeeping below.
+ */
+function syncNavScrolled() {
+  const nav = document.querySelector('[data-type="hero-nav"]') as HTMLElement | null
+  nav?.toggleAttribute('data-nav-scrolled', window.scrollY > 0)
+}
+
 let lastScroll = 0
 function onScroll() {
   const nav = document.querySelector('[data-type="hero-nav"]') as HTMLElement | null
   if (!nav) return
+  syncNavScrolled()
   const current = window.scrollY
   if (current > lastScroll && current > nav.offsetHeight + 20) {
     nav.setAttribute('data-nav-hidden', '')
@@ -60,6 +73,10 @@ function mountStarField() {
 
 function pageSetup() {
   syncNavHeight()
+  // A page can load already scrolled — an anchor link, a restored position, or a
+  // View Transition into a page mid-scroll — so the frosted state has to be
+  // resolved on load, not only on the next scroll event.
+  syncNavScrolled()
   mountStarField()
 }
 
