@@ -5,6 +5,7 @@ import ToolBase from '../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { getSite, getTools } from '../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import { ogCardPath } from '../../lib/og'
 import { render } from '../../lib/markdown'
 import { validateSession } from '../../lib/session'
 import '../../styles/seo-support.css'
@@ -84,6 +85,7 @@ const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
   seoTitle={tool.seoTitle}
   metaDescription={tool.metaDescription}
   keywords={tool.keywords}
+  ogCard={ogCardPath('tools', tool.slug)}
 >
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />

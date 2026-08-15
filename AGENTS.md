@@ -34,6 +34,9 @@ npm run build          # astro build — must stay green before any commit
 npm run preview        # serve the production build locally
 npm run generate-types # wrangler types (regen Cloudflare/KV bindings)
 npm run graph          # graphify update . — refresh the local code-graph
+npm run og             # regenerate the social share cards (see Share cards)
+npm run security:smoke # assert the security invariants (see Security)
+npm run analytics:smoke
 ```
 
 There is no unit-test suite; **`npm run build` is the green-bar gate**. For
@@ -120,6 +123,33 @@ ssh <host> 'cat /opt/portfolio/data/visits.json' | python3 -m json.tool | head -
 
 Cloudflare Web Analytics auto-injection should stay disabled in the Cloudflare
 dashboard; do not weaken the CSP just to allow the blocked Cloudflare beacon.
+
+## Share cards (Open Graph)
+
+Every live tool and interactive game has a generated 1200×630 card in `public/og/`,
+named `<tools|games>-<slug>.png`. `src/lib/og.ts` derives the path from kind+slug —
+there is deliberately **no `image` config field**, because the generator writes
+those exact names from the same config and a second source of truth could only
+ever disagree. Pages without a card (home, sections, coming-soon games) fall back
+to the portrait avatar and the small `summary` Twitter card; a card gets
+`summary_large_image`, since a portrait shown large is cropped to a letterboxed mess.
+
+**Regenerate with `npm run og` after adding a tool/game or changing a title or
+description, and commit the PNGs.** Forgetting means that page falls back to the
+avatar — degraded, not broken.
+
+The generator (`scripts/generate-og.mjs`) rasterises HTML with headless Chrome.
+That is a deliberate choice over an on-demand render route: satori + resvg would
+add two dependencies with native binaries (an Alpine/musl risk in the Docker
+image) and burn CPU and memory per request on a 1 GB box. Committed PNGs are
+ordinary static assets — zero runtime cost, edge-cached like any image. Chrome is
+never needed in CI or production.
+
+Product pages do **not** put the site owner's name in `<title>`: `seoTitle` is used
+verbatim by both shells, because a trailing `· Name` only consumes the pixels
+Google allows before truncating and pushes the real keywords out. Section pages
+(`/projects`, `/blogs`) keep the suffix — there the name is what identifies them.
+Authorship still lives in the JSON-LD `author` and the footer.
 
 ## Security
 
@@ -246,6 +276,7 @@ Every content section displayed on the portfolio must be manageable via the `/ad
 3. Add a `generate{Section}()` function and `case '{section}'` in `astro.config.mjs` (Vite middleware)
 4. Add `'{section}'` to the `allowed` array in `src/pages/api/admin/save.ts`
 5. Add a tab + form + JS save handler in `src/pages/admin.astro`
+6. For a new tool or game, run `npm run og` and commit the card (see Share cards)
 
 Current config keys: `site`, `projects`, `experience`, `blogs`, `games`, `tools`
 
