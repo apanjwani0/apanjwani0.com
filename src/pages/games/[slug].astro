@@ -48,14 +48,15 @@ const ldJson = webAppJsonLd({
   authorName: site.name,
   authorUrl: site.url,
   applicationCategory: 'Game',
+  alsoType: 'VideoGame',
   keywords: game.keywords,
 })
 
-// Visible trail + matching BreadcrumbList — emitted together, and only on the
-// non-interactive "coming soon" pages (which have normal page content to sit
-// above). Each interactive game mounts as a self-contained component with its
-// own heading, so no crumb is drawn there; the visible trail and its structured
-// data must always agree for a breadcrumb path to surface in search results.
+// Visible trail + matching BreadcrumbList, emitted together on every game page.
+// They must always agree: search engines only surface a breadcrumb path when the
+// markup and the structured data match, so neither is emitted without the other.
+// Interactive games render the trail above their component (which draws its own
+// h1), exactly as the tool pages do.
 const crumbs = [
   { label: 'home', href: '/' },
   { label: 'games', href: '/games' },
@@ -70,6 +71,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
 
 <Base title={pageTitle} description={pageDescription} keywords={game.keywords} noindex={!game.interactive} starfield={false} loadFonts={false} clientRouter={false}>
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <Breadcrumbs items={crumbs} inset />
   {game.interactive && slug === '2048' && (
     <twenty48-game data-game="2048">
       <h1>{game.title}</h1>
@@ -144,8 +147,6 @@ const breadcrumbLd = breadcrumbListJsonLd([
   )}
   {!game.interactive && (
     <>
-      <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
-      <Breadcrumbs items={crumbs} />
       <h1>{game.title}</h1>
       <h2 data-type="coming-soon">Coming Soon</h2>
       <div data-type="project-description" set:html={gameIntroHtml} />

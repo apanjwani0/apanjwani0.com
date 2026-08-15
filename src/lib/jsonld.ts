@@ -153,12 +153,24 @@ export interface WebApplicationSchema {
   keywords?: string
   /** schema.org applicationCategory — e.g. 'Game' (default) or 'DeveloperApplication'. */
   applicationCategory?: string
+  /**
+   * Extra schema.org type emitted alongside WebApplication.
+   *
+   * Games pass 'VideoGame': it is the type search engines actually treat as a
+   * game, but it is not a supertype of WebApplication, so declaring both (which
+   * schema.org allows via an @type array) keeps every field below valid while
+   * making the page eligible for game-specific handling. Declaring VideoGame
+   * alone would orphan browserRequirements and the free-to-play Offer.
+   */
+  alsoType?: string
+  /** VideoGame-only. Ignored unless alsoType is set. */
+  playMode?: string
 }
 
 export function webAppJsonLd(a: WebApplicationSchema): string {
   return serialize({
     '@context': 'https://schema.org',
-    '@type': 'WebApplication',
+    '@type': a.alsoType ? [a.alsoType, 'WebApplication'] : 'WebApplication',
     name: a.name,
     description: a.description,
     url: a.url,
@@ -179,6 +191,10 @@ export function webAppJsonLd(a: WebApplicationSchema): string {
       name: a.authorName,
       url: a.authorUrl,
     },
+    ...(a.alsoType === 'VideoGame' && {
+      gamePlatform: 'Web browser',
+      playMode: a.playMode ?? 'SinglePlayer',
+    }),
     ...(a.keywords && { keywords: a.keywords }),
   })
 }

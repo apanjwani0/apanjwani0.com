@@ -102,6 +102,39 @@ Yes for quick validation and formatting. JSON Tidy also adds repair, tree search
     metaDescription: 'Turn a column into a comma-separated list, CSV row or SQL-ready list, then convert it back. Trim, dedupe, quote and sort in your browser.',
     keywords: 'column to comma separated list, comma separator, list to csv, convert column to csv, csv to list, comma separated list generator, delimiter converter, semicolon separated list, pipe separated list, remove duplicates from list, sort list online, add quotes to list, excel column to comma separated',
     intro: 'A two-pane converter that works in both directions: type or paste a column on the left (one item per line, straight out of a spreadsheet) and the delimited list appears on the right — or paste a delimited list on the right and get the column back. Whichever pane you edit is the source, so nothing is ever rewritten under your cursor. Pick the delimiter (comma, comma + space, semicolon, pipe, space, tab, new line, or your own), wrap each value in double or single quotes, and add a prefix and suffix to every item and to the list as a whole — enough to build an SQL IN clause, a JSON-ish array, or a plain CSV row. Clean the data on the way through: trim items, drop empty lines, collapse extra spaces or strip whitespace entirely, remove duplicates, lowercase, sort A→Z, and reverse. Quoted values are handled properly — a delimiter inside quotes never splits an item, and quotes inside a value are doubled the way CSV expects. A live item and character count sits under the panes; copy either side in one click (or turn on auto-copy), download the list as .csv or .txt, and reset when you are done. Your settings and both panes are remembered in your browser, and everything runs locally with nothing uploaded.',
+    seoContent: `## How to use List Forge
+
+Paste a column from a spreadsheet into the left pane — one item per line — and the delimited list appears on the right. Paste a delimited list into the right pane instead and you get the column back. Whichever pane you type in is the source, so your text is never rewritten under the cursor.
+
+## Common jobs
+
+- Turn an Excel or Google Sheets column into a comma-separated list for an email, a form or a config file.
+- Build an SQL \`IN\` clause: choose single quotes, set the list prefix to \`(\` and the list suffix to \`)\`.
+- Switch a list between comma, comma + space, semicolon, pipe, space, tab or newline delimiters.
+- Clean a messy paste — trim items, drop empty lines, collapse extra spaces, remove duplicates, lowercase, sort A→Z or reverse.
+- Split a CSV row back into one item per line, with quoted values kept intact.
+
+## Options worth knowing
+
+Quotes are handled the way CSV expects: a delimiter inside a quoted value never splits an item, and a quote inside a value is doubled. Item prefix and suffix wrap every entry; list prefix and suffix wrap the whole result. A live item and character count sits under the panes, and either side can be copied in one click, auto-copied as you type, or downloaded as .csv or .txt.
+
+## Privacy
+
+Everything runs in your browser. Nothing is uploaded; your settings and both panes are remembered on this device only.
+
+## FAQ
+
+### How do I convert an Excel column to a comma-separated list?
+
+Copy the column, paste it into the left pane and pick Comma or Comma + space as the delimiter. Then press Copy, or turn on auto-copy so the result is always on your clipboard.
+
+### Can it convert a list back into a column?
+
+Yes. Type or paste into the right pane and the column is rebuilt on the left using the same delimiter and quote settings.
+
+### Can I dedupe and sort at the same time?
+
+Yes. Remove duplicates, Lowercase, Sort A→Z and Reverse order are independent checkboxes and can all be on at once.`,
   },
   {
     slug: 'epoch-wizard',
@@ -112,6 +145,37 @@ Yes for quick validation and formatting. JSON Tidy also adds repair, tree search
     metaDescription: 'Convert Unix timestamps to readable dates and back. See seconds, milliseconds, UTC, local time, ISO output and code snippets. No upload.',
     keywords: 'unix timestamp converter, epoch converter, epoch time, unix time converter, timestamp to date, date to timestamp, epoch to human date, unix epoch, milliseconds to date, convert timestamp, current unix timestamp, epoch clock, utc timestamp, iso 8601 converter, seconds to duration, unix time now',
     intro: 'A complete epoch / Unix timestamp workbench that runs entirely in your browser. A live clock ticks the current epoch in seconds, milliseconds, microseconds and nanoseconds, each one copy-able. Paste any timestamp and it detects the unit from the digit count — 10 for seconds, 13 for milliseconds, 16 for microseconds, 19 for nanoseconds — or force a unit yourself, then read it as your local time, UTC, ISO-8601, and a relative "x ago". Go the other way too: type a date as ISO-8601, Y-M-D, M/D/Y, D-M-Y or RFC-2822, choose whether to read it in local time or UTC, and get the epoch back in seconds and milliseconds. Look up the start and end epochs of any day, month or year; break a raw number of seconds down into years, weeks, days, hours and minutes; and copy get-current-plus-convert code for eleven languages including JavaScript, Python, Go, Java, PHP, Ruby, C#, Rust, PostgreSQL, MySQL and shell. Preferences — 12- or 24-hour clock, whether to show UTC, the default unit and time zone — and your last inputs are remembered in your browser. Press C to clear every form. Nothing is uploaded.',
+    seoContent: `## What Epoch Wizard does
+
+A live clock ticks the current Unix epoch in seconds, milliseconds, microseconds and nanoseconds, each one a click to copy. Below it sit four converters for the jobs that actually come up when you are staring at a log line or a database column.
+
+## Common jobs
+
+- Read a timestamp out of a log: paste it and the unit is detected from the digit count — 10 digits for seconds, 13 for milliseconds, 16 for microseconds, 19 for nanoseconds — or force the unit yourself.
+- Go the other way: type a date as ISO-8601, Y-M-D, M/D/Y, D-M-Y or RFC-2822, choose whether to read it as local time or UTC, and get seconds and milliseconds back.
+- Look up the exact start and end epochs of a day, month or year for a range query.
+- Break a raw number of seconds down into years, weeks, days, hours and minutes.
+- Copy a get-current-and-convert snippet for JavaScript, Python, Go, Java, PHP, Ruby, C#, Rust, PostgreSQL, MySQL or shell.
+
+Every result is shown as your local time, UTC, ISO-8601 and a relative "x ago", so you never have to do the offset arithmetic yourself.
+
+## Privacy
+
+Everything runs in your browser. No timestamp you paste leaves the page. Preferences — 12- or 24-hour clock, whether UTC is shown, the default unit and the input time zone — are stored on this device only.
+
+## FAQ
+
+### Is my timestamp in seconds or milliseconds?
+
+Count the digits. A 10-digit number is seconds, 13 is milliseconds, 16 is microseconds and 19 is nanoseconds. Epoch Wizard applies that rule automatically and lets you override it.
+
+### What is the Unix epoch?
+
+It is 00:00:00 UTC on 1 January 1970 — the zero point nearly every system counts from. A Unix timestamp is simply the number of seconds elapsed since then, which is why it carries no time zone of its own.
+
+### How do I clear everything quickly?
+
+Press C while no field is focused and every form on the page resets.`,
   },
   {
     slug: 'chroma-lab',
@@ -122,6 +186,39 @@ Yes for quick validation and formatting. JSON Tidy also adds repair, tree search
     metaDescription: 'Convert HEX, RGB, HSL, HSV and CMYK, pick colour harmonies, and check WCAG contrast ratios with a live preview. Runs in your browser.',
     keywords: 'color converter, colour converter, hex to rgb, rgb to hex, hex to hsl, rgb to hsl, hsl to rgb, hex to cmyk, color code converter, wcag contrast checker, color contrast checker, contrast ratio, accessibility contrast, aa aaa contrast, color harmonies, complementary color, color picker, hsv converter, cmyk converter',
     intro: 'A colour workbench with two halves that runs entirely in your browser. On top, a converter: pick a colour or type it as HEX, and its RGB, HSL, HSV and CMYK values all stay in sync — edit any field and the rest update, without the value ever being rewritten under your cursor. An alpha slider handles transparency, every format is one click to copy, and a strip of harmonies (complementary, analogous, triadic) plus a seven-step tint-to-shade scale are all clickable to load. Below, a WCAG contrast checker: choose a text colour and a background, see a live sample rendered at normal, large and display sizes, and read the exact contrast ratio with pass/fail badges for AA and AAA at each text size and for non-text UI components — swap the pair with one button, or pull the converter colour straight in. Press R for a random colour and S to swap the contrast pair. Your colours are remembered in your browser, and nothing is uploaded.',
+    seoContent: `## Two tools on one page
+
+The top half is a colour converter. Pick a colour or type a HEX code and the RGB, HSL, HSV and CMYK values all stay in sync — edit any field and the rest follow, without the value being rewritten under your cursor. Six formats are one click to copy: HEX, HEX with alpha, rgb()/rgba(), hsl()/hsla(), HSV and CMYK.
+
+The bottom half is a WCAG contrast checker. Choose a text colour and a background, read the exact contrast ratio, and see pass or fail for AA and AAA at normal and large text sizes plus the separate threshold for non-text UI.
+
+## Common jobs
+
+- Convert HEX to RGB, HSL, HSV or CMYK — and back from any of them.
+- Check that body text clears AA against its background before you ship it.
+- Build a palette from the clickable harmonies: complementary, analogous and triadic.
+- Pull a lighter or darker version from the seven-step tint-to-shade scale when a colour is nearly right.
+- Swap the text and background pair to see whether the combination works both ways round.
+
+Press R for a random colour and S to swap the contrast pair. The "use current" buttons load the converter colour straight into the checker.
+
+## Privacy
+
+Everything runs in your browser. No colour, sample or setting is uploaded; your last colours are remembered on this device only.
+
+## FAQ
+
+### What contrast ratio do I actually need?
+
+AA — the level most organisations target — needs 4.5:1 for normal text and 3:1 for large text (24px, or 18.66px bold). AAA is stricter at 7:1 and 4.5:1. Non-text UI such as icons, input borders and focus rings needs 3:1 against whatever is next to it.
+
+### Does the converter handle transparency?
+
+Yes. The alpha slider feeds the HEX+alpha, rgba() and hsla() output. Contrast ratios are computed on the opaque colours, which is how WCAG defines them.
+
+### What is the difference between HSL and HSV?
+
+Both start from hue and saturation. HSL's third value is lightness, where 100% is always white; HSV's is value, where 100% is the most vivid form of that hue. HSL is what CSS uses.`,
   },
   {
     slug: 'codec-forge',
@@ -132,6 +229,39 @@ Yes for quick validation and formatting. JSON Tidy also adds repair, tree search
     metaDescription: 'Encode and decode Base64 and URLs, parse query strings, and handle files locally. Fast browser tool, no signup and no upload.',
     keywords: 'base64 encode, base64 decode, base64 encoder, base64 decoder, url encode, url decode, percent encoding, encodeuricomponent, url safe base64, base64 to image, image to base64, file to base64, data uri generator, query string parser, parse query string, url parameter decoder, base64 online, url encoder online',
     intro: 'A Base64 and URL workbench with three tabs, all running entirely in your browser. On the Base64 tab, two live panes stay in sync — type text on the left to encode, or paste Base64 on the right to decode — with a standard or URL-safe alphabet, optional MIME line-wrapping, and a forgiving decoder that shrugs off whitespace, missing padding, and either alphabet. Text is treated as UTF-8, so accents and emoji round-trip cleanly. Drop in any file to Base64-encode it locally (images get a live preview and you get a ready-made data URI), or turn Base64 back into a downloadable file. The URL tab encodes with encodeURIComponent for single values or encodeURI for a whole address, and decodes without breaking on a stray percent sign, with an optional toggle to read + as a space the way HTML forms do. The Query string tab splits a URL or query string into decoded key = value pairs — repeated keys preserved, + read as space — shown as an editable list and a copyable table, and edits rebuild a properly encoded query string. Everything is copy-first (Ctrl/Cmd + Enter copies the current output), keyboard-friendly, and remembered in your browser; nothing is ever uploaded.',
+    seoContent: `## Three tabs, one job each
+
+The Base64 tab keeps two panes in sync — type text on the left to encode, paste Base64 on the right to decode. Choose the standard (+/) or URL-safe (-_) alphabet and optional MIME (76) or PEM (64) line wrapping. The decoder is deliberately forgiving: it ignores whitespace, tolerates missing padding and accepts either alphabet.
+
+The URL tab encodes with encodeURIComponent for a single value or encodeURI for a whole address, and decodes without choking on a stray percent sign. Turn on "decode + as space" to match how HTML forms submit.
+
+The Query string tab splits a URL or a bare query string into decoded key = value pairs — repeated keys preserved — as an editable list. Change a value and a properly encoded query string is rebuilt.
+
+## Common jobs
+
+- Decode a Base64 payload from a JWT header, a config file or an API response.
+- Turn an image into a data URI you can paste straight into CSS or HTML, with a live preview.
+- Base64-encode any file locally, or turn a Base64 blob back into a downloadable file.
+- Work out why a URL parameter arrives mangled by decoding it field by field.
+- Decide between encodeURIComponent and encodeURI when a generated link keeps breaking.
+
+## Privacy
+
+Everything runs in your browser, file encoding included — files are read locally and never uploaded. Your inputs and settings are remembered on this device only.
+
+## FAQ
+
+### What is the difference between encodeURIComponent and encodeURI?
+
+encodeURIComponent escapes everything unsafe inside a single value, including / ? & and =. encodeURI leaves those alone because they are structural parts of an address. Use the first for a parameter value, the second for a whole URL.
+
+### Does it handle emoji and accented characters?
+
+Yes. Text is treated as UTF-8 on both sides, so accents and emoji round-trip cleanly instead of turning into mojibake.
+
+### What is URL-safe Base64?
+
+The same encoding with + and / swapped for - and _, so the result can sit in a URL or a filename without further escaping. Codec Forge encodes with either alphabet and decodes both automatically.`,
   },
   {
     slug: 'hash-smith',
@@ -142,6 +272,39 @@ Yes for quick validation and formatting. JSON Tidy also adds repair, tree search
     metaDescription: 'Generate SHA hashes, HMAC signatures and UUIDs from text or files in your browser. Verify checksums locally, without uploads.',
     keywords: 'sha256 hash, sha-256 generator, sha1 hash, sha512 hash, sha384, hash generator, online hash, hmac generator, hmac sha256, checksum calculator, verify checksum, file hash, file checksum, md5 alternative, uuid generator, guid generator, uuid v4, uuid v7, generate uuid, random uuid, base64 hash, crypto subtle',
     intro: 'A hashing and UUID workbench that runs entirely in your browser on the built-in Web Crypto API, so nothing is ever uploaded. On the Text tab, type or paste anything and get its SHA-1, SHA-256, SHA-384 and SHA-512 digests all at once, live as you type — read each one as hex (lower or UPPERCASE) or Base64, and copy any single digest in one click. Flip to HMAC mode to authenticate the text with a secret key using the same four algorithms, exactly how API requests and webhooks are signed. On the File tab, pick any file to hash it locally with the same algorithms, then paste a published checksum into the verify box: the matching row lights up, so you can confirm a download is intact — the comparison ignores spaces, colons and letter case and checks every algorithm, so you need not know which one was used. On the UUID tab, mint v4 (fully random) or v7 (time-ordered, ideal as a database key) identifiers, or the nil UUID, in bulk up to a hundred at a time, toggling UPPERCASE, hyphens and {braces}, then copy them all. Everything is copy-first, keyboard-friendly — Ctrl/⌘ + Enter copies the current output — and your non-secret inputs and settings are remembered in your browser.',
+    seoContent: `## What Hash Smith does
+
+Three tabs, all running on the browser's built-in Web Crypto API. Text hash gives you SHA-1, SHA-256, SHA-384 and SHA-512 digests of whatever you type, all four live at once, as hex (lower or UPPERCASE) or Base64. Switch it to HMAC and add a secret key to produce the keyed signature that API requests and webhooks are signed with. File hash does the same for a file you pick. UUID mints identifiers in bulk.
+
+## Verifying a download
+
+Pick the file, then paste the published checksum into the verify box. Hash Smith compares it against all four algorithms at once and lights up the row that matches, so you do not need to know which one the publisher used. The comparison ignores spaces, colons and letter case, so a checksum copied from anywhere usually works as-is.
+
+## Which UUID version
+
+- v4 is fully random — the safe default when you only need uniqueness.
+- v7 is time-ordered, so sequential inserts keep a database index tidy instead of fragmenting it the way random keys do.
+- nil is the all-zeros UUID, useful as a placeholder or sentinel.
+
+Generate up to a hundred at a time and toggle UPPERCASE, hyphens and {braces} before copying them all.
+
+## Privacy
+
+Hashing happens entirely in your browser — text, keys and files never leave the page, and files are read locally rather than uploaded. The HMAC key is deliberately not restored from storage when you come back.
+
+## FAQ
+
+### Why is there no MD5?
+
+The Web Crypto API does not implement MD5, by design: it is broken for anything security-related. For integrity checks and signatures use SHA-256 or stronger, which is what Hash Smith offers.
+
+### What is HMAC and when do I need it?
+
+HMAC mixes a message with a secret key to produce a signature only a holder of that key could have made. It is how Stripe, GitHub and most webhook senders let you prove a payload really came from them rather than a stranger.
+
+### Should I use UUID v4 or v7?
+
+Use v7 for database primary keys — the timestamp prefix keeps inserts roughly sequential. Use v4 when the identifier must leak nothing at all, including when it was created.`,
   },
   {
     slug: 'cron-whisperer',
@@ -152,6 +315,42 @@ Yes for quick validation and formatting. JSON Tidy also adds repair, tree search
     metaDescription: 'Explain cron expressions in plain English and preview the next run times in local time or UTC. Handles ranges, steps, names and @daily.',
     keywords: 'cron expression explainer, crontab explainer, cron parser, cron schedule, cron to english, explain cron, cron expression, crontab guru, cron next run, cron schedule preview, cron generator, cron builder, cron syntax, cron every 5 minutes, cron weekday, cron nickname, cron seconds, quartz cron, node-cron, cron validator',
     intro: 'A cron expression explainer that runs entirely in your browser. Type or paste a crontab schedule and read it back in plain English — in the same phrasing crontab.guru uses, like “At 22:00 on every day-of-week from Monday through Friday.” — then see the next run times computed in your local time zone or in UTC, each with a relative “in x”. It understands the full standard 5-field syntax: any value (*), single numbers, lists (1,15,30), ranges (9-17), and steps (*/5, 0-30/10), plus month and weekday names (JAN–DEC and SUN–SAT, with both 0 and 7 meaning Sunday). Shorthand @nicknames — @yearly, @monthly, @weekly, @daily, @hourly and @reboot — are expanded and explained, and a 6-field expression is read with a leading seconds field the way Quartz and node-cron do. A field-by-field breakdown shows each field’s raw token and the exact values it expands to, a frequency line tells you how often the job fires, and one click loads any of the common examples. It even flags the classic day-of-month / day-of-week gotcha — when both are set, cron runs when either matches. Copy the expression, the description, or the next-run list in one click; your last expression and preferences are remembered on your device, and nothing is ever uploaded.',
+    seoContent: `## How to read a cron expression
+
+A standard crontab line has five fields: minute, hour, day-of-month, month and day-of-week. Paste one in and Cron Whisperer reads it back in plain English, then lists the next run times in your local time zone or UTC, each with a relative "in x". A field-by-field breakdown shows every field's raw token next to the exact values it expands to, which is usually where a wrong schedule gives itself away.
+
+## What the parser understands
+
+- Any value (\`*\`), single numbers, lists like \`1,15,30\`, ranges like \`9-17\`, and steps like \`*/5\` or \`0-30/10\`.
+- Month and weekday names — JAN through DEC and SUN through SAT — with both 0 and 7 accepted for Sunday.
+- Shorthand nicknames: \`@yearly\`, \`@annually\`, \`@monthly\`, \`@weekly\`, \`@daily\`, \`@midnight\`, \`@hourly\` and \`@reboot\`.
+- Six-field expressions, read with a leading seconds field the way Quartz and node-cron do.
+
+## The gotcha it flags for you
+
+When both day-of-month and day-of-week are restricted, cron fires when either one matches — not both. So \`0 0 13 * 5\` runs on the 13th of every month and on every Friday. Cron Whisperer calls this out on screen instead of letting you discover it in production.
+
+## Privacy
+
+The parser, the plain-English description and the next-run calculation all run in your browser. Nothing is uploaded; your last expression and preferences stay on this device.
+
+## FAQ
+
+### How do I write "every 5 minutes" in cron?
+
+\`*/5 * * * *\`. The step syntax means "every nth value", so \`*/5\` in the minute field fires at :00, :05, :10 and so on.
+
+### How do I run a job only on weekdays?
+
+Put \`1-5\` in the day-of-week field. \`0 9 * * 1-5\` runs at 09:00 Monday through Friday.
+
+### Does cron support seconds?
+
+Standard Unix crontab does not. Give Cron Whisperer six fields and it reads the first as seconds, matching Quartz, node-cron and Spring.
+
+### Can I preview runs in UTC?
+
+Yes. The time zone selector switches between your local time and UTC, the clock can be 12- or 24-hour, and you can show 5, 10 or 20 upcoming runs.`,
   },
   {
     slug: 'regex-lab',
@@ -205,6 +404,45 @@ Different regex engines support different features. Regex Lab shows JavaScript b
     metaDescription: 'Create seeded wallpapers, patterns and looping GIFs in your browser. Pick a size, palette and engine, then export PNG or GIF locally.',
     keywords: 'wallpaper generator, gif generator, animated wallpaper maker, pattern generator, generative art, seeded art, procedural art, flow field, harmonograph, topographic pattern, truchet tiles, png wallpaper generator',
     intro: 'A browser-based generative art studio for stills and loops. Choose from Aurora, Waves, Topographic, Truchet, Terrazzo, Flow Field, Harmonograph, Mosaic, or Constellation; pick a device size and palette; then tune density, detail, and grain. Every result is driven by a seed, so the same settings reproduce the same piece. Export a full-resolution PNG or a compact two-second animated GIF, entirely in your browser with nothing uploaded.',
+    seoContent: `## How Wallpaper Forge works
+
+Pick one of nine pattern engines, choose the size you need, set a palette, then tune Density, Detail and Grain until the piece looks right. Everything is driven by a single seed number, so the same engine with the same settings and the same seed always reproduces exactly the same image. Copy the seed and you can come back to a result later.
+
+## The nine engines
+
+- Aurora — a glowing gradient mesh.
+- Waves — layered flowing bands.
+- Topographic — noise contour lines, like a map.
+- Truchet — woven arc tiles.
+- Terrazzo — scattered chips.
+- Flow Field — seeded particle trails.
+- Harmonograph — damped pendulum curves.
+- Mosaic — geometric colour tiles.
+- Constellation — connected star maps.
+
+## Sizes and export
+
+Four device sizes are built in: Phone at 1080×2340, Desktop at 2560×1440, Square at 2048×2048 and Tablet at 1668×2388. Export a full-resolution PNG at the size you picked, or export a two-second animated GIF loop. Seven palettes are available, including one that follows the site's own theme colours.
+
+Shortcuts: R regenerates with a fresh seed, D exports the image, G exports the GIF.
+
+## Privacy
+
+The canvas, the render and both exports run entirely in your browser. Nothing is uploaded and no account is needed; your engine, palette, sliders and seed are remembered on this device only.
+
+## FAQ
+
+### Can I reproduce a wallpaper I made earlier?
+
+Yes. Type the seed back into the seed box with the same engine, palette and slider values and you get the identical image — that is the whole point of seeding it.
+
+### Why is the GIF smaller than the PNG?
+
+A GIF holds 24 frames, so a full-resolution loop would be enormous. The GIF export is capped at 640px wide to stay usable on a phone; use PNG when you want the full device resolution.
+
+### Do the sliders mean the same thing in every engine?
+
+Not quite. Density and Detail map to whatever is meaningful for the engine you picked — particle count, contour spacing, tile size — and the readout under the slider tells you what Density currently controls.`,
   },
   {
     slug: 'md-enhanced',
