@@ -67,10 +67,22 @@ touches the build or deploy pipeline**:
    `__admin_session` cookie. Edge TTL is "Override origin" (1 h); switch it to
    "Respect origin TTL" to let the headers below drive freshness end-to-end.
 2. **`Cache-Control` headers** (`src/middleware.ts`): public `GET` 200 responses
-   get `public, s-maxage=600, stale-while-revalidate=86400`; `/admin`, the admin
-   API, and any logged-in-admin response get `no-store`. This keeps the cache
-   policy in git and guarantees personalized/admin responses are never edge-cached
-   even if the dashboard rule changes.
+   get `public, max-age=0, s-maxage=600, stale-while-revalidate=86400`; `/admin`,
+   the admin API, and any logged-in-admin response get `no-store`. This keeps the
+   cache policy in git and guarantees personalized/admin responses are never
+   edge-cached even if the dashboard rule changes.
+
+   `max-age=0` is deliberate: it caches at the edge but not in the visitor's
+   browser. Browser-cached HTML cannot be purged, so without it an edit stays
+   invisible to anyone who already loaded the page until their own cache expires.
+   Cloudflare's **Browser Cache TTL** setting can re-add a `max-age` on top of
+   this — keep it on "Respect Existing Headers" or it silently overrides the line
+   above.
+
+3. **404s are edge-cached** (`public, max-age=0, s-maxage=300`). Vulnerability
+   scanners generate most of this site's origin traffic and every one of them
+   requests a path that does not exist; an uncached 404 wakes the origin each
+   time. Short TTL so a genuinely new route still appears quickly.
 
 **Gotcha:** after editing content in `/admin`, public pages keep serving the
 cached copy until the TTL expires. To see changes immediately, purge via
@@ -79,16 +91,116 @@ Cloudflare → Caching → Configuration → Purge Everything. Verify caching wi
 
 ## Analytics
 
-Tool and game detail pages send one first-party aggregate event from
-`src/lib/analytics-client.ts` to `/api/analytics/event`. The server stores daily
-rollups in `SITE_ANALYTICS` when present, otherwise under `analytics:*` keys in
-`SITE_CONFIG`, and falls back to `data/analytics.json` on Node/local dev. The
-admin-only `/api/admin/analytics` endpoint powers the `/admin` analytics tab.
-This intentionally stores counts and timing sums only — no user ids, IPs, raw
-referrers, or session traces. Counts are best-effort read-modify-write rollups;
-use Durable Objects/PostHog if exact high-traffic analytics becomes important.
+Two independent layers, both aggregate-only:
+
+1. **Client beacon** (`src/lib/analytics-client.ts` → `/api/analytics/event`) —
+   tool and game detail pages only. Carries the real-user perf metrics (LCP, CLS,
+   TTFB). Rate-limited to 60/min per client; blocked by content blockers.
+2. **Server counter** (`src/lib/visits.ts`, called from `src/middleware.ts`) —
+   every successful HTML page render, so it covers the whole site and cannot be
+   blocked. Records date, path, country (`cf-ipcountry`), referrer **host**, and a
+   separate bot count. Buffered in memory and flushed to `data/visits.json` every
+   30s — never write per request, that turns any visitor into a disk-I/O amplifier.
+
+Storage for layer 1: `SITE_ANALYTICS` when present, else `analytics:*` keys in
+`SITE_CONFIG`, else `data/analytics.json` on Node. Both layers retain 90 days.
+
+**Both layers store counts only — never IPs, user ids, user agents, session
+traces, or full referrer URLs** (query strings leak search terms and tokens). An
+IP is personal data under GDPR the moment it is retained; aggregates are not, so
+the site needs no consent banner. Keep it that way: if a feature seems to need
+per-visitor identity, it needs a different design. Cloudflare's dashboard already
+covers unique visitors and per-country totals — do not rebuild those here.
+
+Reading the data in production (there is no admin UI — see Security):
+
+```sh
+ssh <host> 'cat /opt/portfolio/data/visits.json' | python3 -m json.tool | head -50
+```
+
 Cloudflare Web Analytics auto-injection should stay disabled in the Cloudflare
 dashboard; do not weaken the CSP just to allow the blocked Cloudflare beacon.
+
+## Security
+
+**These are load-bearing invariants, not preferences. Every change must hold
+them, and a change that cannot is a design that needs rethinking.**
+
+### The admin surface does not exist in production
+
+`isAdminRequestAllowed()` returns `import.meta.env.DEV` and nothing else. In
+production `/admin`, `/api/admin/login`, `/logout`, `/save` and `/analytics` all
+return 404. Config is edited in dev — the Vite `admin-save` middleware writes
+`src/config/*.ts` — and ships through git.
+
+This replaced an `ADMIN_IP_WHITELIST` env allowlist, which **did not work**: it
+compared against a client IP read from a request header, and every such header
+(`x-forwarded-for`, `cf-connecting-ip`) is chosen by the caller for anyone who
+reaches the origin directly. It was authenticating a value the attacker supplied.
+Do not reintroduce it. `ADMIN_SECRET` is dev-only and is deliberately not passed
+to the production container.
+
+### Never authorize on a client-controlled value
+
+`getClientIp()` is explicitly untrusted and is used only to bucket rate limits.
+No header, cookie, query param or body field may gate access on its own. If you
+need an authorization decision, it must rest on a secret the client cannot forge
+or on the surface simply not existing.
+
+### Origin exposure
+
+The origin has a public IP with port 80 open, so **Cloudflare is bypassable** and
+`cf-connecting-ip` is only authoritative for traffic that really came through it.
+Two mitigations, in order of preference:
+
+1. `scripts/lock-origin-to-cloudflare.sh` — restrict 80/443 to Cloudflare ranges
+   (or move to a Cloudflare Tunnel and close the ports entirely). **This is the
+   real fix.** UFW alone is not enough; the OCI Security List must match.
+2. `ORIGIN_SHARED_SECRET` + a Cloudflare Transform Rule injecting `x-origin-auth`
+   — the middleware 404s anything without it. Empty value = check disabled, so
+   setting the secret before the rule exists cannot take the site down.
+
+### Rate limits must be bounded
+
+Use `createRateLimiter()` from `src/lib/security.ts` for any public endpoint. Do
+not hand-roll a `Map` keyed by client IP: the keys come from a request header, so
+an unbounded map is a memory-exhaustion vector rather than a defence. The host is
+a 1 GB VM; the container is capped (`--memory=768m`) so a leak restarts the
+container instead of taking down SSH and the CI runner with it.
+
+### Public endpoints must be bounded in every dimension
+
+Body size, per-key count, global bytes, retention, *and* how long a request may
+occupy a socket. The Webhook Inspector is the reference: `WEBHOOK_MAX_*` in
+`src/lib/webhook-store.ts` plus the 2s `?delay=` ceiling. Budget for byte
+accounting being optimistic — `.length` counts UTF-16 code units, not bytes, and
+object overhead is real.
+
+### Escaping
+
+- Anything interpolated into HTML gets escaped including `'` — attribute quoting
+  is a property of the call site and will eventually change.
+- Anything interpolated into a `<script>` body (JSON-LD) goes through
+  `serialize()` in `src/lib/jsonld.ts`, which escapes `<` so a value containing
+  `</script>` cannot break out.
+- Markdown goes through `src/lib/markdown.ts` only: raw HTML is escaped and URLs
+  pass `safeMarkdownUrl()`. Never hand `marked` output to `set:html` directly.
+
+### Unguessable ids are a security control
+
+Where knowing an id is the only thing protecting data (webhook bins), the id must
+be long enough to resist enumeration — 24 chars minimum, and validation enforces
+it server-side, not just in the UI that mints them.
+
+### Before merging anything that touches a trust boundary
+
+```sh
+npm run security:smoke   # asserts these invariants
+npm run build            # must stay green
+```
+
+Add a case to `scripts/security-smoke.mjs` for each new invariant. If a fix has
+no assertion, it will be undone by a later refactor that looks harmless.
 
 ## Key Conventions
 
@@ -135,7 +247,11 @@ Every content section displayed on the portfolio must be manageable via the `/ad
 4. Add `'{section}'` to the `allowed` array in `src/pages/api/admin/save.ts`
 5. Add a tab + form + JS save handler in `src/pages/admin.astro`
 
-Current config keys: `site`, `projects`, `experience`, `blogs`, `games`
+Current config keys: `site`, `projects`, `experience`, `blogs`, `games`, `tools`
+
+Note the admin page is **dev-only** — see Security. Config edited in dev is
+written to `src/config/*.ts` and must be committed to reach production; there is
+no runtime editing on the server.
 
 ## Code graph (graphify)
 
@@ -173,6 +289,14 @@ These apply to every change, on top of the conventions above:
    orphaned config keys, or superseded CSS overrides behind. Delete what a
    change makes obsolete rather than letting it accumulate.
 4. **`npm run build` stays green.** Never commit a change that breaks the build.
+5. **Security invariants hold.** Read the Security section before touching a
+   route, a header, config validation, or anything that renders untrusted input.
+   Run `npm run security:smoke` alongside the build, and add an assertion there
+   for any new invariant. Treat a trust-boundary change without a test as
+   incomplete — the reason a control exists is rarely obvious to the next reader,
+   and an unasserted one gets refactored away.
+6. **No new secrets on the production host.** If a value is only needed in dev,
+   it must not be in the container env. Deploy only what production actually reads.
 
 ## The bar for a new tool or game
 
