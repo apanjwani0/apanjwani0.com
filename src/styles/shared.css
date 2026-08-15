@@ -88,10 +88,19 @@ nav[data-type="hero-nav"] {
   column-gap: 1rem;
   align-items: center;
   padding: clamp(1rem, 3.5vw, 1.4rem) clamp(1.25rem, 5vw, 2rem);
-  /* Same background token as the page, and no bottom rule: the nav reads as part
-     of the page rather than a separate bar, so no divider is needed. It stays
-     opaque (not transparent) so content scrolling under it never shows through. */
-  background: var(--color-bg);
+  /* Translucent, not opaque, and no bottom rule: the nav has to read as part of
+     the page rather than a bar laid on top of it. A solid --color-bg matches the
+     page token but not what is actually *behind* the nav on the home hero, where
+     the starfield canvas is full-bleed — the result was a hard-edged black band
+     across the top with the stars visibly clipped.
+     --color-bg-blur is the token theme.css defines for this ("translucent bg for
+     the sticky header"); at 0.82 alpha the starfield reads through faintly while
+     text scrolling under the nav stays legible. The blur is what keeps that true
+     for busy content; browsers without backdrop-filter fall back to the flat
+     alpha, which is still fine. */
+  background: var(--color-bg-blur);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   transition: transform 0.3s ease;
   pointer-events: auto;
 }
