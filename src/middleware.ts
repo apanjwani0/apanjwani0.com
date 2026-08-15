@@ -51,6 +51,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (isAdminSurface) {
       response.headers.set('Cache-Control', 'no-store')
       response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+    } else if (pathname.startsWith('/api/')) {
+      // API routes are dynamic by definition (analytics writes, the webhook
+      // capture/playback endpoints) — never let the edge cache their responses,
+      // or a GET to a capture URL could be served stale and stop recording.
+      response.headers.set('Cache-Control', 'no-store')
     } else if (hasAdminSession) {
       response.headers.set('Cache-Control', 'no-store')
     } else if ((context.request.method === 'GET' || context.request.method === 'HEAD') && response.status === 200) {

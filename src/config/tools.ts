@@ -17,6 +17,44 @@ export interface Tool {
 
 export const tools: Tool[] = [
   {
+    slug: 'webhook-inspector',
+    title: 'Webhook Inspector',
+    description: 'Get a unique URL, send any webhook to it, and inspect the requests live.',
+    status: 'live',
+    seoTitle: 'Webhook Tester & Inspector — Webhook Inspector',
+    metaDescription: 'Free online webhook tester. Get an instant unique URL, send real webhooks or HTTP requests to it, and inspect the method, headers, query and body live. No sign-up.',
+    keywords: 'webhook tester, webhook inspector, test webhook, webhook debugger, request bin, requestbin, http request inspector, capture webhook, inspect webhook, webhook url, receive webhook, webhook.site alternative, test http request, mock http endpoint, webhook testing tool, online webhook, debug webhook, http echo, request catcher',
+    intro: 'A live webhook and HTTP request tester that uses a real server, not just your browser. You get a unique capture URL that is saved on this device so you can reuse and share it; point any webhook sender or HTTP client at it — Stripe, GitHub, Slack, Shopify, Zapier, a cron job, or your own code — and every request it makes appears here within a couple of seconds, complete with the method, query string, every header, and the raw or pretty-printed body. Expand any request to read the full details, copy the body in one click, and clear the log when you are done. The capture URL doubles as a controllable HTTP target for debugging clients: append ?status=500 to make it return that status and exercise your retry logic, ?delay=3000 to simulate a slow upstream, or ?echo=1 to have it send your request body straight back. Send a sample request with one button to see it work immediately. Captured requests live on the server only long enough to inspect — a few hours of inactivity — and are visible only to whoever holds the unguessable URL: there is no account and no public listing. Press R to refresh, C to clear, N for a fresh URL, and Space to pause the live feed.',
+    seoContent: `## How to use Webhook Inspector
+
+Copy your unique webhook URL from the top of the page and paste it into whatever service or client you want to test. As soon as it sends a request, it appears in the log below — click any entry to see the method, headers, query parameters and body. Use "Send test request" to fire a sample request and confirm everything works.
+
+## What it is good for
+
+- Seeing exactly what a webhook from Stripe, GitHub, Slack, Shopify, Discord or Zapier actually sends before you write code to handle it.
+- Debugging an HTTP client: append \`?status=429\` or \`?status=500\` to test how your code handles error responses and retries.
+- Simulating a slow endpoint with \`?delay=3000\` to test timeouts.
+- Round-tripping a payload with \`?echo=1\`, which sends your request body straight back.
+
+## Privacy
+
+Captured requests are stored on the server only long enough to inspect them — they are dropped after a few hours of inactivity — and are visible only to whoever holds the unguessable URL. There is no account, no public directory, and no long-term storage. Generate a fresh URL any time with the New URL button.
+
+## FAQ
+
+### Is this like RequestBin or webhook.site?
+
+Yes — it gives you a throwaway URL that captures and displays incoming HTTP requests so you can inspect webhooks and API calls.
+
+### Can I control the response it sends back?
+
+Yes. Add \`?status=NNN\` to set the HTTP status, \`?delay=MS\` to slow the response down, and \`?echo=1\` to echo your request body back.
+
+### How long are requests kept?
+
+Requests are held in memory and dropped after a few hours of inactivity, and the most recent 50 per URL are kept. Treat it as a live inspection tool, not storage.`,
+  },
+  {
     slug: 'json-tidy',
     title: 'JSON Tidy',
     description: 'Format, validate, repair, search, compare & convert JSON to YAML, CSV, or XML.',
