@@ -196,6 +196,17 @@ const adminSavePlugin = {
 export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
+  // Astro's default CSRF guard (security.checkOrigin) rejects cross-origin form
+  // POSTs. That is incompatible with the Webhook Inspector's capture endpoint
+  // (/api/hook/*), which exists precisely to receive requests from arbitrary
+  // external senders — including form-encoded webhooks (Twilio, Slack slash
+  // commands) that carry no matching Origin header. checkOrigin cannot be scoped
+  // to one route, so it is disabled here; CSRF on state-changing surfaces is
+  // covered by stronger, explicit controls instead: the __admin_session cookie
+  // is HttpOnly + SameSite=Strict (never sent cross-site), admin login requires
+  // ADMIN_SECRET, and the analytics + webhook-clear endpoints do their own
+  // same-origin checks.
+  security: { checkOrigin: false },
   devToolbar: { enabled: false },
   vite: {
     plugins: [adminSavePlugin],

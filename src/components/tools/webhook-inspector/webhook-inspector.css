@@ -1,0 +1,280 @@
+/* Webhook Inspector — layout for the capture-URL card and the live request log.
+   Tokens only (theme.css): colours, fonts, type sizes and radii come from
+   custom properties; the shared card, toolbar and button chrome come from
+   tools-common.css (this tool opts in via its selectors there). */
+
+div[data-tool="webhook-inspector"] [data-type="tool-header"] p code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+/* URL row — read-only capture URL + copy button. */
+div[data-tool="webhook-inspector"] [data-group="wi-urlrow"] {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+div[data-tool="webhook-inspector"] [data-input="url"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-hint"] {
+  margin: 0.75rem 0 0.35rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-status"] {
+  display: block;
+  min-height: 1.2em;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Requests card header — title left, controls right. */
+div[data-tool="webhook-inspector"] [data-group="wi-reqhead"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-reqhead"] [data-group="toolbar"] {
+  margin: 0;
+}
+
+div[data-tool="webhook-inspector"] [data-for="count"] {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* Live-paused hint on the toggle button. */
+div[data-tool="webhook-inspector"][data-paused="true"] [data-action="toggle-poll"] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* Request log. */
+div[data-tool="webhook-inspector"] [data-type="wi-list"] {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-list"] > li > details {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-summary"] {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-summary"]::-webkit-details-marker {
+  display: none;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-summary"]:hover {
+  background: var(--color-surface);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-method"] {
+  flex: 0 0 auto;
+  min-width: 4.2em;
+  text-align: center;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+}
+
+/* Method accents — token-driven, so they follow the theme. */
+div[data-tool="webhook-inspector"] [data-type="wi-method"][data-method="GET"] {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+div[data-tool="webhook-inspector"] [data-type="wi-method"][data-method="POST"],
+div[data-tool="webhook-inspector"] [data-type="wi-method"][data-method="PUT"],
+div[data-tool="webhook-inspector"] [data-type="wi-method"][data-method="PATCH"] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+div[data-tool="webhook-inspector"] [data-type="wi-method"][data-method="DELETE"] {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-when"] {
+  flex: 0 0 auto;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-meta"] {
+  flex: 1 1 auto;
+  text-align: right;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Expanded detail. */
+div[data-tool="webhook-inspector"] [data-type="wi-detail"] {
+  padding: 0.4rem 0.7rem 0.8rem;
+  border-top: 1px solid var(--color-border);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-facts"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.5rem 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-facts"] b {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-sub"] {
+  margin: 0.9rem 0 0.35rem;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-n"] {
+  color: var(--color-muted);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-kv"] {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  table-layout: fixed;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-kv"] td {
+  padding: 0.2rem 0.5rem 0.2rem 0;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-kv"] td:first-child {
+  width: 34%;
+  color: var(--color-accent);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-kv"] td:last-child {
+  color: var(--color-text);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-body"] {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow: auto;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-nobody"] {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-bodybtns"] {
+  margin-top: 0.5rem;
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-bodybtns"] button {
+  padding: 0.28rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-bodybtns"] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-empty"] {
+  margin: 1rem 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* Explainer disclosure — matches the muted secondary copy used elsewhere. */
+div[data-tool="webhook-inspector"] [data-type="wi-explainer"] {
+  margin-top: 1.25rem;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-explainer"] summary {
+  cursor: pointer;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-explainer"] code {
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+}

@@ -1,11 +1,17 @@
 ---
 import { getSite } from '../lib/config'
+import { ogImageMeta } from '../lib/og'
 import Nav from '../components/Nav.astro'
 import Head from '../components/Head.astro'
 import '../styles/global.css'
 
 interface Props {
   title?: string
+  /** A complete, self-contained <title>. Used verbatim — no site-name suffix.
+   *  Product pages (games) pass their SEO title here: in a search result the
+   *  trailing "· Name" only eats the pixels Google allows before truncating,
+   *  and pushes the actual keywords out. Matches how ToolBase treats seoTitle. */
+  seoTitle?: string
   description?: string
   noindex?: boolean
   keywords?: string
@@ -17,11 +23,14 @@ interface Props {
   clientRouter?: boolean
   ogType?: 'website' | 'article'
   publishedTime?: string
+  /** Generated share card from ogCardPath(); falls back to the avatar if absent. */
+  ogCard?: string
 }
 
 const site = await getSite(Astro.locals)
 const {
   title,
+  seoTitle,
   description = site.tagline,
   noindex = false,
   keywords,
@@ -33,17 +42,18 @@ const {
   clientRouter = true,
   ogType = 'website',
   publishedTime,
+  ogCard,
 } = Astro.props
-// Home (no explicit title) gets a descriptive title with the role line so the
-// most-linked page's <title>/og:title isn't just a bare name.
-const pageTitle = title ? `${title} · ${site.name}` : `${site.name} · ${site.tagline}`
+// A supplied seoTitle is already complete and is used as-is. Otherwise a section
+// title gets the site-name suffix (it is what identifies "projects" as this
+// site's), and home (no title at all) gets a descriptive title with the role line
+// so the most-linked page's <title>/og:title isn't just a bare name.
+const pageTitle = seoTitle || (title ? `${title} · ${site.name}` : `${site.name} · ${site.tagline}`)
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
-// Absolute URL for the social-share preview image (link cards on Slack, X, etc.).
-// Dimensions match public/avatar.webp (320×468) so scrapers get a complete
-// og:image object and reserve the right aspect ratio without a fetch.
-const ogImage = new URL(site.avatar, site.url).href
-const ogImageWidth = 320
-const ogImageHeight = 468
+// Absolute URL + dimensions for the social-share preview image (link cards on
+// Slack, X, etc.). Shared with ToolBase.astro via one helper so the share-image
+// dimensions have a single source of truth.
+const ogImage = ogImageMeta(site, ogCard, title)
 ---
 
 <!doctype html>
@@ -56,9 +66,12 @@ const ogImageHeight = 468
       siteName={site.name}
       noindex={noindex}
       keywords={keywords}
-      image={ogImage}
-      imageWidth={ogImageWidth}
-      imageHeight={ogImageHeight}
+      image={ogImage.src}
+      imageWidth={ogImage.width}
+      imageHeight={ogImage.height}
+      imageAlt={ogImage.alt}
+      imageType={ogImage.type}
+      twitterCard={ogImage.card}
       ogType={ogType}
       publishedTime={publishedTime}
       handle={site.handle}

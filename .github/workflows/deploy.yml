@@ -57,7 +57,16 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           DOCKER_IMAGE: ${{ env.IMAGE }}:latest
-          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+          # ADMIN_SECRET is deliberately NOT passed: the admin surface is dev-only
+          # and every /admin route 404s in production, so the container has no use
+          # for it. Secrets that nothing reads are pure liability on a host that is
+          # reachable from the internet.
+          #
+          # Optional origin lock. Empty until the GitHub secret exists, and the
+          # middleware treats empty as "not configured" and allows traffic — so
+          # adding the secret before the matching Cloudflare Transform Rule cannot
+          # black-hole the site. See AGENTS.md → Origin exposure.
+          ORIGIN_SHARED_SECRET: ${{ secrets.ORIGIN_SHARED_SECRET }}
         run: |
           set -euo pipefail
 
@@ -79,7 +88,10 @@ jobs:
             -p 80:4321 \
             -v /opt/portfolio/data:/app/data \
             -v /opt/portfolio/avatar.webp:/app/dist/client/avatar.webp \
-            -e ADMIN_SECRET="$ADMIN_SECRET" \
+            -e ORIGIN_SHARED_SECRET="$ORIGIN_SHARED_SECRET" \
+            --memory=768m \
+            --memory-swap=1536m \
+            --pids-limit=256 \
             "$DOCKER_IMAGE"
 
           for i in {1..20}; do

@@ -70,13 +70,17 @@ type KVListResult = {
 
 type AnalyticsKV = {
   get(key: string, type: 'json'): Promise<unknown>
-  put(key: string, value: string): Promise<unknown>
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<unknown>
   list?: (options: { prefix: string; cursor?: string }) => Promise<KVListResult>
 }
 
 const MAX_MS = 10 * 60 * 1000
 const MAX_TRANSFER_SIZE = 100 * 1024 * 1024
 const ANALYTICS_PREFIX = 'analytics:'
+/** How long a daily rollup is kept. Nothing dropped these before, and one row per
+ *  day per tool/game accumulates forever — on the local store that matters, because
+ *  every public page view reads and rewrites the whole file. */
+const ANALYTICS_RETENTION_DAYS = 90
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -246,6 +250,20 @@ export function updateAnalyticsAggregate(current: AnalyticsAggregate | null, eve
   return next
 }
 
+/** Drop rollups older than [retentionDays]. Pure, so the retention rule is testable
+ *  without touching the store. */
+export function pruneAnalytics(
+  data: Record<string, AnalyticsAggregate | null>,
+  now = new Date(),
+  retentionDays = ANALYTICS_RETENTION_DAYS,
+): Record<string, AnalyticsAggregate> {
+  const cutoff = new Date(now.getTime() - retentionDays * 86_400_000).toISOString().slice(0, 10)
+  return Object.fromEntries(
+    Object.entries(data).filter((entry): entry is [string, AnalyticsAggregate] =>
+      !!entry[1] && entry[1].date >= cutoff),
+  )
+}
+
 export async function recordAnalyticsEvent(locals: unknown, event: AnalyticsEvent): Promise<void> {
   const date = new Date().toISOString().slice(0, 10)
   const key = analyticsKey(date, event.kind, event.slug)
@@ -254,11 +272,15 @@ export async function recordAnalyticsEvent(locals: unknown, event: AnalyticsEven
   if (kv) {
     const current = cleanAggregate(await kv.get(key, 'json'))
     // ponytail: KV increments are read-modify-write; use Durable Objects or PostHog if exact high-traffic counts matter.
-    await kv.put(key, JSON.stringify(updateAnalyticsAggregate(current, event)))
+    // expirationTtl so KV expires its own keys: readAnalyticsAggregates lists and gets
+    // every key under the prefix, so keys that never die make the admin tab slower forever.
+    await kv.put(key, JSON.stringify(updateAnalyticsAggregate(current, event)), {
+      expirationTtl: ANALYTICS_RETENTION_DAYS * 86_400,
+    })
     return
   }
 
-  const data = await readLocalAnalytics()
+  const data = pruneAnalytics(await readLocalAnalytics())
   // ponytail: local JSON can lose simultaneous increments; use SQLite/Postgres if this site gets real traffic.
   data[key] = updateAnalyticsAggregate(data[key] ?? null, event)
   await writeLocalAnalytics(data)

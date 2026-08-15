@@ -6,6 +6,7 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { getSite, getPosts } from '../../lib/config'
 import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
 import { render } from '../../lib/markdown'
+import { formatDisplayDate } from '../../lib/date'
 
 const { slug } = Astro.params
 const [site, posts] = await Promise.all([getSite(Astro.locals), getPosts(Astro.locals)])
@@ -52,7 +53,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
   <article>
     <header>
       <h1>{post.title}</h1>
-      <time datetime={post.date}>{post.date}</time>
+      <time datetime={post.date}>{formatDisplayDate(post.date)}</time>
     </header>
     <section data-type="post-summary">
       <p><em>Summary:</em> {post.summary}</p>

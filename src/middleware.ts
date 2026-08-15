@@ -1,4 +1,6 @@
 import { defineMiddleware } from 'astro:middleware'
+import { isFromCloudflare } from './lib/security'
+import { looksAutomated, recordVisit, referrerHost } from './lib/visits'
 
 function createNonce(): string {
   const bytes = new Uint8Array(16)
@@ -23,6 +25,12 @@ function buildCsp(nonce: string): string {
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
+  // Origin lock — see isFromCloudflare. No-op until ORIGIN_SHARED_SECRET is set.
+  if (!(await isFromCloudflare(context.request))) {
+    // 404, not 403: a bypass attempt learns nothing about why it failed.
+    return new Response(null, { status: 404, statusText: 'Not Found' })
+  }
+
   const cspNonce = createNonce()
   const locals = context.locals as any
   locals.cspNonce = cspNonce
@@ -47,23 +55,50 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // admins and must not be stored and served to the public.
     const isAdminSurface = pathname === '/admin' || pathname.startsWith('/api/admin/')
     const hasAdminSession = context.request.headers.get('cookie')?.includes('__admin_session') ?? false
+    const isGet = context.request.method === 'GET' || context.request.method === 'HEAD'
 
     if (isAdminSurface) {
       response.headers.set('Cache-Control', 'no-store')
       response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+    } else if (pathname.startsWith('/api/')) {
+      // API routes are dynamic by definition (analytics writes, the webhook
+      // capture/playback endpoints) — never let the edge cache their responses,
+      // or a GET to a capture URL could be served stale and stop recording.
+      response.headers.set('Cache-Control', 'no-store')
     } else if (hasAdminSession) {
       response.headers.set('Cache-Control', 'no-store')
-    } else if ((context.request.method === 'GET' || context.request.method === 'HEAD') && response.status === 200) {
+    } else if (isGet && response.status === 404) {
+      // Vulnerability scanners generate the bulk of this site's origin traffic,
+      // and every one of them requests a path that does not exist. An uncached
+      // 404 wakes the origin every time; a cached one is absorbed at the edge.
+      // Short TTL so a genuinely new route still appears quickly.
+      response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300')
+    } else if (isGet && response.status === 200) {
       // Public, successful page → cacheable. s-maxage drives the CDN edge;
       // stale-while-revalidate lets it refresh in the background so no visitor
-      // ever blocks on the (slow, distant) origin. The sitemap changes far less
-      // often than page content, so it gets a longer fresh window (1 h vs 10 m)
-      // to cut origin hits from crawlers while still refreshing within the day.
+      // ever blocks on the origin. The sitemap changes far less often than page
+      // content, so it gets a longer fresh window (1 h vs 10 m) to cut origin
+      // hits from crawlers while still refreshing within the day.
+      //
+      // max-age=0 keeps *browsers* from pinning stale HTML: without it an edit
+      // stays invisible to anyone who already loaded the page until their own
+      // cache expires, which is not something a purge can fix.
       const isSitemap = pathname === '/sitemap.xml'
       response.headers.set(
         'Cache-Control',
-        `public, ${isSitemap ? 'max-age=3600, s-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
+        `public, max-age=0, ${isSitemap ? 's-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
       )
+    }
+
+    // Count real page views only: successful HTML GETs, never API calls or assets.
+    if (isGet && response.status === 200 && !pathname.startsWith('/api/') && !isAdminSurface) {
+      const headers = context.request.headers
+      recordVisit({
+        path: pathname,
+        country: headers.get('cf-ipcountry') ?? 'XX',
+        referrer: referrerHost(headers.get('referer'), context.url.host),
+        bot: looksAutomated(headers.get('user-agent')),
+      })
     }
   }
 

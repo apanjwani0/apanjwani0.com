@@ -21,7 +21,7 @@ export const prerender = false
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtimeEnv = getRuntimeEnv(locals)
-  if (!isAdminRequestAllowed(request, locals)) return adminNotFound()
+  if (!isAdminRequestAllowed()) return adminNotFound()
 
   // Auth
   const secret = getAdminSecret(locals)

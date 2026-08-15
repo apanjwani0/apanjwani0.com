@@ -21,11 +21,16 @@ export const GET: APIRoute = async ({ locals }) => {
   // <lastmod> — search engines use it to prioritise re-crawls.
   type SitemapUrl = { loc: string; lastmod?: string }
 
+  // The /blogs hub changes whenever a post is added or edited, so stamp it with
+  // the newest authored post date — a freshness signal for re-crawls, mirroring
+  // the per-post <lastmod> below. (ISO YYYY-MM-DD compares correctly as strings.)
+  const latestPostDate = posts.reduce((max, p) => (p.date > max ? p.date : max), '')
+
   // Static pages
   const staticPages: SitemapUrl[] = [
     { loc: '/' },
     { loc: '/projects' },
-    { loc: '/blogs' },
+    { loc: '/blogs', lastmod: latestPostDate || undefined },
     { loc: '/games' },
     { loc: '/tools' },
   ]

@@ -55,7 +55,8 @@ div[data-tool="chroma-lab"] [data-group="toolbar"],
 div[data-tool="codec-forge"] [data-group="toolbar"],
 div[data-tool="hash-smith"] [data-group="toolbar"],
 div[data-tool="cron-whisperer"] [data-group="toolbar"],
-div[data-tool="regex-lab"] [data-group="toolbar"] {
+div[data-tool="regex-lab"] [data-group="toolbar"],
+div[data-tool="webhook-inspector"] [data-group="toolbar"] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -69,7 +70,8 @@ div[data-tool="chroma-lab"] button,
 div[data-tool="codec-forge"] button,
 div[data-tool="hash-smith"] button,
 div[data-tool="cron-whisperer"] button,
-div[data-tool="regex-lab"] button {
+div[data-tool="regex-lab"] button,
+div[data-tool="webhook-inspector"] button {
   padding: 0.32rem 0.85rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -88,7 +90,8 @@ div[data-tool="chroma-lab"] button:hover,
 div[data-tool="codec-forge"] button:hover,
 div[data-tool="hash-smith"] button:hover,
 div[data-tool="cron-whisperer"] button:hover,
-div[data-tool="regex-lab"] button:hover {
+div[data-tool="regex-lab"] button:hover,
+div[data-tool="webhook-inspector"] button:hover {
   color: var(--color-text);
   border-color: var(--color-muted);
 }
@@ -103,7 +106,8 @@ div[data-tool="regex-lab"] button:hover {
 section[data-type="cl-card"],
 section[data-type="ew-card"],
 section[data-type="cw-card"],
-section[data-type="rl-card"] {
+section[data-type="rl-card"],
+section[data-type="wi-card"] {
   margin-top: 1.25rem;
   padding: 1rem 1.1rem 1.15rem;
   border: 1px solid var(--color-border);
@@ -120,7 +124,8 @@ section[data-type="rl-card"] {
 section[data-type="cl-card"] h2,
 section[data-type="ew-card"] h2,
 section[data-type="cw-card"] h2,
-section[data-type="rl-card"] h2 {
+section[data-type="rl-card"] h2,
+section[data-type="wi-card"] h2 {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   letter-spacing: 0.03em;

@@ -5,6 +5,7 @@ import ToolBase from '../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { getSite, getTools } from '../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import { ogCardPath } from '../../lib/og'
 import { render } from '../../lib/markdown'
 import { validateSession } from '../../lib/session'
 import '../../styles/seo-support.css'
@@ -20,6 +21,7 @@ import '../../components/tools/codec-forge/codec-forge.css'
 import '../../components/tools/hash-smith/hash-smith.css'
 import '../../components/tools/cron-whisperer/cron-whisperer.css'
 import '../../components/tools/regex-lab/regex-lab.css'
+import '../../components/tools/webhook-inspector/webhook-inspector.css'
 
 const { slug } = Astro.params
 
@@ -83,6 +85,7 @@ const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
   seoTitle={tool.seoTitle}
   metaDescription={tool.metaDescription}
   keywords={tool.keywords}
+  ogCard={ogCardPath('tools', tool.slug)}
 >
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
@@ -148,6 +151,12 @@ const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
       <p>{tool.intro || tool.description}</p>
     </regex-lab-tool>
   )}
+  {slug === 'webhook-inspector' && (
+    <webhook-inspector-tool data-tool="webhook-inspector">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </webhook-inspector-tool>
+  )}
   {toolSeoContentHtml && <section data-type="seo-support" set:html={toolSeoContentHtml} />}
 </ToolBase>
 
@@ -168,6 +177,7 @@ const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
     else if (slug === 'hash-smith') import('../../components/tools/hash-smith/HashSmith.ts')
     else if (slug === 'cron-whisperer') import('../../components/tools/cron-whisperer/CronWhisperer.ts')
     else if (slug === 'regex-lab') import('../../components/tools/regex-lab/RegexLab.ts')
+    else if (slug === 'webhook-inspector') import('../../components/tools/webhook-inspector/WebhookInspector.ts')
   }
   document.addEventListener('astro:page-load', mountTool)
   mountTool()

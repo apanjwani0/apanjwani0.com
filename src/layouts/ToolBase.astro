@@ -1,5 +1,6 @@
 ---
 import { getSite } from '../lib/config'
+import { ogImageMeta } from '../lib/og'
 import Nav from '../components/Nav.astro'
 import Head from '../components/Head.astro'
 import '../styles/shared.css'
@@ -9,10 +10,12 @@ interface Props {
   seoTitle?: string
   metaDescription?: string
   keywords?: string
+  /** Generated share card from ogCardPath(); falls back to the avatar if absent. */
+  ogCard?: string
 }
 
 const site = await getSite(Astro.locals)
-const { toolTitle, seoTitle, metaDescription, keywords } = Astro.props
+const { toolTitle, seoTitle, metaDescription, keywords, ogCard } = Astro.props
 const pageTitle = seoTitle || (toolTitle ? `${toolTitle} · ${site.name}` : `${site.name} · tools`)
 // Fall back to a tool-appropriate sentence rather than the site's role line
 // (`site.tagline`), which reads as nonsense as a tool page's meta description.
@@ -23,10 +26,8 @@ const description =
     : `Fast, free, browser-based developer tools by ${site.name}.`)
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
 // Absolute URL + dimensions for the social-share preview image, matching
-// Base.astro so shared tool links render a preview card, not a bare link.
-const ogImage = new URL(site.avatar, site.url).href
-const ogImageWidth = 320
-const ogImageHeight = 468
+// Base.astro (shared helper) so tool links render a preview card, not a bare link.
+const ogImage = ogImageMeta(site, ogCard, toolTitle)
 ---
 
 <!doctype html>
@@ -38,9 +39,12 @@ const ogImageHeight = 468
       canonicalURL={canonicalURL}
       siteName={site.name}
       keywords={keywords}
-      image={ogImage}
-      imageWidth={ogImageWidth}
-      imageHeight={ogImageHeight}
+      image={ogImage.src}
+      imageWidth={ogImage.width}
+      imageHeight={ogImage.height}
+      imageAlt={ogImage.alt}
+      imageType={ogImage.type}
+      twitterCard={ogImage.card}
       handle={site.handle}
       loadFonts={false}
       clientRouter={false}

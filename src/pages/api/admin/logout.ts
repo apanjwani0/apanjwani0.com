@@ -5,7 +5,7 @@ import { adminNotFound, getRuntimeEnv, getSessionToken, isAdminRequestAllowed } 
 export const prerender = false
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  if (!isAdminRequestAllowed(request, locals)) return adminNotFound()
+  if (!isAdminRequestAllowed()) return adminNotFound()
 
   const runtimeEnv = getRuntimeEnv(locals)
   const token = getSessionToken(request)

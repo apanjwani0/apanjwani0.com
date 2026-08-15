@@ -19,7 +19,7 @@ const forksUrl = appendPathToExternalUrl(project.url, 'forks')
   <div data-type="project-header">
     <h2 data-type="card-title">
       {projectUrl
-        ? <a href={projectUrl} target="_blank" rel="noopener noreferrer">{project.title}</a>
+        ? <a href={projectUrl} target="_blank" rel="noopener noreferrer" aria-label={`${project.title} (opens in a new tab)`}>{project.title}</a>
         : project.title}
     </h2>
     {stats && stargazersUrl && forksUrl && (
