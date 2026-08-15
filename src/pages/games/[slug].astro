@@ -6,6 +6,7 @@ import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import { ogCardPath } from '../../lib/og'
 import '../../styles/seo-support.css'
 import '../../components/games/games-common.css'
 import '../../components/games/twenty48/twenty48.css'
@@ -35,7 +36,6 @@ if (!game) {
 // For a "coming soon" page, point the visitor at a game that's actually
 // playable right now so the page is an invitation, not a dead end.
 const liveGame = games.find(g => g.enabled && g.interactive && g.slug !== slug)
-const pageTitle = game.seoTitle || game.title
 const pageDescription = game.metaDescription || game.description
 const gameIntro = game.intro || game.description
 const gameIntroHtml = render(gameIntro)
@@ -69,7 +69,17 @@ const breadcrumbLd = breadcrumbListJsonLd([
 ])
 ---
 
-<Base title={pageTitle} description={pageDescription} keywords={game.keywords} noindex={!game.interactive} starfield={false} loadFonts={false} clientRouter={false}>
+<Base
+  title={game.title}
+  seoTitle={game.seoTitle}
+  description={pageDescription}
+  keywords={game.keywords}
+  noindex={!game.interactive}
+  starfield={false}
+  loadFonts={false}
+  clientRouter={false}
+  ogCard={game.interactive ? ogCardPath('games', game.slug) : undefined}
+>
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
