@@ -160,6 +160,45 @@ Yes. Use Practice mode when the daily puzzle is done.`
     "keywords": "reaction diffusion,gray-scott,turing pattern,turing bloom,morphogenesis,cellular pattern simulation,generative art,coral pattern,mitosis simulation,paint simulation,download png,interactive canvas"
   },
   {
+    "slug": "sand-loom",
+    "title": "Sand Loom",
+    "description": "A falling-sand sandbox — a little world of powders, liquids, fire and stone that runs on simple per-cell physics. Pick a material and paint it on the canvas; then just watch. Sand piles into slopes, water finds its level and pours off ledges, oil floats, fire climbs anything flammable, and lava freezes into stone the instant it touches water, hissing off steam.\n\nTwelve materials with real interactions: acid eats through solids, plants creep along water, salt dissolves, smoke and steam drift upward and fade. Which material sits on top of which is decided purely by density. Load a demo scene, adjust your brush, and pour a whole ecosystem into being. Runs entirely in your browser — no downloads, no sign-up.",
+    "seoTitle": "Falling Sand Game — Sand Loom Physics Sandbox",
+    "metaDescription": "Play a falling-sand physics sandbox in your browser. Paint sand, water, fire, lava, oil, acid and plants and watch them react. No download, no sign-up.",
+    "enabled": true,
+    "interactive": true,
+    "keywords": "falling sand game,sand simulation,powder game,physics sandbox,cellular automaton,sandbox game,water sand fire simulation,falling sand online,sand physics,pixel physics",
+    "seoContent": `## How to play Sand Loom
+
+Pick a material from the palette, then click or drag on the canvas to paint it. Everything obeys simple physics from there: powders fall and pile up, liquids flow and seek their level, gases rise. Use the brush slider to draw broad strokes or fine detail, Clear to wipe the grid, and Scene to load a ready-made setup to play with.
+
+## The materials and how they react
+
+- Sand and salt are powders that fall and slide into slopes; salt dissolves in water.
+- Water, oil, acid and lava are liquids. Oil is lighter than water so it floats; lava is the heaviest of all.
+- Fire climbs anything flammable — wood, plant and oil — then burns out into smoke.
+- Lava sets flammables alight and freezes into stone the moment it meets water, releasing steam.
+- Acid eats through sand, stone, wood and plant. Plants slowly grow along water.
+
+## Things to try
+
+Build a stone bowl, fill it with water, float a layer of oil on top and drop a spark of fire on the oil. Or pour lava onto a pool of water and watch it turn to rock. Set a wooden wall alight and watch the fire spread and smoke rise.
+
+## FAQ
+
+### Is Sand Loom free?
+
+Yes. It runs entirely in your browser with no download and no sign-up.
+
+### Does it save my drawing?
+
+Your material, brush size and settings are saved locally. The grid itself resets when you reload — use the Scene button for ready-made setups.
+
+### Can I play on mobile?
+
+Yes. Drag your finger to paint; the canvas will not scroll the page while you draw.`
+  },
+  {
     "slug": "lsystem-tree",
     "title": "Fractal Garden",
     "description": "Plants that draw themselves. Each one is an L-system — a tiny rewriting grammar: start from a short seed string, replace every symbol with new symbols a few times over, then read the result as turtle graphics — step forward, turn, branch — and a whole tree falls out of the maths with nobody drawing a single leaf.\n\nGrow seven species, from a Barnsley fractal plant and a bushy weed to the Koch, Dragon and Sierpinski curves. Bend the branch angle, add organic wobble, thicken the trunk and toggle leaf blossoms; the branches are shaded trunk-to-tip and the geometric curves along their length. A text seed makes any plant reproducible, and you can download the frame you like as a PNG. Runs entirely in your browser.",
