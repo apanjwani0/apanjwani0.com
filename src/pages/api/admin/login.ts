@@ -31,17 +31,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   if (!isAdminRequestAllowed()) return adminNotFound()
 
-  // ponytail: in-memory per-isolate throttle; use Cloudflare WAF/KV if admin login traffic matters.
-  if (!allowAttempt(rateLimitKey(request))) {
-    return new Response(JSON.stringify({ error: 'Too many attempts' }), {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/json',
-        'Retry-After': String(Math.ceil(ADMIN_LOGIN_LIMITS.windowMs / 1000)),
-      },
-    })
-  }
-
   let password = ''
   try {
     const body = await readLimitedJson(request) as { password?: unknown }
@@ -54,7 +43,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
     })
   }
 
+  // Only failures consume the budget — a correct password is proof of the
+  // secret, not a guess, and counting successes locked out login-heavy E2E
+  // flows (the old local limiter cleared itself on success for the same reason).
+  // ponytail: in-memory per-isolate throttle; use Cloudflare WAF/KV if admin login traffic matters.
   if (!(await timingSafeEqualText(password, secret))) {
+    const allowed = allowAttempt(rateLimitKey(request))
+    if (!allowed) {
+      return new Response(JSON.stringify({ error: 'Too many attempts' }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(Math.ceil(ADMIN_LOGIN_LIMITS.windowMs / 1000)),
+        },
+      })
+    }
     return new Response(JSON.stringify({ error: 'incorrect password' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },

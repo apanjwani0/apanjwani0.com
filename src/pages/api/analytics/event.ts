@@ -4,6 +4,7 @@ import { normalizeAnalyticsEvent, recordAnalyticsEvent } from '../../../lib/anal
 import {
   BodyTooLargeError,
   createRateLimiter,
+  isSameOrigin,
   rateLimitKey,
   readLimitedJson,
 } from '../../../lib/security'
@@ -16,16 +17,6 @@ export const prerender = false
 // 60/min is far above what a real visitor produces — the beacon fires roughly
 // once per page view — and far below what abuse needs.
 const allowEvent = createRateLimiter(60_000, 60)
-
-function isSameOrigin(request: Request): boolean {
-  const origin = request.headers.get('origin')
-  if (!origin) return true
-  try {
-    return new URL(origin).origin === new URL(request.url).origin
-  } catch {
-    return false
-  }
-}
 
 export const POST: APIRoute = async ({ request, locals }) => {
   if (!isSameOrigin(request)) return new Response(null, { status: 403 })

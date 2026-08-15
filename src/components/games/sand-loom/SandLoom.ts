@@ -151,6 +151,12 @@ function slToRGB(input: string): [number, number, number] {
   return [255, 255, 255]
 }
 
+// Hoisted diagonal-preference pairs: allocating a fresh two-element array per
+// settled cell per frame (three sim loops × up to ~49k cells × 60fps) was pure
+// short-lived garbage; indexing by parity costs nothing.
+const SL_LR: readonly number[] = [-1, 1]
+const SL_RL: readonly number[] = [1, -1]
+
 class SandLoomGame extends HTMLElement {
   private canvas!: HTMLCanvasElement
   private ctx!: CanvasRenderingContext2D
@@ -161,6 +167,10 @@ class SandLoomGame extends HTMLElement {
   private raf = 0
   private playing = false
   private frame = 0
+  /** Scene to load once the grid is first allocated — a zero-width mount (hidden
+   *  container) defers allocation to the ResizeObserver, and the welcome scene
+   *  must not be silently dropped in that window. */
+  private pendingScene: number | null = null
 
   private w = 0                        // display backing-store dims (device px)
   private h = 0
@@ -263,9 +273,12 @@ class SandLoomGame extends HTMLElement {
 
     this.ro = new ResizeObserver(() => this.resize())
     this.ro.observe(this.querySelector('[data-type="sl-stage"]') as Element)
-    requestAnimationFrame(() => {
-      this.resize()                    // allocates the grid
-      this.loadScene(1)                // welcome scene
+    // Stored in this.raf so disconnecting before it fires cancels it; setPlaying
+    // reassigns the field afterwards, so sharing the slot is safe.
+    this.raf = requestAnimationFrame(() => {
+      this.resize()                    // allocates the grid (unless zero-width)
+      if (this.img) this.loadScene(1)  // welcome scene
+      else this.pendingScene = 1       // …deferred until the stage has width
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       if (reduced) { this.runStatic(120); this.setPlaying(false) }
       else this.setPlaying(true)
@@ -290,7 +303,7 @@ class SandLoomGame extends HTMLElement {
     return Math.min(window.devicePixelRatio || 1, 2)
   }
 
-  private resize() {
+  private resize(force = false) {
     const stage = this.querySelector('[data-type="sl-stage"]') as HTMLElement
     const cssW = stage.getBoundingClientRect().width
     if (cssW < 2) return
@@ -303,8 +316,12 @@ class SandLoomGame extends HTMLElement {
     this.ctx.imageSmoothingEnabled = false
 
     const targetCols = slClamp(Math.round(cssW / this.cell), SL_COLS_MIN, SL_COLS_MAX)
-    if (targetCols !== this.cols || this.cellArr.length === 0) {
+    if (force || targetCols !== this.cols || this.cellArr.length === 0) {
       this.reallocate(targetCols)
+      if (this.pendingScene !== null) {
+        this.loadScene(this.pendingScene)
+        this.pendingScene = null
+      }
     }
     this.draw()
   }
@@ -456,26 +473,30 @@ class SandLoomGame extends HTMLElement {
   }
 
   private doPowder(x: number, y: number, i: number, e: number) {
-    const { cols, rows } = this
     if (e === SL_SALT && this.neighborIs(x, y, SL_WATER) && Math.random() < 0.06) {
       this.setCell(i, SL_EMPTY); return
     }
-    const d = SL_DENSITY[e]
-    if (y + 1 < rows) {
-      const below = i + cols
-      if (this.canDisplace(d, this.cellArr[below])) { this.swap(i, below); return }
-      const order = ((this.frame + x) & 1) ? [-1, 1] : [1, -1]
-      for (const dx of order) {
-        const nx = x + dx
-        if (nx < 0 || nx >= cols) continue
-        const j = below + dx
-        if (this.canDisplace(d, this.cellArr[j])) { this.swap(i, j); return }
-      }
+    this.fallOrSlide(x, y, i, SL_DENSITY[e])
+  }
+
+  /** Shared powder/liquid gravity: straight down, else the parity-alternating
+   *  diagonal. One copy so a physics tweak cannot make the two phases drift. */
+  private fallOrSlide(x: number, y: number, i: number, d: number): boolean {
+    const { cols, rows } = this
+    if (y + 1 >= rows) return false
+    const below = i + cols
+    if (this.canDisplace(d, this.cellArr[below])) { this.swap(i, below); return true }
+    const order = ((this.frame + x) & 1) ? SL_LR : SL_RL
+    for (const dx of order) {
+      const nx = x + dx
+      if (nx < 0 || nx >= cols) continue
+      const j = below + dx
+      if (this.canDisplace(d, this.cellArr[j])) { this.swap(i, j); return true }
     }
+    return false
   }
 
   private doLiquid(x: number, y: number, i: number, e: number) {
-    const { cols, rows } = this
     // reactions
     if ((e === SL_WATER || e === SL_ACID) && this.neighborIs(x, y, SL_LAVA)) {
       this.coolLavaAround(x, y)
@@ -492,17 +513,7 @@ class SandLoomGame extends HTMLElement {
       if (Math.random() < 0.55) { this.moved[i] = 1; return }   // viscous: skip motion some frames
     }
     const d = SL_DENSITY[e]
-    if (y + 1 < rows) {
-      const below = i + cols
-      if (this.canDisplace(d, this.cellArr[below])) { this.swap(i, below); return }
-      const order = ((this.frame + x) & 1) ? [-1, 1] : [1, -1]
-      for (const dx of order) {
-        const nx = x + dx
-        if (nx < 0 || nx >= cols) continue
-        const j = below + dx
-        if (this.canDisplace(d, this.cellArr[j])) { this.swap(i, j); return }
-      }
-    }
+    if (this.fallOrSlide(x, y, i, d)) return
     // spread sideways to seek level
     const dir = ((this.frame + x + y) & 1) ? 1 : -1
     if (this.flow(x, y, dir, d)) return
@@ -538,7 +549,7 @@ class SandLoomGame extends HTMLElement {
     if (y > 0) {
       const up = i - cols
       if (canRise(this.cellArr[up])) { this.swap(i, up); return }
-      const order = ((this.frame + x) & 1) ? [-1, 1] : [1, -1]
+      const order = ((this.frame + x) & 1) ? SL_LR : SL_RL
       for (const dx of order) {
         const nx = x + dx
         if (nx < 0 || nx >= cols) continue
@@ -611,6 +622,7 @@ class SandLoomGame extends HTMLElement {
 
   /* ── rendering ── */
   private draw() {
+    if (!this.img) return // grid not allocated yet (zero-width mount)
     const { cellArr, img, bg } = this
     const d = img.data
     const frame = this.frame
@@ -675,8 +687,9 @@ class SandLoomGame extends HTMLElement {
     this.bindSlider('#sl-speed', '#sl-speed-out', SL_LS_SPEED, raw => { this.steps = slClamp(raw, SL_SPEED_MIN, SL_SPEED_MAX); return `${this.steps}×` })
     this.bindSlider('#sl-scale', '#sl-scale-out', SL_LS_SCALE, raw => {
       this.cell = slClamp(raw, SL_CELL_MIN, SL_CELL_MAX)
-      this.cols = 0            // force reallocation at the new cell size
-      this.resize()
+      // force = true, NOT `this.cols = 0`: zeroing cols made reallocate() skip
+      // its proportional remap (oldCols > 0 guard) and wiped the drawing.
+      this.resize(true)
       return `${this.cell}px`
     })
 

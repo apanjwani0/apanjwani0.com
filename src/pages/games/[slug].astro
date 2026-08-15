@@ -6,7 +6,7 @@ import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
-import { ogCardPath } from '../../lib/og'
+import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import '../../styles/seo-support.css'
 import '../../components/games/games-common.css'
 import '../../components/games/twenty48/twenty48.css'
@@ -67,6 +67,29 @@ const breadcrumbLd = breadcrumbListJsonLd([
   { name: 'Games', url: `${site.url}/games` },
   { name: game.title, url: `${site.url}/games/${game.slug}` },
 ])
+
+// One custom-element tag per playable game. Every mount renders the identical
+// body (h1 + intro), so a single dynamic-tag block replaces twelve copies that
+// could only ever drift. A slug missing here renders as "coming soon".
+const GAME_TAGS: Record<string, string> = {
+  '2048': 'twenty48-game',
+  'quintle': 'quintle-game',
+  'game-of-life': 'game-of-life-game',
+  'flow-field': 'flow-field-game',
+  'maze-weaver': 'maze-weaver-game',
+  'type-trial': 'type-trial-game',
+  'hue-hunt': 'hue-hunt-game',
+  'starfield-toy': 'starfield-voyager-game',
+  'murmuration': 'murmuration-game',
+  'turing-bloom': 'turing-bloom-game',
+  'sand-loom': 'sand-loom-game',
+  'lsystem-tree': 'lsystem-tree-game',
+}
+const GameTag = game.interactive ? GAME_TAGS[game.slug] : undefined
+
+// Card only when the generator emits one AND the PNG is really on disk — a
+// forgotten `npm run og` must degrade to the avatar, not a 404ing og:image.
+const ogCard = gameHasOgCard(game) ? await existingOgCardPath('games', game.slug) : undefined
 ---
 
 <Base
@@ -74,88 +97,22 @@ const breadcrumbLd = breadcrumbListJsonLd([
   seoTitle={game.seoTitle}
   description={pageDescription}
   keywords={game.keywords}
-  noindex={!game.interactive}
+  noindex={!GameTag}
   starfield={false}
   loadFonts={false}
   clientRouter={false}
-  ogCard={game.interactive ? ogCardPath('games', game.slug) : undefined}
+  ogCard={ogCard}
 >
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
-  {game.interactive && slug === '2048' && (
-    <twenty48-game data-game="2048">
+  {GameTag && (
+    <GameTag data-game={game.slug}>
       <h1>{game.title}</h1>
       <div data-type="project-description" set:html={gameIntroHtml} />
-    </twenty48-game>
+    </GameTag>
   )}
-  {game.interactive && slug === 'quintle' && (
-    <quintle-game data-game="quintle">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </quintle-game>
-  )}
-  {game.interactive && slug === 'game-of-life' && (
-    <game-of-life-game data-game="game-of-life">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </game-of-life-game>
-  )}
-  {game.interactive && slug === 'flow-field' && (
-    <flow-field-game data-game="flow-field">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </flow-field-game>
-  )}
-  {game.interactive && slug === 'maze-weaver' && (
-    <maze-weaver-game data-game="maze-weaver">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </maze-weaver-game>
-  )}
-  {game.interactive && slug === 'type-trial' && (
-    <type-trial-game data-game="type-trial">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </type-trial-game>
-  )}
-  {game.interactive && slug === 'hue-hunt' && (
-    <hue-hunt-game data-game="hue-hunt">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </hue-hunt-game>
-  )}
-  {game.interactive && slug === 'starfield-toy' && (
-    <starfield-voyager-game data-game="starfield-toy">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </starfield-voyager-game>
-  )}
-  {game.interactive && slug === 'murmuration' && (
-    <murmuration-game data-game="murmuration">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </murmuration-game>
-  )}
-  {game.interactive && slug === 'turing-bloom' && (
-    <turing-bloom-game data-game="turing-bloom">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </turing-bloom-game>
-  )}
-  {game.interactive && slug === 'sand-loom' && (
-    <sand-loom-game data-game="sand-loom">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </sand-loom-game>
-  )}
-  {game.interactive && slug === 'lsystem-tree' && (
-    <lsystem-tree-game data-game="lsystem-tree">
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </lsystem-tree-game>
-  )}
-  {!game.interactive && (
+  {!GameTag && (
     <>
       <h1>{game.title}</h1>
       <h2 data-type="coming-soon">Coming Soon</h2>
@@ -169,7 +126,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
   )}
   {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
 
-  {game.interactive && (
+  {GameTag && (
     <script>
       // Mount the game's controller on initial load AND after every View Transition
       // navigation. Bundled scripts run only once per session, so without astro:page-load

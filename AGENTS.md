@@ -100,8 +100,12 @@ Two independent layers, both aggregate-only:
    tool and game detail pages only. Carries the real-user perf metrics (LCP, CLS,
    TTFB). Rate-limited to 60/min per client; blocked by content blockers.
 2. **Server counter** (`src/lib/visits.ts`, called from `src/middleware.ts`) —
-   every successful HTML page render, so it covers the whole site and cannot be
-   blocked. Records date, path, country (`cf-ipcountry`), referrer **host**, and a
+   every successful HTML render that reaches the origin, so it covers the whole
+   site and cannot be blocked by the client. One caveat the numbers must be read
+   with: the edge cache sits in front, and a Cloudflare HIT never wakes the
+   origin, so these are **origin renders (cache misses), not raw page views** —
+   per-path shape, not absolute traffic (Cloudflare's dashboard has the totals).
+   Records date, path, country (`cf-ipcountry`), referrer **host**, and a
    separate bot count. Buffered in memory and flushed to `data/visits.json` every
    30s — never write per request, that turns any visitor into a disk-I/O amplifier.
 
@@ -274,7 +278,7 @@ Every content section displayed on the portfolio must be manageable via the `/ad
 1. Add a config file in `src/config/{section}.ts` with the interface and default data
 2. Add a `get{Section}()` accessor in `src/lib/config.ts`
 3. Add a `generate{Section}()` function and `case '{section}'` in `astro.config.mjs` (Vite middleware)
-4. Add `'{section}'` to the `allowed` array in `src/pages/api/admin/save.ts`
+4. Add `'{section}'` to `CONFIG_TYPES` in `src/lib/config-schema.ts` — the `isConfigType()` gate `src/pages/api/admin/save.ts` validates against
 5. Add a tab + form + JS save handler in `src/pages/admin.astro`
 6. For a new tool or game, run `npm run og` and commit the card (see Share cards)
 
@@ -314,7 +318,7 @@ These apply to every change, on top of the conventions above:
    `npm run graph` yourself before committing structural changes.
 2. **Keep docs in sync.** When you change architecture, config keys, commands,
    or conventions, update this AGENTS.md in the same change. Adding an admin
-   section means updating the 5-step checklist *and* the "Current config keys"
+   section means updating the 6-step checklist *and* the "Current config keys"
    line. Stale docs are treated as bugs.
 3. **Prune dead code.** Don't leave commented-out blocks, unused exports,
    orphaned config keys, or superseded CSS overrides behind. Delete what a

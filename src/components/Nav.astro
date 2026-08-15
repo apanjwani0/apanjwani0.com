@@ -30,3 +30,15 @@ const links = site.nav.flatMap((item) => item.children ?? [item])
     ))}
   </span>
 </nav>
+<noscript>
+  <style>
+    /* transparent-at-rest depends on JS toggling data-nav-scrolled (nav-ui.ts);
+       without scripts the frosted readability state must be permanent, or body
+       text scrolls beneath a fully transparent fixed nav. */
+    nav[data-type="hero-nav"] {
+      background-color: var(--color-bg-blur);
+      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(12px);
+    }
+  </style>
+</noscript>

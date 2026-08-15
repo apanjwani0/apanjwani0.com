@@ -5,7 +5,7 @@ import ToolBase from '../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import { getSite, getTools } from '../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
-import { ogCardPath } from '../../lib/og'
+import { existingOgCardPath, toolHasOgCard } from '../../lib/og'
 import { render } from '../../lib/markdown'
 import { validateSession } from '../../lib/session'
 import '../../styles/seo-support.css'
@@ -78,6 +78,9 @@ const breadcrumbLd = breadcrumbListJsonLd([
   { name: tool.title, url: `${site.url}/tools/${tool.slug}` },
 ])
 const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
+// Card only when the generator emits one AND the PNG is really on disk — a
+// forgotten `npm run og` must degrade to the avatar, not a 404ing og:image.
+const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug) : undefined
 ---
 
 <ToolBase
@@ -85,7 +88,8 @@ const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
   seoTitle={tool.seoTitle}
   metaDescription={tool.metaDescription}
   keywords={tool.keywords}
-  ogCard={ogCardPath('tools', tool.slug)}
+  ogCard={ogCard}
+  noindex={tool.status === 'disabled'}
 >
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />

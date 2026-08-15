@@ -10,12 +10,14 @@ interface Props {
   seoTitle?: string
   metaDescription?: string
   keywords?: string
-  /** Generated share card from ogCardPath(); falls back to the avatar if absent. */
+  /** Generated share card from existingOgCardPath(); omit for the avatar fallback. */
   ogCard?: string
+  /** Keep a page out of search results — e.g. the admin-only disabled-tool preview. */
+  noindex?: boolean
 }
 
 const site = await getSite(Astro.locals)
-const { toolTitle, seoTitle, metaDescription, keywords, ogCard } = Astro.props
+const { toolTitle, seoTitle, metaDescription, keywords, ogCard, noindex = false } = Astro.props
 const pageTitle = seoTitle || (toolTitle ? `${toolTitle} · ${site.name}` : `${site.name} · tools`)
 // Fall back to a tool-appropriate sentence rather than the site's role line
 // (`site.tagline`), which reads as nonsense as a tool page's meta description.
@@ -38,6 +40,7 @@ const ogImage = ogImageMeta(site, ogCard, toolTitle)
       description={description}
       canonicalURL={canonicalURL}
       siteName={site.name}
+      noindex={noindex}
       keywords={keywords}
       image={ogImage.src}
       imageWidth={ogImage.width}

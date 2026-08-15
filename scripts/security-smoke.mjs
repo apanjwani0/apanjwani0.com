@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { render, renderInline } from '../src/lib/markdown.ts'
 import {
   createRateLimiter,
   getClientIp,
   isFromCloudflare,
+  isSameOrigin,
   rateLimitKey,
   safeExternalUrl,
   safeMarkdownUrl,
@@ -72,6 +74,24 @@ for (let i = 0; i < 50_000; i += 1) flood(`key-${i}`, t0)
 assert.equal(flood('victim', t0), true)
 assert.equal(flood('victim', t0), false, 'limiter still enforces after a key flood')
 
+// Astro's global checkOrigin is disabled (the webhook capture endpoint must
+// accept cross-origin POSTs), so this shared check IS the CSRF control for every
+// other state-changing endpoint. Missing Origin allows — curl and webhook
+// senders don't send one, and CSRF needs a browser, which always does.
+const oreq = (origin) =>
+  new Request('https://apanjwani0.com/api/analytics/event', origin === undefined ? {} : { headers: { origin } })
+assert.equal(isSameOrigin(oreq(undefined)), true, 'no Origin header (curl) is allowed')
+assert.equal(isSameOrigin(oreq('https://apanjwani0.com')), true)
+assert.equal(isSameOrigin(oreq('https://evil.example')), false, 'cross-origin must be rejected')
+assert.equal(isSameOrigin(oreq('null')), false, 'an opaque origin must be rejected')
+
+// …and it must stay SHARED: a private copy drifting in one route would silently
+// weaken the CSRF story with nothing to notice.
+for (const route of ['src/pages/api/analytics/event.ts', 'src/pages/api/hook/[bin]/requests.ts']) {
+  const src = await readFile(new URL(`../${route}`, import.meta.url), 'utf-8')
+  assert.ok(src.includes('isSameOrigin'), `${route} must use the shared isSameOrigin check`)
+}
+
 // Bin ids are the only thing protecting captured webhook payloads, so short,
 // guessable ids must be rejected outright.
 assert.equal(isValidBinId('test12'), false, 'short ids are enumerable')
@@ -99,8 +119,12 @@ const now = new Date('2026-08-15T00:00:00Z')
 const old = new Date(now.getTime() - 200 * 86_400_000).toISOString().slice(0, 10)
 assert.deepEqual(Object.keys(pruneVisits({ [old]: {}, '2026-08-15': {} }, now)), ['2026-08-15'])
 
-// recordVisit must not throw on the request hot path.
+// recordVisit must not throw on the request hot path — including on inherited
+// object names, which are reachable as referrer hosts ('constructor' is a valid
+// hostname) and via a hand-crafted cf-ipcountry on the direct-origin path.
 recordVisit({ path: '/tools/json-tidy', country: 'IN', referrer: null, bot: false }, now)
 recordVisit({ path: '/tools/json-tidy', country: 'IN', referrer: 'news.ycombinator.com', bot: true }, now)
+recordVisit({ path: '/tools/json-tidy', country: 'XX', referrer: 'constructor', bot: false }, now)
+recordVisit({ path: '/tools/json-tidy', country: 'XX', referrer: '__proto__', bot: false }, now)
 
 console.log('security smoke ok')

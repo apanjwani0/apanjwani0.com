@@ -10,36 +10,33 @@
  * knowing the id (matching webhook.cool's model). Responses are never cached.
  */
 import type { APIRoute } from 'astro'
+import { isSameOrigin } from '../../../../lib/security'
 import { clearBin, isValidBinId, listRequests } from '../../../../lib/webhook-store'
 
 export const prerender = false
 
 const NO_STORE = { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' }
 
-function sameOrigin(request: Request): boolean {
-  const origin = request.headers.get('origin')
-  if (!origin) return true // non-browser or same-origin navigation
-  try {
-    return new URL(origin).origin === new URL(request.url).origin
-  } catch {
-    return false
-  }
-}
-
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const binId = params.bin
   if (!isValidBinId(binId)) {
     return new Response(JSON.stringify({ requests: [], count: 0 }), { status: 200, headers: NO_STORE })
   }
   const requests = listRequests(binId)
+  // Change detector for the 2s poll: count + newest id covers append, trim-at-cap
+  // and clear, so an unchanged bin costs a 304 instead of reserializing every body.
+  const etag = `"${requests.length}-${requests[0]?.id ?? 'empty'}"`
+  if (request.headers.get('if-none-match') === etag) {
+    return new Response(null, { status: 304, headers: { 'Cache-Control': 'no-store', ETag: etag } })
+  }
   return new Response(JSON.stringify({ requests, count: requests.length }), {
     status: 200,
-    headers: NO_STORE,
+    headers: { ...NO_STORE, ETag: etag },
   })
 }
 
 export const DELETE: APIRoute = async ({ params, request }) => {
-  if (!sameOrigin(request)) return new Response(null, { status: 403 })
+  if (!isSameOrigin(request)) return new Response(null, { status: 403 })
   const binId = params.bin
   if (!isValidBinId(binId)) return new Response(null, { status: 404 })
   clearBin(binId)

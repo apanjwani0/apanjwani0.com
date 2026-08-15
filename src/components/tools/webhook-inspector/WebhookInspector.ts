@@ -16,6 +16,11 @@
  * are wi-/WI_-prefixed because tool component files share one global script scope.
  */
 
+// Escapes every character that can end an attribute value or open a tag, `'`
+// included (attribute quoting is a call-site property). Shared with the server
+// so the escaping rule has exactly one home.
+import { escapeHtml as wiEsc } from '../../../lib/escape'
+
 interface WiHeader { name: string; value: string }
 
 interface WiRequest {
@@ -37,20 +42,6 @@ const WI_POLL_MS = 2000
 // Must stay in step with BIN_ID_RE in lib/webhook-store.ts, or a stored id that
 // passes here gets a 404 from the server.
 const WI_BIN_RE = /^[A-Za-z0-9_-]{24,64}$/
-
-/** Escapes every character that can end an attribute value or open a tag.
- *  `'` is included because attribute quoting is a property of the call site: the
- *  markup below happens to use double quotes throughout, and the day one
- *  interpolation is written with single quotes this becomes stored XSS driven by
- *  a header an attacker chose. Escaping both makes that impossible to get wrong. */
-function wiEsc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
 
 function wiNewBinId(): string {
   const uuid = (crypto as any).randomUUID?.() as string | undefined
@@ -85,7 +76,9 @@ class WebhookInspectorTool extends HTMLElement {
   private timer: number | null = null
   private polling = false
   private requests: WiRequest[] = []
-  private lastSig = ''
+  /** null = never rendered — the first render must always run. */
+  private lastSig: string | null = null
+  private reqEtag = ''
   private expanded = new Set<string>()
 
   private urlInput!: HTMLInputElement
@@ -177,7 +170,10 @@ class WebhookInspectorTool extends HTMLElement {
       const req = this.requests.find(r => r.id === b.dataset.copyBody)
       if (req) this.copyText(this.formatBody(req), b)
     })
-    this.addEventListener('keydown', this.onKeydown)
+    // On document, not the element: the custom element is never focused in the
+    // tool's default watch-the-feed state, so a listener on it would leave the
+    // advertised R/C/N/Space shortcuts dead until the user first clicked inside.
+    document.addEventListener('keydown', this.onKeydown)
     document.addEventListener('visibilitychange', this.onVisibility)
 
     this.render()
@@ -187,7 +183,7 @@ class WebhookInspectorTool extends HTMLElement {
 
   disconnectedCallback() {
     this.stopPolling()
-    this.removeEventListener('keydown', this.onKeydown)
+    document.removeEventListener('keydown', this.onKeydown)
     document.removeEventListener('visibilitychange', this.onVisibility)
   }
 
@@ -212,7 +208,9 @@ class WebhookInspectorTool extends HTMLElement {
   private startPolling() {
     this.stopPolling()
     this.timer = window.setInterval(() => {
-      if (!document.hidden && !this.paused) this.poll()
+      if (document.hidden) return
+      if (this.paused) this.updateTimes()
+      else this.poll()
     }, WI_POLL_MS)
   }
 
@@ -224,9 +222,19 @@ class WebhookInspectorTool extends HTMLElement {
     if (this.polling) return
     this.polling = true
     try {
-      const res = await fetch(`/api/hook/${this.binId}/requests`, { headers: { accept: 'application/json' } })
+      const headers: Record<string, string> = { accept: 'application/json' }
+      // Conditional poll: the server answers an unchanged bin with a bodyless
+      // 304 instead of reserializing every captured body every 2 seconds.
+      if (this.reqEtag) headers['if-none-match'] = this.reqEtag
+      const res = await fetch(`/api/hook/${this.binId}/requests`, { headers })
+      if (res.status === 304) {
+        this.updateTimes()
+        if (manual) this.setStatus(`Refreshed — ${this.requests.length} request${this.requests.length === 1 ? '' : 's'}.`)
+        return
+      }
       if (!res.ok) throw new Error(String(res.status))
       const data = await res.json() as { requests?: WiRequest[] }
+      this.reqEtag = res.headers.get('etag') ?? ''
       this.requests = Array.isArray(data.requests) ? data.requests : []
       this.render()
       if (manual) this.setStatus(`Refreshed — ${this.requests.length} request${this.requests.length === 1 ? '' : 's'}.`)
@@ -240,8 +248,14 @@ class WebhookInspectorTool extends HTMLElement {
   // ── render ───────────────────────────────────────────────────────────────
   private render() {
     const now = Date.now()
-    const sig = `${this.requests.map(r => r.id).join(',')}|${Math.floor(now / 5000)}`
-    if (sig === this.lastSig) return
+    // Ids only — an unchanged list must not be torn down and rebuilt (that reset
+    // scroll/selection and re-pretty-printed every body); the relative "ago"
+    // labels are refreshed in place by updateTimes() instead.
+    const sig = this.requests.map(r => r.id).join(',')
+    if (sig === this.lastSig) {
+      this.updateTimes()
+      return
+    }
     this.lastSig = sig
 
     this.countEl.textContent = this.requests.length ? `(${this.requests.length})` : ''
@@ -270,7 +284,7 @@ class WebhookInspectorTool extends HTMLElement {
     const summary = `
       <summary data-type="wi-summary">
         <span data-type="wi-method" data-method="${method}">${method}</span>
-        <span data-type="wi-when" title="${wiEsc(abs)}">${wiEsc(rel)}</span>
+        <span data-type="wi-when" data-ts="${r.receivedAt}" title="${wiEsc(abs)}">${wiEsc(rel)}</span>
         <span data-type="wi-meta">${wiFmtSize(r.size)}${r.bodyTruncated ? ' · truncated' : ''}${r.query ? ' · has query' : ''}</span>
       </summary>`
     return `<li><details data-req="${wiEsc(r.id)}"${open}>${summary}${this.renderDetail(r, abs)}</details></li>`
@@ -306,6 +320,15 @@ class WebhookInspectorTool extends HTMLElement {
 
     const html = parts.join('')
     return html
+  }
+
+  /** Refresh the relative "ago" labels without touching the rest of the DOM. */
+  private updateTimes() {
+    const now = Date.now()
+    this.listEl.querySelectorAll<HTMLElement>('[data-type="wi-when"]').forEach(el => {
+      const ts = Number(el.dataset.ts)
+      if (ts) el.textContent = wiRelTime(ts, now)
+    })
   }
 
   private formatBody(r: WiRequest): string {
@@ -346,10 +369,21 @@ class WebhookInspectorTool extends HTMLElement {
         body: JSON.stringify({ event: 'test', from: 'Webhook Inspector', at: new Date().toISOString() }),
       })
       this.flash(btn, 'Sent!')
-      window.setTimeout(() => this.poll(true), 250)
+      window.setTimeout(() => this.pollAfterSend(), 250)
     } catch {
       this.flash(btn, 'Failed')
     }
+  }
+
+  /** Follow-up poll for a just-sent test request. Retries briefly instead of
+   *  being silently swallowed by the in-flight re-entrancy guard (which would
+   *  leave "Sent!" with no visible row, especially while paused). */
+  private pollAfterSend(attempt = 0) {
+    if (this.polling && attempt < 4) {
+      window.setTimeout(() => this.pollAfterSend(attempt + 1), 300)
+      return
+    }
+    void this.poll(true)
   }
 
   private newUrl() {
@@ -357,7 +391,8 @@ class WebhookInspectorTool extends HTMLElement {
     this.writeLS(WI_LS_BIN, this.binId)
     this.requests = []
     this.expanded.clear()
-    this.lastSig = ''
+    this.lastSig = null
+    this.reqEtag = ''
     this.reflectUrl()
     this.render()
     this.setStatus('Generated a fresh URL — the old one still holds its requests for a while.')
@@ -378,7 +413,8 @@ class WebhookInspectorTool extends HTMLElement {
     } catch { /* still clear the local view */ }
     this.requests = []
     this.expanded.clear()
-    this.lastSig = ''
+    this.lastSig = null
+    this.reqEtag = ''
     this.render()
     this.setStatus('Cleared captured requests.')
   }

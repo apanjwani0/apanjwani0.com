@@ -82,8 +82,11 @@ async function readLimitedText(
 }
 
 function clampInt(raw: string | null, min: number, max: number, fallback: number): number {
-  const n = Number.parseInt(raw ?? '', 10)
-  if (!Number.isFinite(n)) return fallback
+  // All-digits only: parseInt would silently accept prefixes ('204abc' → 204,
+  // '1e3' → 1) and a status knob that lies about what it parsed is worse than
+  // one that falls back.
+  if (raw === null || !/^\d+$/.test(raw)) return fallback
+  const n = Number.parseInt(raw, 10)
   return Math.min(max, Math.max(min, n))
 }
 
@@ -111,10 +114,22 @@ export const ALL: APIRoute = async ({ params, request }) => {
     })
   }
 
-  const { text, size, truncated } = await readLimitedText(request, WEBHOOK_MAX_BODY_BYTES)
+  let { text, size, truncated } = await readLimitedText(request, WEBHOOK_MAX_BODY_BYTES)
+  if (truncated) {
+    // The limited read stops counting at cancel, so `size` is only bytes-seen.
+    // Trust Content-Length for the real pre-truncation size when it says more.
+    const declared = Number(request.headers.get('content-length'))
+    if (Number.isFinite(declared) && declared > size) size = declared
+  }
 
   const headers: CapturedHeader[] = []
-  request.headers.forEach((value, name) => headers.push({ name, value }))
+  request.headers.forEach((value, name) => {
+    // Never store the origin-lock secret: the Cloudflare Transform Rule injects
+    // x-origin-auth into every proxied request, and replaying it in the bin UI
+    // would hand the bypass token to anyone who sends themselves a test request.
+    if (name === 'x-origin-auth') return
+    headers.push({ name, value })
+  })
 
   recordRequest(binId, {
     id: crypto.randomUUID(),
@@ -137,6 +152,12 @@ export const ALL: APIRoute = async ({ params, request }) => {
   // retry handling, which is what the knob is for.
   const delay = clampInt(url.searchParams.get('delay'), 0, 2000, 0)
   if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
+
+  // 204/205/304 forbid a body — the Response constructor throws on one (even
+  // an empty string), which would turn the tool's own advertised input into a 500.
+  if (status === 204 || status === 205 || status === 304) {
+    return new Response(null, { status, headers: baseHeaders() })
+  }
 
   // Echo mode replays the body back to the caller for round-trip testing.
   if (url.searchParams.get('echo') === '1') {
