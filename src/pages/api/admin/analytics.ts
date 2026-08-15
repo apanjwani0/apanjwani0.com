@@ -13,7 +13,7 @@ export const prerender = false
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const runtimeEnv = getRuntimeEnv(locals)
-  if (!isAdminRequestAllowed(request, locals)) return adminNotFound()
+  if (!isAdminRequestAllowed()) return adminNotFound()
 
   const secret = getAdminSecret(locals)
   const token = getSessionToken(request)

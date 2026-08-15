@@ -4,39 +4,22 @@ import {
   ADMIN_LOGIN_LIMITS,
   BodyTooLargeError,
   adminNotFound,
+  createRateLimiter,
   getAdminSecret,
-  getClientIp,
   getRuntimeEnv,
   isAdminRequestAllowed,
+  rateLimitKey,
   readLimitedJson,
   timingSafeEqualText,
 } from '../../../lib/security'
 
 export const prerender = false
 
-const attempts = new Map<string, { count: number; resetAt: number }>()
-
-function loginKey(request: Request): string {
-  return getClientIp(request) || 'unknown'
-}
-
-function isRateLimited(request: Request): boolean {
-  const now = Date.now()
-  const key = loginKey(request)
-  const current = attempts.get(key)
-
-  if (!current || current.resetAt <= now) {
-    attempts.set(key, { count: 1, resetAt: now + ADMIN_LOGIN_LIMITS.windowMs })
-    return false
-  }
-
-  current.count += 1
-  return current.count > ADMIN_LOGIN_LIMITS.maxAttempts
-}
-
-function clearRateLimit(request: Request): void {
-  attempts.delete(loginKey(request))
-}
+// Dev-only route (isAdminRequestAllowed 404s in production), but it uses the
+// shared bounded limiter rather than its own Map: the previous local version
+// never evicted, so its keys — taken straight from a request header — could grow
+// without limit. Same bug class as the one createRateLimiter exists to prevent.
+const allowAttempt = createRateLimiter(ADMIN_LOGIN_LIMITS.windowMs, ADMIN_LOGIN_LIMITS.maxAttempts)
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtimeEnv = getRuntimeEnv(locals)
@@ -46,10 +29,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(null, { status: 404 })
   }
 
-  if (!isAdminRequestAllowed(request, locals)) return adminNotFound()
+  if (!isAdminRequestAllowed()) return adminNotFound()
 
   // ponytail: in-memory per-isolate throttle; use Cloudflare WAF/KV if admin login traffic matters.
-  if (isRateLimited(request)) {
+  if (!allowAttempt(rateLimitKey(request))) {
     return new Response(JSON.stringify({ error: 'Too many attempts' }), {
       status: 429,
       headers: {
@@ -78,7 +61,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
     })
   }
 
-  clearRateLimit(request)
   const token = await createSession(runtimeEnv?.SITE_CONFIG)
   const isHttps = request.headers.get('x-forwarded-proto') === 'https' || new URL(request.url).protocol === 'https:'
   const secure = isHttps ? '; Secure' : ''

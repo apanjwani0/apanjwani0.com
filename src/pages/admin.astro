@@ -13,46 +13,30 @@ const secret = getAdminSecret(Astro.locals)
 // In dev with no secret configured, allow through without auth
 const bypassAuth = import.meta.env.DEV && !secret
 
-// In production: 404 unless the request IP is in the whitelist
-// Set ADMIN_IP_WHITELIST as a comma-separated list of allowed IPs in your environment variables
-const blocked = !isAdminRequestAllowed(Astro.request, Astro.locals)
-if (blocked) Astro.response.status = 404
+// Dev-only surface: production returns a bare 404 without loading any config.
+// Returning here (rather than setting a 404 status and rendering on) keeps the
+// admin markup and the config values off the wire entirely.
+if (!isAdminRequestAllowed()) return new Response(null, { status: 404, statusText: 'Not Found' })
 
-// Skip all data loading for blocked requests
-const token = blocked ? undefined : getSessionToken(Astro.request)
-const isAuth = !blocked && (bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG))
+const token = getSessionToken(Astro.request)
+const isAuth = bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG)
 
-const loginError = blocked ? null : Astro.url.searchParams.get('error')
+const loginError = Astro.url.searchParams.get('error')
 
 // Load from KV (or fallback to bundled TS) so admin always shows live values
-const [site, projects, experience, posts, games, toolItems] = blocked
-  ? [null, null, null, null, null, null]
-  : await Promise.all([
-      getSite(Astro.locals),
-      getProjects(Astro.locals),
-      getExperience(Astro.locals),
-      getPosts(Astro.locals),
-      getGames(Astro.locals),
-      getTools(Astro.locals),
-    ])
+const [siteConfig, projectItems, companyItems, postItems, gameItems, tools] = await Promise.all([
+  getSite(Astro.locals),
+  getProjects(Astro.locals),
+  getExperience(Astro.locals),
+  getPosts(Astro.locals),
+  getGames(Astro.locals),
+  getTools(Astro.locals),
+])
 
-const siteConfig = site!
-const projectItems = projects!
-const companyItems = experience!
-const postItems = posts!
-const gameItems = games!
-const tools = toolItems!
-const navJson = blocked ? '{}' : JSON.stringify(siteConfig.nav)
-const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
+const navJson = JSON.stringify(siteConfig.nav)
+const sectionsJson = JSON.stringify(siteConfig.sections)
 ---
 
-{blocked ? (
-  <Base title="404">
-    <h1>404</h1>
-    <p>This page doesn't exist.</p>
-    <a href="/">Go home</a>
-  </Base>
-) : (
 <Base title="admin" noindex={true}>
   <h1>admin</h1>
 
@@ -258,7 +242,6 @@ const sectionsJson = blocked ? '{}' : JSON.stringify(siteConfig.sections)
   </form>
   </>)}
 </Base>
-)}
 
 <style>
   .tabs {
