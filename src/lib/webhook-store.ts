@@ -51,7 +51,12 @@ interface Bin {
 export const WEBHOOK_MAX_BINS = 800
 export const WEBHOOK_MAX_REQUESTS_PER_BIN = 50
 export const WEBHOOK_MAX_BODY_BYTES = 64 * 1024
-export const WEBHOOK_MAX_TOTAL_BYTES = 64 * 1024 * 1024 // 64 MB across all bins
+// 16 MB, not 64: the host is a 1 GB free-tier VM, and reqBytes() undercounts —
+// it measures bodyText.length (UTF-16 code units, so non-Latin1 text costs ~2x)
+// and charges a flat 256 bytes for per-request and per-header object overhead
+// that is really larger. Budget for the accounting being optimistic rather than
+// discovering the gap as an OOM.
+export const WEBHOOK_MAX_TOTAL_BYTES = 16 * 1024 * 1024
 export const WEBHOOK_BIN_TTL_MS = 6 * 60 * 60 * 1000 // 6h of inactivity
 
 const bins = new Map<string, Bin>()
@@ -74,8 +79,17 @@ function dropBin(id: string): void {
   bins.delete(id)
 }
 
-/** Bin ids are client-generated; accept only URL-safe, sane-length tokens. */
-const BIN_ID_RE = /^[A-Za-z0-9_-]{6,64}$/
+/**
+ * Bin ids are client-generated, and knowing one is the *only* thing protecting a
+ * bin's contents — there is no account and no other auth. Captured requests
+ * routinely carry Authorization headers, webhook signing secrets and customer
+ * data, so the id has to be unguessable, not merely well-formed.
+ *
+ * The 24-char floor is the security control: the UI always mints a 32-char hex
+ * UUID, but the endpoint has to reject the short, memorable ids someone would
+ * otherwise hand-craft ("test12", "webhook") and an attacker would enumerate.
+ */
+const BIN_ID_RE = /^[A-Za-z0-9_-]{24,64}$/
 
 export function isValidBinId(id: unknown): id is string {
   return typeof id === 'string' && BIN_ID_RE.test(id)

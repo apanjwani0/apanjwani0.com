@@ -34,10 +34,22 @@ interface WiRequest {
 const WI_LS_BIN = 'webhook-inspector:bin:v1'
 const WI_LS_PAUSED = 'webhook-inspector:paused:v1'
 const WI_POLL_MS = 2000
-const WI_BIN_RE = /^[A-Za-z0-9_-]{6,64}$/
+// Must stay in step with BIN_ID_RE in lib/webhook-store.ts, or a stored id that
+// passes here gets a 404 from the server.
+const WI_BIN_RE = /^[A-Za-z0-9_-]{24,64}$/
 
+/** Escapes every character that can end an attribute value or open a tag.
+ *  `'` is included because attribute quoting is a property of the call site: the
+ *  markup below happens to use double quotes throughout, and the day one
+ *  interpolation is written with single quotes this becomes stored XSS driven by
+ *  a header an attacker chose. Escaping both makes that impossible to get wrong. */
 function wiEsc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 function wiNewBinId(): string {
@@ -138,7 +150,7 @@ class WebhookInspectorTool extends HTMLElement {
         <details data-type="wi-explainer">
           <summary>How it works &amp; when to use it</summary>
           <p>A <strong>webhook</strong> is an HTTP request one service sends to a URL you control when something happens — a payment succeeds, a repo gets a push, a form is submitted. To build against one you first need to <em>see</em> what it actually sends. Paste the URL above into the service (Stripe, GitHub, Slack, Shopify, Zapier, a cron job, your own code) and every request it makes shows up here with its full method, headers and body.</p>
-          <p>The capture URL also works as a controllable HTTP target for <strong>debugging clients</strong>: <code>?status=429</code> makes it return that status so you can test retry logic, <code>?delay=3000</code> stalls the response to simulate a slow upstream, and <code>?echo=1</code> sends your request body straight back.</p>
+          <p>The capture URL also works as a controllable HTTP target for <strong>debugging clients</strong>: <code>?status=429</code> makes it return that status so you can test retry logic, <code>?delay=2000</code> stalls the response by up to two seconds to simulate a slow upstream, and <code>?echo=1</code> sends your request body straight back.</p>
           <p>Requests are stored on the server only long enough to inspect them and are visible only to whoever holds the unguessable URL; there is no account and no public directory. Generate a fresh URL any time with <kbd>N</kbd>.</p>
         </details>
       </div>

@@ -9,7 +9,7 @@
  * Debugging-loop knobs (query params on the capture URL):
  *   ?status=NNN  — respond with that status (200–599), for exercising a client's
  *                  error/retry handling.
- *   ?delay=MS    — wait before responding (0–8000ms), to simulate a slow upstream.
+ *   ?delay=MS    — wait before responding (0–2000ms), to simulate a slow upstream.
  *   ?echo=1      — echo the received body back with its Content-Type, instead of
  *                  the default JSON acknowledgement.
  *
@@ -17,6 +17,7 @@
  * origin (server-to-server webhooks ignore CORS entirely).
  */
 import type { APIRoute } from 'astro'
+import { createRateLimiter, rateLimitKey } from '../../../lib/security'
 import {
   isValidBinId,
   recordRequest,
@@ -25,6 +26,12 @@ import {
 } from '../../../lib/webhook-store'
 
 export const prerender = false
+
+// Public and unauthenticated by design — anyone on the internet can POST here.
+// Deliberately generous: this endpoint exists to absorb bursts from real webhook
+// senders and load-testing clients, so the cap is set to stop a flood rather than
+// to police normal use.
+const allowCapture = createRateLimiter(60_000, 300)
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -96,6 +103,14 @@ export const ALL: APIRoute = async ({ params, request }) => {
     return new Response(null, { status: 204, headers: baseHeaders() })
   }
 
+  // Checked before the body is read so a flood costs no allocation.
+  if (!allowCapture(rateLimitKey(request))) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limited' }), {
+      status: 429,
+      headers: baseHeaders({ 'Content-Type': 'application/json', 'Retry-After': '60' }),
+    })
+  }
+
   const { text, size, truncated } = await readLimitedText(request, WEBHOOK_MAX_BODY_BYTES)
 
   const headers: CapturedHeader[] = []
@@ -115,7 +130,12 @@ export const ALL: APIRoute = async ({ params, request }) => {
   })
 
   const status = clampInt(url.searchParams.get('status'), 200, 599, 200)
-  const delay = clampInt(url.searchParams.get('delay'), 0, 8000, 0)
+  // Capped at 2s, not 8s. Every in-flight delay pins a socket and its captured
+  // body in memory on a single 1 GB Node process, so an anonymous caller could
+  // otherwise buy 8 seconds of resident connection per request and exhaust the
+  // origin cheaply. 2s is still long enough to exercise a client's timeout and
+  // retry handling, which is what the knob is for.
+  const delay = clampInt(url.searchParams.get('delay'), 0, 2000, 0)
   if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
 
   // Echo mode replays the body back to the caller for round-trip testing.
