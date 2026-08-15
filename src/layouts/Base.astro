@@ -1,5 +1,6 @@
 ---
 import { getSite } from '../lib/config'
+import { ogImageMeta } from '../lib/og'
 import Nav from '../components/Nav.astro'
 import Head from '../components/Head.astro'
 import '../styles/global.css'
@@ -38,12 +39,10 @@ const {
 // most-linked page's <title>/og:title isn't just a bare name.
 const pageTitle = title ? `${title} · ${site.name}` : `${site.name} · ${site.tagline}`
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
-// Absolute URL for the social-share preview image (link cards on Slack, X, etc.).
-// Dimensions match public/avatar.webp (320×468) so scrapers get a complete
-// og:image object and reserve the right aspect ratio without a fetch.
-const ogImage = new URL(site.avatar, site.url).href
-const ogImageWidth = 320
-const ogImageHeight = 468
+// Absolute URL + dimensions for the social-share preview image (link cards on
+// Slack, X, etc.). Shared with ToolBase.astro via one helper so the share-image
+// dimensions have a single source of truth.
+const ogImage = ogImageMeta(site)
 ---
 
 <!doctype html>
@@ -56,9 +55,9 @@ const ogImageHeight = 468
       siteName={site.name}
       noindex={noindex}
       keywords={keywords}
-      image={ogImage}
-      imageWidth={ogImageWidth}
-      imageHeight={ogImageHeight}
+      image={ogImage.src}
+      imageWidth={ogImage.width}
+      imageHeight={ogImage.height}
       ogType={ogType}
       publishedTime={publishedTime}
       handle={site.handle}

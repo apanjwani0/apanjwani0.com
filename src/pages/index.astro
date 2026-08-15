@@ -54,8 +54,8 @@ const siteLd = webSiteJsonLd({
       <h1>{site.name}</h1>
       <p data-type="tagline">{heroTagline}</p>
       <nav data-type="hero-links" aria-label="Social profiles">
-        {githubUrl && <a href={githubUrl} target="_blank" rel="me noopener noreferrer">github</a>}
-        {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="me noopener noreferrer">linkedin</a>}
+        {githubUrl && <a href={githubUrl} target="_blank" rel="me noopener noreferrer" aria-label={`${site.name} on GitHub (opens in a new tab)`}>github</a>}
+        {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="me noopener noreferrer" aria-label={`${site.name} on LinkedIn (opens in a new tab)`}>linkedin</a>}
       </nav>
     </div>
   </section>

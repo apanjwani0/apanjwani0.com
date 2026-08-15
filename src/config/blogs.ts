@@ -20,7 +20,7 @@ export const posts: Post[] = [
     "title": "Visit to Jawaharlal Nehru Planetarium Bengaluru",
     "href": "/blogs/nehru-planetarium-bengaluru",
     "date": "2026-04-05",
-    "summary": "Sunday Trip Review",
+    "summary": "A Sunday at the Jawaharlal Nehru Planetarium in Bengaluru for 'Celestial Fireworks' — a 40-minute digital sky-theatre show on the explosive life cycles of stars.",
     "content": "I visited [Jawaharlal Nehru Planetarium](https://share.google/lWRtv6TfByUF7gOu4) for a sky theatre show called : 'Celestial Fireworks'. \nIt was a 40 Min, high-resolution digital show that explores the dramatic, explosive life cycles of stars, including stellar explosions, black holes, and the Big Bang. I really enjoyed the experience, and would 100% recommend it to everyone. The show was in English and there were no subtitles. 50% of the tickets are reserved for On spot Booking, booking window opens 30 mins prior to the show timings.",
     "keywords": "Jawaharlal Nehru Planetarium, Celestial Fireworks, Bengaluru planetarium, sky theatre show"
   }

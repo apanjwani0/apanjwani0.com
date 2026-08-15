@@ -1,5 +1,6 @@
 ---
 import { getSite } from '../lib/config'
+import { ogImageMeta } from '../lib/og'
 import Nav from '../components/Nav.astro'
 import Head from '../components/Head.astro'
 import '../styles/shared.css'
@@ -23,10 +24,8 @@ const description =
     : `Fast, free, browser-based developer tools by ${site.name}.`)
 const canonicalURL = new URL(Astro.url.pathname, site.url).href
 // Absolute URL + dimensions for the social-share preview image, matching
-// Base.astro so shared tool links render a preview card, not a bare link.
-const ogImage = new URL(site.avatar, site.url).href
-const ogImageWidth = 320
-const ogImageHeight = 468
+// Base.astro (shared helper) so tool links render a preview card, not a bare link.
+const ogImage = ogImageMeta(site)
 ---
 
 <!doctype html>
@@ -38,9 +37,9 @@ const ogImageHeight = 468
       canonicalURL={canonicalURL}
       siteName={site.name}
       keywords={keywords}
-      image={ogImage}
-      imageWidth={ogImageWidth}
-      imageHeight={ogImageHeight}
+      image={ogImage.src}
+      imageWidth={ogImage.width}
+      imageHeight={ogImage.height}
       handle={site.handle}
       loadFonts={false}
       clientRouter={false}
