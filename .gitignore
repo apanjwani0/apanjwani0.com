@@ -16,6 +16,13 @@ pnpm-debug.log*
 .env
 .env.production
 
+# credentials — service-account keys, API exports, anything handed to a script.
+# Listed before the directory exists on purpose: a key is committed by the same
+# mistake that creates the folder, and .gitignore only helps if it got there first.
+secrets/
+*service-account*.json
+*credentials*.json
+
 # macOS-specific files
 .DS_Store
 
