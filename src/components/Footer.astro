@@ -13,18 +13,19 @@
  *
  * Styling is tokens-only and self-contained here.
  */
-import { getSite } from '../lib/config'
+import { getSite, navLinks, type Site } from '../lib/config'
 import { safeExternalUrl } from '../lib/security'
 
 interface Props {
-  site?: Awaited<ReturnType<typeof getSite>>
+  site?: Site
 }
 
 const { site: siteProp } = Astro.props
 const site = siteProp ?? await getSite(Astro.locals)
 
-// Mirror the header's section links (dropdown children flattened, like Nav.astro).
-const links = site.nav.flatMap((item) => item.children ?? [item])
+// The same flat section list the header renders — one definition, so the two
+// can never advertise different sections on the same page.
+const links = navLinks(site)
 
 // Same-origin-safe identity links; rel="me" reinforces the home hero's author
 // claims on every page. Filtered through the URL allowlist like everywhere else.
@@ -39,7 +40,7 @@ const year = new Date().getFullYear()
 <footer data-type="site-footer">
   <div data-type="footer-inner">
     <nav data-type="footer-nav" aria-label="Footer">
-      <a href="/" data-type="footer-wordmark" aria-label={`${site.name} — home`}>{site.handle}</a>
+      <a href="/" data-type="footer-wordmark" aria-label={`${site.handle} — ${site.name} home`}>{site.handle}</a>
       {links.map((link) => <a href={link.href}>{link.label}</a>)}
     </nav>
     {social.length > 0 && (

@@ -68,37 +68,47 @@ export const onRequest = defineMiddleware(async (context, next) => {
       response.headers.set('X-Robots-Tag', 'noindex, nofollow')
     } else if (hasAdminSession) {
       response.headers.set('Cache-Control', 'no-store')
-    } else if (response.headers.has('Cache-Control')) {
-      // A route that set its own policy knows better (the webhook endpoints all
-      // send no-store) — the fallbacks below are for routes that didn't.
-    } else if (isGet && response.status === 404) {
-      // Vulnerability scanners generate the bulk of this site's origin traffic,
-      // and every one of them requests a path that does not exist — /api/*
-      // probes (wp-login, .env, graphql) most of all, which is why this ranks
-      // above the blanket API no-store. An uncached 404 wakes the origin every
-      // time; a cached one is absorbed at the edge. Short TTL so a genuinely
-      // new route still appears quickly.
-      response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300')
-    } else if (pathname.startsWith('/api/')) {
-      // API routes are dynamic by definition (analytics writes, the webhook
-      // capture/playback endpoints) — never let the edge cache their responses,
-      // or a GET to a capture URL could be served stale and stop recording.
-      response.headers.set('Cache-Control', 'no-store')
-    } else if (isGet && response.status === 200) {
-      // Public, successful page → cacheable. s-maxage drives the CDN edge;
-      // stale-while-revalidate lets it refresh in the background so no visitor
-      // ever blocks on the origin. The sitemap changes far less often than page
-      // content, so it gets a longer fresh window (1 h vs 10 m) to cut origin
-      // hits from crawlers while still refreshing within the day.
-      //
-      // max-age=0 keeps *browsers* from pinning stale HTML: without it an edit
-      // stays invisible to anyone who already loaded the page until their own
-      // cache expires, which is not something a purge can fix.
-      const isSitemap = pathname === '/sitemap.xml'
-      response.headers.set(
-        'Cache-Control',
-        `public, max-age=0, ${isSitemap ? 's-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
-      )
+    } else if (!response.headers.has('Cache-Control')) {
+      // A route that set its own policy owns it (the webhook endpoints all send
+      // no-store). Everything in here is the fallback for routes that did not —
+      // written as a guard rather than an empty `else if` branch in the chain,
+      // because an empty block reads as an unfinished edit and the next person
+      // to tidy it away would silently drop every route's own no-store.
+      if (pathname.startsWith('/api/')) {
+        // API routes are dynamic by definition (analytics writes, the webhook
+        // capture/playback endpoints) — never let the edge cache their
+        // responses, or a GET to a capture URL could be served stale and stop
+        // recording. This deliberately ranks ABOVE the 404 rule below: a 404
+        // from an API route is usually a resource that can exist a moment later
+        // (a bin not created yet, a freshly minted id), and edge-caching that
+        // for five minutes serves the miss back to everyone in the colo —
+        // including the owner who just created it. The scanner-absorption win
+        // below is not worth making that depend on every future route
+        // remembering to set its own header.
+        response.headers.set('Cache-Control', 'no-store')
+      } else if (isGet && response.status === 404) {
+        // Vulnerability scanners generate the bulk of this site's origin
+        // traffic, and every one of them requests a path that does not exist
+        // (wp-login, .env, .git, phpMyAdmin). An uncached 404 wakes the origin
+        // every time; a cached one is absorbed at the edge. Short TTL so a
+        // genuinely new route still appears quickly.
+        response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300')
+      } else if (isGet && response.status === 200) {
+        // Public, successful page → cacheable. s-maxage drives the CDN edge;
+        // stale-while-revalidate lets it refresh in the background so no visitor
+        // ever blocks on the origin. The sitemap changes far less often than page
+        // content, so it gets a longer fresh window (1 h vs 10 m) to cut origin
+        // hits from crawlers while still refreshing within the day.
+        //
+        // max-age=0 keeps *browsers* from pinning stale HTML: without it an edit
+        // stays invisible to anyone who already loaded the page until their own
+        // cache expires, which is not something a purge can fix.
+        const isSitemap = pathname === '/sitemap.xml'
+        response.headers.set(
+          'Cache-Control',
+          `public, max-age=0, ${isSitemap ? 's-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
+        )
+      }
     }
 
     // Count real page views only: successful HTML GETs. Content-Type decides —

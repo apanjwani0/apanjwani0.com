@@ -14,7 +14,7 @@ import {
 import { isValidBinId } from '../src/lib/webhook-store.ts'
 import { gameTag, isPlayableGame } from '../src/lib/games.ts'
 import { games } from '../src/config/games.ts'
-import { looksAutomated, pruneVisits, recordVisit, referrerHost } from '../src/lib/visits.ts'
+import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
 
 const unsafeMarkdown = render('[x](javascript:alert(1)) <img src=x onerror=alert(1)>')
 assert.equal(unsafeMarkdown.includes('javascript:'), false)
@@ -133,6 +133,33 @@ assert.equal(referrerHost('https://news.ycombinator.com/item?id=1', 'apanjwani0.
 assert.equal(referrerHost('https://apanjwani0.com/tools', 'apanjwani0.com'), null)
 assert.equal(referrerHost(null, 'apanjwani0.com'), null)
 
+// The visits file is bounded in bytes, not just per-day rows — it is written
+// from public traffic on a 1 GB host, so "global bytes" is one of the dimensions
+// AGENTS.md requires every public-input store to bound. The trimming must keep
+// the NEWEST days (today's counters are the ones being written), must not mutate
+// the store it is handed, and must stay linear: the obvious drop-oldest-and-
+// re-stringify loop is quadratic in exactly the case the ceiling exists for.
+{
+  const day = () => ({ '/x': { views: 1, bots: 0, countries: { XX: 1 }, referrers: {} } })
+  const store = Object.fromEntries(
+    Array.from({ length: 40 }, (_, i) => [`2026-01-${String(i + 1).padStart(2, '0')}`, day()]),
+  )
+  const before = JSON.stringify(store)
+  const out = serializeBounded(store, 400)
+
+  assert.ok(out.length <= 400, `bounded output must fit the budget, got ${out.length}`)
+  assert.equal(JSON.stringify(store), before, 'serializeBounded must not mutate its argument')
+  const kept = Object.keys(JSON.parse(out))
+  assert.ok(kept.length > 0 && kept.length < 40, 'it must drop some days but not all')
+  assert.equal(kept.at(-1), '2026-01-40', 'the newest day must survive the trim')
+  assert.deepEqual(kept, [...kept].sort(), 'surviving days stay in chronological order')
+
+  // A single day larger than the whole budget is written anyway rather than
+  // losing the day entirely — the per-day caps are what bound that case.
+  const oneBigDay = { '2026-01-01': day() }
+  assert.equal(JSON.parse(serializeBounded(oneBigDay, 1))['2026-01-01']['/x'].views, 1)
+}
+
 // …and it never records an /api/ path. Content-Type alone cannot decide this:
 // the webhook capture endpoint echoes the caller's own Content-Type back on
 // ?echo=1, so `GET /api/hook/<id>?echo=1` declaring text/html would write that
@@ -144,6 +171,16 @@ assert.match(
   /isHtml && !isAdminSurface && !isApi/,
   'visit counting must exclude /api/ paths, not just non-HTML responses',
 )
+
+// Cache-Control branch order. The /api/ no-store must rank ABOVE the 404 rule:
+// an API 404 is usually a resource that can exist a moment later (a bin not yet
+// created), and edge-caching that for 5 minutes serves the miss back to the
+// whole colo. Swapping them looks like a harmless scanner-absorption win.
+const apiNoStore = middlewareSrc.indexOf("if (pathname.startsWith('/api/')) {")
+const cache404 = middlewareSrc.indexOf('isGet && response.status === 404')
+assert.ok(apiNoStore !== -1, 'middleware must have an /api/ no-store branch')
+assert.ok(cache404 !== -1, 'middleware must have a 404 edge-cache branch')
+assert.ok(apiNoStore < cache404, 'the /api/ no-store branch must rank above the 404 edge-cache branch')
 assert.equal(referrerHost('not a url', 'apanjwani0.com'), null)
 
 assert.equal(looksAutomated('Mozilla/5.0 (Macintosh) Chrome/120'), false)

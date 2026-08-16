@@ -82,10 +82,20 @@ touches the build or deploy pipeline**:
    this — keep it on "Respect Existing Headers" or it silently overrides the line
    above.
 
-3. **404s are edge-cached** (`public, max-age=0, s-maxage=300`). Vulnerability
-   scanners generate most of this site's origin traffic and every one of them
-   requests a path that does not exist; an uncached 404 wakes the origin each
-   time. Short TTL so a genuinely new route still appears quickly.
+3. **Non-API 404s are edge-cached** (`public, max-age=0, s-maxage=300`).
+   Vulnerability scanners generate most of this site's origin traffic and every
+   one of them requests a path that does not exist; an uncached 404 wakes the
+   origin each time. Short TTL so a genuinely new route still appears quickly.
+
+   The branch order in `src/middleware.ts` matters and is asserted by
+   `security:smoke`: admin surfaces first, then any response that set its own
+   `Cache-Control`, then **`/api/*` → `no-store` ahead of the 404 rule**. An API
+   404 is usually a resource that can exist a moment later (a bin not created
+   yet, a freshly minted id), so edge-caching it for five minutes serves the miss
+   back to everyone in the colo — including the owner who just created it. Do not
+   reorder those two to reclaim the scanner-absorption win on `/api/` probes;
+   that would make the guarantee depend on every future route remembering to set
+   its own header.
 
 **Gotcha:** after editing content in `/admin`, public pages keep serving the
 cached copy until the TTL expires. To see changes immediately, purge via

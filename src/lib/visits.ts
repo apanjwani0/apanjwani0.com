@@ -155,14 +155,19 @@ function mergeRow(target: VisitRow, source: VisitRow): void {
 /** Merge `source` into `target`, enforcing the per-day path cap on the target —
  *  the "keep the file finite" backstop has to hold for the stored file, not just
  *  the 30-second buffer. Shared by the flush and the flush-failure restore so
- *  the two paths cannot drift. */
-function mergeStore(target: VisitStore, source: VisitStore): void {
+ *  the two paths cannot drift.
+ *
+ *  `capPaths` is off for the restore: those rows were already admitted once, so
+ *  re-applying the cap to put them back would discard the very traffic the retry
+ *  exists to save. The cap belongs on the persisted file, which the next
+ *  successful flush applies. */
+function mergeStore(target: VisitStore, source: VisitStore, capPaths = true): void {
   for (const [date, paths] of Object.entries(source)) {
     const day = (target[date] ??= {})
     for (const [path, row] of Object.entries(paths)) {
       const existing = day[path]
       if (existing) mergeRow(existing, row)
-      else if (Object.keys(day).length < MAX_PATHS_PER_DAY) day[path] = row
+      else if (!capPaths || Object.keys(day).length < MAX_PATHS_PER_DAY) day[path] = row
     }
   }
 }
@@ -175,15 +180,42 @@ export function pruneVisits(store: VisitStore, now = new Date(), retentionDays =
 
 /** Serialize, dropping oldest days while over the byte ceiling. `.length` counts
  *  UTF-16 units, not bytes — fine here, the content is almost entirely ASCII and
- *  the ceiling has headroom. */
-function serializeBounded(store: VisitStore): string {
-  let json = JSON.stringify(store)
-  const dates = Object.keys(store).sort()
-  while (json.length > MAX_STORE_BYTES && dates.length > 1) {
-    delete store[dates.shift()!]
-    json = JSON.stringify(store)
+ *  the ceiling has headroom.
+ *
+ *  One stringify per DAY, and none over the whole store. The obvious version —
+ *  stringify everything, drop the oldest day, stringify again — is quadratic in
+ *  the worst case it exists for: a cap-shaped day is ~2 MB, so the ceiling is
+ *  blown by RECENT days while the loop sheds near-empty 89-day-old ones, up to
+ *  89 full passes over a multi-megabyte object, synchronously, on a 30s timer,
+ *  on a 1 GB host. It also built the entire store as one string BEFORE dropping
+ *  anything, so it could exhaust the 768 MB container long before the 4 MB
+ *  ceiling it enforces ever applied.
+ *
+ *  Also non-destructive: the old version `delete`d from the store it was handed,
+ *  which was safe only because the one caller passes a fresh pruneVisits()
+ *  result. A later caller passing `pending` would have lost live counters inside
+ *  a function named "serialize". */
+export function serializeBounded(store: VisitStore, maxBytes = MAX_STORE_BYTES): string {
+  const days = Object.keys(store)
+    .sort()
+    .map(date => [date, JSON.stringify(store[date])] as const)
+
+  // Newest first, so an oversized day costs the OLD days rather than the one
+  // currently being written. Budget per entry: `"<date>":<body>` plus a comma,
+  // rounded up — over-estimating is the safe direction for a ceiling.
+  const kept: string[] = []
+  let bytes = '{}'.length
+  for (let i = days.length - 1; i >= 0; i -= 1) {
+    const [date, body] = days[i]
+    const size = date.length + body.length + 4
+    // The newest day is always kept: if it alone exceeds the budget the choice
+    // is between over-writing it and losing today's counters entirely, and the
+    // per-day caps already bound it.
+    if (kept.length > 0 && bytes + size > maxBytes) break
+    kept.unshift(`${JSON.stringify(date)}:${body}`)
+    bytes += size
   }
-  return json
+  return `{${kept.join(',')}}`
 }
 
 /** Merge the in-memory buffer into the file. Read-modify-write is fine here
@@ -213,8 +245,12 @@ export async function flushVisits(): Promise<void> {
     await writeFile(visitsPath(), serializeBounded(pruneVisits(stored)), 'utf-8')
   } catch (error) {
     // Counters must never take the site down. Put the buffer back so the next
-    // flush retries it rather than silently dropping the interval's traffic.
-    mergeStore(pending, buffered)
+    // flush retries it rather than silently dropping the interval's traffic —
+    // uncapped, since these rows already passed the cap once.
+    mergeStore(pending, buffered, false)
+    // And arm a timer: the callback cleared flushTimer before calling us, so on
+    // a quiet site nothing else would retry until the next visitor arrives.
+    scheduleFlush()
     console.error('[visits] flush failed', error)
   }
 }

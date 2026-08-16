@@ -75,6 +75,10 @@ class WebhookInspectorTool extends HTMLElement {
   private paused = false
   private timer: number | null = null
   private polling = false
+  /** A poll asked for while one was in flight. Coalesced rather than dropped —
+   *  see poll(). `pollAgainManual` carries the "show a status line" intent. */
+  private pollAgain = false
+  private pollAgainManual = false
   private requests: WiRequest[] = []
   /** null = never rendered — the first render must always run. */
   private lastSig: string | null = null
@@ -226,14 +230,28 @@ class WebhookInspectorTool extends HTMLElement {
   }
 
   private async poll(manual = false) {
-    if (this.polling) return
+    // Coalesce rather than drop. A poll requested while one is in flight — the
+    // R shortcut, the Refresh button, the follow-up after "Send test request" —
+    // used to hit this guard and vanish, so the request it was fetching did not
+    // appear until the next 2s tick, or never at all while the feed is paused.
+    if (this.polling) {
+      this.pollAgain = true
+      this.pollAgainManual ||= manual
+      return
+    }
     this.polling = true
+    // Bind the bin for the whole round trip: N and Clear can replace this.binId
+    // while the fetch is in flight, and applying bin A's response afterwards
+    // would render A's captured Authorization headers and signing secrets under
+    // the freshly minted URL B — and send A's ETag as if-none-match against B.
+    const bin = this.binId
     try {
       const headers: Record<string, string> = { accept: 'application/json' }
       // Conditional poll: the server answers an unchanged bin with a bodyless
       // 304 instead of reserializing every captured body every 2 seconds.
       if (this.reqEtag) headers['if-none-match'] = this.reqEtag
-      const res = await fetch(`/api/hook/${this.binId}/requests`, { headers })
+      const res = await fetch(`/api/hook/${bin}/requests`, { headers })
+      if (bin !== this.binId) return
       if (res.status === 304) {
         this.updateTimes()
         if (manual) this.setStatus(`Refreshed — ${this.requests.length} request${this.requests.length === 1 ? '' : 's'}.`)
@@ -241,6 +259,7 @@ class WebhookInspectorTool extends HTMLElement {
       }
       if (!res.ok) throw new Error(String(res.status))
       const data = await res.json() as { requests?: WiRequest[] }
+      if (bin !== this.binId) return
       this.reqEtag = res.headers.get('etag') ?? ''
       this.requests = Array.isArray(data.requests) ? data.requests : []
       this.render()
@@ -249,6 +268,12 @@ class WebhookInspectorTool extends HTMLElement {
       this.setStatus('Could not reach the server. Retrying…')
     } finally {
       this.polling = false
+      if (this.pollAgain) {
+        this.pollAgain = false
+        const again = this.pollAgainManual
+        this.pollAgainManual = false
+        void this.poll(again)
+      }
     }
   }
 
@@ -263,7 +288,6 @@ class WebhookInspectorTool extends HTMLElement {
       this.updateTimes()
       return
     }
-    this.lastSig = sig
 
     this.countEl.textContent = this.requests.length ? `(${this.requests.length})` : ''
     this.emptyEl.hidden = this.requests.length > 0
@@ -280,6 +304,15 @@ class WebhookInspectorTool extends HTMLElement {
         if (d.open) this.expanded.add(id); else this.expanded.delete(id)
       })
     })
+
+    // Last, not first: the signature records what the DOM now shows. Committing
+    // it up front meant a throw anywhere above (a malformed row in the feed —
+    // poll() only checks Array.isArray, never the items) left the list stale
+    // while every later poll matched the signature and returned early, wedging
+    // the tool on old rows plus a bogus "could not reach the server" until a
+    // full reload. The signature used to carry a 5s time bucket, which papered
+    // over this by expiring; ids alone do not.
+    this.lastSig = sig
   }
 
   private renderRow(r: WiRequest, now: number): string {
@@ -376,21 +409,13 @@ class WebhookInspectorTool extends HTMLElement {
         body: JSON.stringify({ event: 'test', from: 'Webhook Inspector', at: new Date().toISOString() }),
       })
       this.flash(btn, 'Sent!')
-      window.setTimeout(() => this.pollAfterSend(), 250)
+      // No retry ladder needed: poll() coalesces, so this lands even if another
+      // poll is mid-flight, and it is the only thing that shows the new row
+      // while the feed is paused.
+      void this.poll(true)
     } catch {
       this.flash(btn, 'Failed')
     }
-  }
-
-  /** Follow-up poll for a just-sent test request. Retries briefly instead of
-   *  being silently swallowed by the in-flight re-entrancy guard (which would
-   *  leave "Sent!" with no visible row, especially while paused). */
-  private pollAfterSend(attempt = 0) {
-    if (this.polling && attempt < 4) {
-      window.setTimeout(() => this.pollAfterSend(attempt + 1), 300)
-      return
-    }
-    void this.poll(true)
   }
 
   private newUrl() {

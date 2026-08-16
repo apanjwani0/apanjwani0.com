@@ -83,7 +83,7 @@ const ogImage = ogImageMeta(site, ogCard, title)
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
     {starfield && <star-field data-type="starfield" aria-hidden="true"></star-field>}
-    <Nav site={site} />
+    <Nav site={site} bare={bare} />
     <main
       id="main-content"
       tabindex="-1"

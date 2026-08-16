@@ -28,7 +28,7 @@ portfolio-apanjwani0/
 │   ├── components/
 │   │   ├── Nav.astro        # Top navigation driven by site.nav
 │   │   ├── Head.astro       # <head> meta + SEO/OG tags
-│   │   ├── Avatar.astro / ProjectCard.astro / ExperienceItem.astro / SocialLinks.astro
+│   │   ├── Avatar.astro / ProjectCard.astro / ExperienceItem.astro / RelatedLinks.astro
 │   │   ├── home/            # Home hero pieces (star canvas, …)
 │   │   ├── tools/           # Tool WebComponents (json-tidy/, wallpaper-forge/, md-enhanced/, …)
 │   │   └── games/           # Game WebComponents (game-of-life/, type-trial/, hue-hunt/)
