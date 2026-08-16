@@ -23,5 +23,6 @@
   ],
   "theme_color": "#05070c",
   "background_color": "#05070c",
-  "display": "standalone"
+  "display": "standalone",
+  "categories": ["productivity", "utilities", "games"]
 }

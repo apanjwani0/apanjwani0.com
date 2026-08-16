@@ -16,6 +16,11 @@
  * are wi-/WI_-prefixed because tool component files share one global script scope.
  */
 
+// Escapes every character that can end an attribute value or open a tag, `'`
+// included (attribute quoting is a call-site property). Shared with the server
+// so the escaping rule has exactly one home.
+import { escapeHtml as wiEsc } from '../../../lib/escape'
+
 interface WiHeader { name: string; value: string }
 
 interface WiRequest {
@@ -37,20 +42,6 @@ const WI_POLL_MS = 2000
 // Must stay in step with BIN_ID_RE in lib/webhook-store.ts, or a stored id that
 // passes here gets a 404 from the server.
 const WI_BIN_RE = /^[A-Za-z0-9_-]{24,64}$/
-
-/** Escapes every character that can end an attribute value or open a tag.
- *  `'` is included because attribute quoting is a property of the call site: the
- *  markup below happens to use double quotes throughout, and the day one
- *  interpolation is written with single quotes this becomes stored XSS driven by
- *  a header an attacker chose. Escaping both makes that impossible to get wrong. */
-function wiEsc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
 
 function wiNewBinId(): string {
   const uuid = (crypto as any).randomUUID?.() as string | undefined
@@ -84,8 +75,14 @@ class WebhookInspectorTool extends HTMLElement {
   private paused = false
   private timer: number | null = null
   private polling = false
+  /** A poll asked for while one was in flight. Coalesced rather than dropped —
+   *  see poll(). `pollAgainManual` carries the "show a status line" intent. */
+  private pollAgain = false
+  private pollAgainManual = false
   private requests: WiRequest[] = []
-  private lastSig = ''
+  /** null = never rendered — the first render must always run. */
+  private lastSig: string | null = null
+  private reqEtag = ''
   private expanded = new Set<string>()
 
   private urlInput!: HTMLInputElement
@@ -96,14 +93,20 @@ class WebhookInspectorTool extends HTMLElement {
   private pollBtn!: HTMLButtonElement
 
   private onKeydown = (e: KeyboardEvent) => {
-    const t = e.target as HTMLElement
-    const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')
-    if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+    if (e.metaKey || e.ctrlKey || e.altKey) return
+    // This listens on document (see connectedCallback), so it sees keys aimed at
+    // the whole page — anything focusable owns its own: typing must never be
+    // hijacked, and Space/Enter activate a button, a link or a <summary>.
+    const t = e.target as HTMLElement | null
+    if (t?.closest('input, textarea, select, button, a, summary, [contenteditable]')) return
     const k = e.key.toLowerCase()
     if (k === 'c') { e.preventDefault(); this.clear() }
     else if (k === 'r') { e.preventDefault(); this.poll(true) }
     else if (k === 'n') { e.preventDefault(); this.newUrl() }
-    else if (e.key === ' ') { e.preventDefault(); this.togglePoll() }
+    // Pause is P, not Space: with nothing focused Space is the browser's
+    // page-scroll key, and this page has a long SEO section under the app, so
+    // taking it meant a reader trying to scroll silently paused the feed instead.
+    else if (k === 'p') { e.preventDefault(); this.togglePoll() }
   }
 
   private onVisibility = () => { if (!document.hidden && !this.paused) this.poll() }
@@ -116,7 +119,7 @@ class WebhookInspectorTool extends HTMLElement {
       <div data-type="tool-page" data-tool="webhook-inspector">
         <div data-type="tool-header">
           <h1>Webhook Inspector</h1>
-          <p>Get a unique URL, point any webhook or HTTP client at it, and watch the requests arrive here in real time — method, query string, headers and body, all captured server-side. Your URL is saved on this device so you can reuse and share it. Add <code>?status=500</code>, <code>?delay=2000</code>, or <code>?echo=1</code> to the URL to test how your client handles errors, slow responses, or round-tripped bodies. Press <kbd>R</kbd> to refresh, <kbd>C</kbd> to clear, <kbd>N</kbd> for a new URL, <kbd>Space</kbd> to pause.</p>
+          <p>Get a unique URL, point any webhook or HTTP client at it, and watch the requests arrive here in real time — method, query string, headers and body, all captured server-side. Your URL is saved on this device so you can reuse and share it. Add <code>?status=500</code>, <code>?delay=2000</code>, or <code>?echo=1</code> to the URL to test how your client handles errors, slow responses, or round-tripped bodies. Press <kbd>R</kbd> to refresh, <kbd>C</kbd> to clear, <kbd>N</kbd> for a new URL, <kbd>P</kbd> to pause.</p>
         </div>
 
         <section data-type="wi-card" data-card="url" aria-labelledby="wi-url-h">
@@ -177,7 +180,11 @@ class WebhookInspectorTool extends HTMLElement {
       const req = this.requests.find(r => r.id === b.dataset.copyBody)
       if (req) this.copyText(this.formatBody(req), b)
     })
-    this.addEventListener('keydown', this.onKeydown)
+    // On document, not the element: the custom element is never focused in the
+    // tool's default watch-the-feed state, so a listener on it would leave the
+    // advertised R/C/N/P shortcuts dead until the user first clicked inside.
+    // onKeydown is what keeps that from hijacking keys meant for other controls.
+    document.addEventListener('keydown', this.onKeydown)
     document.addEventListener('visibilitychange', this.onVisibility)
 
     this.render()
@@ -187,7 +194,7 @@ class WebhookInspectorTool extends HTMLElement {
 
   disconnectedCallback() {
     this.stopPolling()
-    this.removeEventListener('keydown', this.onKeydown)
+    document.removeEventListener('keydown', this.onKeydown)
     document.removeEventListener('visibilitychange', this.onVisibility)
   }
 
@@ -204,7 +211,7 @@ class WebhookInspectorTool extends HTMLElement {
   }
 
   private reflectPollBtn() {
-    this.pollBtn.textContent = this.paused ? 'Resume (Space)' : 'Pause (Space)'
+    this.pollBtn.textContent = this.paused ? 'Resume (P)' : 'Pause (P)'
     this.root.setAttribute('data-paused', this.paused ? 'true' : 'false')
   }
 
@@ -212,7 +219,9 @@ class WebhookInspectorTool extends HTMLElement {
   private startPolling() {
     this.stopPolling()
     this.timer = window.setInterval(() => {
-      if (!document.hidden && !this.paused) this.poll()
+      if (document.hidden) return
+      if (this.paused) this.updateTimes()
+      else this.poll()
     }, WI_POLL_MS)
   }
 
@@ -221,12 +230,37 @@ class WebhookInspectorTool extends HTMLElement {
   }
 
   private async poll(manual = false) {
-    if (this.polling) return
+    // Coalesce rather than drop. A poll requested while one is in flight — the
+    // R shortcut, the Refresh button, the follow-up after "Send test request" —
+    // used to hit this guard and vanish, so the request it was fetching did not
+    // appear until the next 2s tick, or never at all while the feed is paused.
+    if (this.polling) {
+      this.pollAgain = true
+      this.pollAgainManual ||= manual
+      return
+    }
     this.polling = true
+    // Bind the bin for the whole round trip: N and Clear can replace this.binId
+    // while the fetch is in flight, and applying bin A's response afterwards
+    // would render A's captured Authorization headers and signing secrets under
+    // the freshly minted URL B — and send A's ETag as if-none-match against B.
+    const bin = this.binId
     try {
-      const res = await fetch(`/api/hook/${this.binId}/requests`, { headers: { accept: 'application/json' } })
+      const headers: Record<string, string> = { accept: 'application/json' }
+      // Conditional poll: the server answers an unchanged bin with a bodyless
+      // 304 instead of reserializing every captured body every 2 seconds.
+      if (this.reqEtag) headers['if-none-match'] = this.reqEtag
+      const res = await fetch(`/api/hook/${bin}/requests`, { headers })
+      if (bin !== this.binId) return
+      if (res.status === 304) {
+        this.updateTimes()
+        if (manual) this.setStatus(`Refreshed — ${this.requests.length} request${this.requests.length === 1 ? '' : 's'}.`)
+        return
+      }
       if (!res.ok) throw new Error(String(res.status))
       const data = await res.json() as { requests?: WiRequest[] }
+      if (bin !== this.binId) return
+      this.reqEtag = res.headers.get('etag') ?? ''
       this.requests = Array.isArray(data.requests) ? data.requests : []
       this.render()
       if (manual) this.setStatus(`Refreshed — ${this.requests.length} request${this.requests.length === 1 ? '' : 's'}.`)
@@ -234,15 +268,26 @@ class WebhookInspectorTool extends HTMLElement {
       this.setStatus('Could not reach the server. Retrying…')
     } finally {
       this.polling = false
+      if (this.pollAgain) {
+        this.pollAgain = false
+        const again = this.pollAgainManual
+        this.pollAgainManual = false
+        void this.poll(again)
+      }
     }
   }
 
   // ── render ───────────────────────────────────────────────────────────────
   private render() {
     const now = Date.now()
-    const sig = `${this.requests.map(r => r.id).join(',')}|${Math.floor(now / 5000)}`
-    if (sig === this.lastSig) return
-    this.lastSig = sig
+    // Ids only — an unchanged list must not be torn down and rebuilt (that reset
+    // scroll/selection and re-pretty-printed every body); the relative "ago"
+    // labels are refreshed in place by updateTimes() instead.
+    const sig = this.requests.map(r => r.id).join(',')
+    if (sig === this.lastSig) {
+      this.updateTimes()
+      return
+    }
 
     this.countEl.textContent = this.requests.length ? `(${this.requests.length})` : ''
     this.emptyEl.hidden = this.requests.length > 0
@@ -259,6 +304,15 @@ class WebhookInspectorTool extends HTMLElement {
         if (d.open) this.expanded.add(id); else this.expanded.delete(id)
       })
     })
+
+    // Last, not first: the signature records what the DOM now shows. Committing
+    // it up front meant a throw anywhere above (a malformed row in the feed —
+    // poll() only checks Array.isArray, never the items) left the list stale
+    // while every later poll matched the signature and returned early, wedging
+    // the tool on old rows plus a bogus "could not reach the server" until a
+    // full reload. The signature used to carry a 5s time bucket, which papered
+    // over this by expiring; ids alone do not.
+    this.lastSig = sig
   }
 
   private renderRow(r: WiRequest, now: number): string {
@@ -270,7 +324,7 @@ class WebhookInspectorTool extends HTMLElement {
     const summary = `
       <summary data-type="wi-summary">
         <span data-type="wi-method" data-method="${method}">${method}</span>
-        <span data-type="wi-when" title="${wiEsc(abs)}">${wiEsc(rel)}</span>
+        <span data-type="wi-when" data-ts="${r.receivedAt}" title="${wiEsc(abs)}">${wiEsc(rel)}</span>
         <span data-type="wi-meta">${wiFmtSize(r.size)}${r.bodyTruncated ? ' · truncated' : ''}${r.query ? ' · has query' : ''}</span>
       </summary>`
     return `<li><details data-req="${wiEsc(r.id)}"${open}>${summary}${this.renderDetail(r, abs)}</details></li>`
@@ -306,6 +360,15 @@ class WebhookInspectorTool extends HTMLElement {
 
     const html = parts.join('')
     return html
+  }
+
+  /** Refresh the relative "ago" labels without touching the rest of the DOM. */
+  private updateTimes() {
+    const now = Date.now()
+    this.listEl.querySelectorAll<HTMLElement>('[data-type="wi-when"]').forEach(el => {
+      const ts = Number(el.dataset.ts)
+      if (ts) el.textContent = wiRelTime(ts, now)
+    })
   }
 
   private formatBody(r: WiRequest): string {
@@ -346,7 +409,10 @@ class WebhookInspectorTool extends HTMLElement {
         body: JSON.stringify({ event: 'test', from: 'Webhook Inspector', at: new Date().toISOString() }),
       })
       this.flash(btn, 'Sent!')
-      window.setTimeout(() => this.poll(true), 250)
+      // No retry ladder needed: poll() coalesces, so this lands even if another
+      // poll is mid-flight, and it is the only thing that shows the new row
+      // while the feed is paused.
+      void this.poll(true)
     } catch {
       this.flash(btn, 'Failed')
     }
@@ -357,7 +423,8 @@ class WebhookInspectorTool extends HTMLElement {
     this.writeLS(WI_LS_BIN, this.binId)
     this.requests = []
     this.expanded.clear()
-    this.lastSig = ''
+    this.lastSig = null
+    this.reqEtag = ''
     this.reflectUrl()
     this.render()
     this.setStatus('Generated a fresh URL — the old one still holds its requests for a while.')
@@ -378,7 +445,8 @@ class WebhookInspectorTool extends HTMLElement {
     } catch { /* still clear the local view */ }
     this.requests = []
     this.expanded.clear()
-    this.lastSig = ''
+    this.lastSig = null
+    this.reqEtag = ''
     this.render()
     this.setStatus('Cleared captured requests.')
   }

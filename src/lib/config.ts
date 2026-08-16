@@ -69,7 +69,7 @@ async function getConfig<T>(locals: unknown, key: string, fallback: T): Promise<
   return validateConfigData(key, config) ? config : fallback
 }
 
-/** One nav entry. `children` renders as a dropdown and is flattened by Nav.astro. */
+/** One nav entry. `children` renders as a dropdown and is flattened by navLinks(). */
 export interface NavItem {
   label: string
   href: string
@@ -89,6 +89,21 @@ export interface NavItem {
 export type Site = Omit<typeof staticSite, 'nav' | 'theme'> & {
   nav: NavItem[]
   theme: 'light' | 'dark'
+}
+
+/**
+ * The site's section links as a flat list — dropdown children hoisted to top
+ * level.
+ *
+ * Lives here, next to the type, because both the header and the footer render
+ * "the site's sections" and they must agree: two copies of this expression meant
+ * a future discriminator on NavItem (a `footerOnly` flag, a third level of
+ * nesting) could be honoured in one component and forgotten in the other, and
+ * both would still render successfully — so the mismatch would surface as a
+ * header and footer listing different sections on the same page.
+ */
+export function navLinks(site: Site): NavItem[] {
+  return site.nav.flatMap(item => item.children ?? [item])
 }
 
 export async function getSite(locals: unknown): Promise<Site> {

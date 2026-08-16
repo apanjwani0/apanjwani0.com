@@ -288,16 +288,22 @@ export async function recordAnalyticsEvent(locals: unknown, event: AnalyticsEven
 
 export async function readAnalyticsAggregates(locals: unknown): Promise<AnalyticsAggregate[]> {
   const kv = getAnalyticsKV(locals)
-  if (!kv) return Object.values(await readLocalAnalytics())
+  if (!kv) return Object.values(pruneAnalytics(await readLocalAnalytics()))
   if (!kv.list) return []
 
+  // Retention must also hold on the read path: keys written before expirationTtl
+  // was set never expire on their own, and the local backend prunes on write —
+  // without this filter the two backends would disagree about the 90-day window.
+  const cutoff = new Date(Date.now() - ANALYTICS_RETENTION_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10)
   const rows: AnalyticsAggregate[] = []
   let cursor: string | undefined
   do {
     const result = await kv.list({ prefix: ANALYTICS_PREFIX, ...(cursor ? { cursor } : {}) })
     for (const key of result.keys) {
       const row = cleanAggregate(await kv.get(key.name, 'json'))
-      if (row) rows.push(row)
+      if (row && row.date >= cutoff) rows.push(row)
     }
     cursor = result.list_complete === false ? result.cursor : undefined
   } while (cursor)

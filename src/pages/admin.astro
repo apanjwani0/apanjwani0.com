@@ -4,7 +4,7 @@ export const prerender = false
 import Base from '../layouts/Base.astro'
 import { getSite, getProjects, getExperience, getPosts, getGames, getTools } from '../lib/config'
 import { validateSession } from '../lib/session'
-import { getAdminSecret, getRuntimeEnv, getSessionToken, isAdminRequestAllowed } from '../lib/security'
+import { adminNotFound, getAdminSecret, getRuntimeEnv, getSessionToken, isAdminRequestAllowed } from '../lib/security'
 
 // Auth: read secret from Cloudflare env (prod) or process.env/.env (dev/Node)
 const runtimeEnv = getRuntimeEnv(Astro.locals)
@@ -16,7 +16,7 @@ const bypassAuth = import.meta.env.DEV && !secret
 // Dev-only surface: production returns a bare 404 without loading any config.
 // Returning here (rather than setting a 404 status and rendering on) keeps the
 // admin markup and the config values off the wire entirely.
-if (!isAdminRequestAllowed()) return new Response(null, { status: 404, statusText: 'Not Found' })
+if (!isAdminRequestAllowed()) return adminNotFound()
 
 const token = getSessionToken(Astro.request)
 const isAuth = bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFIG)

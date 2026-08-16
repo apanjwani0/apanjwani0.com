@@ -94,8 +94,12 @@ jobs:
             --pids-limit=256 \
             "$DOCKER_IMAGE"
 
+          # The probe must present the origin-lock secret: docker-exec traffic never
+          # passes through Cloudflare, so once ORIGIN_SHARED_SECRET is set the
+          # middleware would 404 a header-less probe and fail every deploy. Empty
+          # secret sends an empty header, which the middleware ignores.
           for i in {1..20}; do
-            if docker exec portfolio node -e "fetch('http://127.0.0.1:4321/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"; then
+            if docker exec portfolio node -e "fetch('http://127.0.0.1:4321/', { headers: { 'x-origin-auth': process.env.ORIGIN_SHARED_SECRET || '' } }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"; then
               echo "✓ Container health check passed"
               break
             fi

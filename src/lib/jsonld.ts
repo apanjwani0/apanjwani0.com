@@ -163,8 +163,6 @@ export interface WebApplicationSchema {
    * alone would orphan browserRequirements and the free-to-play Offer.
    */
   alsoType?: string
-  /** VideoGame-only. Ignored unless alsoType is set. */
-  playMode?: string
 }
 
 export function webAppJsonLd(a: WebApplicationSchema): string {
@@ -193,7 +191,7 @@ export function webAppJsonLd(a: WebApplicationSchema): string {
     },
     ...(a.alsoType === 'VideoGame' && {
       gamePlatform: 'Web browser',
-      playMode: a.playMode ?? 'SinglePlayer',
+      playMode: 'SinglePlayer',
     }),
     ...(a.keywords && { keywords: a.keywords }),
   })

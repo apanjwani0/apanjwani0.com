@@ -28,7 +28,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Origin lock — see isFromCloudflare. No-op until ORIGIN_SHARED_SECRET is set.
   if (!(await isFromCloudflare(context.request))) {
     // 404, not 403: a bypass attempt learns nothing about why it failed.
-    return new Response(null, { status: 404, statusText: 'Not Found' })
+    // no-store: if the Transform Rule is ever broken, Cloudflare would forward
+    // header-less requests — a cacheable lock-out 404 would outlive the fix.
+    return new Response(null, {
+      status: 404,
+      statusText: 'Not Found',
+      headers: { 'Cache-Control': 'no-store' },
+    })
   }
 
   const cspNonce = createNonce()
@@ -60,38 +66,62 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (isAdminSurface) {
       response.headers.set('Cache-Control', 'no-store')
       response.headers.set('X-Robots-Tag', 'noindex, nofollow')
-    } else if (pathname.startsWith('/api/')) {
-      // API routes are dynamic by definition (analytics writes, the webhook
-      // capture/playback endpoints) — never let the edge cache their responses,
-      // or a GET to a capture URL could be served stale and stop recording.
-      response.headers.set('Cache-Control', 'no-store')
     } else if (hasAdminSession) {
       response.headers.set('Cache-Control', 'no-store')
-    } else if (isGet && response.status === 404) {
-      // Vulnerability scanners generate the bulk of this site's origin traffic,
-      // and every one of them requests a path that does not exist. An uncached
-      // 404 wakes the origin every time; a cached one is absorbed at the edge.
-      // Short TTL so a genuinely new route still appears quickly.
-      response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300')
-    } else if (isGet && response.status === 200) {
-      // Public, successful page → cacheable. s-maxage drives the CDN edge;
-      // stale-while-revalidate lets it refresh in the background so no visitor
-      // ever blocks on the origin. The sitemap changes far less often than page
-      // content, so it gets a longer fresh window (1 h vs 10 m) to cut origin
-      // hits from crawlers while still refreshing within the day.
-      //
-      // max-age=0 keeps *browsers* from pinning stale HTML: without it an edit
-      // stays invisible to anyone who already loaded the page until their own
-      // cache expires, which is not something a purge can fix.
-      const isSitemap = pathname === '/sitemap.xml'
-      response.headers.set(
-        'Cache-Control',
-        `public, max-age=0, ${isSitemap ? 's-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
-      )
+    } else if (!response.headers.has('Cache-Control')) {
+      // A route that set its own policy owns it (the webhook endpoints all send
+      // no-store). Everything in here is the fallback for routes that did not —
+      // written as a guard rather than an empty `else if` branch in the chain,
+      // because an empty block reads as an unfinished edit and the next person
+      // to tidy it away would silently drop every route's own no-store.
+      if (pathname.startsWith('/api/')) {
+        // API routes are dynamic by definition (analytics writes, the webhook
+        // capture/playback endpoints) — never let the edge cache their
+        // responses, or a GET to a capture URL could be served stale and stop
+        // recording. This deliberately ranks ABOVE the 404 rule below: a 404
+        // from an API route is usually a resource that can exist a moment later
+        // (a bin not created yet, a freshly minted id), and edge-caching that
+        // for five minutes serves the miss back to everyone in the colo —
+        // including the owner who just created it. The scanner-absorption win
+        // below is not worth making that depend on every future route
+        // remembering to set its own header.
+        response.headers.set('Cache-Control', 'no-store')
+      } else if (isGet && response.status === 404) {
+        // Vulnerability scanners generate the bulk of this site's origin
+        // traffic, and every one of them requests a path that does not exist
+        // (wp-login, .env, .git, phpMyAdmin). An uncached 404 wakes the origin
+        // every time; a cached one is absorbed at the edge. Short TTL so a
+        // genuinely new route still appears quickly.
+        response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300')
+      } else if (isGet && response.status === 200) {
+        // Public, successful page → cacheable. s-maxage drives the CDN edge;
+        // stale-while-revalidate lets it refresh in the background so no visitor
+        // ever blocks on the origin. The sitemap changes far less often than page
+        // content, so it gets a longer fresh window (1 h vs 10 m) to cut origin
+        // hits from crawlers while still refreshing within the day.
+        //
+        // max-age=0 keeps *browsers* from pinning stale HTML: without it an edit
+        // stays invisible to anyone who already loaded the page until their own
+        // cache expires, which is not something a purge can fix.
+        const isSitemap = pathname === '/sitemap.xml'
+        response.headers.set(
+          'Cache-Control',
+          `public, max-age=0, ${isSitemap ? 's-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
+        )
+      }
     }
 
-    // Count real page views only: successful HTML GETs, never API calls or assets.
-    if (isGet && response.status === 200 && !pathname.startsWith('/api/') && !isAdminSurface) {
+    // Count real page views only: successful HTML GETs. Content-Type decides —
+    // path lists rot (the SSR /sitemap.xml was being counted as a page) — and
+    // HEAD probes are not views. /api/ stays excluded on top of that, because
+    // Content-Type is not ours to trust there: the capture endpoint echoes the
+    // caller's own header back on ?echo=1, so `GET /api/hook/<id>?echo=1` with
+    // Content-Type: text/html would write that secret bin id into the path table
+    // (retained 90 days), and ~400 such requests would exhaust the day's paths
+    // and silently drop every real page seen after that.
+    const isHtml = (response.headers.get('Content-Type') ?? '').includes('text/html')
+    const isApi = pathname.startsWith('/api/')
+    if (context.request.method === 'GET' && response.status === 200 && isHtml && !isAdminSurface && !isApi) {
       const headers = context.request.headers
       recordVisit({
         path: pathname,

@@ -1,0 +1,75 @@
+---
+/**
+ * Sibling links at the foot of a product page — other tools on a tool page,
+ * other games on a game page.
+ *
+ * Without them a detail page is a crawl leaf: the only links out are the
+ * breadcrumb up to the hub and the site footer, so every product page is
+ * reachable by exactly one internal route and both crawl attention and internal
+ * link equity pool on the hub instead of reaching the pages that actually answer
+ * a search query. Eleven sibling links give each page eleven ways in, and give a
+ * visitor who landed on one from a search a reason to see the rest.
+ *
+ * Plain text links, no cards: this sits under the SEO support copy at the very
+ * bottom of the page, where the job is to be crawlable and unobtrusive. The
+ * hub's card grid is where the products get sold.
+ */
+interface Props {
+  /** Section heading, e.g. 'More tools' — also the nav's accessible name. */
+  heading: string
+  items: { title: string; href: string }[]
+}
+
+const { heading, items } = Astro.props
+---
+
+{items.length > 0 && (
+  <nav data-type="related-links" aria-labelledby="related-links-h">
+    <h2 id="related-links-h">{heading}</h2>
+    <ul>
+      {items.map(item => (
+        <li><a href={item.href}>{item.title}</a></li>
+      ))}
+    </ul>
+  </nav>
+)}
+
+<style>
+  /* Matches section[data-type="seo-support"] so the two stack as one column. */
+  nav {
+    width: min(var(--max-width), 100%);
+    margin: var(--space-section) auto 0;
+    padding-top: var(--space-section);
+    border-top: 1px solid var(--color-border);
+  }
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: 0.04em;
+    color: var(--color-muted);
+  }
+
+  ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.15rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  a {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-underline-offset: 0.3em;
+  }
+</style>

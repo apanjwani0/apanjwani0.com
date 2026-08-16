@@ -15,9 +15,14 @@
  *
  * The URL is resolved to an ABSOLUTE href against the site origin because
  * og:image must be absolute for cross-site unfurlers (Slack, X, iMessage…).
+ *
+ * scripts/generate-og.mjs imports the names, dimensions and eligibility rules
+ * below — the generator and the pages cannot disagree about which cards exist.
  */
 
-/** Dimensions of a generated card. Must match scripts/generate-og.mjs. */
+import { isPlayableGame, type GameFlags } from './games'
+
+/** Dimensions of a generated card. */
 export const OG_CARD_WIDTH = 1200
 export const OG_CARD_HEIGHT = 630
 
@@ -33,19 +38,84 @@ export interface OgImage {
 }
 
 /**
- * Path of the generated card for a tool or game.
+ * File and URL-path names of the generated card for a tool or game.
  *
  * Derived from kind + slug rather than stored as a config field: the generator
  * writes exactly these names from the same config, so a separate `image` key
  * would be a second source of truth that can only ever disagree.
  */
+export function ogCardFile(kind: 'tools' | 'games', slug: string): string {
+  return `${kind}-${slug}.png`
+}
+
 export function ogCardPath(kind: 'tools' | 'games', slug: string): string {
-  return `/og/${kind}-${slug}.png`
+  return `/og/${ogCardFile(kind, slug)}`
+}
+
+/** Which items get a card — the generator renders exactly this set, so pages
+ *  must not emit a card URL for anything outside it.
+ *
+ *  Both predicates are exactly "the page is publicly indexable". A card is a
+ *  promise that a real product is on the other side of the link, so anything the
+ *  page marks `noindex` — a wip tool, a game with no component wired up — must
+ *  not carry one, or a share unfurls a polished card for a page search engines
+ *  were told to drop. */
+export function toolHasOgCard(tool: { status: string }): boolean {
+  return tool.status === 'live'
+}
+
+export function gameHasOgCard(game: GameFlags): boolean {
+  return isPlayableGame(game)
+}
+
+// Cards on disk, read once per process. Directories cover dev (public/) and the
+// standalone Node build (dist/client/). `null` = could not look (non-Node
+// runtime) — callers then assume the card exists rather than dropping them all.
+let cardNames: Promise<Set<string> | null> | undefined
+
+async function readCardNames(): Promise<Set<string> | null> {
+  try {
+    const { readdir } = await import('node:fs/promises')
+    const { join } = await import('node:path')
+    const names = new Set<string>()
+    let readAny = false
+    for (const dir of [join('public', 'og'), join('dist', 'client', 'og')]) {
+      try {
+        for (const file of await readdir(join(process.cwd(), dir))) names.add(file)
+        readAny = true
+      } catch {
+        // Directory absent in this runtime — the other one may exist.
+      }
+    }
+    // An EMPTY directory is not evidence that no card exists — it is the state
+    // `npm run og` leaves behind when it mkdir's public/og and then fails (the
+    // Chrome path it shells out to is macOS-only, so that is every Linux/CI run).
+    // Trusting it would strip og:image from every product page for the process
+    // lifetime, which is the exact degradation this whole function prevents.
+    return readAny && names.size > 0 ? names : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * ogCardPath, but only when the PNG actually exists — this is what makes the
+ * documented behavior true: a forgotten `npm run og` degrades the page to the
+ * avatar fallback instead of shipping an og:image URL that 404s. Cached for the
+ * process lifetime; a card added in dev needs a server restart to be seen.
+ */
+export async function existingOgCardPath(
+  kind: 'tools' | 'games',
+  slug: string,
+): Promise<string | undefined> {
+  const names = await (cardNames ??= readCardNames())
+  if (names === null || names.has(ogCardFile(kind, slug))) return ogCardPath(kind, slug)
+  return undefined
 }
 
 export function ogImageMeta(
   site: { url: string; avatar: string; name: string },
-  /** Generated card path from ogCardPath(); omit for the portrait fallback. */
+  /** Generated card path from existingOgCardPath(); omit for the portrait fallback. */
   cardPath?: string,
   /** Product name, used for the card's alt text. */
   cardTitle?: string,

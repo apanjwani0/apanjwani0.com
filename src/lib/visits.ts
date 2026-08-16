@@ -3,8 +3,12 @@
  *
  * The client beacon in analytics-client.ts only fires on tool/game pages, only
  * when JS runs, and is blocked by most content blockers. This counts every SSR
- * page render instead — so it covers the whole site, cannot be blocked, and
- * needs no client code.
+ * HTML render instead — no client code, nothing to block. One honest caveat:
+ * the Cloudflare edge cache sits in front, and an edge HIT never reaches the
+ * origin, so these are *origin renders* (cache misses), not raw page views.
+ * Popular pages undercount toward one hit per colo per TTL window; treat the
+ * numbers as per-path shape, not absolute traffic. Cloudflare's dashboard has
+ * the absolute totals.
  *
  * WHAT IS STORED, DELIBERATELY: date, path, country, referrer host, and whether
  * the request looked automated. Counts only.
@@ -35,6 +39,10 @@ const RETENTION_DAYS = 90
  *  regardless of what the internet sends. */
 const MAX_PATHS_PER_DAY = 400
 const MAX_REFERRERS_PER_PATH = 40
+/** Hard ceiling on the serialized file. The per-day caps bound each day, but 90
+ *  retained days of cap-sized rows would still be re-read and re-written every
+ *  flush on a 1 GB host — over this, the oldest days are dropped first. */
+const MAX_STORE_BYTES = 4 * 1024 * 1024
 
 export interface VisitRow {
   views: number
@@ -51,7 +59,6 @@ type VisitStore = Record<string, Record<string, VisitRow>>
 
 const pending: VisitStore = {}
 let flushTimer: ReturnType<typeof setTimeout> | null = null
-let dirty = false
 
 function visitsPath(): string {
   return join(process.cwd(), 'data', 'visits.json')
@@ -79,9 +86,22 @@ export function referrerHost(referer: string | null, selfHost: string): string |
   }
 }
 
-function bump(bucket: Record<string, number>, key: string, cap: number): void {
-  if (bucket[key] === undefined && Object.keys(bucket).length >= cap) return
-  bucket[key] = (bucket[key] ?? 0) + 1
+/** Capped counter bump. Only *new* keys are capped, so established ones keep
+ *  counting once a bucket is full.
+ *
+ *  Hardened against inherited names: country and referrer keys are ultimately
+ *  attacker-chosen (direct-to-origin headers), and on a plain object
+ *  `bucket['constructor']` reads an inherited function while `bucket['__proto__']
+ *  = n` silently no-ops — so existence uses hasOwn and writes use defineProperty. */
+function bump(bucket: Record<string, number>, key: string, cap: number, by = 1): void {
+  const current = Object.hasOwn(bucket, key) ? bucket[key] : undefined
+  if (current === undefined && Object.keys(bucket).length >= cap) return
+  Object.defineProperty(bucket, key, {
+    value: (current ?? 0) + by,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  })
 }
 
 export interface VisitInput {
@@ -105,11 +125,12 @@ export function recordVisit(input: VisitInput, now = new Date()): void {
     row.bots += 1
   } else {
     row.views += 1
-    bump(row.countries, input.country, 300)
+    // A country is two chars (ISO alpha-2, or Cloudflare's T1/XX) — slicing
+    // keeps a hand-crafted kilobyte header value from becoming a stored key.
+    bump(row.countries, input.country.slice(0, 2) || 'XX', 300)
     if (input.referrer) bump(row.referrers, input.referrer, MAX_REFERRERS_PER_PATH)
   }
 
-  dirty = true
   scheduleFlush()
 }
 
@@ -119,22 +140,36 @@ function scheduleFlush(): void {
     flushTimer = null
     void flushVisits()
   }, FLUSH_MS)
-  // Never hold the process open just to write counters.
-  if (typeof flushTimer === 'object' && flushTimer && 'unref' in flushTimer) {
-    (flushTimer as { unref: () => void }).unref()
-  }
+  // Never hold the process open just to write counters. (Cast because the DOM
+  // lib types setTimeout's return as number; this module is Node-only.)
+  ;(flushTimer as unknown as { unref?: () => void }).unref?.()
 }
 
 function mergeRow(target: VisitRow, source: VisitRow): void {
   target.views += source.views
   target.bots += source.bots
-  for (const [k, v] of Object.entries(source.countries)) bump2(target.countries, k, v, 300)
-  for (const [k, v] of Object.entries(source.referrers)) bump2(target.referrers, k, v, MAX_REFERRERS_PER_PATH)
+  for (const [k, v] of Object.entries(source.countries)) bump(target.countries, k, 300, v)
+  for (const [k, v] of Object.entries(source.referrers)) bump(target.referrers, k, MAX_REFERRERS_PER_PATH, v)
 }
 
-function bump2(bucket: Record<string, number>, key: string, by: number, cap: number): void {
-  if (bucket[key] === undefined && Object.keys(bucket).length >= cap) return
-  bucket[key] = (bucket[key] ?? 0) + by
+/** Merge `source` into `target`, enforcing the per-day path cap on the target —
+ *  the "keep the file finite" backstop has to hold for the stored file, not just
+ *  the 30-second buffer. Shared by the flush and the flush-failure restore so
+ *  the two paths cannot drift.
+ *
+ *  `capPaths` is off for the restore: those rows were already admitted once, so
+ *  re-applying the cap to put them back would discard the very traffic the retry
+ *  exists to save. The cap belongs on the persisted file, which the next
+ *  successful flush applies. */
+function mergeStore(target: VisitStore, source: VisitStore, capPaths = true): void {
+  for (const [date, paths] of Object.entries(source)) {
+    const day = (target[date] ??= {})
+    for (const [path, row] of Object.entries(paths)) {
+      const existing = day[path]
+      if (existing) mergeRow(existing, row)
+      else if (!capPaths || Object.keys(day).length < MAX_PATHS_PER_DAY) day[path] = row
+    }
+  }
 }
 
 /** Drop days older than the retention window. Pure, so retention is testable. */
@@ -143,13 +178,58 @@ export function pruneVisits(store: VisitStore, now = new Date(), retentionDays =
   return Object.fromEntries(Object.entries(store).filter(([date]) => date >= cutoff))
 }
 
+/** Serialize, dropping oldest days while over the byte ceiling. `.length` counts
+ *  UTF-16 units, not bytes — fine here, the content is almost entirely ASCII and
+ *  the ceiling has headroom.
+ *
+ *  One stringify per DAY, and none over the whole store. The obvious version —
+ *  stringify everything, drop the oldest day, stringify again — is quadratic in
+ *  the worst case it exists for: a cap-shaped day is ~2 MB, so the ceiling is
+ *  blown by RECENT days while the loop sheds near-empty 89-day-old ones, up to
+ *  89 full passes over a multi-megabyte object, synchronously, on a 30s timer,
+ *  on a 1 GB host. It also built the entire store as one string BEFORE dropping
+ *  anything, so it could exhaust the 768 MB container long before the 4 MB
+ *  ceiling it enforces ever applied.
+ *
+ *  Also non-destructive: the old version `delete`d from the store it was handed,
+ *  which was safe only because the one caller passes a fresh pruneVisits()
+ *  result. A later caller passing `pending` would have lost live counters inside
+ *  a function named "serialize". */
+export function serializeBounded(store: VisitStore, maxBytes = MAX_STORE_BYTES): string {
+  const days = Object.keys(store)
+    .sort()
+    .map(date => [date, JSON.stringify(store[date])] as const)
+
+  // Newest first, so an oversized day costs the OLD days rather than the one
+  // currently being written. Budget per entry: `"<date>":<body>` plus a comma,
+  // rounded up — over-estimating is the safe direction for a ceiling.
+  const kept: string[] = []
+  let bytes = '{}'.length
+  for (let i = days.length - 1; i >= 0; i -= 1) {
+    const [date, body] = days[i]
+    const size = date.length + body.length + 4
+    // The newest day is always kept: if it alone exceeds the budget the choice
+    // is between over-writing it and losing today's counters entirely, and the
+    // per-day caps already bound it.
+    if (kept.length > 0 && bytes + size > maxBytes) break
+    kept.unshift(`${JSON.stringify(date)}:${body}`)
+    bytes += size
+  }
+  return `{${kept.join(',')}}`
+}
+
 /** Merge the in-memory buffer into the file. Read-modify-write is fine here
  *  because it runs on a timer, not per request. */
 export async function flushVisits(): Promise<void> {
-  if (!dirty) return
-  const buffered = JSON.parse(JSON.stringify(pending)) as VisitStore
-  for (const date of Object.keys(pending)) delete pending[date]
-  dirty = false
+  const dates = Object.keys(pending)
+  if (dates.length === 0) return
+  // Move (not copy) the buffered days out, so visits recorded during the awaits
+  // below land in a fresh buffer and nothing is double-counted.
+  const buffered: VisitStore = {}
+  for (const date of dates) {
+    buffered[date] = pending[date]
+    delete pending[date]
+  }
 
   try {
     let stored: VisitStore = {}
@@ -160,29 +240,17 @@ export async function flushVisits(): Promise<void> {
       // First write, or an unreadable file — start fresh rather than lose the buffer.
     }
 
-    for (const [date, paths] of Object.entries(buffered)) {
-      const day = (stored[date] ??= {})
-      for (const [path, row] of Object.entries(paths)) {
-        const existing = day[path]
-        if (existing) mergeRow(existing, row)
-        else day[path] = row
-      }
-    }
-
+    mergeStore(stored, buffered)
     await mkdir(join(process.cwd(), 'data'), { recursive: true })
-    await writeFile(visitsPath(), JSON.stringify(pruneVisits(stored)), 'utf-8')
+    await writeFile(visitsPath(), serializeBounded(pruneVisits(stored)), 'utf-8')
   } catch (error) {
     // Counters must never take the site down. Put the buffer back so the next
-    // flush retries it rather than silently dropping the interval's traffic.
-    for (const [date, paths] of Object.entries(buffered)) {
-      const day = (pending[date] ??= {})
-      for (const [path, row] of Object.entries(paths)) {
-        const existing = day[path]
-        if (existing) mergeRow(existing, row)
-        else day[path] = row
-      }
-    }
-    dirty = true
+    // flush retries it rather than silently dropping the interval's traffic —
+    // uncapped, since these rows already passed the cap once.
+    mergeStore(pending, buffered, false)
+    // And arm a timer: the callback cleared flushTimer before calling us, so on
+    // a quiet site nothing else would retry until the next visitor arrives.
+    scheduleFlush()
     console.error('[visits] flush failed', error)
   }
 }

@@ -8,13 +8,23 @@ const decoder = new TextDecoder()
 export class BodyTooLargeError extends Error {}
 export class InvalidJsonError extends Error {}
 
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+export { escapeHtml } from './escape'
+
+/**
+ * Same-origin check for state-changing endpoints. Astro's global checkOrigin is
+ * disabled (astro.config.mjs) so /api/hook/:bin can accept cross-origin webhook
+ * POSTs — every other state-changing public endpoint must call this instead.
+ * A missing Origin header is allowed: non-browser clients (curl, webhook
+ * senders) don't send one, and CSRF requires a browser, which always does.
+ */
+export function isSameOrigin(request: Request): boolean {
+  const origin = request.headers.get('origin')
+  if (!origin) return true
+  try {
+    return new URL(origin).origin === new URL(request.url).origin
+  } catch {
+    return false
+  }
 }
 
 function hasUnsafeUrlChars(value: string): boolean {

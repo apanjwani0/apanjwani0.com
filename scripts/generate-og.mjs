@@ -29,25 +29,28 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { tools } from '../src/config/tools.ts'
 import { games } from '../src/config/games.ts'
+import { escapeHtml } from '../src/lib/escape.ts'
+import {
+  OG_CARD_HEIGHT,
+  OG_CARD_WIDTH,
+  gameHasOgCard,
+  ogCardFile,
+  toolHasOgCard,
+} from '../src/lib/og.ts'
 
 const run = promisify(execFile)
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const WIDTH = 1200
-const HEIGHT = 630
+// Names, dimensions and eligibility all come from src/lib/og.ts — the pages
+// read the same module, so the two sides cannot drift.
+const WIDTH = OG_CARD_WIDTH
+const HEIGHT = OG_CARD_HEIGHT
 const OUT_DIR = join(process.cwd(), 'public', 'og')
 const TMP_DIR = join(process.cwd(), '.og-tmp')
 
 /** Escape for HTML text nodes — titles and descriptions are authored content and
  *  can legitimately contain &, <, quotes. */
-function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
+const esc = s => escapeHtml(String(s ?? ''))
 
 /**
  * Deterministic star field, seeded off the slug so each card differs but any
@@ -142,10 +145,10 @@ function shorten(text, max = 118) {
 async function main() {
   const items = [
     ...tools
-      .filter(t => t.status !== 'external' && t.status !== 'disabled')
+      .filter(toolHasOgCard)
       .map(t => ({ kind: 'tools', slug: t.slug, label: 'Tool', title: t.title, description: t.description })),
     ...games
-      .filter(g => g.enabled && g.interactive)
+      .filter(gameHasOgCard)
       .map(g => ({ kind: 'games', slug: g.slug, label: 'Game', title: g.title, description: g.description })),
   ]
 
@@ -154,9 +157,9 @@ async function main() {
 
   console.log(`Rendering ${items.length} cards at ${WIDTH}×${HEIGHT}…`)
   for (const item of items) {
-    const name = `${item.kind}-${item.slug}`
-    const htmlPath = join(TMP_DIR, `${name}.html`)
-    const pngPath = join(OUT_DIR, `${name}.png`)
+    const file = ogCardFile(item.kind, item.slug)
+    const htmlPath = join(TMP_DIR, file.replace(/\.png$/, '.html'))
+    const pngPath = join(OUT_DIR, file)
     await writeFile(htmlPath, cardHtml({ ...item, description: shorten(item.description) }), 'utf-8')
     await run(CHROME, [
       '--headless',
@@ -169,7 +172,7 @@ async function main() {
       `--screenshot=${pngPath}`,
       `file://${htmlPath}`,
     ])
-    console.log(`  ✓ public/og/${name}.png  ${item.title}`)
+    console.log(`  ✓ public/og/${file}  ${item.title}`)
   }
 
   await rm(TMP_DIR, { recursive: true, force: true })

@@ -82,10 +82,20 @@ touches the build or deploy pipeline**:
    this — keep it on "Respect Existing Headers" or it silently overrides the line
    above.
 
-3. **404s are edge-cached** (`public, max-age=0, s-maxage=300`). Vulnerability
-   scanners generate most of this site's origin traffic and every one of them
-   requests a path that does not exist; an uncached 404 wakes the origin each
-   time. Short TTL so a genuinely new route still appears quickly.
+3. **Non-API 404s are edge-cached** (`public, max-age=0, s-maxage=300`).
+   Vulnerability scanners generate most of this site's origin traffic and every
+   one of them requests a path that does not exist; an uncached 404 wakes the
+   origin each time. Short TTL so a genuinely new route still appears quickly.
+
+   The branch order in `src/middleware.ts` matters and is asserted by
+   `security:smoke`: admin surfaces first, then any response that set its own
+   `Cache-Control`, then **`/api/*` → `no-store` ahead of the 404 rule**. An API
+   404 is usually a resource that can exist a moment later (a bin not created
+   yet, a freshly minted id), so edge-caching it for five minutes serves the miss
+   back to everyone in the colo — including the owner who just created it. Do not
+   reorder those two to reclaim the scanner-absorption win on `/api/` probes;
+   that would make the guarantee depend on every future route remembering to set
+   its own header.
 
 **Gotcha:** after editing content in `/admin`, public pages keep serving the
 cached copy until the TTL expires. To see changes immediately, purge via
@@ -100,8 +110,12 @@ Two independent layers, both aggregate-only:
    tool and game detail pages only. Carries the real-user perf metrics (LCP, CLS,
    TTFB). Rate-limited to 60/min per client; blocked by content blockers.
 2. **Server counter** (`src/lib/visits.ts`, called from `src/middleware.ts`) —
-   every successful HTML page render, so it covers the whole site and cannot be
-   blocked. Records date, path, country (`cf-ipcountry`), referrer **host**, and a
+   every successful HTML render that reaches the origin, so it covers the whole
+   site and cannot be blocked by the client. One caveat the numbers must be read
+   with: the edge cache sits in front, and a Cloudflare HIT never wakes the
+   origin, so these are **origin renders (cache misses), not raw page views** —
+   per-path shape, not absolute traffic (Cloudflare's dashboard has the totals).
+   Records date, path, country (`cf-ipcountry`), referrer **host**, and a
    separate bot count. Buffered in memory and flushed to `data/visits.json` every
    30s — never write per request, that turns any visitor into a disk-I/O amplifier.
 
@@ -126,13 +140,16 @@ dashboard; do not weaken the CSP just to allow the blocked Cloudflare beacon.
 
 ## Share cards (Open Graph)
 
-Every live tool and interactive game has a generated 1200×630 card in `public/og/`,
-named `<tools|games>-<slug>.png`. `src/lib/og.ts` derives the path from kind+slug —
-there is deliberately **no `image` config field**, because the generator writes
-those exact names from the same config and a second source of truth could only
-ever disagree. Pages without a card (home, sections, coming-soon games) fall back
-to the portrait avatar and the small `summary` Twitter card; a card gets
-`summary_large_image`, since a portrait shown large is cropped to a letterboxed mess.
+Every `live` tool and every **playable** game (see Indexing below) has a generated
+1200×630 card in `public/og/`, named `<tools|games>-<slug>.png`. `src/lib/og.ts`
+derives the path from kind+slug — there is deliberately **no `image` config
+field**, because the generator writes those exact names from the same config and
+a second source of truth could only ever disagree. Card eligibility is exactly
+"the page is publicly indexable": a card promises a real product behind the link,
+so a `noindex` page must never carry one. Pages without a card (home, sections,
+wip tools, coming-soon games) fall back to the portrait avatar and the small
+`summary` Twitter card; a card gets `summary_large_image`, since a portrait shown
+large is cropped to a letterboxed mess.
 
 **Regenerate with `npm run og` after adding a tool/game or changing a title or
 description, and commit the PNGs.** Forgetting means that page falls back to the
@@ -274,11 +291,40 @@ Every content section displayed on the portfolio must be manageable via the `/ad
 1. Add a config file in `src/config/{section}.ts` with the interface and default data
 2. Add a `get{Section}()` accessor in `src/lib/config.ts`
 3. Add a `generate{Section}()` function and `case '{section}'` in `astro.config.mjs` (Vite middleware)
-4. Add `'{section}'` to the `allowed` array in `src/pages/api/admin/save.ts`
+4. Add `'{section}'` to `CONFIG_TYPES` in `src/lib/config-schema.ts` — the `isConfigType()` gate `src/pages/api/admin/save.ts` validates against
 5. Add a tab + form + JS save handler in `src/pages/admin.astro`
 6. For a new tool or game, run `npm run og` and commit the card (see Share cards)
+7. For a new **game**, register its custom-element tag in `GAME_TAGS`
+   (`src/lib/games.ts`) and add its import to `mountGame()` + its CSS import in
+   `src/pages/games/[slug].astro`. Config alone is not enough — see Indexing.
 
 Current config keys: `site`, `projects`, `experience`, `blogs`, `games`, `tools`
+
+### Indexing: one predicate decides whether a page is real
+
+A page that search engines are told to `noindex` must not appear in the sitemap,
+must not be in a hub's `ItemList`, and must not carry a share card — three
+signals that contradict each other are worse than any one of them being absent,
+because a crawler resolves the conflict by trusting none.
+
+So each kind has exactly **one** predicate, and every consumer reads it:
+
+- **Games** — `isPlayableGame()` in `src/lib/games.ts`: `enabled && interactive
+  && GAME_TAGS[slug]`. The third condition is the one config cannot know; without
+  it a game flagged `interactive` but never wired to a component was listed in
+  the sitemap while its own page served `noindex`.
+- **Tools** — `status === 'live'`. `wip` renders publicly but is not indexable,
+  so it is noindex, out of the sitemap, and cardless. `external` and `disabled`
+  404 outright.
+
+`GAME_TAGS` lives in `src/lib/games.ts` and **not** in `src/config/games.ts`
+because the `/admin` Vite middleware regenerates that config file wholesale from
+`generateGames()` — an export added there is deleted on the next admin save.
+
+Detail pages also cross-link their siblings via `src/components/RelatedLinks.astro`.
+Without it each product page is a crawl leaf reachable only through its hub, so
+crawl attention and internal link equity never reach the pages that rank. Feed it
+only indexable items, for the reason above.
 
 Note the admin page is **dev-only** — see Security. Config edited in dev is
 written to `src/config/*.ts` and must be committed to reach production; there is
@@ -314,7 +360,7 @@ These apply to every change, on top of the conventions above:
    `npm run graph` yourself before committing structural changes.
 2. **Keep docs in sync.** When you change architecture, config keys, commands,
    or conventions, update this AGENTS.md in the same change. Adding an admin
-   section means updating the 5-step checklist *and* the "Current config keys"
+   section means updating the 7-step checklist *and* the "Current config keys"
    line. Stale docs are treated as bugs.
 3. **Prune dead code.** Don't leave commented-out blocks, unused exports,
    orphaned config keys, or superseded CSS overrides behind. Delete what a

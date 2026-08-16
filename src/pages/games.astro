@@ -5,6 +5,7 @@ import Base from '../layouts/Base.astro'
 import { getSite, getGames } from '../lib/config'
 import { render } from '../lib/markdown'
 import { itemListJsonLd } from '../lib/jsonld'
+import { isPlayableGame } from '../lib/games'
 
 const [site, games] = await Promise.all([
   getSite(Astro.locals),
@@ -12,13 +13,13 @@ const [site, games] = await Promise.all([
 ])
 const cspNonce = (Astro.locals as any).cspNonce
 
-// Only interactive games have an indexable detail page; the "coming soon"
-// placeholders render noindex, so keep them out of the structured item list
-// (matching the sitemap's `enabled && interactive` filter). The card grid below
-// still shows every enabled game, including any coming-soon ones.
+// Only playable games have an indexable detail page; the "coming soon"
+// placeholders render noindex, so keep them out of the structured item list.
+// Same predicate as the sitemap and the detail page's robots meta, so the three
+// cannot disagree. The card grid below still shows every enabled game.
 const ldJson = itemListJsonLd(
   'Games by Aman Panjwani',
-  games.filter(g => g.interactive).map(g => ({ name: g.title, url: `${site.url}/games/${g.slug}` })),
+  games.filter(isPlayableGame).map(g => ({ name: g.title, url: `${site.url}/games/${g.slug}` })),
 )
 ---
 
@@ -34,7 +35,7 @@ const ldJson = itemListJsonLd(
     Browser games and playable experiments — a daily five-letter word puzzle, a game of 2048, a maze that solves itself,
     a flock that swarms from three simple rules, a falling-sand sandbox where powders, water and fire obey simple physics,
     a reaction-diffusion dish that blooms Turing patterns, a fractal garden that grows itself
-    from an L-system, a flow field that sweeps thousands of particles into rivers, a starfield you fly through, a colour-guessing game to test your eye, and a few other things I built for the fun of it.
+    from an L-system, a flow field that sweeps thousands of particles into rivers, a starfield you fly through, a colour-guessing game to test your eye, a typing race against the clock, and a few other things I built for the fun of it.
     Everything marked play runs right here, no downloads and no sign-up; the rest are on the way.
   </p>
   {games.length === 0 ? (
@@ -46,7 +47,7 @@ const ldJson = itemListJsonLd(
           <div data-type="project-header">
             <h2 data-type="card-title"><a href={`/games/${g.slug}`}>{g.title}</a></h2>
             <span data-type="project-stats">
-              {g.interactive ? (
+              {isPlayableGame(g) ? (
                 <span data-type="game-badge" data-live>play <span aria-hidden="true">&rsaquo;</span></span>
               ) : (
                 <span data-type="game-badge">coming soon</span>

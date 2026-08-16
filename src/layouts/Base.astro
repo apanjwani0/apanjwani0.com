@@ -2,6 +2,7 @@
 import { getSite } from '../lib/config'
 import { ogImageMeta } from '../lib/og'
 import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
 import Head from '../components/Head.astro'
 import '../styles/global.css'
 
@@ -82,7 +83,7 @@ const ogImage = ogImageMeta(site, ogCard, title)
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
     {starfield && <star-field data-type="starfield" aria-hidden="true"></star-field>}
-    <Nav site={site} />
+    <Nav site={site} bare={bare} />
     <main
       id="main-content"
       tabindex="-1"
@@ -92,6 +93,9 @@ const ogImage = ogImageMeta(site, ogCard, title)
     >
       <slot />
     </main>
+    {/* Skipped on the full-bleed home hero (bare) so it stays a single immersive
+        screen; present on every other route as the contentinfo landmark. */}
+    {!bare && <Footer site={site} />}
     <script src="/oat.min.js" defer></script>
     <script>
       // Nav height sync, hide-on-scroll, and StarField mount — shared verbatim

@@ -88,7 +88,8 @@ export interface Tool {
   metaDescription?: string
   intro?: string
   seoContent?: string
-  /** Comma-separated search terms — feeds the page <meta name="keywords"> and the WebApplication JSON-LD */
+  /** Comma-separated search terms — feeds the page <meta name="keywords"> and the
+      WebApplication JSON-LD, matching how games carry keywords. */
   keywords?: string
 }
 
@@ -204,8 +205,9 @@ export default defineConfig({
   // to one route, so it is disabled here; CSRF on state-changing surfaces is
   // covered by stronger, explicit controls instead: the __admin_session cookie
   // is HttpOnly + SameSite=Strict (never sent cross-site), admin login requires
-  // ADMIN_SECRET, and the analytics + webhook-clear endpoints do their own
-  // same-origin checks.
+  // ADMIN_SECRET, and the analytics + webhook-clear endpoints call the shared
+  // isSameOrigin() in src/lib/security.ts (asserted by security-smoke). Every
+  // NEW state-changing endpoint must call it too — nothing global backstops it.
   security: { checkOrigin: false },
   devToolbar: { enabled: false },
   vite: {

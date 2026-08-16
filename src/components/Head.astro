@@ -11,8 +11,8 @@ interface Props {
   image?: string
   imageWidth?: number
   imageHeight?: number
-  /** Describes the share image. Defaults to the portrait wording for pages that
-   *  still use the avatar; product pages pass their own. */
+  /** Describes the share image. Both layouts pass this from ogImageMeta() — the
+   *  single source of truth for the avatar-fallback wording; no default here. */
   imageAlt?: string
   /** MIME type of `image` — the avatar is WebP, generated cards are PNG. */
   imageType?: string
@@ -39,9 +39,9 @@ const {
   image,
   imageWidth,
   imageHeight,
-  imageAlt = `Portrait of ${siteName}`,
-  imageType = 'image/webp',
-  twitterCard = 'summary',
+  imageAlt,
+  imageType,
+  twitterCard,
   ogType = 'website',
   publishedTime,
   handle,
@@ -75,18 +75,18 @@ const twitterHandle = handle ? `@${handle.replace(/^@/, '')}` : undefined
 <meta property="og:site_name" content={siteName} />
 <meta property="og:locale" content="en_US" />
 {image && <meta property="og:image" content={image} />}
-{image && <meta property="og:image:alt" content={imageAlt} />}
+{image && imageAlt && <meta property="og:image:alt" content={imageAlt} />}
 {image && imageWidth && <meta property="og:image:width" content={String(imageWidth)} />}
 {image && imageHeight && <meta property="og:image:height" content={String(imageHeight)} />}
-{image && <meta property="og:image:type" content={imageType} />}
+{image && imageType && <meta property="og:image:type" content={imageType} />}
 
-<meta name="twitter:card" content={twitterCard} />
+{twitterCard && <meta name="twitter:card" content={twitterCard} />}
 {twitterHandle && <meta name="twitter:site" content={twitterHandle} />}
 {twitterHandle && <meta name="twitter:creator" content={twitterHandle} />}
 <meta name="twitter:title" content={pageTitle} />
 <meta name="twitter:description" content={description} />
 {image && <meta name="twitter:image" content={image} />}
-{image && <meta name="twitter:image:alt" content={imageAlt} />}
+{image && imageAlt && <meta name="twitter:image:alt" content={imageAlt} />}
 
 {loadFonts && (
   <>

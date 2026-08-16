@@ -1,11 +1,16 @@
 ---
-import { getSite } from '../lib/config'
+import { getSite, navLinks, type Site } from '../lib/config'
 
 interface Props {
-  site?: Awaited<ReturnType<typeof getSite>>
+  site?: Site
+  /**
+   * True on the full-bleed home hero (Base's `bare`). Suppresses the no-JS
+   * frosted override below — see the <noscript> comment.
+   */
+  bare?: boolean
 }
 
-const { site: siteProp } = Astro.props
+const { site: siteProp, bare = false } = Astro.props
 const site = siteProp ?? await getSite(Astro.locals)
 const current = Astro.url.pathname
 // A nav link is "current" when the path matches it exactly or (for section links
@@ -13,9 +18,7 @@ const current = Astro.url.pathname
 const isActive = (href: string) =>
   current === href || (href !== '/' && current.startsWith(href + '/'))
 
-// Flatten site.nav into a flat list of links (dropdown children become top-level
-// links), matching the home-screen hero-nav style.
-const links = site.nav.flatMap((item) => item.children ?? [item])
+const links = navLinks(site)
 ---
 
 <nav data-type="hero-nav" aria-label="Site sections">
@@ -30,3 +33,24 @@ const links = site.nav.flatMap((item) => item.children ?? [item])
     ))}
   </span>
 </nav>
+{!bare && (
+  <noscript>
+    <style>
+      /* transparent-at-rest depends on JS toggling data-nav-scrolled (nav-ui.ts);
+         without scripts the frosted readability state must be permanent, or body
+         text scrolls beneath a fully transparent fixed nav.
+
+         Not on `bare` (the home hero): shared.css keeps the nav transparent at
+         rest specifically because painting it opaque "clipped the stars into a
+         hard-edged black band across the top", and that page is a single
+         immersive screen with nothing scrolling under the nav to be unreadable.
+         So the one page where this override costs the most is the one page it
+         buys nothing on. */
+      nav[data-type="hero-nav"] {
+        background-color: var(--color-bg-blur);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+      }
+    </style>
+  </noscript>
+)}
