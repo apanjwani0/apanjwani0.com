@@ -9,6 +9,7 @@ import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, toolHasOgCard } from '../../lib/og'
 import { render } from '../../lib/markdown'
 import { validateSession } from '../../lib/session'
+import { getSessionToken } from '../../lib/security'
 import '../../styles/seo-support.css'
 import '../../components/tools/tools-common.css'
 import '../../components/tools/md-enhanced/md-enhanced.css'
@@ -46,8 +47,7 @@ if (!tool || tool.status === 'external') {
 
 if (tool.status === 'disabled') {
   const runtimeEnv = (Astro.locals as any).runtime?.env
-  const cookie = Astro.request.headers.get('cookie') ?? ''
-  const token = cookie.match(/(?:^|;\s*)__admin_session=([^;]+)/)?.[1]
+  const token = getSessionToken(Astro.request)
   const isAdmin = (import.meta.env.DEV && !runtimeEnv?.ADMIN_SECRET && !process.env.ADMIN_SECRET)
     || await validateSession(token, runtimeEnv?.SITE_CONFIG)
 

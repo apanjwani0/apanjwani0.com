@@ -220,7 +220,7 @@ export function serializeBounded(store: VisitStore, maxBytes = MAX_STORE_BYTES):
 
 /** Merge the in-memory buffer into the file. Read-modify-write is fine here
  *  because it runs on a timer, not per request. */
-export async function flushVisits(): Promise<void> {
+async function flushVisits(): Promise<void> {
   const dates = Object.keys(pending)
   if (dates.length === 0) return
   // Move (not copy) the buffered days out, so visits recorded during the awaits
