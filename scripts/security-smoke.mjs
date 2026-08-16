@@ -89,7 +89,15 @@ assert.equal(isSameOrigin(oreq('null')), false, 'an opaque origin must be reject
 // weaken the CSRF story with nothing to notice.
 for (const route of ['src/pages/api/analytics/event.ts', 'src/pages/api/hook/[bin]/requests.ts']) {
   const src = await readFile(new URL(`../${route}`, import.meta.url), 'utf-8')
-  assert.ok(src.includes('isSameOrigin'), `${route} must use the shared isSameOrigin check`)
+  // Match the guard, not the identifier: an `import { isSameOrigin }` line — or
+  // this very comment — satisfies a substring test, so a refactor that deletes
+  // the call and leaves the import would keep the smoke green with the CSRF
+  // control gone. That is exactly the failure an assertion is supposed to catch.
+  assert.match(
+    src,
+    /if \(!isSameOrigin\(request\)\)\s*return[^\n]*403/,
+    `${route} must reject cross-origin requests with the shared isSameOrigin check`,
+  )
 }
 
 // Bin ids are the only thing protecting captured webhook payloads, so short,
@@ -107,6 +115,18 @@ assert.equal(isValidBinId('../../etc/passwd'), false)
 assert.equal(referrerHost('https://news.ycombinator.com/item?id=1', 'apanjwani0.com'), 'news.ycombinator.com')
 assert.equal(referrerHost('https://apanjwani0.com/tools', 'apanjwani0.com'), null)
 assert.equal(referrerHost(null, 'apanjwani0.com'), null)
+
+// …and it never records an /api/ path. Content-Type alone cannot decide this:
+// the webhook capture endpoint echoes the caller's own Content-Type back on
+// ?echo=1, so `GET /api/hook/<id>?echo=1` declaring text/html would write that
+// secret bin id into data/visits.json for 90 days, and ~400 of them would fill
+// MAX_PATHS_PER_DAY and silently drop every real page path for the rest of the day.
+const middlewareSrc = await readFile(new URL('../src/middleware.ts', import.meta.url), 'utf-8')
+assert.match(
+  middlewareSrc,
+  /isHtml && !isAdminSurface && !isApi/,
+  'visit counting must exclude /api/ paths, not just non-HTML responses',
+)
 assert.equal(referrerHost('not a url', 'apanjwani0.com'), null)
 
 assert.equal(looksAutomated('Mozilla/5.0 (Macintosh) Chrome/120'), false)

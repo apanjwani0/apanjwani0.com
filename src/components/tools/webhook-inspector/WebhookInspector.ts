@@ -89,14 +89,20 @@ class WebhookInspectorTool extends HTMLElement {
   private pollBtn!: HTMLButtonElement
 
   private onKeydown = (e: KeyboardEvent) => {
-    const t = e.target as HTMLElement
-    const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')
-    if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+    if (e.metaKey || e.ctrlKey || e.altKey) return
+    // This listens on document (see connectedCallback), so it sees keys aimed at
+    // the whole page — anything focusable owns its own: typing must never be
+    // hijacked, and Space/Enter activate a button, a link or a <summary>.
+    const t = e.target as HTMLElement | null
+    if (t?.closest('input, textarea, select, button, a, summary, [contenteditable]')) return
     const k = e.key.toLowerCase()
     if (k === 'c') { e.preventDefault(); this.clear() }
     else if (k === 'r') { e.preventDefault(); this.poll(true) }
     else if (k === 'n') { e.preventDefault(); this.newUrl() }
-    else if (e.key === ' ') { e.preventDefault(); this.togglePoll() }
+    // Pause is P, not Space: with nothing focused Space is the browser's
+    // page-scroll key, and this page has a long SEO section under the app, so
+    // taking it meant a reader trying to scroll silently paused the feed instead.
+    else if (k === 'p') { e.preventDefault(); this.togglePoll() }
   }
 
   private onVisibility = () => { if (!document.hidden && !this.paused) this.poll() }
@@ -109,7 +115,7 @@ class WebhookInspectorTool extends HTMLElement {
       <div data-type="tool-page" data-tool="webhook-inspector">
         <div data-type="tool-header">
           <h1>Webhook Inspector</h1>
-          <p>Get a unique URL, point any webhook or HTTP client at it, and watch the requests arrive here in real time — method, query string, headers and body, all captured server-side. Your URL is saved on this device so you can reuse and share it. Add <code>?status=500</code>, <code>?delay=2000</code>, or <code>?echo=1</code> to the URL to test how your client handles errors, slow responses, or round-tripped bodies. Press <kbd>R</kbd> to refresh, <kbd>C</kbd> to clear, <kbd>N</kbd> for a new URL, <kbd>Space</kbd> to pause.</p>
+          <p>Get a unique URL, point any webhook or HTTP client at it, and watch the requests arrive here in real time — method, query string, headers and body, all captured server-side. Your URL is saved on this device so you can reuse and share it. Add <code>?status=500</code>, <code>?delay=2000</code>, or <code>?echo=1</code> to the URL to test how your client handles errors, slow responses, or round-tripped bodies. Press <kbd>R</kbd> to refresh, <kbd>C</kbd> to clear, <kbd>N</kbd> for a new URL, <kbd>P</kbd> to pause.</p>
         </div>
 
         <section data-type="wi-card" data-card="url" aria-labelledby="wi-url-h">
@@ -172,7 +178,8 @@ class WebhookInspectorTool extends HTMLElement {
     })
     // On document, not the element: the custom element is never focused in the
     // tool's default watch-the-feed state, so a listener on it would leave the
-    // advertised R/C/N/Space shortcuts dead until the user first clicked inside.
+    // advertised R/C/N/P shortcuts dead until the user first clicked inside.
+    // onKeydown is what keeps that from hijacking keys meant for other controls.
     document.addEventListener('keydown', this.onKeydown)
     document.addEventListener('visibilitychange', this.onVisibility)
 
@@ -200,7 +207,7 @@ class WebhookInspectorTool extends HTMLElement {
   }
 
   private reflectPollBtn() {
-    this.pollBtn.textContent = this.paused ? 'Resume (Space)' : 'Pause (Space)'
+    this.pollBtn.textContent = this.paused ? 'Resume (P)' : 'Pause (P)'
     this.root.setAttribute('data-paused', this.paused ? 'true' : 'false')
   }
 

@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-08-16)
 
 ## Corpus Check
-- 121 files · ~167,804 words
+- 121 files · ~168,120 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2018 nodes · 4246 edges · 78 communities (68 shown, 10 thin omitted)
+- 2018 nodes · 4246 edges · 76 communities (66 shown, 10 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 33 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `bb02a291`
+- Built from commit: `8510e79a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -56,7 +56,6 @@
 - [[_COMMUNITY_Community 39|Community 39]]
 - [[_COMMUNITY_Community 40|Community 40]]
 - [[_COMMUNITY_Community 41|Community 41]]
-- [[_COMMUNITY_Community 42|Community 42]]
 - [[_COMMUNITY_Community 43|Community 43]]
 - [[_COMMUNITY_Community 44|Community 44]]
 - [[_COMMUNITY_Community 45|Community 45]]
@@ -79,7 +78,6 @@
 - [[_COMMUNITY_Community 62|Community 62]]
 - [[_COMMUNITY_Community 63|Community 63]]
 - [[_COMMUNITY_Community 65|Community 65]]
-- [[_COMMUNITY_Community 66|Community 66]]
 - [[_COMMUNITY_Community 68|Community 68]]
 - [[_COMMUNITY_Community 69|Community 69]]
 - [[_COMMUNITY_Community 70|Community 70]]
@@ -126,7 +124,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (78 total, 10 thin omitted)
+## Communities (76 total, 10 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.07
@@ -225,8 +223,8 @@ Cohesion: 0.09
 Nodes (11): currentActorKind(), fmtChips(), createPbSession(), hostName(), GameState, SeatView, TableView, esc() (+3 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.10
-Nodes (25): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout) (+17 more)
+Cohesion: 0.07
+Nodes (36): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, ClientRouter (view transitions), Head Props (SEO meta), Tool (+28 more)
 
 ### Community 32 - "Community 32"
 Cohesion: 0.09
@@ -267,10 +265,6 @@ Nodes (3): ../../components/tools/audio-transcriber/AudioTranscriber.ts, AudioTr
 ### Community 41 - "Community 41"
 Cohesion: 0.50
 Nodes (3): Design Thinking, Frontend Aesthetics Guidelines, Portfolio Override (apanjwani0)
-
-### Community 42 - "Community 42"
-Cohesion: 0.10
-Nodes (23): ../components/Avatar.astro, getProjects(), blogPostingJsonLd(), BlogPostingSchema, BreadcrumbEntry, breadcrumbListJsonLd(), ItemListEntry, itemListJsonLd() (+15 more)
 
 ### Community 43 - "Community 43"
 Cohesion: 0.12
@@ -341,16 +335,12 @@ Cohesion: 0.33
 Nodes (5): Client wiring (not yet — comes with the rooms slice), Layout, Online-play collections (the sequencer), PocketBase — local backend (dev only, for now), Run
 
 ### Community 62 - "Community 62"
-Cohesion: 0.08
-Nodes (29): breadcrumbLd, crumbs, ldJson, post, ../../components/Breadcrumbs.astro, ExperienceItem Props, ../components/ProjectCard.astro, forksUrl (+21 more)
+Cohesion: 0.06
+Nodes (42): breadcrumbLd, crumbs, ldJson, post, ../../components/Breadcrumbs.astro, ExperienceItem Props, ../components/ProjectCard.astro, forksUrl (+34 more)
 
 ### Community 65 - "Community 65"
-Cohesion: 0.10
-Nodes (24): ../components/Footer.astro, ../components/Head.astro, ../components/Nav.astro, Tool, Tool (interface), ToolStatus (type), tools, ToolStatus (+16 more)
-
-### Community 66 - "Community 66"
-Cohesion: 0.52
-Nodes (6): initNav(), mountStarField(), onScroll(), pageSetup(), syncNavHeight(), syncNavScrolled()
+Cohesion: 0.09
+Nodes (29): ../components/Avatar.astro, ../components/Footer.astro, ../components/Head.astro, ../components/Nav.astro, ../../layouts/Base.astro, ogImage, ../../layouts/ToolBase.astro, ogImage (+21 more)
 
 ### Community 68 - "Community 68"
 Cohesion: 0.12

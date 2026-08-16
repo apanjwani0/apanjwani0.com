@@ -103,9 +103,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     // Count real page views only: successful HTML GETs. Content-Type decides —
     // path lists rot (the SSR /sitemap.xml was being counted as a page) — and
-    // HEAD probes are not views.
+    // HEAD probes are not views. /api/ stays excluded on top of that, because
+    // Content-Type is not ours to trust there: the capture endpoint echoes the
+    // caller's own header back on ?echo=1, so `GET /api/hook/<id>?echo=1` with
+    // Content-Type: text/html would write that secret bin id into the path table
+    // (retained 90 days), and ~400 such requests would exhaust the day's paths
+    // and silently drop every real page seen after that.
     const isHtml = (response.headers.get('Content-Type') ?? '').includes('text/html')
-    if (context.request.method === 'GET' && response.status === 200 && isHtml && !isAdminSurface) {
+    const isApi = pathname.startsWith('/api/')
+    if (context.request.method === 'GET' && response.status === 200 && isHtml && !isAdminSurface && !isApi) {
       const headers = context.request.headers
       recordVisit({
         path: pathname,
