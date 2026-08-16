@@ -37,6 +37,7 @@ npm run graph          # graphify update . — refresh the local code-graph
 npm run og             # regenerate the social share cards (see Share cards)
 npm run security:smoke # assert the security invariants (see Security)
 npm run analytics:smoke
+npm run origin:check   # assert the DEPLOYED edge posture against production
 ```
 
 There is no unit-test suite; **`npm run build` is the green-bar gate**. For
@@ -202,10 +203,38 @@ Two mitigations, in order of preference:
 
 1. `scripts/lock-origin-to-cloudflare.sh` — restrict 80/443 to Cloudflare ranges
    (or move to a Cloudflare Tunnel and close the ports entirely). **This is the
-   real fix.** UFW alone is not enough; the OCI Security List must match.
-2. `ORIGIN_SHARED_SECRET` + a Cloudflare Transform Rule injecting `x-origin-auth`
-   — the middleware 404s anything without it. Empty value = check disabled, so
-   setting the secret before the rule exists cannot take the site down.
+   real fix.** UFW alone is not enough; the OCI Security List must match — it is
+   enforced upstream of the VM, so it overrides anything UFW says. **Still open.**
+2. **Enabled 2026-08-17.** `ORIGIN_SHARED_SECRET` + a Cloudflare Transform Rule
+   injecting `x-origin-auth` — the middleware 404s anything without it. A direct
+   hit on the origin IP now returns 404 `no-store`; the box still answers, so (1)
+   is still worth doing.
+
+**Enabling it is order-dependent and the order is not obvious.** An *empty*
+secret disables the check, which is what makes the mechanism opt-in — but a
+non-empty secret with no matching Transform Rule 404s **every** request, because
+real traffic arrives without the header. So: create the Transform Rule first,
+set the secret second. If it ever breaks, fix the **rule value** — that applies
+on the next request, whereas changing the secret costs a redeploy.
+
+A green deploy proves nothing here: the health probe reaches the app over
+`docker exec` and supplies the header from the container's own env
+(`deploy.yml`), so it passes whether or not Cloudflare's value matches. Only a
+request from outside proves the lock — which is what `npm run origin:check` is.
+
+### Verifying what is not in git
+
+`security:smoke` asserts the code half of the security invariants. The other half
+lives in the Cloudflare dashboard — the Transform Rule above, the Cache Rule, and
+Browser Cache TTL — where nothing in this repo can see it, and where a stray
+click reverts it silently.
+
+`npm run origin:check` (`scripts/origin-check.sh`) closes that gap: it makes
+plain unauthenticated HTTP requests to production and asserts what a stranger
+sees — site 200 through Cloudflare, origin IP not serving the app, `max-age=0`
+(Browser Cache TTL not overriding), `s-maxage` present, response actually
+proxied. Exits non-zero on regression, and prints the current Cloudflare CIDR
+list while mitigation (1) is outstanding. Run it after any Cloudflare change.
 
 ### Rate limits must be bounded
 
@@ -246,7 +275,11 @@ npm run security:smoke   # asserts these invariants
 npm run build            # must stay green
 ```
 
-Add a case to `scripts/security-smoke.mjs` for each new invariant. If a fix has
+Add an assertion for each new invariant, in whichever of the two homes fits: a
+**code** invariant (a guard, an escape, a bound) goes in
+`scripts/security-smoke.mjs`; a **deployed-posture** invariant (a Cloudflare
+rule, a header the edge rewrites, whether the origin answers) goes in
+`scripts/origin-check.sh`, because nothing in this repo can see it. If a fix has
 no assertion, it will be undone by a later refactor that looks harmless.
 
 ## Key Conventions
