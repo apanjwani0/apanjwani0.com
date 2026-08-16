@@ -2,11 +2,15 @@ export const prerender = false
 
 import type { APIRoute } from 'astro'
 import { getSite, getPosts, getGames, getTools } from '../lib/config'
+import { isPlayableGame } from '../lib/games'
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = await getSite(locals)
   const posts = await getPosts(locals)
-  const games = (await getGames(locals)).filter(g => g.enabled && g.interactive)
+  // isPlayableGame, not `enabled && interactive`: a game flagged interactive but
+  // with no component registered renders "coming soon" behind a noindex, and
+  // listing it here would have the sitemap contradict the page's own robots meta.
+  const games = (await getGames(locals)).filter(isPlayableGame)
   const tools = await getTools(locals)
   const base = site.url.replace(/\/$/, '')
 

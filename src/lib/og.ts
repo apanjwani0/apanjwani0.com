@@ -20,6 +20,8 @@
  * below — the generator and the pages cannot disagree about which cards exist.
  */
 
+import { isPlayableGame, type GameFlags } from './games'
+
 /** Dimensions of a generated card. */
 export const OG_CARD_WIDTH = 1200
 export const OG_CARD_HEIGHT = 630
@@ -51,13 +53,19 @@ export function ogCardPath(kind: 'tools' | 'games', slug: string): string {
 }
 
 /** Which items get a card — the generator renders exactly this set, so pages
- *  must not emit a card URL for anything outside it. */
+ *  must not emit a card URL for anything outside it.
+ *
+ *  Both predicates are exactly "the page is publicly indexable". A card is a
+ *  promise that a real product is on the other side of the link, so anything the
+ *  page marks `noindex` — a wip tool, a game with no component wired up — must
+ *  not carry one, or a share unfurls a polished card for a page search engines
+ *  were told to drop. */
 export function toolHasOgCard(tool: { status: string }): boolean {
-  return tool.status !== 'external' && tool.status !== 'disabled'
+  return tool.status === 'live'
 }
 
-export function gameHasOgCard(game: { enabled?: boolean; interactive?: boolean }): boolean {
-  return Boolean(game.enabled && game.interactive)
+export function gameHasOgCard(game: GameFlags): boolean {
+  return isPlayableGame(game)
 }
 
 // Cards on disk, read once per process. Directories cover dev (public/) and the
@@ -79,7 +87,12 @@ async function readCardNames(): Promise<Set<string> | null> {
         // Directory absent in this runtime — the other one may exist.
       }
     }
-    return readAny ? names : null
+    // An EMPTY directory is not evidence that no card exists — it is the state
+    // `npm run og` leaves behind when it mkdir's public/og and then fails (the
+    // Chrome path it shells out to is macOS-only, so that is every Linux/CI run).
+    // Trusting it would strip og:image from every product page for the process
+    // lifetime, which is the exact degradation this whole function prevents.
+    return readAny && names.size > 0 ? names : null
   } catch {
     return null
   }

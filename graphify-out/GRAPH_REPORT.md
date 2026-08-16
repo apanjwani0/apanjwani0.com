@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-08-16)
 
 ## Corpus Check
-- 121 files · ~168,120 words
+- 123 files · ~169,509 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2018 nodes · 4246 edges · 76 communities (66 shown, 10 thin omitted)
+- 2028 nodes · 4276 edges · 82 communities (71 shown, 11 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 33 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8510e79a`
+- Built from commit: `d7cda392`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -56,6 +56,7 @@
 - [[_COMMUNITY_Community 39|Community 39]]
 - [[_COMMUNITY_Community 40|Community 40]]
 - [[_COMMUNITY_Community 41|Community 41]]
+- [[_COMMUNITY_Community 42|Community 42]]
 - [[_COMMUNITY_Community 43|Community 43]]
 - [[_COMMUNITY_Community 44|Community 44]]
 - [[_COMMUNITY_Community 45|Community 45]]
@@ -78,6 +79,8 @@
 - [[_COMMUNITY_Community 62|Community 62]]
 - [[_COMMUNITY_Community 63|Community 63]]
 - [[_COMMUNITY_Community 65|Community 65]]
+- [[_COMMUNITY_Community 66|Community 66]]
+- [[_COMMUNITY_Community 67|Community 67]]
 - [[_COMMUNITY_Community 68|Community 68]]
 - [[_COMMUNITY_Community 69|Community 69]]
 - [[_COMMUNITY_Community 70|Community 70]]
@@ -85,6 +88,9 @@
 - [[_COMMUNITY_Community 72|Community 72]]
 - [[_COMMUNITY_Community 73|Community 73]]
 - [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 75|Community 75]]
+- [[_COMMUNITY_Community 76|Community 76]]
+- [[_COMMUNITY_Community 77|Community 77]]
 - [[_COMMUNITY_Community 173|Community 173]]
 - [[_COMMUNITY_Community 175|Community 175]]
 - [[_COMMUNITY_Community 176|Community 176]]
@@ -105,12 +111,12 @@
 ## Surprising Connections (you probably didn't know these)
 - `readTheme()` --calls--> `v()`  [INFERRED]
   src/components/games/poker/ui/renderer.ts → public/oat.min.js
-- `esc()` --calls--> `escapeHtml()`  [EXTRACTED]
-  scripts/generate-og.mjs → src/lib/escape.ts
-- `chooseAction()` --calls--> `botInputFor()`  [EXTRACTED]
-  scripts/poker-golden/generate.ts → src/components/games/poker/engine/engine.ts
 - `main()` --calls--> `ogCardFile()`  [EXTRACTED]
   scripts/generate-og.mjs → src/lib/og.ts
+- `chooseAction()` --calls--> `botInputFor()`  [EXTRACTED]
+  scripts/poker-golden/generate.ts → src/components/games/poker/engine/engine.ts
+- `esc()` --calls--> `escapeHtml()`  [EXTRACTED]
+  scripts/generate-og.mjs → src/lib/escape.ts
 - `chooseAction()` --calls--> `decide()`  [EXTRACTED]
   scripts/poker-golden/generate.ts → src/components/games/poker/engine/bots.ts
 
@@ -124,7 +130,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (76 total, 10 thin omitted)
+## Communities (82 total, 11 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.07
@@ -137,10 +143,6 @@ Nodes (22): ../../components/games/hue-hunt/HueHunt.ts, accuracyPct(), buildOpti
 ### Community 2 - "Config KV-with-Fallback Chain"
 Cohesion: 0.05
 Nodes (39): 1. Authentication & Session Management, 2. Input Validation & Injection, 3. Infrastructure & Deployment, 4. Middleware, Config Access & Data Flow, 5. Dependencies & Supply Chain, Consolidated Remediation Roadmap, CRITICAL — C1.1: Timing Attack on Password Comparison, CRITICAL — C1.2: Auth Bypass if ADMIN_SECRET Is Unset in Production (+31 more)
-
-### Community 3 - "Community 3"
-Cohesion: 0.21
-Nodes (5): parseColor(), RGB, Star, StarField, TrailPoint
 
 ### Community 4 - "Community 4"
 Cohesion: 0.10
@@ -156,11 +158,11 @@ Nodes (5): HelpEntry, HelpSection, helpSections, ../../components/tools/md-enhan
 
 ### Community 8 - "astro.config.mjs Plugin Generators"
 Cohesion: 0.05
-Nodes (28): Admin Config Management, Analytics, `/antigravity <task>`, Before merging anything that touches a trust boundary, `/browser-debug [url] [what to check]`, Build / Test / Run, Caching & Performance, Code graph (graphify) (+20 more)
+Nodes (29): Admin Config Management, Analytics, `/antigravity <task>`, Before merging anything that touches a trust boundary, `/browser-debug [url] [what to check]`, Build / Test / Run, Caching & Performance, Code graph (graphify) (+21 more)
 
 ### Community 9 - "AudioTranscriber Tool Logic"
-Cohesion: 0.11
-Nodes (18): breadcrumbLd, crumbs, ldJson, string, tool, ../../components/tools/audio-transcriber/audio-transcriber.css, ../../components/tools/chroma-lab/chroma-lab.css, ../../components/tools/codec-forge/codec-forge.css (+10 more)
+Cohesion: 0.09
+Nodes (22): ../../components/RelatedLinks.astro, breadcrumbLd, crumbs, ldJson, relatedTools, string, tool, ../../components/tools/audio-transcriber/audio-transcriber.css (+14 more)
 
 ### Community 10 - "AudioTranscriber Custom Element + Web Speech"
 Cohesion: 0.22
@@ -175,8 +177,8 @@ Cohesion: 0.19
 Nodes (16): $(), activeIndex(), b(), cleanup(), connectedCallback(), disconnectedCallback(), #e(), emit() (+8 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.07
-Nodes (36): breadcrumbLd, crumbs, game, gameIntroHtml, ldJson, liveGame, string, existingOgCardPath() (+28 more)
+Cohesion: 0.08
+Nodes (32): Game, breadcrumbLd, crumbs, game, gameIntroHtml, GameTag, ldJson, liveGame (+24 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.07
@@ -223,8 +225,8 @@ Cohesion: 0.09
 Nodes (11): currentActorKind(), fmtChips(), createPbSession(), hostName(), GameState, SeatView, TableView, esc() (+3 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.07
-Nodes (36): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, ClientRouter (view transitions), Head Props (SEO meta), Tool (+28 more)
+Cohesion: 0.18
+Nodes (14): ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout), ToolBase.astro (tools layout), getGames(), getPosts(), getSite(), getTools() (+6 more)
 
 ### Community 32 - "Community 32"
 Cohesion: 0.09
@@ -243,8 +245,8 @@ Cohesion: 0.12
 Nodes (11): ../../components/games/flow-field/FlowField.ts, clamp(), fade(), FlowFieldGame, hash2(), lerp(), mulberry32(), Palette (+3 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.18
-Nodes (20): CONFIG_TYPES, ConfigType, isRecord(), isString(), optionalSafeExternalUrl(), optionalString(), safeBlogHref(), TOOL_STATUSES (+12 more)
+Cohesion: 0.17
+Nodes (21): CONFIG_TYPES, ConfigType, isRecord(), isString(), optionalSafeExternalUrl(), optionalString(), safeBlogHref(), TOOL_STATUSES (+13 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.11
@@ -265,6 +267,10 @@ Nodes (3): ../../components/tools/audio-transcriber/AudioTranscriber.ts, AudioTr
 ### Community 41 - "Community 41"
 Cohesion: 0.50
 Nodes (3): Design Thinking, Frontend Aesthetics Guidelines, Portfolio Override (apanjwani0)
+
+### Community 42 - "Community 42"
+Cohesion: 0.18
+Nodes (20): DELETE(), GET(), NO_STORE, ALL(), allowCapture, baseHeaders(), clampInt(), CORS_HEADERS (+12 more)
 
 ### Community 43 - "Community 43"
 Cohesion: 0.12
@@ -319,8 +325,8 @@ Cohesion: 0.08
 Nodes (27): ../../components/tools/codec-forge/CodecForge.ts, CF_DEFAULTS, CF_REV, CF_TABS, CfB64Source, cfB64Status(), cfB64ToText(), CfB64Variant (+19 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.14
-Nodes (8): escapeHtml(), ../../components/tools/webhook-inspector/WebhookInspector.ts, WebhookInspectorTool, wiFmtSize(), WiHeader, wiNewBinId(), wiRelTime(), WiRequest
+Cohesion: 0.15
+Nodes (7): ../../components/tools/webhook-inspector/WebhookInspector.ts, WebhookInspectorTool, wiFmtSize(), WiHeader, wiNewBinId(), wiRelTime(), WiRequest
 
 ### Community 59 - "Community 59"
 Cohesion: 0.29
@@ -335,12 +341,20 @@ Cohesion: 0.33
 Nodes (5): Client wiring (not yet — comes with the rooms slice), Layout, Online-play collections (the sequencer), PocketBase — local backend (dev only, for now), Run
 
 ### Community 62 - "Community 62"
-Cohesion: 0.06
-Nodes (42): breadcrumbLd, crumbs, ldJson, post, ../../components/Breadcrumbs.astro, ExperienceItem Props, ../components/ProjectCard.astro, forksUrl (+34 more)
+Cohesion: 0.09
+Nodes (26): breadcrumbLd, crumbs, ldJson, post, ../../components/Breadcrumbs.astro, ExperienceItem Props, ../components/ProjectCard.astro, forksUrl (+18 more)
 
 ### Community 65 - "Community 65"
-Cohesion: 0.09
-Nodes (29): ../components/Avatar.astro, ../components/Footer.astro, ../components/Head.astro, ../components/Nav.astro, ../../layouts/Base.astro, ogImage, ../../layouts/ToolBase.astro, ogImage (+21 more)
+Cohesion: 0.08
+Nodes (31): ../components/Avatar.astro, ../components/Footer.astro, ../components/Head.astro, ../components/Nav.astro, RGB, Star, TrailPoint, ../../layouts/Base.astro (+23 more)
+
+### Community 66 - "Community 66"
+Cohesion: 0.28
+Nodes (16): GET(), POST(), POST(), summarizeAnalytics(), isConfigType(), adminNotFound(), getAdminSecret(), getRuntimeEnv() (+8 more)
+
+### Community 67 - "Community 67"
+Cohesion: 0.17
+Nodes (15): blogPostingJsonLd(), BlogPostingSchema, BreadcrumbEntry, breadcrumbListJsonLd(), ItemListEntry, itemListJsonLd(), personJsonLd(), PersonSchema (+7 more)
 
 ### Community 68 - "Community 68"
 Cohesion: 0.12
@@ -355,16 +369,28 @@ Cohesion: 0.05
 Nodes (42): StartSeat, DealConfig, Peer, SeatSnapshot, Action, ActionRequest, ActionType, BotDecision (+34 more)
 
 ### Community 71 - "Community 71"
-Cohesion: 0.17
-Nodes (30): GET(), allowAttempt, POST(), POST(), POST(), allowEvent, POST(), summarizeAnalytics() (+22 more)
+Cohesion: 0.20
+Nodes (18): allowAttempt, POST(), allowEvent, POST(), ADMIN_LOGIN_LIMITS, BodyTooLargeError, createRateLimiter(), decoder (+10 more)
 
 ### Community 73 - "Community 73"
 Cohesion: 0.29
 Nodes (8): buildResult(), CACHE_PATH, getProjectStats(), memCache, parseGithubUrl(), readCache(), StatsCache, writeCache()
 
 ### Community 74 - "Community 74"
-Cohesion: 0.07
-Nodes (44): DELETE(), GET(), NO_STORE, ALL(), allowCapture, baseHeaders(), clampInt(), CORS_HEADERS (+36 more)
+Cohesion: 0.10
+Nodes (24): safeMarkdownUrl(), bump(), flushVisits(), looksAutomated(), mergeRow(), mergeStore(), pending, pruneVisits() (+16 more)
+
+### Community 75 - "Community 75"
+Cohesion: 0.17
+Nodes (11): Tool, Tool (interface), ToolStatus (type), tools, ToolStatus, tools/index.astro tools listing, tools/[slug].astro dynamic tool page, cards (+3 more)
+
+### Community 76 - "Community 76"
+Cohesion: 0.27
+Nodes (10): escapeHtml(), toolHasOgCard(), cardHtml(), esc(), main(), OUT_DIR, run, shorten() (+2 more)
+
+### Community 77 - "Community 77"
+Cohesion: 0.29
+Nodes (7): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, admin auth gate / login form, admin client save() fetch helper
 
 ### Community 173 - "Community 173"
 Cohesion: 0.14
@@ -383,23 +409,23 @@ Cohesion: 0.27
 Nodes (3): indentString(), repairJson(), sortDeep()
 
 ## Knowledge Gaps
-- **505 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+500 more)
+- **508 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+503 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **11 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `../../components/games/lsystem/LSystem.ts` connect `Community 4` to `Community 13`?**
-  _High betweenness centrality (0.160) - this node is a cross-community bridge._
+  _High betweenness centrality (0.164) - this node is a cross-community bridge._
 - **Why does `v()` connect `Community 56` to `Community 32`, `Community 35`, `Community 4`, `Community 70`, `Layout Shell (Base + ToolBase + Head + Nav)`, `Community 173`, `Community 45`, `Community 175`, `Community 25`, `Community 29`?**
-  _High betweenness centrality (0.140) - this node is a cross-community bridge._
+  _High betweenness centrality (0.139) - this node is a cross-community bridge._
 - **Why does `Rng` connect `Community 46` to `Community 4`, `Community 69`?**
-  _High betweenness centrality (0.135) - this node is a cross-community bridge._
+  _High betweenness centrality (0.137) - this node is a cross-community bridge._
 - **What connects `name`, `type`, `version` to the rest of the system?**
-  _505 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _508 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Content Types + AdminSavePlugin Dispatch` be split into smaller, more focused modules?**
-  _Cohesion score 0.06868686868686869 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06871035940803383 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.09745293466223699 - nodes in this community are weakly interconnected._
 - **Should `Config KV-with-Fallback Chain` be split into smaller, more focused modules?**

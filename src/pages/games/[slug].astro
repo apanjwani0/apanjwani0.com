@@ -5,8 +5,10 @@ import Base from '../../layouts/Base.astro'
 import { getSite, getGames } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import RelatedLinks from '../../components/RelatedLinks.astro'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
+import { gameTag, isPlayableGame } from '../../lib/games'
 import '../../styles/seo-support.css'
 import '../../components/games/games-common.css'
 import '../../components/games/twenty48/twenty48.css'
@@ -35,7 +37,13 @@ if (!game) {
 
 // For a "coming soon" page, point the visitor at a game that's actually
 // playable right now so the page is an invitation, not a dead end.
-const liveGame = games.find(g => g.enabled && g.interactive && g.slug !== slug)
+const liveGame = games.find(g => isPlayableGame(g) && g.slug !== slug)
+// Sibling links, so this page is not a dead end for a crawler or a visitor who
+// arrived here from a search. Only playable games — the same set the sitemap and
+// the hub's ItemList list, so nothing here points at a noindex page.
+const relatedGames = games
+  .filter(g => isPlayableGame(g) && g.slug !== slug)
+  .map(g => ({ title: g.title, href: `/games/${g.slug}` }))
 const pageDescription = game.metaDescription || game.description
 const gameIntro = game.intro || game.description
 const gameIntroHtml = render(gameIntro)
@@ -70,22 +78,10 @@ const breadcrumbLd = breadcrumbListJsonLd([
 
 // One custom-element tag per playable game. Every mount renders the identical
 // body (h1 + intro), so a single dynamic-tag block replaces twelve copies that
-// could only ever drift. A slug missing here renders as "coming soon".
-const GAME_TAGS: Record<string, string> = {
-  '2048': 'twenty48-game',
-  'quintle': 'quintle-game',
-  'game-of-life': 'game-of-life-game',
-  'flow-field': 'flow-field-game',
-  'maze-weaver': 'maze-weaver-game',
-  'type-trial': 'type-trial-game',
-  'hue-hunt': 'hue-hunt-game',
-  'starfield-toy': 'starfield-voyager-game',
-  'murmuration': 'murmuration-game',
-  'turing-bloom': 'turing-bloom-game',
-  'sand-loom': 'sand-loom-game',
-  'lsystem-tree': 'lsystem-tree-game',
-}
-const GameTag = game.interactive ? GAME_TAGS[game.slug] : undefined
+// could only ever drift. A slug with no tag registered renders as "coming soon"
+// — and because the sitemap and the share card read the same predicate from
+// src/lib/games.ts, all three agree about that instead of contradicting.
+const GameTag = gameTag(game)
 
 // Card only when the generator emits one AND the PNG is really on disk — a
 // forgotten `npm run og` must degrade to the avatar, not a 404ing og:image.
@@ -125,6 +121,7 @@ const ogCard = gameHasOgCard(game) ? await existingOgCardPath('games', game.slug
     </>
   )}
   {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
+  <RelatedLinks heading="More games" items={relatedGames} />
 
   {GameTag && (
     <script>

@@ -12,6 +12,8 @@ import {
   timingSafeEqualText,
 } from '../src/lib/security.ts'
 import { isValidBinId } from '../src/lib/webhook-store.ts'
+import { gameTag, isPlayableGame } from '../src/lib/games.ts'
+import { games } from '../src/config/games.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost } from '../src/lib/visits.ts'
 
 const unsafeMarkdown = render('[x](javascript:alert(1)) <img src=x onerror=alert(1)>')
@@ -98,6 +100,21 @@ for (const route of ['src/pages/api/analytics/event.ts', 'src/pages/api/hook/[bi
     /if \(!isSameOrigin\(request\)\)\s*return[^\n]*403/,
     `${route} must reject cross-origin requests with the shared isSameOrigin check`,
   )
+}
+
+// One predicate decides whether a game is real: the sitemap, the detail page's
+// robots meta, the share card and the hub's ItemList all read isPlayableGame, so
+// they cannot contradict each other. It must also survive a slug that names an
+// Object.prototype member — a bare GAME_TAGS[slug] lookup returns an inherited
+// function there, which is truthy, so the page would render <GameTag> with a
+// function as its tag name and 500 instead of showing "coming soon".
+assert.equal(isPlayableGame({ slug: 'constructor', enabled: true, interactive: true }), false)
+assert.equal(isPlayableGame({ slug: 'toString', enabled: true, interactive: true }), false)
+assert.equal(isPlayableGame({ slug: '2048', enabled: true, interactive: true }), true)
+assert.equal(isPlayableGame({ slug: '2048', enabled: true, interactive: false }), false)
+assert.equal(isPlayableGame({ slug: 'not-a-game', enabled: true, interactive: true }), false)
+for (const g of games.filter(isPlayableGame)) {
+  assert.ok(gameTag(g), `${g.slug} is listed in the sitemap, so it must render a real component`)
 }
 
 // Bin ids are the only thing protecting captured webhook payloads, so short,
