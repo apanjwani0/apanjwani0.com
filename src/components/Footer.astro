@@ -1,0 +1,118 @@
+---
+/**
+ * Site footer — the page-level `contentinfo` landmark the layouts were missing.
+ *
+ * Rendered on every standard page (see Base.astro / ToolBase.astro); the layouts
+ * deliberately skip it on the full-bleed home hero so that flagship stays a single
+ * immersive screen. It gives every other route three things it lacked:
+ *   1. a `contentinfo` landmark (a11y — screen readers can jump to it);
+ *   2. a crawlable link mesh to home + every section from every page, including
+ *      deep /tools/x and /games/x detail routes that otherwise only linked one
+ *      level up via the breadcrumb (SEO — flatter crawl depth, spread equity);
+ *   3. visible authorship + a rel="me" identity signal on every page.
+ *
+ * Styling is tokens-only and self-contained here.
+ */
+import { getSite } from '../lib/config'
+import { safeExternalUrl } from '../lib/security'
+
+interface Props {
+  site?: Awaited<ReturnType<typeof getSite>>
+}
+
+const { site: siteProp } = Astro.props
+const site = siteProp ?? await getSite(Astro.locals)
+
+// Mirror the header's section links (dropdown children flattened, like Nav.astro).
+const links = site.nav.flatMap((item) => item.children ?? [item])
+
+// Same-origin-safe identity links; rel="me" reinforces the home hero's author
+// claims on every page. Filtered through the URL allowlist like everywhere else.
+const social = Object.entries(site.social)
+  .map(([platform, url]) => [platform, safeExternalUrl(url)] as const)
+  .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+
+// Rendered at request time (SSR), so the copyright year never goes stale.
+const year = new Date().getFullYear()
+---
+
+<footer data-type="site-footer">
+  <div data-type="footer-inner">
+    <nav data-type="footer-nav" aria-label="Footer">
+      <a href="/" data-type="footer-wordmark" aria-label={`${site.name} — home`}>{site.handle}</a>
+      {links.map((link) => <a href={link.href}>{link.label}</a>)}
+    </nav>
+    {social.length > 0 && (
+      <div data-type="footer-social">
+        {social.map(([platform, url]) => (
+          <a
+            href={url}
+            target="_blank"
+            rel="me noopener noreferrer"
+            aria-label={`${site.name} on ${platform} (opens in a new tab)`}
+          >{platform}</a>
+        ))}
+      </div>
+    )}
+    <p data-type="footer-legal">© {year} {site.name} · built from scratch, by hand</p>
+  </div>
+</footer>
+
+<style>
+  footer[data-type="site-footer"] {
+    /* Sits above the fixed starfield canvas (z-index:0) on pages that show it. */
+    position: relative;
+    z-index: 1;
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-section) var(--space-page-x);
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: 0.04em;
+    color: var(--color-muted);
+  }
+
+  div[data-type="footer-inner"] {
+    max-width: var(--content-width);
+    margin-inline: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.7rem 1.15rem;
+  }
+
+  footer[data-type="site-footer"] nav[data-type="footer-nav"],
+  footer[data-type="site-footer"] div[data-type="footer-social"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.7rem 1.15rem;
+  }
+
+  /* Push the social cluster to the trailing edge on a wide single row. */
+  footer[data-type="site-footer"] div[data-type="footer-social"] {
+    margin-inline-start: auto;
+  }
+
+  footer[data-type="site-footer"] a {
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+
+  footer[data-type="site-footer"] a:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-underline-offset: 0.3em;
+  }
+
+  /* The wordmark reads as primary; the rest of the row stays muted. */
+  footer[data-type="site-footer"] a[data-type="footer-wordmark"] {
+    color: var(--color-text);
+  }
+
+  /* Authorship drops to its own full-width row beneath the links. */
+  footer[data-type="site-footer"] p[data-type="footer-legal"] {
+    flex-basis: 100%;
+    margin: 0;
+  }
+</style>

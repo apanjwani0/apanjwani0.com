@@ -2,6 +2,7 @@
 import { getSite } from '../lib/config'
 import { ogImageMeta } from '../lib/og'
 import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
 import Head from '../components/Head.astro'
 import '../styles/shared.css'
 
@@ -59,6 +60,7 @@ const ogImage = ogImageMeta(site, ogCard, toolTitle)
     <main id="main-content" tabindex="-1">
       <slot />
     </main>
+    <Footer site={site} />
     <script src="/oat.min.js" defer></script>
     <script>
       // Nav height sync, hide-on-scroll, and StarField mount — shared verbatim
