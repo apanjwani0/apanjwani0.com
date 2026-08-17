@@ -1,7 +1,7 @@
 # Graph Report - portfolio-apanjwani0  (2026-08-17)
 
 ## Corpus Check
-- 127 files · ~176,962 words
+- 127 files · ~177,016 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f8cdfb25`
+- Built from commit: `4e4c714b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -190,10 +190,6 @@ Nodes (56): ../../components/RelatedLinks.astro, Game, breadcrumbLd, crumbs, gam
 Cohesion: 0.07
 Nodes (25): ../../components/games/quintle/Quintle.ts, Q_ANSWERS, q_bestState(), q_dailyAnswer(), q_dayNumber(), q_el(), Q_EPOCH_DAY, q_evaluate() (+17 more)
 
-### Community 19 - "Community 19"
-Cohesion: 0.19
-Nodes (3): msUntilUtcMidnight(), pick(), TypeTrialTool
-
 ### Community 20 - "Community 20"
 Cohesion: 0.09
 Nodes (38): AnalyticsAggregate, AnalyticsEvent, analyticsKey(), AnalyticsKind, AnalyticsKV, AnalyticsMetricKey, analyticsMetricKeys, AnalyticsMetrics (+30 more)
@@ -263,8 +259,8 @@ Cohesion: 0.12
 Nodes (21): ../../components/tools/chroma-lab/ChromaLab.ts, ChromaLabTool, clClamp(), clContrast(), clEsc(), clFmt(), clHex2(), ClHSL (+13 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.09
-Nodes (27): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), childPath(), cleanMessage(), ErrorLoc, Indent, isPrimitive(), jtDeepEqual() (+19 more)
+Cohesion: 0.08
+Nodes (28): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), childPath(), cleanMessage(), countKeys(), ErrorLoc, Indent, isPrimitive() (+20 more)
 
 ### Community 40 - "Community 40"
 Cohesion: 0.27
@@ -301,6 +297,10 @@ Nodes (16): ../../components/games/sand-loom/SandLoom.ts, SandLoomGame, SL_BASE,
 ### Community 48 - "Community 48"
 Cohesion: 0.05
 Nodes (36): dependencies, astro, @astrojs/node, dompurify, gifenc, html2canvas, marked, devDependencies (+28 more)
+
+### Community 49 - "Community 49"
+Cohesion: 0.40
+Nodes (4): DAILY_TEXTS, dailyPassage(), fnv1a(), msUntilUtcMidnight()
 
 ### Community 50 - "Community 50"
 Cohesion: 0.06
@@ -387,8 +387,8 @@ Cohesion: 0.18
 Nodes (20): DELETE(), GET(), NO_STORE, ALL(), allowCapture, baseHeaders(), clampInt(), CORS_HEADERS (+12 more)
 
 ### Community 75 - "Community 75"
-Cohesion: 0.12
-Nodes (13): DAILY_TEXTS, dailyPassage(), fnv1a(), allow, apiNoStore, cache404, flood, lbNow (+5 more)
+Cohesion: 0.15
+Nodes (10): allow, apiNoStore, cache404, flood, lbNow, lbOld, now, old (+2 more)
 
 ### Community 76 - "Community 76"
 Cohesion: 0.18
