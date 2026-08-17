@@ -37,6 +37,7 @@ npm run graph          # graphify update . — refresh the local code-graph
 npm run og             # regenerate the social share cards (see Share cards)
 npm run security:smoke # assert the security invariants (see Security)
 npm run analytics:smoke
+npm run origin:check   # assert the DEPLOYED edge posture against production
 ```
 
 There is no unit-test suite; **`npm run build` is the green-bar gate**. For
@@ -202,10 +203,38 @@ Two mitigations, in order of preference:
 
 1. `scripts/lock-origin-to-cloudflare.sh` — restrict 80/443 to Cloudflare ranges
    (or move to a Cloudflare Tunnel and close the ports entirely). **This is the
-   real fix.** UFW alone is not enough; the OCI Security List must match.
-2. `ORIGIN_SHARED_SECRET` + a Cloudflare Transform Rule injecting `x-origin-auth`
-   — the middleware 404s anything without it. Empty value = check disabled, so
-   setting the secret before the rule exists cannot take the site down.
+   real fix.** UFW alone is not enough; the OCI Security List must match — it is
+   enforced upstream of the VM, so it overrides anything UFW says. **Still open.**
+2. **Enabled 2026-08-17.** `ORIGIN_SHARED_SECRET` + a Cloudflare Transform Rule
+   injecting `x-origin-auth` — the middleware 404s anything without it. A direct
+   hit on the origin IP now returns 404 `no-store`; the box still answers, so (1)
+   is still worth doing.
+
+**Enabling it is order-dependent and the order is not obvious.** An *empty*
+secret disables the check, which is what makes the mechanism opt-in — but a
+non-empty secret with no matching Transform Rule 404s **every** request, because
+real traffic arrives without the header. So: create the Transform Rule first,
+set the secret second. If it ever breaks, fix the **rule value** — that applies
+on the next request, whereas changing the secret costs a redeploy.
+
+A green deploy proves nothing here: the health probe reaches the app over
+`docker exec` and supplies the header from the container's own env
+(`deploy.yml`), so it passes whether or not Cloudflare's value matches. Only a
+request from outside proves the lock — which is what `npm run origin:check` is.
+
+### Verifying what is not in git
+
+`security:smoke` asserts the code half of the security invariants. The other half
+lives in the Cloudflare dashboard — the Transform Rule above, the Cache Rule, and
+Browser Cache TTL — where nothing in this repo can see it, and where a stray
+click reverts it silently.
+
+`npm run origin:check` (`scripts/origin-check.sh`) closes that gap: it makes
+plain unauthenticated HTTP requests to production and asserts what a stranger
+sees — site 200 through Cloudflare, origin IP not serving the app, `max-age=0`
+(Browser Cache TTL not overriding), `s-maxage` present, response actually
+proxied. Exits non-zero on regression, and prints the current Cloudflare CIDR
+list while mitigation (1) is outstanding. Run it after any Cloudflare change.
 
 ### Rate limits must be bounded
 
@@ -222,6 +251,32 @@ occupy a socket. The Webhook Inspector is the reference: `WEBHOOK_MAX_*` in
 `src/lib/webhook-store.ts` plus the 2s `?delay=` ceiling. Budget for byte
 accounting being optimistic — `.length` counts UTF-16 code units, not bytes, and
 object overhead is real.
+
+The Type Trial daily leaderboard is the second worked example: `DAILY_*` in
+`src/lib/type-trial-leaderboard.ts` bounds name length, entries per day, retained
+days and the claimable wpm; the route
+(`src/pages/api/games/type-trial/daily.ts`) caps the body and rate-limits reads
+and writes separately. It persists to `data/type-trial-daily.json` on the mounted
+volume, debounced like `src/lib/visits.ts` — never a write per request. Stored
+rows are re-validated on load, so a corrupt or hand-edited file degrades to an
+empty board instead of crashing the route.
+
+### Validate a client-submitted value against one the server derives
+
+The server must re-derive the thing being scored and check the payload against
+*that*, never against numbers the payload also supplied. Type Trial derives the
+UTC day and its passage from `src/lib/type-trial-daily.ts` — deliberately shared
+with the browser bundle so client and server cannot disagree about what today's
+text is — and validates the submitted run against the passage it derived.
+
+**One-sided bounds are the trap.** "wpm may not exceed a perfect run of the
+passage in the claimed seconds" reads like a real check and is vacuous: the
+ceiling it computes grows without limit as the claimed seconds shrink, so 249 wpm
+in 2 seconds passed it and the wpm cap was the only thing actually holding. A run
+finishes only when the typed text equals the passage, which makes wpm a
+*function* of elapsed time — the gate has to pin the pair to each other, not
+bound one of them. Ask it of every new validator: what does an attacker set the
+*other* field to?
 
 ### Escaping
 
@@ -246,7 +301,11 @@ npm run security:smoke   # asserts these invariants
 npm run build            # must stay green
 ```
 
-Add a case to `scripts/security-smoke.mjs` for each new invariant. If a fix has
+Add an assertion for each new invariant, in whichever of the two homes fits: a
+**code** invariant (a guard, an escape, a bound) goes in
+`scripts/security-smoke.mjs`; a **deployed-posture** invariant (a Cloudflare
+rule, a header the edge rewrites, whether the origin answers) goes in
+`scripts/origin-check.sh`, because nothing in this repo can see it. If a fix has
 no assertion, it will be undone by a later refactor that looks harmless.
 
 ## Key Conventions
@@ -410,6 +469,13 @@ or canvas screensaver. That shelf is full and it is what prompted this section.
 Next level is a shared daily seed, a server-side leaderboard, or a replay permalink.
 One game with a daily seed beats five clones — and prefer *deepening one* of the
 existing games over adding a fourteenth.
+
+Type Trial is the worked example, and it was a deepening rather than a fourteenth
+game: one shared passage per UTC day, a server-validated leaderboard you join by
+name, and practice modes that still never leave the browser. Note what it did
+*not* need — no accounts, no per-visitor identity, no cookie. A display name plus
+the numbers is the whole record, which keeps it on the right side of the
+aggregate-only line the Analytics section draws.
 
 Ship fewer, larger things. One tool that a stranger would bookmark is worth more
 than the whole current list.

@@ -364,7 +364,9 @@ class QuintleGame extends HTMLElement {
   }
 
   private buildKey(key: string, label: string, wide: boolean): HTMLElement {
-    const attrs: Record<string, string> = { type: 'button', 'data-key': key, 'aria-label': key === 'back' ? 'Backspace' : key === 'enter' ? 'Enter' : key }
+    // data-type is what quintle.css sizes the keys by and what syncKeyboard()
+    // looks up to colour them; without it the whole keyboard block is dead CSS.
+    const attrs: Record<string, string> = { type: 'button', 'data-type': 'q-key', 'data-key': key, 'aria-label': key === 'back' ? 'Backspace' : key === 'enter' ? 'Enter' : key }
     if (wide) attrs['data-wide'] = ''
     const b = q_el('button', attrs)
     b.textContent = label

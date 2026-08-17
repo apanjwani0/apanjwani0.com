@@ -458,36 +458,40 @@ Yes. The string rewriting and the drawing both happen on your device, and nothin
   {
     "slug": "type-trial",
     "title": "Type Trial",
-    "description": "A fast, distraction-free typing race. Pick quotes, code, or numbers, then chase your best words-per-minute as the clock starts on your first keystroke.\n\nEvery character lights up as you go, your speed and accuracy tick live, and a ranked result card lands when you finish. Each category keeps its own personal best, saved right in your browser — nothing is ever uploaded.",
-    "seoTitle": "Typing Speed Test Game — Type Trial",
-    "metaDescription": "Race through quotes, code or numbers and measure WPM, accuracy and personal bests. A simple typing speed game that stays in your browser.",
+    "description": "A fast, distraction-free typing race — now with a daily duel. Every day there's one shared passage, the same for everyone on Earth, and a leaderboard you can join under any name once you finish. Or practice quotes, code, and numbers on your own clock.\n\nEvery character lights up as you go, your speed and accuracy tick live, and a ranked result card lands when you finish. Practice bests stay in your browser; only a daily score you choose to submit is sent, and it's just your name and the numbers.",
+    "seoTitle": "Daily Typing Race & Speed Test — Type Trial",
+    "metaDescription": "One shared passage per day, a live leaderboard, and practice modes for quotes, code and numbers. Measure WPM and accuracy in a daily typing race.",
     "enabled": true,
     "interactive": true,
-    "keywords": "typing game,typing race,typing speed test,wpm game,words per minute,typing practice,typing test",
-    "seoContent": `## A typing speed test for real text
+    "keywords": "daily typing race,typing leaderboard,typing game,typing race,typing speed test,wpm game,words per minute,typing practice,typing test",
+    "seoContent": `## The daily race
 
-Type Trial measures words per minute, accuracy and personal bests while you type short quotes, code or numbers. The timer starts when you press the first key, so setup time does not count against you.
+Every UTC day has exactly one passage, and everyone who visits races the same text. Finish a run on the Daily tab and you can submit your words-per-minute and accuracy to that day's leaderboard under any display name — no account, no sign-up. The board resets at midnight UTC when the next passage arrives, so every day is a fresh race.
 
 ## What it measures
 
 - WPM, or words per minute, based on standard word length.
-- Accuracy, based on how many characters you typed correctly.
-- Category bests for quotes, code and numbers.
-- A finish card you can use to compare attempts.
+- Accuracy, based on every keystroke you entered — corrected mistakes still count.
+- Your rank on today's shared leaderboard, if you submit a daily run.
+- Local personal bests for the daily, quotes, code and numbers categories.
 
 ## How to improve your score
 
-Start by typing cleanly, not quickly. Accuracy usually raises WPM because you spend less time correcting mistakes. Practice numbers and symbols separately if normal quote tests feel easy; they expose weak spots that plain words hide.
+Start by typing cleanly, not quickly. Accuracy usually raises WPM because you spend less time correcting mistakes. Practice numbers and symbols separately if normal quote tests feel easy; they expose weak spots that plain words hide. Then bring the speed back to the daily passage and climb the board.
 
 ## FAQ
 
 ### Is this like Monkeytype?
 
-Monkeytype is a full typing practice platform. Type Trial is smaller and focused on quick local races with quotes, code and numbers.
+Monkeytype is a full typing practice platform. Type Trial is smaller: quick races over quotes, code and numbers, plus one shared daily passage with a leaderboard.
 
 ### Are scores uploaded?
 
-No. Personal bests stay in your browser.
+Practice runs never leave your browser. A daily score is sent only if you press Submit, and it carries just your chosen display name, WPM, accuracy and time — no account, no tracking, and submissions are validated server-side against the day's passage.
+
+### When does the daily race reset?
+
+At midnight UTC, everywhere at once — the passage and the leaderboard change together, so the whole world races the same text on the same day.
 
 ### What does WPM mean?
 
