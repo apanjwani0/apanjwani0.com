@@ -3,23 +3,34 @@
  *
  * Pure DOM + a single transparent input, no dependencies. The timer starts on
  * the first keystroke; net WPM is (correct chars / 5) ÷ minutes and accuracy is
- * correct ÷ typed. Each category (quotes / code / numbers) keeps its own personal
- * best, remembered locally (never uploaded), and a finished run produces a
- * shareable one-line result. Mounts as a WebComponent so it survives Astro's
- * client-side View Transitions. Surfaced as a game at /games/type-trial.
+ * correct ÷ typed. Each category (daily / quotes / code / numbers) keeps its own
+ * personal best, remembered locally, and a finished run produces a shareable
+ * one-line result. Mounts as a WebComponent so it survives Astro's client-side
+ * View Transitions. Surfaced as a game at /games/type-trial.
+ *
+ * DAILY RACE: the Daily tab races one shared passage per UTC day — everyone on
+ * the site gets the same text (src/lib/type-trial-daily.ts, shared with the
+ * server) — and a finished run can be submitted by name to a server-side daily
+ * leaderboard (/api/games/type-trial/daily). Practice categories stay entirely
+ * local; only a daily submission you explicitly send leaves the browser, and it
+ * carries just a display name and the score.
  */
+import { dailyPassage, msUntilUtcMidnight, todayUtcDay } from '../../../lib/type-trial-daily'
 
-type Category = 'quotes' | 'code' | 'numbers'
+type Category = 'daily' | 'quotes' | 'code' | 'numbers'
 
 const CATEGORIES: { id: Category; name: string }[] = [
+  { id: 'daily', name: 'Daily' },
   { id: 'quotes', name: 'Quotes' },
   { id: 'code', name: 'Code' },
   { id: 'numbers', name: 'Numbers' },
 ]
 
 /* Curated prompts. Quotes are original aphorisms (no real-person attribution),
-   code is short single-line snippets, numbers mix digits and symbols. */
-const TEXTS: Record<Category, string[]> = {
+   code is short single-line snippets, numbers mix digits and symbols. The daily
+   passage is NOT here — it comes from the shared lib so server validation and
+   every visitor's browser agree on the day's text. */
+const TEXTS: Record<Exclude<Category, 'daily'>, string[]> = {
   quotes: [
     'The best way to predict the future is to build a small piece of it today.',
     'Simplicity is the soul of efficiency, and clarity is the soul of simplicity.',
@@ -54,6 +65,13 @@ const TEXTS: Record<Category, string[]> = {
    each category now tracks its own best, so a slow Numbers run no longer hides a
    fast Quotes run (and vice versa). Old v1 data is simply left behind. */
 const BESTS_KEY = 'type-trial:bests:v1'
+/** Remembered leaderboard display name — so submitting is one click next time. */
+const NAME_KEY = 'type-trial:name:v1'
+
+/** Whole-string HTML escape for untrusted text (leaderboard names). */
+function escText(s: string): string {
+  return s.replace(/[&<>"']/g, escapeHtml)
+}
 
 function escapeHtml(ch: string): string {
   switch (ch) {
@@ -116,8 +134,13 @@ function saveBests(b: Bests): void {
 interface Stats { wpm: number; acc: number; sec: number; correct: number; typedLen: number }
 
 class TypeTrialTool extends HTMLElement {
-  private category: Category = 'quotes'
+  private category: Category = 'daily'
   private target = ''
+  /** UTC day the current daily passage belongs to — refreshed on restart so a
+   *  tab left open across midnight picks up the new race. */
+  private dailyDay = todayUtcDay()
+  /** Set after a successful submission so the board can highlight your row. */
+  private submittedName: string | null = null
   private startedAt: number | null = null
   private finishedAt: number | null = null
   private finished = false
@@ -140,15 +163,30 @@ class TypeTrialTool extends HTMLElement {
   private shareBtn!: HTMLButtonElement
   private bestEl!: HTMLElement
   private resetBtn!: HTMLButtonElement
+  private dailyEl!: HTMLElement
+  private dailyMetaEl!: HTMLElement
+  private dailyFormEl!: HTMLFormElement
+  private dailyNameEl!: HTMLInputElement
+  private dailyNoteEl!: HTMLElement
+  private dailyBoardEl!: HTMLElement
+
+  /** The passage for the current category (daily = the shared UTC-day text). */
+  private passageFor(avoid?: string): string {
+    if (this.category === 'daily') {
+      this.dailyDay = todayUtcDay()
+      return dailyPassage(this.dailyDay)
+    }
+    return pick(TEXTS[this.category], avoid)
+  }
 
   connectedCallback() {
-    this.target = pick(TEXTS[this.category])
+    this.target = this.passageFor()
 
     this.innerHTML = `
       <div data-type="tool-page" data-tool="type-trial">
         <div data-type="tool-header">
           <h1>Type Trial</h1>
-          <p>How fast can you type? Pick a category and start — the clock begins on your first keystroke. Everything runs in your browser; nothing is uploaded.</p>
+          <p>How fast can you type? The Daily tab races one shared passage — same text for everyone, new at midnight UTC — with a leaderboard you can join by name. Practice categories stay entirely in your browser.</p>
         </div>
 
         <div data-group="categories" role="group" aria-label="Category">
@@ -188,6 +226,29 @@ class TypeTrialTool extends HTMLElement {
           <span data-type="tt-best-text"></span>
           <button data-action="reset-best" type="button" hidden>Reset</button>
         </p>
+
+        <section data-type="tt-daily" hidden aria-label="Daily leaderboard">
+          <h2>Today's leaderboard</h2>
+          <p data-type="tt-daily-meta"></p>
+          <form data-type="tt-daily-form" hidden>
+            <label>
+              <span>Name for the board</span>
+              <input
+                data-type="tt-daily-name"
+                type="text"
+                minlength="2"
+                maxlength="24"
+                required
+                autocomplete="nickname"
+                spellcheck="false"
+                placeholder="e.g. swift-fox"
+              />
+            </label>
+            <button data-action="submit-daily" type="submit">Submit score</button>
+          </form>
+          <p data-type="tt-daily-note" role="status" aria-live="polite" hidden></p>
+          <ol data-type="tt-daily-board"></ol>
+        </section>
       </div>
     `
 
@@ -197,12 +258,19 @@ class TypeTrialTool extends HTMLElement {
     this.shareBtn = this.querySelector('[data-action="share"]') as HTMLButtonElement
     this.bestEl = this.querySelector('[data-type="tt-best-text"]') as HTMLElement
     this.resetBtn = this.querySelector('[data-action="reset-best"]') as HTMLButtonElement
+    this.dailyEl = this.querySelector('[data-type="tt-daily"]') as HTMLElement
+    this.dailyMetaEl = this.querySelector('[data-type="tt-daily-meta"]') as HTMLElement
+    this.dailyFormEl = this.querySelector('[data-type="tt-daily-form"]') as HTMLFormElement
+    this.dailyNameEl = this.querySelector('[data-type="tt-daily-name"]') as HTMLInputElement
+    this.dailyNoteEl = this.querySelector('[data-type="tt-daily-note"]') as HTMLElement
+    this.dailyBoardEl = this.querySelector('[data-type="tt-daily-board"]') as HTMLElement
 
     this.wire()
     this.renderText()
     this.renderStats({ wpm: 0, acc: 100, sec: 0, correct: 0, typedLen: 0 })
     this.renderBest()
     this.syncCategoryUI()
+    this.syncDailyUI()
     requestAnimationFrame(() => this.input.focus({ preventScroll: true }))
   }
 
@@ -237,6 +305,7 @@ class TypeTrialTool extends HTMLElement {
         this.category = cat
         this.syncCategoryUI()
         this.renderBest()
+        this.syncDailyUI()
         this.restart(true)
       }),
     )
@@ -244,6 +313,10 @@ class TypeTrialTool extends HTMLElement {
     this.querySelector('[data-action="restart"]')!.addEventListener('click', () => this.restart(false))
     this.querySelector('[data-action="new"]')!.addEventListener('click', () => this.restart(true))
     this.shareBtn.addEventListener('click', (e) => this.copyResult(e))
+    this.dailyFormEl.addEventListener('submit', (e) => {
+      e.preventDefault()
+      void this.submitDaily()
+    })
     this.resetBtn.addEventListener('click', () => {
       // Clear only the active category's best, leaving the others intact.
       const m = loadBests()
@@ -444,12 +517,23 @@ class TypeTrialTool extends HTMLElement {
     this.renderBest()
     this.input.blur()
     this.lastResult = s
+
+    // A plausible daily finish unlocks the leaderboard form (name remembered).
+    if (this.category === 'daily' && plausible && s.wpm > 0) {
+      this.dailyNameEl.value = this.loadName()
+      this.dailyFormEl.hidden = false
+      this.setDailyNote('')
+    }
   }
 
   private lastResult: Stats | null = null
 
   private restart(newText: boolean) {
-    if (newText) this.target = pick(TEXTS[this.category], this.target)
+    // Daily always re-derives the day's passage (a tab left open across UTC
+    // midnight must pick up the new race); other categories draw a fresh text
+    // only when asked.
+    if (this.category === 'daily') this.target = this.passageFor()
+    else if (newText) this.target = pick(TEXTS[this.category], this.target)
     this.input.value = ''
     this.startedAt = null
     this.finishedAt = null
@@ -468,6 +552,8 @@ class TypeTrialTool extends HTMLElement {
     this.resultEl.hidden = true
     this.resultEl.innerHTML = ''
     this.shareBtn.hidden = true
+    this.dailyFormEl.hidden = true
+    if (this.category === 'daily') this.renderDailyMeta()
 
     this.renderText()
     this.renderStats({ wpm: 0, acc: 100, sec: 0, correct: 0, typedLen: 0 })
@@ -496,12 +582,129 @@ class TypeTrialTool extends HTMLElement {
     }
   }
 
+  /* ── Daily race: shared passage + server leaderboard ───── */
+
+  private loadName(): string {
+    try { return localStorage.getItem(NAME_KEY) ?? '' } catch { return '' }
+  }
+
+  private saveName(name: string): void {
+    try { localStorage.setItem(NAME_KEY, name) } catch { /* ignore */ }
+  }
+
+  private setDailyNote(text: string): void {
+    this.dailyNoteEl.textContent = text
+    this.dailyNoteEl.hidden = !text
+  }
+
+  /** Show/hide the daily panel; "New text" makes no sense on a fixed passage. */
+  private syncDailyUI(): void {
+    const daily = this.category === 'daily'
+    this.dailyEl.hidden = !daily
+    ;(this.querySelector('[data-action="new"]') as HTMLElement).hidden = daily
+    if (daily) {
+      this.renderDailyMeta()
+      void this.refreshBoard()
+    }
+  }
+
+  private renderDailyMeta(): void {
+    const ms = msUntilUtcMidnight()
+    const h = Math.floor(ms / 3_600_000)
+    const m = Math.floor((ms % 3_600_000) / 60_000)
+    const left = h > 0 ? `${h}h ${m}m` : `${m}m`
+    this.dailyMetaEl.textContent = `Everyone races the same passage today (${this.dailyDay} UTC). New text in ${left}.`
+  }
+
+  private async refreshBoard(): Promise<void> {
+    try {
+      const res = await fetch('/api/games/type-trial/daily', { headers: { accept: 'application/json' } })
+      if (!res.ok) throw new Error(String(res.status))
+      const data = await res.json() as { entries?: unknown }
+      this.renderBoard(Array.isArray(data.entries) ? data.entries : [])
+    } catch {
+      this.dailyBoardEl.innerHTML = ''
+      this.setDailyNote('Leaderboard unavailable right now — your runs still count locally.')
+    }
+  }
+
+  /** Render the top of the board. Names are user-supplied strings from the
+   *  server — escaped here, at the render site, before touching innerHTML. */
+  private renderBoard(entries: unknown[]): void {
+    const you = (this.submittedName ?? '').toLowerCase()
+    const rows = entries.slice(0, 10).map((e, i) => {
+      const v = (e ?? {}) as Record<string, unknown>
+      const name = typeof v.name === 'string' ? v.name : '?'
+      const wpm = typeof v.wpm === 'number' ? Math.round(v.wpm) : 0
+      const acc = typeof v.acc === 'number' ? Math.round(v.acc) : 0
+      const yours = you && name.toLowerCase() === you ? ' data-you' : ''
+      return `<li${yours}><span data-type="tt-lb-rank">${i + 1}</span><span data-type="tt-lb-name">${escText(name)}</span><span data-type="tt-lb-score">${wpm} wpm · ${acc}%</span></li>`
+    })
+    this.dailyBoardEl.innerHTML = rows.join('')
+    if (!rows.length) this.setDailyNote('No entries yet today — finish a run and be first on the board.')
+  }
+
+  private async submitDaily(): Promise<void> {
+    if (!this.lastResult || this.category !== 'daily') return
+    const s = this.lastResult
+    const name = this.dailyNameEl.value.trim()
+    if (name.length < 2) { this.setDailyNote('Pick a name of at least 2 characters.'); return }
+    const btn = this.dailyFormEl.querySelector('[data-action="submit-daily"]') as HTMLButtonElement
+    btn.disabled = true
+    btn.textContent = 'Submitting…'
+    try {
+      const res = await fetch('/api/games/type-trial/daily', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          day: this.dailyDay,
+          name,
+          wpm: s.wpm,
+          acc: s.acc,
+          sec: Math.round(s.sec * 10) / 10,
+        }),
+      })
+      const data = await res.json().catch(() => ({})) as Record<string, unknown>
+      if (res.status === 409) {
+        // UTC midnight passed between rendering the passage and submitting.
+        this.setDailyNote('Midnight UTC rolled over mid-run — a fresh passage is up. Race it!')
+        this.restart(true)
+        return
+      }
+      if (res.status === 429) { this.setDailyNote('Too many submissions — give it a minute.'); return }
+      if (!res.ok) { this.setDailyNote('That score did not validate on the server.'); return }
+      // Highlight your own row using the name the SERVER stored — sanitizing can
+      // change what was typed (collapsed spaces, stripped zero-widths), and
+      // matching on the raw input would silently never highlight anything.
+      this.submittedName = typeof data.name === 'string' ? data.name : name
+      this.saveName(this.submittedName)
+      this.dailyFormEl.hidden = true
+      this.renderBoard(Array.isArray(data.entries) ? data.entries as unknown[] : [])
+      const rank = typeof data.rank === 'number' ? data.rank : null
+      const kept = data.keptPrevious === true
+      this.setDailyNote(
+        kept
+          ? `Your earlier run today still ranks higher — kept it.${rank ? ` You're #${rank}.` : ''}`
+          : rank
+            ? `On the board — you're #${rank} today.`
+            : "Submitted — today's board is full of faster runs, keep chasing.",
+      )
+    } catch {
+      this.setDailyNote('Could not reach the leaderboard — try again shortly.')
+    } finally {
+      btn.disabled = false
+      btn.textContent = 'Submit score'
+    }
+  }
+
   private async copyResult(e: Event) {
     if (!this.lastResult) return
     const btn = e.currentTarget as HTMLButtonElement
     const s = this.lastResult
     const url = `${location.origin}${location.pathname}`
-    const text = `I just typed ${s.wpm} wpm at ${s.acc}% accuracy on Type Trial — beat me at ${url}`
+    const text = this.category === 'daily'
+      ? `Type Trial daily ${this.dailyDay}: ${s.wpm} wpm at ${s.acc}% accuracy — race the same passage at ${url}`
+      : `I just typed ${s.wpm} wpm at ${s.acc}% accuracy on Type Trial — beat me at ${url}`
     try {
       await navigator.clipboard.writeText(text)
       btn.textContent = 'Copied!'

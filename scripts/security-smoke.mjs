@@ -15,6 +15,15 @@ import { isValidBinId } from '../src/lib/webhook-store.ts'
 import { gameTag, isPlayableGame } from '../src/lib/games.ts'
 import { games } from '../src/config/games.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
+import {
+  DAILY_MAX_ENTRIES_PER_DAY,
+  DAILY_NAME_MAX,
+  DAILY_WPM_CAP,
+  isPlausibleScore,
+  pruneBoard,
+  sanitizeName,
+} from '../src/lib/type-trial-leaderboard.ts'
+import { dailyPassage, todayUtcDay } from '../src/lib/type-trial-daily.ts'
 
 const unsafeMarkdown = render('[x](javascript:alert(1)) <img src=x onerror=alert(1)>')
 assert.equal(unsafeMarkdown.includes('javascript:'), false)
@@ -200,5 +209,46 @@ recordVisit({ path: '/tools/json-tidy', country: 'IN', referrer: null, bot: fals
 recordVisit({ path: '/tools/json-tidy', country: 'IN', referrer: 'news.ycombinator.com', bot: true }, now)
 recordVisit({ path: '/tools/json-tidy', country: 'XX', referrer: 'constructor', bot: false }, now)
 recordVisit({ path: '/tools/json-tidy', country: 'XX', referrer: '__proto__', bot: false }, now)
+
+// ── Type Trial daily leaderboard — a public, unauthenticated write endpoint ──
+// Display names render on every visitor's screen, so control/zero-width/bidi
+// characters (spoofing neighbours, hiding payload) must be stripped, whitespace
+// collapsed, and length capped server-side — the client's maxlength is UX only.
+assert.equal(sanitizeName('  swift   fox  '), 'swift fox')
+assert.equal(sanitizeName('a\u0000b\u200Bc\u202Ed'), 'abcd', 'control/zero-width/bidi chars are stripped')
+assert.equal(sanitizeName('x'), null, 'too-short names are rejected')
+assert.equal(sanitizeName(42), null)
+assert.equal((sanitizeName('n'.repeat(500)) ?? '').length <= DAILY_NAME_MAX, true, 'names are length-capped')
+
+// Scores must be arithmetically possible for the day's passage: the claimed wpm
+// cannot exceed a perfect run of that text in the claimed seconds, and every
+// number must sit in range — otherwise the board is a forgery free-for-all.
+const passageLen = dailyPassage(todayUtcDay()).length
+assert.equal(isPlausibleScore({ wpm: 60, acc: 97, sec: (passageLen / 5 / 60) * 60 }, passageLen), true)
+assert.equal(isPlausibleScore({ wpm: DAILY_WPM_CAP + 1, acc: 100, sec: 2 }, passageLen), false, 'wpm above the human cap is rejected')
+assert.equal(isPlausibleScore({ wpm: 200, acc: 100, sec: 60 }, passageLen), false, 'wpm impossible for the passage length/time is rejected')
+assert.equal(isPlausibleScore({ wpm: 60, acc: 100, sec: 0.2 }, passageLen), false, 'sub-second runs are rejected')
+assert.equal(isPlausibleScore({ wpm: 60.5, acc: 97, sec: 20 }, passageLen), false, 'non-integer wpm is rejected')
+assert.equal(isPlausibleScore({ wpm: 60, acc: 101, sec: 20 }, passageLen), false)
+// A finish means the whole passage was typed, so wpm is a FUNCTION of sec — a
+// one-sided "not faster than perfect" test is vacuous, because shrinking the
+// claimed sec raises its ceiling without limit. This pair got through that test.
+assert.equal(
+  isPlausibleScore({ wpm: DAILY_WPM_CAP - 1, acc: 100, sec: 2 }, passageLen),
+  false,
+  'wpm/sec pairs that disagree are rejected, not just wpm above the perfect-run ceiling',
+)
+// The honest floor that leaves: a forger must claim a time a cap-speed typist
+// would need, and no less.
+const capSec = (passageLen / 5) / (DAILY_WPM_CAP / 60)
+assert.equal(isPlausibleScore({ wpm: DAILY_WPM_CAP, acc: 100, sec: capSec }, passageLen), true)
+assert.equal(isPlausibleScore({ wpm: DAILY_WPM_CAP, acc: 100, sec: capSec / 2 }, passageLen), false)
+
+// Retention drops old boards rather than growing the file forever, and the
+// per-day cap is a real constant the store trims to.
+const lbNow = new Date('2026-08-15T00:00:00Z')
+const lbOld = new Date(lbNow.getTime() - 30 * 86_400_000).toISOString().slice(0, 10)
+assert.deepEqual(Object.keys(pruneBoard({ [lbOld]: [], '2026-08-15': [] }, lbNow)), ['2026-08-15'])
+assert.ok(DAILY_MAX_ENTRIES_PER_DAY <= 200, 'per-day entry cap stays bounded')
 
 console.log('security smoke ok')

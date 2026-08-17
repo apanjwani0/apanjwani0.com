@@ -252,6 +252,32 @@ occupy a socket. The Webhook Inspector is the reference: `WEBHOOK_MAX_*` in
 accounting being optimistic — `.length` counts UTF-16 code units, not bytes, and
 object overhead is real.
 
+The Type Trial daily leaderboard is the second worked example: `DAILY_*` in
+`src/lib/type-trial-leaderboard.ts` bounds name length, entries per day, retained
+days and the claimable wpm; the route
+(`src/pages/api/games/type-trial/daily.ts`) caps the body and rate-limits reads
+and writes separately. It persists to `data/type-trial-daily.json` on the mounted
+volume, debounced like `src/lib/visits.ts` — never a write per request. Stored
+rows are re-validated on load, so a corrupt or hand-edited file degrades to an
+empty board instead of crashing the route.
+
+### Validate a client-submitted value against one the server derives
+
+The server must re-derive the thing being scored and check the payload against
+*that*, never against numbers the payload also supplied. Type Trial derives the
+UTC day and its passage from `src/lib/type-trial-daily.ts` — deliberately shared
+with the browser bundle so client and server cannot disagree about what today's
+text is — and validates the submitted run against the passage it derived.
+
+**One-sided bounds are the trap.** "wpm may not exceed a perfect run of the
+passage in the claimed seconds" reads like a real check and is vacuous: the
+ceiling it computes grows without limit as the claimed seconds shrink, so 249 wpm
+in 2 seconds passed it and the wpm cap was the only thing actually holding. A run
+finishes only when the typed text equals the passage, which makes wpm a
+*function* of elapsed time — the gate has to pin the pair to each other, not
+bound one of them. Ask it of every new validator: what does an attacker set the
+*other* field to?
+
 ### Escaping
 
 - Anything interpolated into HTML gets escaped including `'` — attribute quoting
@@ -443,6 +469,13 @@ or canvas screensaver. That shelf is full and it is what prompted this section.
 Next level is a shared daily seed, a server-side leaderboard, or a replay permalink.
 One game with a daily seed beats five clones — and prefer *deepening one* of the
 existing games over adding a fourteenth.
+
+Type Trial is the worked example, and it was a deepening rather than a fourteenth
+game: one shared passage per UTC day, a server-validated leaderboard you join by
+name, and practice modes that still never leave the browser. Note what it did
+*not* need — no accounts, no per-visitor identity, no cookie. A display name plus
+the numbers is the whole record, which keeps it on the right side of the
+aggregate-only line the Analytics section draws.
 
 Ship fewer, larger things. One tool that a stranger would bookmark is worth more
 than the whole current list.
