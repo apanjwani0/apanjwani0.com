@@ -445,7 +445,10 @@ class TypeTrialTool extends HTMLElement {
     const t = this.target
     let html = ''
     for (let i = 0; i < t.length; i++) {
-      const display = t[i] === ' ' ? '&nbsp;' : escapeHtml(t[i])
+      // A plain space, not &nbsp; — pre-wrap already preserves it, and a
+      // no-break space leaves the line breaker no legal break at word
+      // boundaries, so every wrap lands mid-word.
+      const display = escapeHtml(t[i])
       const classes: string[] = []
       if (i < typed.length) classes.push(typed[i] === t[i] ? 'ok' : 'bad')
       if (i === typed.length && !this.finished) classes.push('caret')
