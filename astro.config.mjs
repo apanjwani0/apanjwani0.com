@@ -96,6 +96,45 @@ export interface Tool {
 export const tools: Tool[] = ${JSON.stringify(data, null, 2)}\n`
 }
 
+/** @param {unknown} data */
+function generateLearnings(data) {
+  return `/**
+ * Learnings — the long-form section.
+ *
+ * A learning is a blog post that can mount a live component. \`embed\` names a key
+ * in GAME_TAGS (src/lib/games.ts), and the article page mounts that component
+ * inline through the same dispatch the games route uses.
+ *
+ * Separate from \`blogs\` on purpose. Blogs are personal and occasional; these are
+ * written to be found, so they carry their own keywords, share cards and
+ * indexing predicate (isPublishedLearning, src/lib/learnings.ts).
+ */
+
+export interface Learning {
+  slug: string
+  title: string
+  /** Shown on the hub and as the meta description when \`metaDescription\` is unset. */
+  summary: string
+  date: string
+  /** Markdown. Rendered through src/lib/markdown.ts — never handed to set:html raw. */
+  content: string
+  /**
+   * A GAME_TAGS key. Mounts that component inline, below the intro.
+   * Unknown or absent → the article renders as prose, which is a valid article.
+   */
+  embed?: string
+  /** Caption under the embed, explaining what the reader is looking at. */
+  embedCaption?: string
+  /** Draft when false: no page, no sitemap entry, no card. See isPublishedLearning(). */
+  published: boolean
+  seoTitle?: string
+  metaDescription?: string
+  keywords?: string
+}
+
+export const learnings: Learning[] = ${JSON.stringify(data, null, 2)}\n`
+}
+
 /** @type {import('vite').Plugin} */
 const adminSavePlugin = {
   name: 'admin-save',
@@ -172,6 +211,10 @@ const adminSavePlugin = {
             case 'tools':
               content = generateTools(data)
               filename = 'tools.ts'
+              break
+            case 'learnings':
+              content = generateLearnings(data)
+              filename = 'learnings.ts'
               break
             default:
               res.writeHead(400, { 'Content-Type': 'application/json' })

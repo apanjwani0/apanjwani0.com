@@ -29,11 +29,14 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { tools } from '../src/config/tools.ts'
 import { games } from '../src/config/games.ts'
+import { learnings } from '../src/config/learnings.ts'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG } from '../src/lib/driftfield.ts'
 import { escapeHtml } from '../src/lib/escape.ts'
 import {
   OG_CARD_HEIGHT,
   OG_CARD_WIDTH,
   gameHasOgCard,
+  learningHasOgCard,
   ogCardFile,
   toolHasOgCard,
 } from '../src/lib/og.ts'
@@ -150,6 +153,22 @@ async function main() {
     ...games
       .filter(gameHasOgCard)
       .map(g => ({ kind: 'games', slug: g.slug, label: 'Game', title: g.title, description: g.description })),
+    // The card carries the summary, not the body: it is the same promise the
+    // hub makes about the article, and the body is markdown that would render
+    // as literal syntax on a 1200×630 image.
+    ...learnings
+      .filter(learningHasOgCard)
+      .map(l => ({ kind: 'learnings', slug: l.slug, label: 'Learning', title: l.title, description: l.summary })),
+    // Driftfield's modes are sub-routes of one tool, so their cards are named
+    // `tools-driftfield-<mode>` — the same prefix+slug rule as everything else,
+    // with the mode folded into the slug. The page derives the identical name.
+    ...DRIFTFIELD_MODES.map(m => ({
+      kind: 'tools',
+      slug: `${DRIFTFIELD_SLUG}-${m.slug}`,
+      label: 'Driftfield',
+      title: m.title,
+      description: m.description,
+    })),
   ]
 
   await mkdir(OUT_DIR, { recursive: true })

@@ -1,0 +1,205 @@
+---
+export const prerender = false
+
+import ToolBase from '../../../layouts/ToolBase.astro'
+import Breadcrumbs from '../../../components/Breadcrumbs.astro'
+import RelatedLinks from '../../../components/RelatedLinks.astro'
+import { getSite } from '../../../lib/config'
+import { breadcrumbListJsonLd, webAppJsonLd } from '../../../lib/jsonld'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, driftfieldMode } from '../../../lib/driftfield'
+import { embedTag } from '../../../lib/embeds'
+import { existingOgCardPath } from '../../../lib/og'
+import '../../../styles/seo-support.css'
+import '../../../components/tools/tools-common.css'
+import '../../../styles/games-embed.css'
+
+const { mode: modeSlug } = Astro.params
+const mode = driftfieldMode(modeSlug)
+
+if (!mode) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+const [site] = await Promise.all([getSite(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
+const canonicalUrl = `${site.url}/tools/${DRIFTFIELD_SLUG}/${mode.slug}`
+
+// The engine to mount. Driftfield modes are the same components the articles
+// embed — EMBED_TAGS, not GAME_TAGS, because none of these are games any more.
+const EngineTag = embedTag(mode.slug)
+
+// Siblings, so no mode is a crawl leaf reachable only through the hub.
+const siblings = DRIFTFIELD_MODES
+  .filter(m => m.slug !== mode.slug)
+  .map(m => ({ title: m.title, href: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` }))
+
+const ogCard = await existingOgCardPath('tools', `${DRIFTFIELD_SLUG}-${mode.slug}`)
+
+const ldJson = webAppJsonLd({
+  name: `${mode.title} — Driftfield`,
+  description: mode.description,
+  url: canonicalUrl,
+  authorName: site.name,
+  authorUrl: site.url,
+  applicationCategory: 'DesignApplication',
+  keywords: mode.keywords,
+})
+
+const crumbs = [
+  { label: 'home', href: '/' },
+  { label: 'tools', href: '/tools' },
+  { label: 'driftfield', href: `/tools/${DRIFTFIELD_SLUG}` },
+  { label: mode.title },
+]
+const breadcrumbLd = breadcrumbListJsonLd([
+  { name: 'Home', url: site.url },
+  { name: 'Tools', url: `${site.url}/tools` },
+  { name: 'Driftfield', url: `${site.url}/tools/${DRIFTFIELD_SLUG}` },
+  { name: mode.title, url: canonicalUrl },
+])
+---
+
+<ToolBase
+  toolTitle={`${mode.title} — Driftfield`}
+  seoTitle={mode.seoTitle}
+  metaDescription={mode.description}
+  keywords={mode.keywords}
+  ogCard={ogCard}
+>
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <Breadcrumbs items={crumbs} inset />
+
+  <h1>{mode.title}</h1>
+  <p data-type="page-intro">{mode.description}</p>
+
+  <nav data-type="driftfield-modes" aria-label="Driftfield modes">
+    {DRIFTFIELD_MODES.map(m => (
+      <a
+        href={`/tools/${DRIFTFIELD_SLUG}/${m.slug}`}
+        aria-current={m.slug === mode.slug ? 'page' : undefined}
+      >{m.title}</a>
+    ))}
+  </nav>
+
+  {EngineTag ? (
+    <div data-type="driftfield-stage">
+      <EngineTag data-game={mode.slug} />
+    </div>
+  ) : (
+    <p>This mode is not wired up yet.</p>
+  )}
+
+  <div data-type="driftfield-actions">
+    <button type="button" data-action="driftfield-export">Download PNG</button>
+    <span data-type="driftfield-export-note" role="status"></span>
+  </div>
+
+  {mode.learning && (
+    <p data-type="driftfield-story">
+      Where this came from: <a href={`/learnings/${mode.learning}`}>read the story behind it</a>.
+    </p>
+  )}
+
+  <RelatedLinks heading="More Driftfield modes" items={siblings} />
+
+  <script>
+    import { mountEmbed } from '../../../lib/game-mount'
+
+    // The engine writes its own <h1> and blurb; this page supplies both from the
+    // mode config, so strip them. See src/lib/game-mount.ts for why an observer.
+    function mount() {
+      mountEmbed('[data-type="driftfield-stage"]')
+    }
+
+    // Export whatever the engine has drawn. Every engine renders to a <canvas>,
+    // so the shell does not need to know anything about the engine itself — which
+    // is what lets one export button serve all six.
+    function wireExport() {
+      const button = document.querySelector('[data-action="driftfield-export"]')
+      if (!button || button.hasAttribute('data-wired')) return
+      button.setAttribute('data-wired', '')
+      const note = document.querySelector('[data-type="driftfield-export-note"]')
+
+      button.addEventListener('click', () => {
+        const canvas = document.querySelector('[data-type="driftfield-stage"] canvas')
+        if (!(canvas instanceof HTMLCanvasElement)) {
+          if (note) note.textContent = 'Nothing to export yet.'
+          return
+        }
+        // toDataURL throws a SecurityError on a tainted canvas. Nothing here
+        // draws cross-origin images, but a future mode might, and a thrown
+        // exception in a click handler would look like a dead button.
+        let url: string
+        try {
+          url = canvas.toDataURL('image/png')
+        } catch {
+          if (note) note.textContent = 'This mode cannot be exported.'
+          return
+        }
+        const slug = document.querySelector('[data-game]')?.getAttribute('data-game') ?? 'driftfield'
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `driftfield-${slug}-${canvas.width}x${canvas.height}.png`
+        link.click()
+        if (note) note.textContent = `Saved at ${canvas.width}×${canvas.height}.`
+      })
+    }
+
+    function init() {
+      mount()
+      wireExport()
+    }
+    document.addEventListener('astro:page-load', init)
+    init()
+  </script>
+</ToolBase>
+
+<style>
+  /* Mode switcher: a row of links, the current one marked. Tokens only. */
+  nav[data-type="driftfield-modes"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-section);
+  }
+
+  nav[data-type="driftfield-modes"] a {
+    padding: var(--space-2xs) var(--space-xs);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+
+  nav[data-type="driftfield-modes"] a[aria-current="page"] {
+    color: var(--color-text);
+    border-color: var(--color-accent);
+  }
+
+  div[data-type="driftfield-actions"] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-top: var(--space-section);
+  }
+
+  span[data-type="driftfield-export-note"] {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
+  p[data-type="driftfield-story"] {
+    margin-top: var(--space-section);
+    color: var(--color-muted);
+  }
+
+  /* The engine supplies its own title block, which this page already renders
+     from the mode config. Hidden here so it never paints; the script removes it
+     from the DOM. :global() because that markup is written at runtime and never
+     carries Astro's scope hash. */
+  div[data-type="driftfield-stage"] :global([data-type$="-header"]),
+  div[data-type="driftfield-stage"] :global(h1) {
+    display: none;
+  }
+</style>

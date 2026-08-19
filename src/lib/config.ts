@@ -8,7 +8,7 @@
  * Usage in any Astro page, layout, or component:
  *   const site = await getSite(Astro.locals)
  *
- * Keys: 'site' | 'projects' | 'experience' | 'blogs' | 'games' | 'tools'
+ * Keys: 'site' | 'projects' | 'experience' | 'blogs' | 'games' | 'tools' | 'learnings'
  */
 
 import { readFile } from 'node:fs/promises'
@@ -19,6 +19,7 @@ import { experience as staticExperience } from '../config/experience'
 import { posts as staticPosts } from '../config/blogs'
 import { games as staticGames } from '../config/games'
 import { tools as staticTools } from '../config/tools'
+import { learnings as staticLearnings } from '../config/learnings'
 import { validateConfigData } from './config-schema'
 
 import type { Company } from '../config/experience'
@@ -26,6 +27,7 @@ import type { Project } from '../config/projects'
 import type { Post } from '../config/blogs'
 import type { Game } from '../config/games'
 import type { Tool } from '../config/tools'
+import type { Learning } from '../config/learnings'
 
 type KVStore = { get(key: string, type: 'json'): Promise<unknown> }
 
@@ -129,4 +131,8 @@ export async function getGames(locals: unknown): Promise<Game[]> {
 
 export async function getTools(locals: unknown): Promise<Tool[]> {
   return getConfig(locals, 'tools', staticTools as Tool[])
+}
+
+export async function getLearnings(locals: unknown): Promise<Learning[]> {
+  return getConfig(locals, 'learnings', staticLearnings as Learning[])
 }

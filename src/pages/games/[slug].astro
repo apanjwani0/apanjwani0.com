@@ -9,23 +9,19 @@ import RelatedLinks from '../../components/RelatedLinks.astro'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
+import { MOVED_GAMES } from '../../lib/driftfield'
 import '../../styles/seo-support.css'
-import '../../components/games/games-common.css'
-import '../../components/games/twenty48/twenty48.css'
-import '../../components/games/game-of-life/game-of-life.css'
-import '../../components/games/flow-field/flow-field.css'
-import '../../components/games/maze-weaver/maze-weaver.css'
-import '../../components/games/type-trial/type-trial.css'
-import '../../components/games/hue-hunt/hue-hunt.css'
-import '../../components/games/starfield-toy/starfield.css'
-import '../../components/games/murmuration/murmuration.css'
-import '../../components/games/turing-bloom/turing-bloom.css'
-import '../../components/games/sand-loom/sand-loom.css'
-import '../../components/games/lsystem/lsystem.css'
-import '../../components/games/quintle/quintle.css'
+import '../../styles/games-embed.css'
 
 const { slug } = Astro.params
-if (slug === 'wallpaper-forge') return Astro.redirect('/tools/wallpaper-forge', 301)
+if (slug === 'wallpaper-forge') return Astro.redirect('/tools/driftfield', 301)
+
+// The six generative engines and Game of Life left /games — they were never
+// games, and "flow field game" is not a thing anyone searches for. Their URLs
+// are retargeted rather than dropped: same content, correct intent, and whatever
+// equity those pages had follows them. See src/lib/driftfield.ts.
+const movedGame = MOVED_GAMES[slug as string]
+if (movedGame) return Astro.redirect(movedGame, 301)
 
 const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
 const cspNonce = (Astro.locals as any).cspNonce
@@ -125,24 +121,10 @@ const ogCard = gameHasOgCard(game) ? await existingOgCardPath('games', game.slug
 
   {GameTag && (
     <script>
-      // Mount the game's controller on initial load AND after every View Transition
-      // navigation. Bundled scripts run only once per session, so without astro:page-load
-      // a game reached via in-site nav renders blank until a hard reload.
-      function mountGame() {
-        const slug = document.querySelector('[data-game]')?.getAttribute('data-game')
-        if (slug === 'quintle') import('../../components/games/quintle/Quintle.ts')
-        else if (slug === '2048') import('../../components/games/twenty48/Twenty48.ts')
-        else if (slug === 'game-of-life') import('../../components/games/game-of-life/GameOfLife.ts')
-        else if (slug === 'flow-field') import('../../components/games/flow-field/FlowField.ts')
-        else if (slug === 'maze-weaver') import('../../components/games/maze-weaver/MazeWeaver.ts')
-        else if (slug === 'type-trial') import('../../components/games/type-trial/TypeTrial.ts')
-        else if (slug === 'hue-hunt') import('../../components/games/hue-hunt/HueHunt.ts')
-        else if (slug === 'starfield-toy') import('../../components/games/starfield-toy/Starfield.ts')
-        else if (slug === 'murmuration') import('../../components/games/murmuration/Murmuration.ts')
-        else if (slug === 'turing-bloom') import('../../components/games/turing-bloom/TuringBloom.ts')
-        else if (slug === 'sand-loom') import('../../components/games/sand-loom/SandLoom.ts')
-        else if (slug === 'lsystem-tree') import('../../components/games/lsystem/LSystem.ts')
-      }
+      // Mount on initial load AND after every View Transition navigation. Bundled
+      // scripts run only once per session, so without astro:page-load a game
+      // reached via in-site nav renders blank until a hard reload.
+      import { mountGame } from '../../lib/game-mount'
       document.addEventListener('astro:page-load', mountGame)
       mountGame()
     </script>

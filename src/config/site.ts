@@ -16,6 +16,10 @@ export const site = {
       "href": "/tools"
     },
     {
+      "label": "learnings",
+      "href": "/learnings"
+    },
+    {
       "label": "blogs",
       "href": "/blogs"
     },

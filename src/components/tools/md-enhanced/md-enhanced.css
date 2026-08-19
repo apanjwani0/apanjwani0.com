@@ -112,6 +112,55 @@ div[data-type="md-panes"][data-view="preview"] textarea[data-type="md-input"] {
   display: none;
 }
 
+/* ── Map view ──
+   The map is hidden in every other mode and takes the full width in its own.
+   It must never be `display: none` while Cytoscape is measuring: a zero-sized
+   container yields a blank canvas that does not recover, which is why the
+   component builds it only after this attribute is already set. */
+div[data-type="md-map"] {
+  display: none;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+div[data-type="md-panes"][data-view="map"] {
+  grid-template-columns: 1fr;
+}
+
+div[data-type="md-panes"][data-view="map"] textarea[data-type="md-input"],
+div[data-type="md-panes"][data-view="map"] div[data-type="md-preview"] {
+  display: none;
+}
+
+div[data-type="md-panes"][data-view="map"] div[data-type="md-map"] {
+  display: flex;
+}
+
+div[data-type="md-map-bar"] {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+div[data-type="md-map-bar"] button[data-active] {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+span[data-type="md-map-note"] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+div[data-type="md-map-canvas"] {
+  height: var(--md-pane-h);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-surface, transparent);
+}
+
 /* ── Textarea & preview ── */
 
 textarea[data-type="md-input"] {

@@ -55,6 +55,114 @@ Yes. Add \`?status=NNN\` to set the HTTP status, \`?delay=MS\` to slow the respo
 Requests are held in memory and dropped after a few hours of inactivity, and the most recent 50 per URL are kept. Treat it as a live inspection tool, not storage.`,
   },
   {
+    slug: 'trellis',
+    title: 'Trellis',
+    description: 'Paste an outline or a mermaid flowchart and it draws itself, then rearrange by hand. Share the whole board as a link.',
+    status: 'live',
+    seoTitle: 'Mind Map & Flowchart Maker from Text — Trellis',
+    metaDescription: 'Turn an indented outline or mermaid flowchart into a diagram instantly, then drag it into shape. Export Mermaid or PNG, or share the board as a single link.',
+    keywords: 'mind map maker, text to diagram, mermaid editor, outline to mind map, flowchart from text, node graph editor, ideation canvas, concept map tool',
+    intro: 'A canvas for thinking on. Paste an indented outline or a mermaid flowchart and it lays itself out; then add, connect and drag nodes into the shape you actually meant. Three layouts, a searchable node list, and export as Mermaid, PNG, or a link that carries the whole board.',
+    seoContent: `## Start from text, finish by hand
+
+Hand-placing thirty boxes is the reason most diagrams never get drawn. Trellis takes structure you already have and does the placing, so the work you do is the thinking.
+
+Paste either of two things — it detects which:
+
+- **An indented outline.** Markdown lists work unmodified; each nested line becomes a child node. This is the fastest way to turn notes into a mind map.
+- **A mermaid flowchart.** \`A[Start] --> B[Next]\`, edge labels, and the usual arrow variants. Round-trips with the Mermaid export, so a board can leave and come back.
+
+Then move things. A generated layout is a starting point, never the finished thought.
+
+## Layouts
+
+- **Flow** — a directed, top-down tree. Right for hierarchies and processes.
+- **Grid** — even rows and columns, for when you want to read everything at once.
+- **Force** — a physics simulation that lets clusters find themselves. Right when you do not yet know the shape.
+
+Switching layout re-runs it; dragging a node afterwards keeps your placement.
+
+## Getting it out
+
+- **Copy link.** The entire board is encoded into the URL fragment. Send it to someone and they open exactly what you were looking at — no account, no server, no stored document. A fragment is never transmitted to a server, so the board does not appear in anyone's access log.
+- **Copy as Mermaid.** Paste it into a README, a GitHub comment, or any tool that renders Mermaid.
+- **PNG.** A 2× export of the current board.
+
+Your work is also saved to this browser as you go, so closing the tab does not lose it.
+
+## FAQ
+
+### Does anything get uploaded?
+
+No. Parsing, layout, rendering and export all run in your browser, and the share link carries the board inside the URL itself rather than storing it anywhere.
+
+### How large a board can a link hold?
+
+Large enough for a normal diagram — the board is compacted into the fragment, and browsers accept long URLs — but a board with hundreds of long labels will produce an unwieldy link. Use the Mermaid export for those.
+
+### Which mermaid features are supported?
+
+The flowchart subset people actually write: node shapes, the common arrow types, and edge labels. Subgraphs, styling and other diagram types are skipped rather than rejected, so an unsupported line does not stop the rest from drawing.`,
+  },
+  {
+    slug: 'token-bench',
+    title: 'Token Bench',
+    description: 'Decode a JWT and actually verify its signature against a JWK, JWKS or HMAC secret.',
+    status: 'live',
+    seoTitle: 'JWT Verifier — Decode and Verify a JWT Signature Online',
+    metaDescription: 'Most JWT tools only decode. Token Bench verifies the signature against a key you paste — HS, RS, PS and ES algorithms — entirely in your browser.',
+    keywords: 'jwt verifier, verify jwt signature, jwt decoder, jwk, jwks, hs256, rs256, es256, jwt signature validation, alg none attack, algorithm confusion',
+    intro: 'Paste a JWT to read its header, payload and claims. Paste a key — an HMAC secret, a JWK, or a whole JWKS — to find out whether the signature actually holds. HS, RS, PS and ES algorithms, checked with the browser\'s own Web Crypto. Nothing is uploaded.',
+    seoContent: `## Verify against a JWKS, by \`kid\`
+
+Plenty of JWT tools verify a signature once you paste a key. What none of them make easy is the step before that: your identity provider publishes a **JWKS** — a set of keys — and the token names which one it was signed with in its \`kid\` header. Matching those up by hand is the fiddly part of the job.
+
+Paste the whole JWKS from your provider's \`/.well-known/jwks.json\` and Token Bench picks the key the token names. If the set holds several keys and the token names none, it says so rather than guessing — verifying against the wrong key and reporting a pass is the worst thing a tool like this can do.
+
+Verification runs on the browser's Web Crypto API over the exact \`header.payload\` bytes. No crypto is hand-rolled, and the token and key never leave the tab.
+
+## What it accepts
+
+- **HMAC** — HS256, HS384, HS512. Paste the shared secret as plain text, or as an \`oct\` JWK.
+- **RSA** — RS256/384/512 (PKCS#1 v1.5) and PS256/384/512 (RSA-PSS). Paste the public key as a JWK.
+- **ECDSA** — ES256 (P-256), ES384 (P-384), ES512 (P-521). Public key as a JWK.
+- **A whole JWKS.** Paste the JSON from your provider's \`/.well-known/jwks.json\` and the key matching the token's \`kid\` is selected automatically.
+
+## The two mistakes this is built around
+
+### \`alg: none\`
+
+A token can declare that it is not signed. Early JWT libraries honoured that and returned "valid", which meant anyone could mint an admin token by editing the payload and deleting the signature. Token Bench reports such a token as **UNSIGNED** and never as verified.
+
+### Algorithm confusion
+
+The more subtle one. If your verifier reads the algorithm from the token's own header, an attacker can take a token you expect to be RS256, re-sign it as HS256 using your **public** key as the HMAC secret, and your verifier will confirm it — because the attacker chose both the message and the method of checking it.
+
+That is why the algorithm here is a control you set rather than something silently taken from the token. It defaults to the header's value because that is convenient while debugging, and it warns you whenever the two disagree. In production, the algorithm must come from your configuration.
+
+## Signature and expiry are separate answers
+
+A correctly signed token that expired last week is a normal, common state, and it is not the same as a forged one. Token Bench reports the signature result and the \`exp\`/\`nbf\` state separately, because collapsing them into a single "valid" light is how expired-token bugs ship.
+
+## Privacy
+
+Everything runs in your browser. The token and the key are never sent anywhere, and neither is stored — only your algorithm choice is remembered on this device, deliberately, since both of the other two are credentials.
+
+## FAQ
+
+### Can I verify a token from Auth0, Cognito, Firebase or Okta?
+
+Yes. Fetch your provider's JWKS (usually \`https://<issuer>/.well-known/jwks.json\`), paste the whole JSON in, and the key matching the token's \`kid\` is picked for you.
+
+### Why does it not fetch the JWKS for me?
+
+Because that would mean this page making a request to your identity provider, and a browser tool that reaches out to an auth endpoint on your behalf is a worse default than one that does not. Fetch it yourself and paste it.
+
+### Can it sign tokens too?
+
+No, only verification. Signing needs a private key, and pasting production private keys into a web page is a habit worth not building.`,
+  },
+  {
     slug: 'json-tidy',
     title: 'JSON Tidy',
     description: 'Format, validate, repair, search, compare & convert JSON to YAML, CSV, or XML.',
@@ -396,15 +504,15 @@ No. Pattern testing, replacement preview and examples run locally in your browse
 Different regex engines support different features. Regex Lab shows JavaScript behavior only, which is what you want for browser and Node.js code.`,
   },
   {
-    slug: 'wallpaper-forge',
-    title: 'Wallpaper Forge',
-    description: 'Make seeded wallpapers and patterns, then export a PNG or looping GIF.',
+    slug: 'driftfield',
+    title: 'Driftfield',
+    description: 'A generative art studio: nine seeded pattern engines plus six live simulations, exported as PNG or looping GIF.',
     status: 'live',
-    seoTitle: 'Wallpaper & GIF Generator — Wallpaper Forge',
-    metaDescription: 'Create seeded wallpapers, patterns and looping GIFs in your browser. Pick a size, palette and engine, then export PNG or GIF locally.',
-    keywords: 'wallpaper generator, gif generator, animated wallpaper maker, pattern generator, generative art, seeded art, procedural art, flow field, harmonograph, topographic pattern, truchet tiles, png wallpaper generator',
-    intro: 'A browser-based generative art studio for stills and loops. Choose from Aurora, Waves, Topographic, Truchet, Terrazzo, Flow Field, Harmonograph, Mosaic, or Constellation; pick a device size and palette; then tune density, detail, and grain. Every result is driven by a seed, so the same settings reproduce the same piece. Export a full-resolution PNG or a compact two-second animated GIF, entirely in your browser with nothing uploaded.',
-    seoContent: `## How Wallpaper Forge works
+    seoTitle: 'Generative Art & Wallpaper Generator — Driftfield',
+    metaDescription: 'Create seeded wallpapers, patterns and looping GIFs in your browser, or run six live simulations — flow fields, boids, reaction-diffusion, L-systems and more.',
+    keywords: 'wallpaper generator, gif generator, animated wallpaper maker, pattern generator, generative art, seeded art, procedural art, flow field, harmonograph, topographic pattern, truchet tiles, png wallpaper generator, reaction diffusion, boids simulation, l-system generator',
+    intro: 'A browser-based generative art studio for stills and loops. Choose from Aurora, Waves, Topographic, Truchet, Terrazzo, Flow Field, Harmonograph, Mosaic, or Constellation; pick a device size and palette; then tune density, detail, and grain. Every result is driven by a seed, so the same settings reproduce the same piece. Export a full-resolution PNG or a compact two-second animated GIF, entirely in your browser with nothing uploaded. Six live simulations sit alongside the studio, each on its own page.',
+    seoContent: `## How Driftfield works
 
 Pick one of nine pattern engines, choose the size you need, set a palette, then tune Density, Detail and Grain until the piece looks right. Everything is driven by a single seed number, so the same engine with the same settings and the same seed always reproduces exactly the same image. Copy the seed and you can come back to a result later.
 
@@ -447,13 +555,26 @@ Not quite. Density and Detail map to whatever is meaningful for the engine you p
   {
     slug: 'md-enhanced',
     title: 'MD Enhanced',
-    description: 'Markdown editor with live preview and multi-format export.',
+    description: 'Markdown editor with live preview, a structure map of the document, and multi-format export.',
     status: 'live',
-    seoTitle: 'Markdown Editor with Live Preview — MD Enhanced',
-    metaDescription: 'Write Markdown with a live preview, then export to MD, TXT, PDF or image. A simple browser editor with no login and no upload.',
-    keywords: 'markdown editor, markdown preview, markdown to pdf, online markdown editor, markdown export, live markdown preview',
-    intro: 'A browser-based markdown editor with real-time preview. Write in markdown on the left, see the formatted result on the right. Export your work as PDF, PNG image, raw markdown, or plain text — all processed locally in your browser with no server uploads.',
-    seoContent: `## A quick markdown editor for export
+    seoTitle: 'Markdown Editor with Live Preview & Mind Map — MD Enhanced',
+    metaDescription: 'Write Markdown with a live preview and see your document as a mind map of its own headings — click a node to jump there. Export to MD, TXT, PDF or image.',
+    keywords: 'markdown editor, markdown preview, markdown to pdf, online markdown editor, markdown export, live markdown preview, markdown mind map, document outline map, markdown structure view',
+    intro: 'A browser-based markdown editor with real-time preview. Write in markdown on the left, see the formatted result on the right — or switch to Map and see the document as a tree of its own headings, where clicking a node jumps you straight to that section. Export as PDF, PNG image, raw markdown, or plain text, all locally with no server uploads.',
+    seoContent: `## The Map view
+
+Long documents lose their shape while you are inside them. The **Map** view draws the document as a tree so you can see the shape rather than remember it, and clicking any node jumps the editor to that line.
+
+Two things it can map, switchable:
+
+- **Headings** — \`#\` / \`##\` / \`###\` become parent and child. This is the skeleton of the argument, and it is what a long piece is missing a view of.
+- **Outline** — indented bullet lists become the tree, for brainstorming inside a document.
+
+Fenced code blocks are excluded from both, so the \`#\` comments and \`-\` flags in a shell snippet do not turn into branches of your map.
+
+The map is a navigator, not an editor: it never rewrites your markdown. It redraws as you type.
+
+## A quick markdown editor for export
 
 MD Enhanced is for short documents you want to write, preview and export without opening a full writing app. Paste markdown, check the rendered preview, then export the result.
 

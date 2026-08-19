@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Personal portfolio site — an SSR Astro app that renders a home hero, plus
-projects / experience / blogs / games / tools sections. All personal content is
+projects / experience / blogs / learnings / games / tools sections. All personal content is
 **runtime-editable** through a dev-only `/admin` page that writes to Cloudflare
 KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 
@@ -278,6 +278,32 @@ finishes only when the typed text equals the passage, which makes wpm a
 bound one of them. Ask it of every new validator: what does an attacker set the
 *other* field to?
 
+### A verifier's algorithm must not come from the thing it is verifying
+
+`src/lib/jwt.ts` takes the algorithm as a **parameter** and never reads it from
+the token's own header. That is the defence against algorithm confusion: a
+verifier that trusts `header.alg` lets whoever crafted the token also choose how
+it gets checked — re-sign an RS256 token as HS256 using the RSA *public* key as
+the HMAC secret, and such a verifier confirms it. Token Bench defaults the
+control to the header value because that is convenient while debugging, and warns
+whenever the two disagree.
+
+Same shape as the Type Trial rule above: **the thing being checked must not
+supply the terms of its own check.** Ask it of any new verifier.
+
+Two more properties that are asserted rather than assumed, because both have
+been real vulnerabilities in shipped JWT libraries:
+
+- `alg: none` is reported UNSIGNED and never verified, whatever else the token
+  carries. A header is attacker-controlled, so it can remove trust, never add it.
+- Signature validity and `exp`/`nbf` are **separate answers**. A correctly signed
+  token that expired last week is a normal state and is not a forgery; collapsing
+  both into one "valid" boolean is how expired-token bugs ship.
+
+The verification core lives in `src/lib/jwt.ts` and not in the component, so
+`security:smoke` can run real Web Crypto against the RFC 7515 A.1 vector plus the
+tampered-payload, wrong-key and `alg:none` cases.
+
 ### Escaping
 
 - Anything interpolated into HTML gets escaped including `'` — attribute quoting
@@ -318,6 +344,15 @@ no assertion, it will be undone by a later refactor that looks harmless.
 - **Fonts on tools/games**: Tool and game detail pages pass `loadFonts={false}` to `Head`. This avoids mobile CLS and a render-blocking third-party font request on utility pages; fallback system fonts are acceptable there.
 - **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
+- **Heavy deps are lazy-loaded per route**: `cytoscape` (~400KB) is imported
+  *inside* `connectedCallback` in `src/components/tools/trellis/Trellis.ts` and
+  nowhere else, so no other page pays for it. Any dependency of that size gets
+  the same treatment — a static import at module scope would put it in a shared
+  chunk and tax every tool page. It earns its place: hand-rolling pan/zoom, force
+  layout and edge routing is far more code than the dependency costs.
+  `nodeDimensionsIncludeLabels: true` is **required** on every Cytoscape layout —
+  it defaults to off, and without it a graph of word-labelled nodes lays out
+  using the box and ignores the text, piling up overlapping in one corner.
 - **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
 - **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed.
 
@@ -357,7 +392,7 @@ Every content section displayed on the portfolio must be manageable via the `/ad
    (`src/lib/games.ts`) and add its import to `mountGame()` + its CSS import in
    `src/pages/games/[slug].astro`. Config alone is not enough — see Indexing.
 
-Current config keys: `site`, `projects`, `experience`, `blogs`, `games`, `tools`
+Current config keys: `site`, `projects`, `experience`, `blogs`, `learnings`, `games`, `tools`
 
 ### Indexing: one predicate decides whether a page is real
 
@@ -375,6 +410,10 @@ So each kind has exactly **one** predicate, and every consumer reads it:
 - **Tools** — `status === 'live'`. `wip` renders publicly but is not indexable,
   so it is noindex, out of the sitemap, and cardless. `external` and `disabled`
   404 outright.
+- **Learnings** — `isPublishedLearning()` in `src/lib/learnings.ts`: `published
+  && content.trim()`. The second condition is the one the flag cannot express —
+  an entry saved from /admin with the box ticked and the body still empty would
+  otherwise be sitemapped and carry a card while its page rendered nothing.
 
 `GAME_TAGS` lives in `src/lib/games.ts` and **not** in `src/config/games.ts`
 because the `/admin` Vite middleware regenerates that config file wholesale from
@@ -388,6 +427,37 @@ only indexable items, for the reason above.
 Note the admin page is **dev-only** — see Security. Config edited in dev is
 written to `src/config/*.ts` and must be committed to reach production; there is
 no runtime editing on the server.
+
+### Learnings: articles that mount a live component
+
+`/learnings` is the long-form section, and the one thing it can do that a
+newsletter cannot is run the simulation it is describing inside the page. A
+learning's optional `embed` field names a **`GAME_TAGS` key**, and the article
+route mounts that component through `mountGame()` in `src/lib/game-mount.ts` —
+the same dispatch `/games/[slug]` uses. Adding an article about an existing
+component therefore costs no interactive code at all.
+
+Three things follow from sharing components between the two routes, and each has
+already broken once:
+
+- **`src/lib/game-mount.ts` is the only copy of the dispatch.** Two copies drift
+  the first time a component moves, and the failure is silent — a blank element
+  on whichever route was forgotten.
+- **`src/styles/games-embed.css` is the only list of component stylesheets**, for
+  the same reason. Both routes import that one file.
+- **Every component writes its own `<h1>` and blurb into itself**, because on
+  `/games/<slug>` it *is* the page. Inside an article those duplicate the header
+  above them and give the document two `<h1>`s, so the learnings route strips
+  them. It does that with a `MutationObserver`, **not** a sweep after mount:
+  the component's markup lands *before* `astro:page-load` when its module is
+  already in the session's module cache (every in-site navigation) and *after*
+  it on a cold load, so no single moment is safe to sweep at. A timing-based
+  version passed a hard reload and failed on every in-site click.
+
+Unknown or absent `embed` degrades to a prose article rather than throwing — a
+typo in /admin should cost the simulation, not the page. `security:smoke` asserts
+that every shipped article's `embed` is really in `GAME_TAGS`, because nothing
+else catches that typo.
 
 ## Code graph (graphify)
 

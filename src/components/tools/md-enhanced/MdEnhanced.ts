@@ -1,10 +1,31 @@
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { helpSections } from './help-content'
+import { parseHeadings, parseMarkdownOutline, type Graph } from '../../../lib/graph-text'
 
 const STORAGE_KEY = 'md-enhanced-draft'
+const MAP_MODE_KEY = 'md-enhanced-map-mode'
+
+type MdMapMode = 'headings' | 'outline'
+
+/** Cytoscape layout options. `nodeDimensionsIncludeLabels` is off by default and
+ *  without it word-labelled nodes lay out on top of each other — see AGENTS.md. */
+const MD_MAP_LAYOUT = {
+  name: 'breadthfirst',
+  directed: true,
+  fit: true,
+  padding: 30,
+  spacingFactor: 1.25,
+  avoidOverlap: true,
+  nodeDimensionsIncludeLabels: true,
+  animate: false,
+}
 
 class MdEnhancedTool extends HTMLElement {
+  private cy: any = null
+  private mapMode: MdMapMode = 'headings'
+  private mapTimer: number | undefined
+
   connectedCallback() {
     const helpHtml = helpSections.map(s => `
       <div data-type="help-group">
@@ -29,10 +50,19 @@ class MdEnhancedTool extends HTMLElement {
             <button data-view="edit" title="Editor only">Edit</button>
             <button data-view="split" title="Side by side">Split</button>
             <button data-view="preview" title="Preview only">Preview</button>
+            <button data-view="map" title="Structure map">Map</button>
           </div>
           <div data-type="md-panes">
             <textarea data-type="md-input" placeholder="Start writing markdown..."></textarea>
             <div data-type="md-preview"></div>
+            <div data-type="md-map">
+              <div data-type="md-map-bar">
+                <button data-map-mode="headings">Headings</button>
+                <button data-map-mode="outline">Outline</button>
+                <span data-type="md-map-note"></span>
+              </div>
+              <div data-type="md-map-canvas"></div>
+            </div>
           </div>
           <div data-type="md-actions-bar">
             <div data-group="editor">
@@ -71,7 +101,17 @@ class MdEnhancedTool extends HTMLElement {
     input.addEventListener('input', () => {
       localStorage.setItem(STORAGE_KEY, input.value)
       this.updatePreview()
+      this.scheduleMap()
     })
+
+    this.querySelector('[data-type="md-map-bar"]')!
+      .addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-map-mode]')
+        if (!btn?.dataset.mapMode) return
+        this.mapMode = btn.dataset.mapMode as MdMapMode
+        localStorage.setItem(MAP_MODE_KEY, this.mapMode)
+        this.renderMap()
+      })
 
     this.querySelector('[data-type="md-view-bar"]')!
       .addEventListener('click', (e) => {
@@ -104,9 +144,130 @@ class MdEnhancedTool extends HTMLElement {
     this.querySelector('[data-action="close-help"]')!
       .addEventListener('click', () => this.toggleHelp(false))
 
+    const savedMode = localStorage.getItem(MAP_MODE_KEY)
+    if (savedMode === 'headings' || savedMode === 'outline') this.mapMode = savedMode
+
     const defaultView = window.innerWidth <= 600 ? 'edit' : 'split'
     this.setView(defaultView)
     this.updatePreview()
+  }
+
+  disconnectedCallback() {
+    clearTimeout(this.mapTimer)
+    this.cy?.destroy()
+    this.cy = null
+  }
+
+  /** Rebuild the map after typing stops. Re-laying out a graph on every
+   *  keystroke is both wasted work and visually unusable. */
+  private scheduleMap() {
+    if (!this.cy) return
+    clearTimeout(this.mapTimer)
+    this.mapTimer = window.setTimeout(() => this.renderMap(), 400)
+  }
+
+  private currentGraph(): Graph {
+    const input = this.querySelector<HTMLTextAreaElement>('[data-type="md-input"]')!
+    return this.mapMode === 'headings'
+      ? parseHeadings(input.value)
+      : parseMarkdownOutline(input.value)
+  }
+
+  /** Put the caret on `line` and scroll it into view. The map's only job is
+   *  navigation — it never writes back into the document. */
+  private jumpTo(line: number) {
+    // Leave the map first. The textarea is display:none in map view, and a
+    // hidden textarea cannot take focus or report a scroll height — so jumping
+    // without switching lands the caret somewhere the reader cannot see, which
+    // reads as the click having done nothing.
+    this.setView(window.innerWidth <= 600 ? 'edit' : 'split')
+
+    const input = this.querySelector<HTMLTextAreaElement>('[data-type="md-input"]')!
+    const lines = input.value.split('\n')
+    const start = lines.slice(0, line).reduce((sum, l) => sum + l.length + 1, 0)
+    input.focus()
+    input.setSelectionRange(start, start + (lines[line]?.length ?? 0))
+    // Approximate: scroll so the target sits near the top of the textarea.
+    const lineHeight = input.scrollHeight / Math.max(lines.length, 1)
+    input.scrollTop = Math.max(0, line * lineHeight - lineHeight * 2)
+  }
+
+  /** Cytoscape is ~400KB, so it loads only when the Map view is first opened —
+   *  someone who never presses Map never downloads it. */
+  private async ensureMap() {
+    if (this.cy) return
+    const host = this.querySelector<HTMLElement>('[data-type="md-map-canvas"]')!
+    const cytoscape = (await import('cytoscape')).default
+    const token = (name: string, fallback: string) =>
+      getComputedStyle(this).getPropertyValue(name).trim() || fallback
+    const muted = token('--color-muted', '#8a8a8a')
+    const surface = token('--color-surface', '#1b1b1e')
+
+    this.cy = cytoscape({
+      container: host,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': surface,
+            'border-color': muted,
+            'border-width': 1,
+            label: 'data(label)',
+            color: token('--color-text', '#e8e8e8'),
+            'font-size': 12,
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '160px',
+            shape: 'round-rectangle',
+            width: 'label',
+            height: 'label',
+            padding: '9px',
+          },
+        },
+        { selector: 'node:selected', style: { 'border-color': token('--color-accent', '#7c6cf0'), 'border-width': 2 } },
+        {
+          selector: 'edge',
+          style: {
+            width: 1.5,
+            'line-color': muted,
+            'target-arrow-color': muted,
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+          },
+        },
+      ],
+      wheelSensitivity: 0.2,
+    })
+
+    this.cy.on('tap', 'node', (event: any) => {
+      const line = event.target.data('line')
+      if (typeof line === 'number') this.jumpTo(line)
+    })
+  }
+
+  private renderMap() {
+    if (!this.cy) return
+    const graph = this.currentGraph()
+    const note = this.querySelector<HTMLElement>('[data-type="md-map-note"]')!
+
+    for (const button of this.querySelectorAll<HTMLElement>('[data-map-mode]')) {
+      button.toggleAttribute('data-active', button.dataset.mapMode === this.mapMode)
+    }
+
+    this.cy.elements().remove()
+    if (!graph.nodes.length) {
+      note.textContent = this.mapMode === 'headings'
+        ? 'No headings yet — add a "# Heading" to see the shape of the document.'
+        : 'No list items yet — add a bulleted list to see it as a map.'
+      return
+    }
+    note.textContent = `${graph.nodes.length} nodes · click one to jump there`
+    this.cy.add([
+      ...graph.nodes.map(n => ({ data: { id: n.id, label: n.label, line: n.line } })),
+      ...graph.edges.map(e => ({ data: { id: e.id, source: e.source, target: e.target } })),
+    ])
+    this.cy.layout(MD_MAP_LAYOUT).run()
   }
 
   private updatePreview() {
@@ -123,6 +284,7 @@ class MdEnhancedTool extends HTMLElement {
         input.value = ''
         localStorage.removeItem(STORAGE_KEY)
         this.updatePreview()
+        this.renderMap()
         break
       case 'copy':
         navigator.clipboard.writeText(input.value).then(() => {
@@ -151,6 +313,16 @@ class MdEnhancedTool extends HTMLElement {
     this.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(btn => {
       btn.toggleAttribute('data-active', btn.dataset.view === mode)
     })
+
+    // Build the map lazily, and only once the pane is actually visible —
+    // Cytoscape measures its container, and a display:none container measures
+    // zero, which produces an empty canvas that never recovers.
+    if (mode === 'map') {
+      void this.ensureMap().then(() => {
+        this.cy?.resize()
+        this.renderMap()
+      })
+    }
   }
 
   private toggleHelp(force?: boolean) {

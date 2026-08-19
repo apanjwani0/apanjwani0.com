@@ -1,0 +1,129 @@
+/* Token Bench — tokens only, no hardcoded colours or sizes (see AGENTS.md). */
+
+[data-type='tb-tool'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+}
+
+[data-type='tb-titlebar'] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+[data-type='tb-badge'] {
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+[data-type='tb-grid'] {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-type='tb-field'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+[data-type='tb-field'] > span {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+[data-type='tb-field'] textarea,
+[data-type='tb-field'] select {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  /* A JWT is one long unbroken string — without this it forces the page to
+     scroll sideways on a phone instead of wrapping. */
+  word-break: break-all;
+}
+
+[data-type='tb-alg-note'] {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+[data-type='tb-alg-note'][data-state='warn'] { color: var(--color-warning, var(--color-accent)); }
+[data-type='tb-alg-note'][data-state='bad'] { color: var(--color-danger, var(--color-accent)); }
+
+[data-type='tb-actions'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+/* The verdict is the whole point of the tool, so it gets the emphasis. Colour
+   is never the only signal — the text says "verifies" / "does NOT verify" /
+   "UNSIGNED" in words, so it survives being read without colour vision. */
+[data-type='tb-verdict'] {
+  display: block;
+  min-height: 1.5em;
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+[data-type='tb-verdict'][data-state='good'] { border-color: var(--color-success, var(--color-accent)); color: var(--color-text); }
+[data-type='tb-verdict'][data-state='warn'] { border-color: var(--color-warning, var(--color-accent)); color: var(--color-text); }
+[data-type='tb-verdict'][data-state='bad'],
+[data-type='tb-verdict'][data-state='error'] { border-color: var(--color-danger, var(--color-accent)); color: var(--color-text); }
+
+[data-type='tb-panes'] {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+@media (min-width: 48rem) {
+  [data-type='tb-panes'] { grid-template-columns: 1fr 1fr; }
+}
+
+[data-type='tb-pane'] h2 {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  text-transform: lowercase;
+}
+
+[data-type='tb-pane'] pre {
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+[data-type='tb-claims'] {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+[data-type='tb-claims'] th,
+[data-type='tb-claims'] td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--space-2xs) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-type='tb-claims'] th {
+  color: var(--color-muted);
+  font-weight: 400;
+  padding-right: var(--space-xs);
+  white-space: nowrap;
+}
+
+[data-type='tb-claims'] td {
+  font-family: var(--font-mono);
+  word-break: break-word;
+}

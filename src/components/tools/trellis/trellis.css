@@ -1,0 +1,156 @@
+/* Trellis — tokens only, no hardcoded colours or sizes (see AGENTS.md). */
+
+[data-type='tr-tool'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+}
+
+[data-type='tr-titlebar'] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+[data-type='tr-badge'] {
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* Rail · canvas · detail. Stacks on narrow screens — the canvas is useless in a
+   200px column, so it gets the full width there and the panels sit around it. */
+[data-type='tr-body'] {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-xs);
+}
+
+@media (min-width: 64rem) {
+  [data-type='tr-body'] {
+    grid-template-columns: 15rem minmax(0, 1fr) 15rem;
+    align-items: start;
+  }
+}
+
+[data-type='tr-rail'],
+[data-type='tr-detail'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  min-width: 0;
+}
+
+[data-type='tr-rail'] h2,
+[data-type='tr-detail'] h2 {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  text-transform: lowercase;
+  margin-bottom: var(--space-2xs);
+}
+
+[data-type='tr-rail'] textarea,
+[data-type='tr-rail'] input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+[data-type='tr-rail-actions'],
+[data-type='tr-layouts'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  margin-top: var(--space-2xs);
+}
+
+[data-type='tr-layouts'] button[data-active] {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+[data-type='tr-import-note'],
+[data-type='tr-share-note'],
+[data-type='tr-hint'] {
+  margin-top: var(--space-2xs);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* The canvas needs an explicit height: Cytoscape measures its container, and a
+   container sized by its content collapses to zero because the canvas IS the
+   content. Viewport-relative so it stays usable on a laptop and a phone. */
+[data-type='tr-canvas-wrap'] {
+  position: relative;
+  min-width: 0;
+}
+
+[data-type='tr-canvas'] {
+  height: min(70vh, 40rem);
+  min-height: 20rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-surface, transparent);
+}
+
+[data-type='tr-zoom'] {
+  position: absolute;
+  right: var(--space-xs);
+  bottom: var(--space-xs);
+  display: flex;
+  gap: var(--space-2xs);
+}
+
+[data-type='tr-zoom'] button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  line-height: 1;
+}
+
+[data-type='tr-field'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+[data-type='tr-field'] > span {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+[data-type='tr-connections'] {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2xs) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  font-size: var(--text-sm);
+}
+
+[data-type='tr-connections'] li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
+
+[data-type='tr-connections'] button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-accent);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  font: inherit;
+}
+
+[data-type='tr-empty'] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}

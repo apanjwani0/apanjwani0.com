@@ -12,7 +12,7 @@ import {
   timingSafeEqualText,
 } from '../src/lib/security.ts'
 import { isValidBinId } from '../src/lib/webhook-store.ts'
-import { gameTag, isPlayableGame } from '../src/lib/games.ts'
+import { GAME_TAGS, gameTag, isPlayableGame } from '../src/lib/games.ts'
 import { games } from '../src/config/games.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
 import {
@@ -24,6 +24,30 @@ import {
   sanitizeName,
 } from '../src/lib/type-trial-leaderboard.ts'
 import { dailyPassage, todayUtcDay } from '../src/lib/type-trial-daily.ts'
+import { isPublishedLearning, learningEmbedTag } from '../src/lib/learnings.ts'
+import { learningHasOgCard } from '../src/lib/og.ts'
+import { learnings } from '../src/config/learnings.ts'
+import { EMBED_TAGS } from '../src/lib/embeds.ts'
+import { DRIFTFIELD_MODES, MOVED_GAMES } from '../src/lib/driftfield.ts'
+import { validateConfigData } from '../src/lib/config-schema.ts'
+import {
+  algParams,
+  checkTimeClaims,
+  isJwtAlg,
+  isUnsigned,
+  parseJwt,
+  verifyJwt,
+} from '../src/lib/jwt.ts'
+import {
+  decodeGraph,
+  detectDialect,
+  encodeGraph,
+  parseMermaid,
+  parseOutline,
+  parseHeadings,
+  parseMarkdownOutline,
+  toMermaid,
+} from '../src/lib/graph-text.ts'
 
 const unsafeMarkdown = render('[x](javascript:alert(1)) <img src=x onerror=alert(1)>')
 assert.equal(unsafeMarkdown.includes('javascript:'), false)
@@ -250,5 +274,255 @@ const lbNow = new Date('2026-08-15T00:00:00Z')
 const lbOld = new Date(lbNow.getTime() - 30 * 86_400_000).toISOString().slice(0, 10)
 assert.deepEqual(Object.keys(pruneBoard({ [lbOld]: [], '2026-08-15': [] }, lbNow)), ['2026-08-15'])
 assert.ok(DAILY_MAX_ENTRIES_PER_DAY <= 200, 'per-day entry cap stays bounded')
+
+// ---------------------------------------------------------------------------
+// Learnings: one predicate, and every consumer reads it.
+//
+// The section embeds live game components inside articles and renders
+// author-controlled markdown, so it crosses two trust boundaries the rest of the
+// site already guards. These assert both, plus the indexing agreement that
+// AGENTS.md requires of every kind of page.
+
+const draft = { published: false, content: 'written but not shipped' }
+const hollow = { published: true, content: '   ' }
+const real = { published: true, content: 'body' }
+
+assert.equal(isPublishedLearning(real), true)
+assert.equal(isPublishedLearning(draft), false, 'an unpublished learning is not a page')
+assert.equal(
+  isPublishedLearning(hollow),
+  false,
+  'published-with-empty-body is the case the flag alone cannot express: it would be sitemapped and carry a card while rendering nothing',
+)
+
+// Share-card eligibility IS the indexable predicate. Three signals that disagree
+// are worse than any one missing — a crawler resolves the conflict by trusting
+// none of them.
+for (const l of [draft, hollow, real]) {
+  assert.equal(learningHasOgCard(l), isPublishedLearning(l), 'card eligibility tracks the predicate')
+}
+
+// An unrecognised embed degrades to a prose article rather than throwing, and a
+// prototype key must not resolve to an inherited function (the Object.hasOwn
+// guard, same trap isPlayableGame closes).
+assert.equal(learningEmbedTag({ embed: 'game-of-life' }), EMBED_TAGS['game-of-life'])
+assert.equal(learningEmbedTag({ embed: 'not-a-real-game' }), undefined)
+assert.equal(learningEmbedTag({ embed: 'constructor' }), undefined, 'prototype keys are not embeds')
+assert.equal(learningEmbedTag({ embed: 'toString' }), undefined)
+assert.equal(learningEmbedTag({}), undefined)
+
+// Every shipped article's embed really is wired. A typo here costs the
+// simulation silently — the article still renders, so nothing else catches it.
+for (const l of learnings) {
+  if (l.embed === undefined) continue
+  assert.ok(
+    Object.hasOwn(EMBED_TAGS, l.embed),
+    `learning "${l.slug}" embeds "${l.embed}", which is not in EMBED_TAGS`,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// The embeds/games split.
+//
+// "Is wired to a component" and "is a game" were one question until the six
+// generative engines moved out of /games into Driftfield and the articles.
+// Collapsing them back would either empty every article embed or resurrect six
+// pages that no longer exist, and both failures are silent.
+
+// GAME_TAGS is a strict subset of EMBED_TAGS, and agrees with it on every tag.
+for (const [slug, tag] of Object.entries(GAME_TAGS)) {
+  assert.ok(Object.hasOwn(EMBED_TAGS, slug), `game "${slug}" is missing from EMBED_TAGS`)
+  assert.equal(tag, EMBED_TAGS[slug], `game "${slug}" resolves to two different tags`)
+}
+assert.ok(
+  Object.keys(EMBED_TAGS).length > Object.keys(GAME_TAGS).length,
+  'EMBED_TAGS is the wider list — if these are equal the split has been collapsed',
+)
+
+// Every Driftfield mode mounts a real component, and none of them is still a
+// game: a slug in both lists would be served by /games AND redirected away
+// from it, and only one of those can win.
+for (const mode of DRIFTFIELD_MODES) {
+  assert.ok(Object.hasOwn(EMBED_TAGS, mode.slug), `driftfield mode "${mode.slug}" has no component`)
+  assert.equal(Object.hasOwn(GAME_TAGS, mode.slug), false, `driftfield mode "${mode.slug}" is still a game`)
+}
+
+// Nothing that moved is still served under /games, and nothing redirects to a
+// page that is not there. A redirect to a 404 is worse than the old page.
+for (const [from, to] of Object.entries(MOVED_GAMES)) {
+  assert.equal(Object.hasOwn(GAME_TAGS, from), false, `"${from}" redirects away but is still a game`)
+  assert.equal(games.some(g => g.slug === from), false, `"${from}" redirects away but is still in the games config`)
+  const isMode = DRIFTFIELD_MODES.some(m => to === `/tools/driftfield/${m.slug}`)
+  const isLearning = learnings.some(l => to === `/learnings/${l.slug}` && isPublishedLearning(l))
+  assert.ok(isMode || isLearning, `"${from}" redirects to ${to}, which is not a published page`)
+}
+
+// Config validation rejects what the admin form could otherwise save.
+assert.equal(validateConfigData('learnings', learnings), true, 'shipped learnings pass their own validator')
+assert.equal(validateConfigData('learnings', [{ ...real, slug: '../etc', title: 't', summary: 's', date: 'd' }]), false)
+assert.equal(validateConfigData('learnings', [{ slug: 'ok', title: 't', summary: 's', date: 'd', content: 'c' }]), false, 'published is required')
+assert.equal(
+  validateConfigData('learnings', [{ slug: 'ok', title: 't', summary: 's', date: 'd', content: 'c', published: true, embed: 'a b' }]),
+  false,
+  'embed is constrained to slug shape, not arbitrary text',
+)
+
+// The article body is author-controlled markdown and must go through
+// src/lib/markdown.ts, which escapes raw HTML and passes URLs through
+// safeMarkdownUrl. Handing it to set:html directly would be an XSS hole that no
+// unit test would notice, because the page would still look correct.
+const learningRouteSrc = await readFile(new URL('../src/pages/learnings/[slug].astro', import.meta.url), 'utf-8')
+assert.ok(learningRouteSrc.includes("render(learning.content)"), 'learning content is rendered through markdown.ts')
+assert.equal(
+  /set:html=\{learning\.(content|summary)\}/.test(learningRouteSrc),
+  false,
+  'raw learning fields are never handed to set:html',
+)
+
+// ---------------------------------------------------------------------------
+// Token Bench: the tool's entire claim is that it tells you whether a signature
+// holds, so "verified" has to be load-bearing. These run real Web Crypto.
+
+// RFC 7515 A.1 — the canonical HS256 example and its key.
+const RFC_JWT = 'eyJ0eXAiOiJKV1QiLA0KICJhbGciOiJIUzI1NiJ9'
+  + '.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ'
+  + '.dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'
+const RFC_KEY = JSON.stringify({
+  kty: 'oct',
+  k: 'AyM1SysPpbyDfgZld3umj1qzKObwVMkoqQ-EstJQLr_T-1qS0gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow',
+})
+
+const rfc = parseJwt(RFC_JWT)
+assert.equal(await verifyJwt(rfc, 'HS256', RFC_KEY), true, 'the RFC 7515 A.1 vector verifies')
+
+// Tampering with the payload must break it — this is the property the whole
+// tool sells, and it is the one a subtly wrong signing-input would silently lose.
+const b64url = obj => Buffer.from(JSON.stringify(obj)).toString('base64url')
+const tampered = parseJwt(`${RFC_JWT.split('.')[0]}.${b64url({ iss: 'attacker' })}.${RFC_JWT.split('.')[2]}`)
+assert.equal(await verifyJwt(tampered, 'HS256', RFC_KEY), false, 'a tampered payload does not verify')
+
+// Wrong key, same token.
+const wrongKey = JSON.stringify({ kty: 'oct', k: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' })
+assert.equal(await verifyJwt(rfc, 'HS256', wrongKey), false, 'a wrong key does not verify')
+
+// `alg: none` is never "verified". Accepting it was a real, widespread library
+// vulnerability, and the whole point of the tool is to not repeat it.
+const noneToken = parseJwt(`${b64url({ alg: 'none', typ: 'JWT' })}.${b64url({ sub: 'admin' })}.`)
+assert.equal(isUnsigned(noneToken), true, 'alg:none is reported unsigned')
+assert.equal(await verifyJwt(noneToken, 'HS256', RFC_KEY), false, 'alg:none never verifies')
+
+// A signed token whose header merely SAYS none is still unsigned to us — the
+// header is attacker-controlled, so it can only ever remove trust, never add it.
+const lyingHeader = parseJwt(`${b64url({ alg: 'none' })}.${b64url({ sub: 'x' })}.${RFC_JWT.split('.')[2]}`)
+assert.equal(await verifyJwt(lyingHeader, 'HS256', RFC_KEY), false)
+
+// Malformed input throws with a message rather than resolving to anything.
+assert.throws(() => parseJwt('not-a-jwt'), /three dot-separated parts/)
+assert.throws(() => parseJwt('a.b.c'), /not valid base64url/)
+
+// Signature validity and expiry stay separate answers. Merging them is how an
+// expired token gets accepted, and the RFC vector is itself long expired — so
+// it verifies AND is expired at the same time, which is the point.
+const rfcTime = checkTimeClaims(rfc.payload)
+assert.equal(rfcTime.expired, true, 'the RFC vector is expired, and says so independently of the signature')
+assert.equal(checkTimeClaims({ exp: 4102444800 }).expired, false)
+assert.equal(checkTimeClaims({ nbf: 4102444800 }).notYetValid, true)
+assert.equal(checkTimeClaims({}).notes.length, 0)
+
+// ES512 is P-521, not P-512 — an easy and silent mis-mapping.
+assert.equal(algParams('ES512').importAlgo.namedCurve, 'P-521')
+assert.equal(algParams('ES256').importAlgo.namedCurve, 'P-256')
+// RFC 7518 §3.5: PSS salt length equals the hash length in bytes.
+assert.equal(algParams('PS256').verifyAlgo.saltLength, 32)
+assert.equal(algParams('PS512').verifyAlgo.saltLength, 64)
+assert.equal(isJwtAlg('none'), false, 'none is not a verifiable algorithm')
+assert.equal(isJwtAlg('HS256'), true)
+
+// ---------------------------------------------------------------------------
+// Trellis: the text→graph parsers, and the share link.
+//
+// Parsers are where the bugs are, and these fail silently — a dropped edge just
+// looks like a diagram you drew slightly wrong.
+
+assert.equal(detectDialect('A --> B'), 'mermaid')
+assert.equal(detectDialect('flowchart TD\n  A'), 'mermaid')
+assert.equal(detectDialect('- one\n  - two'), 'outline')
+assert.equal(detectDialect(''), 'outline', 'an outline has no required syntax, so it is the default')
+
+const mm = parseMermaid('flowchart TD\n  A[Start] --> B(Middle)\n  B -->|yes| C{End}\n  D[Loner]')
+assert.deepEqual(mm.nodes.map(n => n.id).sort(), ['A', 'B', 'C', 'D'])
+assert.equal(mm.nodes.find(n => n.id === 'B').label, 'Middle')
+assert.equal(mm.edges.length, 2)
+assert.equal(mm.edges[1].label, 'yes', 'edge labels survive')
+// A bare reference must not blank a label declared earlier, which depends
+// entirely on line order and so is easy to get backwards.
+assert.equal(parseMermaid('A[Named] --> B\nA --> C').nodes.find(n => n.id === 'A').label, 'Named')
+// Chained arrows on one line are two edges, not one.
+assert.equal(parseMermaid('A --> B --> C').edges.length, 2)
+// An unsupported line is skipped, not thrown on — one bad line must not cost
+// the other twenty.
+assert.equal(parseMermaid('subgraph S\nA --> B\nend\nstyle A fill:#fff').edges.length, 1)
+
+const ol = parseOutline('- root\n  - child\n    - grandchild\n  - sibling\n- second root')
+assert.equal(ol.nodes.length, 5)
+assert.equal(ol.edges.length, 3, 'two roots means three parent links, not four')
+assert.equal(ol.nodes[0].label, 'root', 'list markers are stripped')
+assert.equal(ol.nodes[2].label, 'grandchild')
+// Tabs and spaces must nest identically, or a tab-indented paste comes out flat.
+assert.equal(parseOutline('a\n\tb').edges.length, parseOutline('a\n  b').edges.length)
+// Duplicate labels are distinct nodes; collapsing them would silently merge
+// two different ideas that happen to be worded the same.
+assert.equal(parseOutline('- a\n- a').nodes.length, 2)
+
+// Round-trip: a graph built by hand can leave as Mermaid and come back.
+const round = parseMermaid(toMermaid(ol))
+assert.equal(round.nodes.length, ol.nodes.length, 'mermaid round-trip keeps every node')
+assert.equal(round.edges.length, ol.edges.length, 'mermaid round-trip keeps every edge')
+// Including a node with no edges, which a pure edge list would drop.
+assert.equal(parseMermaid(toMermaid({ nodes: [{ id: 'x', label: 'alone' }], edges: [] })).nodes.length, 1)
+
+// The share link carries the board, and what comes back out of a URL a stranger
+// wrote is re-validated rather than trusted.
+const board = { nodes: [{ id: 'a', label: 'héllo · 日本' }], edges: [] }
+assert.deepEqual(decodeGraph(encodeGraph(board)), board, 'non-ASCII labels survive the link')
+assert.equal(decodeGraph('not-base64!!'), null)
+assert.equal(decodeGraph(btoa('{"n":"nope","e":[]}')), null, 'a malformed payload decodes to null, not a crash')
+// An edge naming a node that is not in the payload would render as a dangling
+// reference, so it is dropped on the way in.
+const dangling = encodeGraph({ nodes: [{ id: 'a', label: 'a' }], edges: [{ id: 'e', source: 'a', target: 'ghost' }] })
+assert.equal(decodeGraph(dangling).edges.length, 0, 'edges to missing nodes are dropped')
+
+// MD Enhanced's map reads the same parsers. Fenced code is the case that breaks
+// it in practice: a shell snippet is full of `#` comments and `-` flags, and
+// without blanking the fences every code block becomes a branch of the map.
+const doc = [
+  '# Title',
+  '## Section A',
+  'text',
+  '```sh',
+  '# not a heading',
+  '- not a list item',
+  '```',
+  '### Deep',
+  '## Section B',
+].join('\n')
+
+const heads = parseHeadings(doc)
+assert.deepEqual(heads.nodes.map(n => n.label), ['Title', 'Section A', 'Deep', 'Section B'])
+assert.equal(heads.edges.length, 3, 'Deep nests under Section A, both sections under Title')
+assert.equal(heads.nodes[0].line, 0, 'nodes carry their source line so the map can navigate')
+assert.equal(heads.nodes[3].line, 8, 'line numbers survive the blanked fence')
+assert.equal(parseMarkdownOutline(doc).nodes.length, 0, 'the fenced list item is not an outline node')
+
+// A skipped level attaches to the nearest shallower heading rather than being
+// dropped — real documents skip levels, and losing those sections silently is
+// worse than a slightly flatter tree.
+const skipped = parseHeadings('# One\n### Three')
+assert.equal(skipped.nodes.length, 2)
+assert.equal(skipped.edges.length, 1)
+// Setext-style trailing hashes are decoration, not part of the title.
+assert.equal(parseHeadings('## Closed ##').nodes[0].label, 'Closed')
+// `#hashtag` with no space is not a heading.
+assert.equal(parseHeadings('#nospace').nodes.length, 0)
 
 console.log('security smoke ok')

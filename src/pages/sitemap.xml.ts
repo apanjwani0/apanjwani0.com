@@ -1,8 +1,10 @@
 export const prerender = false
 
 import type { APIRoute } from 'astro'
-import { getSite, getPosts, getGames, getTools } from '../lib/config'
+import { getSite, getPosts, getGames, getTools, getLearnings } from '../lib/config'
 import { isPlayableGame } from '../lib/games'
+import { isPublishedLearning } from '../lib/learnings'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG } from '../lib/driftfield'
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = await getSite(locals)
@@ -12,6 +14,10 @@ export const GET: APIRoute = async ({ locals }) => {
   // listing it here would have the sitemap contradict the page's own robots meta.
   const games = (await getGames(locals)).filter(isPlayableGame)
   const tools = await getTools(locals)
+  // isPublishedLearning, not `published`: an entry ticked published with an empty
+  // body renders nothing behind a noindex, so listing it here would have the
+  // sitemap contradict the page — the same trap isPlayableGame closes for games.
+  const learnings = (await getLearnings(locals)).filter(isPublishedLearning)
   const base = site.url.replace(/\/$/, '')
 
   const normalize = (href: string) => {
@@ -29,12 +35,14 @@ export const GET: APIRoute = async ({ locals }) => {
   // the newest authored post date — a freshness signal for re-crawls, mirroring
   // the per-post <lastmod> below. (ISO YYYY-MM-DD compares correctly as strings.)
   const latestPostDate = posts.reduce((max, p) => (p.date > max ? p.date : max), '')
+  const latestLearningDate = learnings.reduce((max, l) => (l.date > max ? l.date : max), '')
 
   // Static pages
   const staticPages: SitemapUrl[] = [
     { loc: '/' },
     { loc: '/projects' },
     { loc: '/blogs', lastmod: latestPostDate || undefined },
+    { loc: '/learnings', lastmod: latestLearningDate || undefined },
     { loc: '/games' },
     { loc: '/tools' },
   ]
@@ -45,6 +53,11 @@ export const GET: APIRoute = async ({ locals }) => {
     return { loc: `/blogs/${slug}`, lastmod: p.date }
   })
 
+  const learningPages: SitemapUrl[] = learnings.map(l => ({
+    loc: `/learnings/${l.slug}`,
+    lastmod: l.date,
+  }))
+
   const gamePages: SitemapUrl[] = games.map(g => ({ loc: `/games/${g.slug}` }))
 
   // Only live tools have their own crawlable detail route (wip/external/disabled don't).
@@ -52,7 +65,19 @@ export const GET: APIRoute = async ({ locals }) => {
     .filter(t => t.status === 'live')
     .map(t => ({ loc: `/tools/${t.slug}` }))
 
-  const allPages = [...staticPages, ...blogPages, ...gamePages, ...toolPages]
+  // Driftfield's modes are real routes, not query params, precisely so they can
+  // appear here — one indexable page per engine is the whole reason the six were
+  // merged into a tool rather than deleted. Listed only when the hub itself is
+  // live, so the sitemap cannot advertise modes of a tool that is not published.
+  const driftfieldLive = tools.some(t => t.slug === DRIFTFIELD_SLUG && t.status === 'live')
+  const driftfieldPages: SitemapUrl[] = driftfieldLive
+    ? DRIFTFIELD_MODES.map(m => ({ loc: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` }))
+    : []
+
+  const allPages = [
+    ...staticPages, ...blogPages, ...learningPages,
+    ...gamePages, ...toolPages, ...driftfieldPages,
+  ]
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

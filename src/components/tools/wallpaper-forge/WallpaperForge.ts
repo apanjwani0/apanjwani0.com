@@ -1,5 +1,10 @@
 /**
- * Wallpaper Forge — one seeded tool for wallpapers, patterns, PNGs and GIFs.
+ * Driftfield — one seeded tool for wallpapers, patterns, PNGs and GIFs.
+ *
+ * Published as "Wallpaper Forge" until the six generative engines from /games
+ * moved in alongside it. The directory and element names keep the old spelling
+ * deliberately: renaming them would churn the CSS, the mount dispatch and the
+ * saved localStorage keys for a change nobody outside this file can observe.
  * Nine engines share one deterministic render path, so preview, still export and
  * every animation frame are generated from the same settings.
  *
@@ -295,7 +300,7 @@ class WallpaperForgeTool extends HTMLElement {
       <div data-type="tool-page" data-tool="wallpaper-forge">
         <div data-type="wf-header">
           <div data-type="wf-titlebar">
-            <h1>Wallpaper Forge</h1>
+            <h1>Driftfield</h1>
             <span data-type="wf-badge">image + GIF studio</span>
           </div>
           <p>Make seeded wallpapers and looping generative patterns in one place. Choose an engine, size and palette, tune the detail, then export a full-resolution PNG or a mobile-safe animated GIF. The same settings and seed always reproduce the same piece.</p>

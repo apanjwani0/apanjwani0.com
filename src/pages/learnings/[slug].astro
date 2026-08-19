@@ -1,0 +1,145 @@
+---
+export const prerender = false
+
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import RelatedLinks from '../../components/RelatedLinks.astro'
+import { getSite, getLearnings } from '../../lib/config'
+import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
+import { isPublishedLearning, learningEmbedTag } from '../../lib/learnings'
+import { existingOgCardPath, learningHasOgCard } from '../../lib/og'
+import { render } from '../../lib/markdown'
+import { formatDisplayDate } from '../../lib/date'
+import '../../styles/games-embed.css'
+
+const { slug } = Astro.params
+const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
+
+const learning = learnings.find(l => l.slug === slug)
+
+// A draft is readable in dev so the author can preview rendered markdown and the
+// embed together — /admin has no preview of its own. In production it does not
+// exist, matching the same `import.meta.env.DEV` gate the admin surface uses.
+const isDraft = Boolean(learning) && !isPublishedLearning(learning!)
+if (!learning || (isDraft && !import.meta.env.DEV)) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+const canonicalUrl = `${site.url}/learnings/${learning.slug}`
+const pageDescription = learning.metaDescription || learning.summary
+const contentHtml = render(learning.content)
+
+// The component to mount inline, or undefined for a prose-only article.
+const EmbedTag = learningEmbedTag(learning)
+
+const related = learnings
+  .filter(l => isPublishedLearning(l) && l.slug !== learning.slug)
+  .map(l => ({ title: l.title, href: `/learnings/${l.slug}` }))
+
+// Card only when the generator emits one AND the PNG is really on disk — a
+// forgotten `npm run og` degrades to the avatar, never a 404ing og:image.
+const ogCard = learningHasOgCard(learning)
+  ? await existingOgCardPath('learnings', learning.slug)
+  : undefined
+
+const ldJson = blogPostingJsonLd({
+  headline: learning.title,
+  description: pageDescription,
+  url: canonicalUrl,
+  datePublished: learning.date,
+  authorName: site.name,
+  authorUrl: site.url,
+  keywords: learning.keywords,
+})
+
+// Visible trail + matching BreadcrumbList (see src/components/Breadcrumbs.astro).
+// Emitted together or not at all: a breadcrumb path only surfaces in search when
+// the markup and the structured data agree.
+const crumbs = [
+  { label: 'home', href: '/' },
+  { label: 'learnings', href: '/learnings' },
+  { label: learning.title },
+]
+const breadcrumbLd = breadcrumbListJsonLd([
+  { name: 'Home', url: site.url },
+  { name: 'Learnings', url: `${site.url}/learnings` },
+  { name: learning.title, url: canonicalUrl },
+])
+---
+
+<Base
+  title={learning.title}
+  seoTitle={learning.seoTitle}
+  description={pageDescription}
+  keywords={learning.keywords}
+  noindex={isDraft}
+  ogType="article"
+  publishedTime={learning.date}
+  ogCard={ogCard}
+  {/* The decorative star canvas competes for CPU with an embedded simulation —
+      the same reason it is off on game pages. Prose-only articles keep it. */}
+  starfield={!EmbedTag}
+>
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <Breadcrumbs items={crumbs} />
+  <article>
+    <header>
+      <h1>{learning.title}</h1>
+      <time datetime={learning.date}>{formatDisplayDate(learning.date)}</time>
+    </header>
+    <section data-type="post-summary">
+      <p><em>Summary:</em> {learning.summary}</p>
+    </section>
+    {EmbedTag && (
+      <figure data-type="learning-embed">
+        {/* data-game is what src/lib/game-mount.ts dispatches on — the same
+            attribute the game route uses, so one mount function serves both. */}
+        <EmbedTag data-game={learning.embed} />
+        {learning.embedCaption && <figcaption>{learning.embedCaption}</figcaption>}
+      </figure>
+    )}
+    <section data-type="post-content" set:html={contentHtml} />
+  </article>
+  <RelatedLinks heading="More learnings" items={related} />
+
+  {EmbedTag && (
+    <script>
+      // Mount on initial load AND after every View Transition navigation. Bundled
+      // scripts run once per session, so without astro:page-load an article
+      // reached by in-site nav shows an empty element until a hard reload.
+      // The component writes its own <h1> and blurb into itself; inside an article
+      // both duplicate the header above. mountEmbed strips them and mounts — see
+      // src/lib/game-mount.ts for why that needs an observer, not a sweep.
+      import { mountEmbed } from '../../lib/game-mount'
+      const mount = () => mountEmbed('figure[data-type="learning-embed"]')
+      document.addEventListener('astro:page-load', mount)
+      mount()
+    </script>
+  )}
+</Base>
+
+<style>
+  /* The embed sits between the summary and the prose, so it needs to read as a
+     figure rather than as the page's main subject: full content width, its own
+     breathing room, and a caption that tells the reader what they are looking
+     at. Tokens only — no hardcoded colours, sizes or spacing. */
+  figure[data-type="learning-embed"] {
+    margin: var(--space-section) 0;
+  }
+
+  /* The component's own title block, hidden before it can paint — the script
+     above then removes it outright. :global() is required: this markup is
+     written by the component at runtime and never carries Astro's scope hash. */
+  figure[data-type="learning-embed"] :global([data-type$="-header"]),
+  figure[data-type="learning-embed"] :global(h1) {
+    display: none;
+  }
+
+  figure[data-type="learning-embed"] figcaption {
+    margin-top: var(--space-xs);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+</style>
