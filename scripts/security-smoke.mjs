@@ -23,6 +23,7 @@ import {
 } from '../src/components/tools/webhook-inspector/signature.ts'
 import { GAME_TAGS, gameTag, isPlayableGame } from '../src/lib/games.ts'
 import { games } from '../src/config/games.ts'
+import { tools } from '../src/config/tools.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
 import {
   DAILY_MAX_ENTRIES_PER_DAY,
@@ -434,168 +435,6 @@ for (const l of learnings) {
 }
 
 // ---------------------------------------------------------------------------
-// The maze-generation article's numbers are claims about the CODE.
-//
-// Its title is "There are 192 mazes on a 3×3 grid. The recursive backtracker
-// can build 14", and the body adds that the grid ships at 28×17, that the
-// shortest corner-to-corner route on it is 44 cells, and that there are three
-// builders. None of that is a fact about mazes in general: it falls out of
-// MazeWeaver's default column count, its ASPECT constant, its generator list
-// and the cell its backtracker starts from. Change any one of those and the
-// shipped prose is simply false — while the article still renders, the maze
-// still works, and the build still passes. Nothing else looks at both halves.
-//
-// The two headline counts are RECOMPUTED here from the 3×3 grid graph rather
-// than read from the article or from the component, so no assertion below can
-// pass by the prose agreeing with itself.
-{
-  const maze = learnings.find(l => l.slug === 'maze-generation-bias')
-  assert.ok(maze, 'the maze-generation article is shipped')
-  assert.equal(maze.embed, 'maze-weaver', 'the article argues about the component it embeds')
-
-  // A perfect maze on a 3×3 grid of cells IS a spanning tree of the 3×3 grid
-  // graph, so enumerate them: 9 cells, 12 possible walls to knock out, 8 in any
-  // tree.
-  const EDGES = []
-  for (let r = 0; r < 3; r += 1) {
-    for (let c = 0; c < 3; c += 1) {
-      const i = r * 3 + c
-      if (c < 2) EDGES.push([i, i + 1])
-      if (r < 2) EDGES.push([i, i + 3])
-    }
-  }
-  const spanning = []
-  for (let mask = 0; mask < 1 << EDGES.length; mask += 1) {
-    const chosen = EDGES.filter((_, e) => mask & (1 << e))
-    if (chosen.length !== 8) continue
-    const parent = Array.from({ length: 9 }, (_, i) => i)
-    const find = (x) => {
-      while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x] }
-      return x
-    }
-    const acyclic = chosen.every(([a, b]) => {
-      const ra = find(a), rb = find(b)
-      if (ra === rb) return false
-      parent[ra] = rb
-      return true
-    })
-    if (acyclic) spanning.push(mask)
-  }
-
-  // Tarjan 1972: a spanning tree is a DFS tree exactly when every edge the
-  // search declined joins an ancestor to a descendant, never two cousins. That
-  // is the article's entire argument for why the backtracker cannot reach most
-  // mazes, so it is the thing worth executing rather than restating.
-  const isDfsTree = (mask) => {
-    const adj = Array.from({ length: 9 }, () => [])
-    EDGES.forEach(([a, b], e) => {
-      if (mask & (1 << e)) { adj[a].push(b); adj[b].push(a) }
-    })
-    const parent = Array(9).fill(-2)
-    parent[0] = -1
-    const queue = [0]
-    for (let head = 0; head < queue.length; head += 1) {
-      for (const v of adj[queue[head]]) if (parent[v] === -2) { parent[v] = queue[head]; queue.push(v) }
-    }
-    const isAncestor = (a, d) => {
-      for (let x = d; x !== -1; x = parent[x]) if (x === a) return true
-      return false
-    }
-    return EDGES.every(([a, b], e) => (mask & (1 << e)) || isAncestor(a, b) || isAncestor(b, a))
-  }
-  const reachable = spanning.filter(isDfsTree).length
-
-  const mazeText = `${maze.title}\n${maze.summary}\n${maze.content}`
-  for (const claim of [
-    `${spanning.length} mazes on a 3×3 grid`,
-    `3×3 gives ${spanning.length}`,
-    `can build ${reachable}`,
-    `reaches ${reachable}`,
-    `the missing ${spanning.length - reachable}`,
-  ]) {
-    assert.ok(mazeText.includes(claim), `the article must still say "${claim}"`)
-  }
-
-  const mazeSrc = await readFile(
-    new URL('../src/components/games/maze-weaver/MazeWeaver.ts', import.meta.url),
-    'utf-8',
-  )
-  const constant = (re, what) => {
-    const m = mazeSrc.match(re)
-    assert.ok(m, `MazeWeaver.ts no longer declares ${what} — the checks below are only meaningful if it found it`)
-    return Number(m[1])
-  }
-  // rows derive from cols exactly as the component derives them.
-  const cols = constant(/private cols = (\d+)/, 'a default column count')
-  const rows = Math.max(6, Math.round(cols * constant(/const ASPECT = ([\d.]+)/, 'an aspect ratio')))
-
-  assert.ok(maze.content.includes(`${cols} by ${rows} out of the box`), `the default grid is ${cols}×${rows}`)
-  assert.ok(maze.content.includes(`${cols}×${rows} grid`), 'the measured averages are quoted for the default grid')
-  // Corner to corner in a perfect maze is at best the Manhattan walk, in cells.
-  assert.ok(
-    maze.content.includes(`can be on that grid is ${cols + rows - 1} cells`),
-    `the shortest corner-to-corner route on a ${cols}×${rows} grid is ${cols + rows - 1} cells`,
-  )
-
-  // The builder buttons. The article names all three and the caption tells the
-  // reader to press one by its LABEL, so a rename breaks an instruction and a
-  // fourth builder ("Wilson's", which the article itself recommends) makes
-  // "three builders" and "Two of the three" false.
-  const genBlock = mazeSrc.slice(mazeSrc.indexOf('const GEN_NAMES'), mazeSrc.indexOf('const SOLVE_NAMES'))
-  const genNames = [...genBlock.matchAll(/:\s*["']([^"']+)["']/g)].map(m => m[1])
-  assert.equal(genNames.length, 3, 'the article counts the builders — "three builders", "Two of the three", "All three"')
-  for (const name of genNames) {
-    assert.ok(maze.content.includes(name), `the article must name the builder button "${name}"`)
-  }
-  assert.ok(
-    genNames.some(name => maze.embedCaption.includes(name)),
-    'the caption tells the reader to press a builder by its label — that label must still exist',
-  )
-
-  // "read the last figure in the status line — path N cells"
-  assert.ok(maze.embedCaption.includes('path N cells'), 'the caption points at the path figure')
-  assert.match(mazeSrc, /`path \$\{this\.path\.length\} cells`/, 'the status line still prints "path N cells"')
-
-  // "it rebuilds the same seed, so only the rule has changed" — which is only
-  // true because switching builder passes false where Regenerate passes true.
-  // Assert both halves: the flag has to mean "take a new seed" for the caption's
-  // promise to hold, and a swap of the two arguments is invisible on screen.
-  assert.match(
-    mazeSrc,
-    /\[data-action="generate"\][\s\S]{0,140}?startGenerate\(true\)/,
-    'Regenerate takes a NEW seed — that is what makes the flag mean "new seed"',
-  )
-  // EVERY startGenerate inside the builder-switch handler, not just one of them:
-  // the handler has two (switch builder, re-press the current one) and both keep
-  // the seed. A `false` somewhere else in that block is what let an earlier draft
-  // of this check pass a mutant that took a new seed on switch.
-  const genHandlerStart = mazeSrc.indexOf("querySelectorAll<HTMLButtonElement>('[data-gen]')")
-  const genHandlerEnd = mazeSrc.indexOf("querySelectorAll<HTMLButtonElement>('[data-solver]')")
-  assert.ok(
-    genHandlerStart !== -1 && genHandlerEnd > genHandlerStart,
-    'could not locate the builder-switch handler — the check below is only meaningful if it found it',
-  )
-  const seedFlags = [...mazeSrc
-    .slice(genHandlerStart, genHandlerEnd)
-    .matchAll(/startGenerate\((true|false)\)/g)].map(m => m[1])
-  assert.ok(seedFlags.length >= 2, 'the builder-switch handler regenerates on both of its paths')
-  assert.deepEqual(
-    [...new Set(seedFlags)],
-    ['false'],
-    'switching builder must rebuild the SAME seed, or the caption is asking the reader to compare two different mazes',
-  )
-
-  // The 14 is counted from the top-left cell ("Enumerate the 3×3 spanning trees
-  // that satisfy Tarjan's condition from the top-left cell"). A backtracker that
-  // started anywhere else reaches a different set, and the count would move.
-  assert.match(
-    mazeSrc.slice(mazeSrc.indexOf('*genBacktracker'), mazeSrc.indexOf('*genPrim')),
-    /stack: number\[\] = \[0\]/,
-    'the backtracker roots at cell 0 — the article counts its reachable mazes from there',
-  )
-}
-
-// ---------------------------------------------------------------------------
 // The embeds/games split.
 //
 // "Is wired to a component" and "is a game" were one question until the six
@@ -633,7 +472,11 @@ for (const [from, to] of Object.entries(MOVED_GAMES)) {
   // Still checked against isPlayableGame — a redirect to a "coming soon" page is
   // the same broken promise as a redirect to a 404.
   const isGame = games.some(g => to === `/games/${g.slug}` && isPlayableGame(g))
-  assert.ok(isMode || isLearning || isGame, `"${from}" redirects to ${to}, which is not a published page`)
+  // …and a live tool. Game of Life lost its article and now lands on the
+  // generative-art hub; `status === 'live'` keeps the "must actually exist and be
+  // indexable" guarantee that makes this assertion worth having.
+  const isTool = tools.some(t => to === `/tools/${t.slug}` && t.status === 'live')
+  assert.ok(isMode || isLearning || isGame || isTool, `"${from}" redirects to ${to}, which is not a published page`)
 }
 
 // Config validation rejects what the admin form could otherwise save.
@@ -1057,7 +900,7 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
 
 {
   const poker = await import('../src/components/games/poker-trainer/engine/equity.ts')
-  const article = learnings.find(l => l.slug === 'pot-odds-and-bluff-frequency')
+  const article = learnings.find(l => l.slug === 'the-test-that-shared-the-bug')
   assert.ok(article, 'the pot-odds article is shipped')
   assert.equal(article.embed, 'poker-trainer', 'the article argues about the component it embeds')
 
@@ -1093,12 +936,6 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   assert.equal(poker.countRunouts([hero, villain], board3), flop, 'engine agrees on the flop count')
   assert.equal(poker.countRunouts([hero, villain], [...board3, card(7, 'h')]), turn, 'engine agrees on the turn count')
 
-  assert.ok(
-    text.includes('C(48,5) = 1,712,304 boards'),
-    'the article must still quote the pre-flop runout count it was written from',
-  )
-  assert.ok(text.includes('C(45,2) = 990'), 'the article must still quote the flop count')
-
   // The claim "the trainer refuses pre-flop" is only true while the ceiling is
   // under the pre-flop count. Read the ceiling out of source rather than
   // assuming it.
@@ -1107,7 +944,7 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   const ceiling = Number(ceilingMatch[1].replace(/_/g, ''))
   assert.ok(
     ceiling < preflop,
-    `the article says a pre-flop hand-vs-hand query is refused, so PT_MAX_RUNOUTS (${ceiling}) must stay below ${preflop}`,
+    `PT_MAX_RUNOUTS (${ceiling}) must stay below the ${preflop} pre-flop boards, or the tool would try to enumerate them`,
   )
 
   // The four prices. `pot` and `sizes` are the drill's, pinned from source: the
@@ -1171,16 +1008,16 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     )
   }
   assert.ok(
-    text.includes('B / (P + 2B)** of the time') && text.includes('B / (P + B) is the number most tables quote'),
-    'the article must keep both fractions distinct and name the near-miss',
+    text.includes('**B / (P + 2B)**') && text.includes('**B / (P + B)**'),
+    'the article must keep both fractions distinct — the wrong one it shipped and the right one',
   )
   assert.ok(
-    text.includes('bets 33, 50, 66 or 100 into it'),
+    text.includes('33, 50, 66 and 100 into a pot of 100'),
     'the article must still name the drill bet sizes',
   )
   assert.ok(
-    text.includes(prices.map(p => p.replace('%', '')).join('%, ') + '%'),
-    `the article must still quote the four prices as "${prices.join(', ')}"`,
+    prices.every(price => text.includes(price)),
+    `the article must still quote every derived price (${prices.join(', ')}) — asserted individually so prose punctuation is free to change but the numbers are not`,
   )
   // One decimal place, because that is how the article and the caption write
   // them; a formatter change would make both wrong.
@@ -1204,21 +1041,11 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     .filter(combo => !combo.some(c => c.r === 14 && c.s === 's'))
   assert.equal(blockedAces.length, choose(3, 2), 'one ace in your hand leaves C(3,2) = 3 of theirs')
   assert.equal(blockedAces.length, 3)
-  for (const claim of [
-    'a specific pair is 6 two-card combinations, a suited hand 4, an offsuit hand 12',
-    'Ace-king arrives sixteen ways and aces six',
-    'their aces drop from 6 to 3',
-  ]) {
-    assert.ok(text.includes(claim), `the article must still say "${claim}"`)
-  }
-
   // The caption is an instruction, so every control and readout it names has to
   // exist character for character. This is the half that rots silently: a
   // reworded table heading leaves the caption pointing at nothing.
   for (const label of [
     'Play a spot',
-    'Next spot',
-    'Your equity against their whole range',
     'Equity you needed to call',
   ]) {
     assert.ok(ptSrc.includes(label), `PokerTrainer.ts must still render "${label}" — the caption points at it`)

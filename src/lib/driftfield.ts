@@ -101,10 +101,14 @@ export const MOVED_GAMES: Record<string, string> = {
   // The poker game became the trainer. Without this its URL 404s, and it is the
   // one removed page whose successor is a direct replacement rather than a move.
   poker: '/games/poker-trainer',
+  // Conway's Game of Life had an article to land on; that article is gone. The
+  // generative-art hub is the closest surviving relative — a cellular automaton
+  // belongs with the other engines, and the URL is live in production so it
+  // cannot simply stop resolving.
+  'game-of-life': '/tools/driftfield',
   ...Object.fromEntries(
     DRIFTFIELD_MODES.map(m => [m.slug, `/tools/${DRIFTFIELD_SLUG}/${m.slug}`]),
   ),
   // Game of Life is not a Driftfield mode — it is discrete and rule-based rather
   // than generative wallpaper — so its page becomes the article about it.
-  'game-of-life': '/learnings/conway-game-of-life',
 }

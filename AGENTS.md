@@ -436,7 +436,17 @@ no assertion, it will be undone by a later refactor that looks harmless.
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
 - **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
-- **SEO support copy**: Tool and game detail pages may render `seoContent` markdown from config under the interactive app for how-to, FAQ, privacy, and strategy copy. Keep the app first; this block is for search context and users who scroll.
+- **SEO support copy is OFF by default.** Tool and game detail pages still render
+  `seoContent` markdown from config when it is set, but every entry ships with it
+  empty as of 2026-08-20. The owner read the generated version — "how to play X",
+  "what is different in this version", "simple X strategy", "faq" on all 19 pages —
+  and called it boring and not useful, which it was: it restated the collapsible
+  "How to play" control sitting directly above it, and the FAQ answered questions
+  nobody had. That cost ~7,500 words of indexable text, which is a real SEO
+  trade-off made deliberately. The mechanism is kept, not deleted, so genuinely
+  useful copy can go back without a rebuild — but generated how-to/FAQ filler is
+  what this field is now known to attract, so anything added here needs to earn
+  its place the way a learnings article does.
 - **Decorative StarField**: Keep the home/background star canvas off tool and game detail pages. Lighthouse showed it spending CPU before the game became useful; detail pages should prioritize the interactive app.
 - **Fonts on tools/games**: Tool and game detail pages pass `loadFonts={false}` to `Head`. This avoids mobile CLS and a render-blocking third-party font request on utility pages; fallback system fonts are acceptable there.
 - **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.

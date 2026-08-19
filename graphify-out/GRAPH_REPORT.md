@@ -1,16 +1,16 @@
-# Graph Report - portfolio-apanjwani0  (2026-08-19)
+# Graph Report - portfolio-apanjwani0  (2026-08-20)
 
 ## Corpus Check
-- 142 files · ~246,596 words
+- 142 files · ~209,312 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2294 nodes · 4925 edges · 96 communities (80 shown, 16 thin omitted)
+- 2294 nodes · 4927 edges · 96 communities (78 shown, 18 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `062a6e51`
+- Built from commit: `8396b51b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -143,7 +143,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (96 total, 16 thin omitted)
+## Communities (96 total, 18 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.05
@@ -162,8 +162,8 @@ Cohesion: 0.21
 Nodes (5): parseColor(), RGB, Star, StarField, TrailPoint
 
 ### Community 4 - "Community 4"
-Cohesion: 0.09
-Nodes (15): mountEmbed(), mountGame(), stripEmbedChrome(), FG_PALETTES, FG_PRESETS, fgClamp(), fgExpand(), fgHash() (+7 more)
+Cohesion: 0.10
+Nodes (12): FG_PALETTES, FG_PRESETS, fgClamp(), fgExpand(), fgHash(), fgMulberry32(), FgPalette, FgPreset (+4 more)
 
 ### Community 7 - "Admin API Route Handlers (login/logout/save)"
 Cohesion: 0.08
@@ -234,8 +234,8 @@ Cohesion: 0.09
 Nodes (26): ../../../components/tools/wallpaper-forge/WallpaperForge.ts, AspectId, clamp(), fade(), fbm(), hash2(), LEGACY_PALETTE, lerp() (+18 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.15
-Nodes (7): BO_PALETTES, BoBoid, boClamp(), BoPalette, BoPointerMode, boToRGB(), v()
+Cohesion: 0.28
+Nodes (7): mountEmbed(), mountGame(), stripEmbedChrome(), SF_PALETTES, SfPalette, SfStar, sfToRGB()
 
 ### Community 31 - "Community 31"
 Cohesion: 0.20
@@ -326,12 +326,8 @@ Cohesion: 0.19
 Nodes (16): $(), activeIndex(), b(), cleanup(), connectedCallback(), disconnectedCallback(), #e(), emit() (+8 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.26
-Nodes (9): attachCanvasExport(), TB_PALETTES, TB_PRESETS, tbClamp(), TbPalette, TbPreset, tbReadExact(), tbReadStored() (+1 more)
-
-### Community 56 - "Community 56"
-Cohesion: 0.14
-Nodes (3): tbMulberry32(), tbWriteStored(), TuringBloomGame
+Cohesion: 0.17
+Nodes (10): v(), TB_PALETTES, TB_PRESETS, tbMulberry32(), TbPalette, TbPreset, tbReadExact(), tbReadStored() (+2 more)
 
 ### Community 57 - "Community 57"
 Cohesion: 0.08
@@ -353,17 +349,13 @@ Nodes (5): Client wiring (not yet — comes with the rooms slice), Layout, Onlin
 Cohesion: 0.06
 Nodes (46): breadcrumbLd, crumbs, ldJson, post, ../../../components/Breadcrumbs.astro, ExperienceItem Props, ../components/ProjectCard.astro, forksUrl (+38 more)
 
-### Community 65 - "Community 65"
-Cohesion: 0.14
-Nodes (6): SF_PALETTES, sfClamp(), SfPalette, SfStar, sfToRGB(), StarfieldVoyagerGame
-
 ### Community 66 - "Community 66"
 Cohesion: 0.09
 Nodes (33): ../../components/tools/draftboard/Draftboard.ts, MD_MAP_LAYOUT, MdMapMode, HelpEntry, HelpSection, helpSections, ../../components/tools/flowmap/Flowmap.ts, FM_BASE (+25 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.17
-Nodes (6): EXPORT_SIZES, ExportSize, GifOptions, LiveExportOptions, SizeError, SizeResult
+Cohesion: 0.10
+Nodes (13): attachCanvasExport(), EXPORT_SIZES, ExportSize, GifOptions, LiveExportOptions, SizeError, SizeResult, BO_PALETTES (+5 more)
 
 ### Community 68 - "Community 68"
 Cohesion: 0.12
@@ -456,12 +448,12 @@ Nodes (4): byteLength(), escapeHtml(), formatBytes(), toCsv()
 ## Knowledge Gaps
 - **619 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+614 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **16 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `mountGame()` connect `Community 4` to `Community 32`, `Community 1`, `Community 65`, `Community 35`, `Community 69`, `Community 76`, `Community 45`, `Community 47`, `Community 18`, `Community 55`, `Community 25`, `Community 30`?**
+- **Why does `mountGame()` connect `Community 30` to `Community 32`, `Community 1`, `Community 35`, `Community 4`, `Community 67`, `Community 69`, `Community 76`, `Community 45`, `Community 47`, `Community 18`, `Community 55`, `Community 25`?**
   _High betweenness centrality (0.127) - this node is a cross-community bridge._
 - **Why does `flashLabel()` connect `Community 43` to `Community 32`, `Community 66`, `Community 35`, `Community 68`, `Community 37`, `Community 38`, `Community 39`, `Community 46`, `Community 50`, `Community 178`, `Community 55`, `Community 57`, `Community 58`, `Community 28`, `Community 29`?**
   _High betweenness centrality (0.121) - this node is a cross-community bridge._
