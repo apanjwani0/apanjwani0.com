@@ -1561,4 +1561,152 @@ assert.ok(
 }
 
 
+// ── role: projects ───────────────────────────────────────────────────────────
+// The projects page advertises its entries twice: as cards and as an ItemList in
+// JSON-LD. When an entry points at this site's own /tools/<slug> or /games/<slug>
+// it is making the same promise a hub listing makes, so it has to obey the same
+// one predicate the Indexing section defines — `status === 'live'` for a tool,
+// isPlayableGame() for a game. Nothing else notices the disagreement: flip a tool
+// to `wip` (noindex) or `disabled` (404) and the projects page keeps linking to it
+// with a confident description, which is precisely the "signals that contradict
+// each other" failure the Indexing rule exists to prevent.
+import { projects as smokeProjects } from '../src/config/projects.ts'
+
+const smokeToolBySlug = new Map(tools.map(t => [t.slug, t]))
+const smokeGameBySlug = new Map(games.map(g => [g.slug, g]))
+
+for (const p of smokeProjects) {
+  const m = /^https:\/\/apanjwani0\.com\/(tools|games)\/([a-z0-9-]+)\/?$/.exec(p.url)
+  if (!m) continue
+  const [, kind, slug] = m
+  if (kind === 'tools') {
+    const tool = smokeToolBySlug.get(slug)
+    assert.ok(tool, `project "${p.title}" links to /tools/${slug}, which is not a configured tool`)
+    assert.equal(
+      tool.status,
+      'live',
+      `project "${p.title}" links to /tools/${slug}, which is "${tool.status}" — a project entry must not advertise a non-indexable page`,
+    )
+  } else {
+    const game = smokeGameBySlug.get(slug)
+    assert.ok(game, `project "${p.title}" links to /games/${slug}, which is not a configured game`)
+    assert.ok(
+      isPlayableGame(game),
+      `project "${p.title}" links to /games/${slug}, which is not playable — a project entry must not advertise a non-indexable page`,
+    )
+  }
+}
+
+
+/* ══════════════  design-ux: ONE disabled treatment, site-wide  ══════════════
+
+   "This control is dead" used to be told seven different ways — opacity 0.4 in
+   draftboard, 0.45 in 2048 / json-tidy's panes / the games floor, 0.5 in
+   json-tidy's repair button and tree search, 0.6 in both daily-leaderboard
+   forms, 0.65 in wallpaper-forge, a bare colour swap in the shared canvas export
+   bar, and in the tools lane's shared button chrome nothing at all. That last
+   one was the real defect: flowmap's Undo/Redo ship `disabled` and toggle on
+   every edit, so they rendered byte-identically to live buttons and lit up on
+   hover.
+
+   `--opacity-disabled` in theme.css is now the single value. These assertions
+   exist because a token nobody references is decoration, and the next tool to
+   hand-roll `opacity: 0.5` would be invisible in review — the page still renders
+   and the build stays green. */
+{
+  const styleUrl = n => new URL(`../src/styles/${n}`, import.meta.url)
+  const themeCss = await readFile(styleUrl('theme.css'), 'utf-8')
+
+  assert.ok(
+    /--opacity-disabled:\s*[\d.]+\s*;/.test(themeCss),
+    'theme.css must define --opacity-disabled — it is the one "this control is dead" value',
+  )
+
+  // Collect every stylesheet the site ships: src/styles plus each component sheet.
+  const sheets = []
+  for (const f of (await readdir(new URL('../src/styles/', import.meta.url))).filter(f => f.endsWith('.css'))) {
+    sheets.push([`src/styles/${f}`, await readFile(styleUrl(f), 'utf-8')])
+  }
+  for (const lane of ['tools', 'games']) {
+    const laneUrl = new URL(`../src/components/${lane}/`, import.meta.url)
+    for (const e of await readdir(laneUrl, { withFileTypes: true })) {
+      if (e.isFile() && e.name.endsWith('.css')) {
+        sheets.push([`${lane}/${e.name}`, await readFile(new URL(e.name, laneUrl), 'utf-8')])
+      }
+      if (!e.isDirectory()) continue
+      const dirUrl = new URL(`${e.name}/`, laneUrl)
+      for (const f of (await readdir(dirUrl)).filter(f => f.endsWith('.css'))) {
+        sheets.push([`${lane}/${e.name}/${f}`, await readFile(new URL(f, dirUrl), 'utf-8')])
+      }
+    }
+  }
+  assert.ok(sheets.length > 25, `expected the whole stylesheet set, found ${sheets.length}`)
+
+  // No sheet may hand-roll a numeric opacity inside a :disabled rule. Matches the
+  // declaration block of any rule whose selector list mentions :disabled, then
+  // looks for a literal `opacity:` value that is not a var().
+  for (const [name, css] of sheets) {
+    for (const m of css.matchAll(/([^{}]*:disabled[^{}]*)\{([^}]*)\}/g)) {
+      // Note the lookbehind: without it this matches the tail of a custom
+      // property named `--opacity-*`. And the var() test is on the CAPTURE, not
+      // a lookahead — `\s*` backtracks to zero width, so `(?!var\()` after it
+      // "passes" on the leading space of ` var(...)` and flags correct code.
+      const hit = m[2].match(/(?<![\w-])opacity:\s*([^;]+)/)
+      const bad = hit && !hit[1].trim().startsWith('var(') ? hit : null
+      assert.ok(
+        !bad,
+        `${name} sets a literal opacity (${bad?.[1]?.trim()}) on "${m[1].trim().split('\n').pop()}" — use var(--opacity-disabled)`,
+      )
+    }
+  }
+
+  // The two lane floors must actually carry a disabled state. games-common had
+  // one and tools-common did not, which is how flowmap's Undo/Redo shipped
+  // indistinguishable from live buttons for as long as they existed.
+  for (const rel of ['tools/tools-common.css', 'games/games-common.css']) {
+    const css = sheets.find(([n]) => n === rel)?.[1]
+    assert.ok(css, `${rel} must exist — it is the lane's shared button floor`)
+    const rule = css.match(/([^{}]*button:disabled[^{}]*)\{([^}]*)\}/)
+    assert.ok(rule, `${rel} must give disabled buttons a dead state`)
+    assert.ok(
+      rule[2].includes('var(--opacity-disabled)'),
+      `${rel}'s disabled rule must dim with var(--opacity-disabled)`,
+    )
+    // …and must neutralise its own hover, so a dead control never lights up.
+    // The guard is source-order, not `:hover:not(:disabled)`: adding that
+    // pseudo-class raises the hover rule's specificity past the per-tool tab
+    // opt-outs (hash-smith / codec-forge / regex-lab) and past every per-game
+    // copy, which would repaint borders those controls deliberately lack.
+    const hoverProps = [...css.matchAll(/([^{}]*button:hover[^{}]*)\{([^}]*)\}/g)]
+      .flatMap(m => [...m[2].matchAll(/^\s*([a-z-]+)\s*:/gm)].map(p => p[1]))
+    for (const prop of new Set(hoverProps)) {
+      assert.ok(
+        rule[2].includes(`${prop}:`),
+        `${rel}: the shared hover sets "${prop}" but the disabled rule does not reset it — a dead button lights up on hover`,
+      )
+    }
+    assert.ok(
+      css.indexOf('button:disabled') > css.lastIndexOf('button:hover'),
+      `${rel}: the disabled rule must come AFTER the hover rule — they tie on specificity, so source order is the whole mechanism`,
+    )
+  }
+
+  // The one tool in the shared chrome that actually disables buttons. If flowmap
+  // ever stops shipping them the assertion above still holds the language, but
+  // this pins the case that motivated it.
+  const flowmap = await readFile(
+    new URL('../src/components/tools/flowmap/Flowmap.ts', import.meta.url), 'utf-8',
+  )
+  assert.ok(
+    /data-action="undo"[^>]*\sdisabled/.test(flowmap) && /\.disabled = this\.(history|future)\.length === 0/.test(flowmap),
+    'flowmap Undo/Redo still ship disabled and toggle at runtime — the case tools-common.css now covers',
+  )
+  const toolsCommon = sheets.find(([n]) => n === 'tools/tools-common.css')[1]
+  assert.ok(
+    /div\[data-tool="flowmap"\] button:disabled/.test(toolsCommon),
+    'flowmap must be in the shared disabled selector list, not just the live one',
+  )
+}
+
+
 console.log('security smoke ok')

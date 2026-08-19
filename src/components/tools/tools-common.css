@@ -106,6 +106,46 @@ div[data-tool="token-bench"] button:hover {
   border-color: var(--color-muted);
 }
 
+/* …and the dead state the chrome above was missing entirely. games-common.css
+   has carried this floor since the games lane was unified; the tools lane never
+   got it, so a disabled button in these ten tools rendered byte-identically to a
+   live one, kept `cursor: pointer`, and lit up under the mouse.
+
+   Flowmap is where that shows: its Undo and Redo ship `disabled` and are toggled
+   on every edit (Flowmap.ts), so the two controls a user reaches for most often
+   were the two that lied about whether they would do anything. Dimming is
+   `--opacity-disabled` — the single site-wide value — so this lane, the games
+   lane and the shared canvas export bar all say "dead" the same way.
+
+   This rule re-states colour and border-colour rather than the tidier-looking
+   `:hover:not(:disabled)` guard on the rule above, and the reason is specificity,
+   not taste. `button:hover` is (0,2,2); adding `:not(:disabled)` makes it (0,3,2),
+   which then TIES the class column of the tab opt-outs
+   (`div[data-tool="hash-smith"] [data-tab-btn]:hover`, (0,3,1)) and beats them on
+   the element column — so hovering a tab in hash-smith / codec-forge / regex-lab
+   would have started painting the grey border those tabs deliberately do not
+   have. `button:disabled` is (0,2,2), identical to the hover rule, and is
+   declared after it, so it wins on source order and changes nothing else. The
+   file header's "specificity is byte-identical" promise is load-bearing; keep it.
+
+   Consequence to respect: a new hover property added above must be neutralised
+   here too. */
+div[data-tool="list-forge"] button:disabled,
+div[data-tool="epoch-wizard"] button:disabled,
+div[data-tool="chroma-lab"] button:disabled,
+div[data-tool="codec-forge"] button:disabled,
+div[data-tool="hash-smith"] button:disabled,
+div[data-tool="cron-whisperer"] button:disabled,
+div[data-tool="regex-lab"] button:disabled,
+div[data-tool="webhook-inspector"] button:disabled,
+div[data-tool="flowmap"] button:disabled,
+div[data-tool="token-bench"] button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+  color: var(--color-muted);
+  border-color: var(--color-border);
+}
+
 /* Card container — the surfaced panel treatment shared byte-for-byte across the
    tools that group their controls into cards (chroma-lab / epoch-wizard /
    cron-whisperer). Hoisted here from three identical per-tool copies. Same

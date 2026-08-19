@@ -62,7 +62,16 @@
   border-color: var(--color-muted);
 }
 
+/* The lane's dead state. `--opacity-disabled` rather than a number so this,
+   tools-common.css and the shared canvas export bar cannot drift apart again —
+   before the token they said 0.45 / nothing / a colour change respectively.
+   Colour and border-colour are re-stated to neutralise the hover rule above:
+   same specificity (0,2,1), declared later, so it wins on source order without
+   the `:hover:not(:disabled)` guard that would have out-specified every
+   per-game copy. A dead control must not light up under the cursor. */
 [data-game] button:disabled {
-  opacity: 0.45;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
+  color: var(--color-muted);
+  border-color: var(--color-border);
 }

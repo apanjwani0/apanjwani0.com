@@ -145,7 +145,7 @@ div[data-group="pane-actions"] button:hover:not(:disabled) {
 }
 
 div[data-group="pane-actions"] button:disabled {
-  opacity: 0.45;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 
@@ -309,7 +309,7 @@ div[data-type="jt-repair"] button[data-action="repair-apply"]:hover:not(:disable
 }
 
 div[data-type="jt-repair"] button[data-action="repair-apply"]:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
   cursor: default;
 }
 
@@ -412,7 +412,7 @@ div[data-tool="json-tidy"] input[data-control="tree-search"]:focus {
 }
 
 div[data-tool="json-tidy"] input[data-control="tree-search"]:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 
@@ -461,7 +461,7 @@ div[data-group="search-nav"] button:hover:not(:disabled) {
 }
 
 div[data-group="search-nav"] button:disabled {
-  opacity: 0.45;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 

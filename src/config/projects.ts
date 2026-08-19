@@ -34,6 +34,18 @@ export const projects: Project[] = [
     "keywords": "webhook tester, request bin, webhook debugger, http inspector"
   },
   {
+    "title": "Cron Whisperer",
+    "url": "https://apanjwani0.com/tools/cron-whisperer",
+    "description": "Paste a crontab line, read it back in plain English, and see the next runs in the time zone the server actually runs in rather than the one your browser happens to be in. It exists to answer the question every other cron explainer skips: what happens to this job when the clocks change.\n\nA crontab line names a wall-clock reading, not an instant, and twice a year those stop being the same thing — an hour of readings never happens in spring, and an hour happens twice in autumn. So the engine walks wall-clock readings with plain calendar arithmetic and only then asks the zone which instants each reading maps to: zero, one, or two. That ordering is why the daylight-saving cases fall out rather than being special-cased. Then it applies the rule from `man 8 cron`: a job counts as running \"at a particular time\" only when neither the hour nor the minute field contains a `*`, and only those get made up after a forward jump or held to one run after a backward one. Everything else follows the new wall clock, which is why a `*/30` schedule quietly loses two runs every spring and gains two every autumn.\n\nThe part that took the longest is that the walk decides in wall order and returns instants, and across a fall-back those two orders disagree. Every termination decision taken in wall order is therefore wrong, and the final sort by instant hides the hole instead of showing it.\n\nEverything computes in the browser, and the shareable link carries the expression and the zone in the URL fragment, which browsers never send to a server. The time claims are asserted against the real tz database in CI — a wrong answer here renders perfectly and stays green otherwise.",
+    "tags": [
+      "typescript",
+      "cron",
+      "timezones",
+      "dst"
+    ],
+    "keywords": "cron expression explainer, crontab parser, cron dst, cron timezone, cron next run"
+  },
+  {
     "title": "Type Trial",
     "url": "https://apanjwani0.com/games/type-trial",
     "description": "One shared passage per UTC day, and a leaderboard the server validates rather than trusts.\n\nThe validation is the point. The server re-derives the day and its passage from the same module the browser bundle uses, then checks the submitted run against that. A finish means the whole passage was typed, which makes wpm a *function* of elapsed time — so the gate pins the two to each other. A one-sided \"not faster than a perfect run\" check reads as real and is vacuous, because its ceiling grows without limit as the claimed time shrinks.\n\nNo accounts, no cookie, no per-visitor identity — a display name and the numbers are the whole record.",

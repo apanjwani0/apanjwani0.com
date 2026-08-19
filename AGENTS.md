@@ -469,6 +469,22 @@ no assertion, it will be undone by a later refactor that looks harmless.
 
 - **Never hardcode** a colour, font, or type size in `global.css`, `home.css`, `shared.css`, component CSS, or scoped `<style>` blocks — reference a token: `var(--color-*)`, `var(--font-*)`, `var(--text-*)`, `var(--space-*)`.
 - **Load order**: `theme.css` (tokens) → `shared.css` (base elements + header, shared by both layouts) → `global.css` (content pages) / `home.css` (home hero) / component CSS.
+- **One disabled treatment**: `--opacity-disabled` in `theme.css` is the single
+  "this control is dead" value. It is an opacity and not a colour on purpose —
+  theme-agnostic, and it dims the border and the label together. Both lane floors
+  (`src/components/tools/tools-common.css`, `src/components/games/games-common.css`)
+  neutralise their own `:hover` by **re-stating the hovered properties at equal
+  specificity, declared afterwards** — source order, *not* `:hover:not(:disabled)`.
+  The guarded form is tidier and is wrong here: it lifts the hover rule from
+  (0,2,2) to (0,3,2), which out-specifies the per-tool tab opt-outs in
+  `hash-smith` / `codec-forge` / `regex-lab` and repaints a border they
+  deliberately lack. `tools-common.css` promises its specificity is
+  byte-identical, and that promise is load-bearing. `security:smoke` asserts the
+  token, the source order, and that the disabled rule resets every property the
+  shared hover sets — the last one derived from the hover block, so a hover
+  property added later is caught automatically. Note a tool joining the shared
+  button chrome now adds its selector to **three** lists in `tools-common.css`
+  (toolbar, button, `button:disabled`), not two.
 - **Theming**: `theme.css` defines light at `:root` and overrides the palette under `[data-theme="dark"]` (the site runs dark). Add a theme by adding another `[data-theme="…"]` block — palette tokens only.
 
 ## Skills & Commands

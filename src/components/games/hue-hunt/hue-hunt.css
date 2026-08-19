@@ -763,7 +763,7 @@ form[data-type="hue-daily-form"] button:hover:not(:disabled) {
 }
 
 form[data-type="hue-daily-form"] button:disabled {
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
   cursor: default;
 }
 

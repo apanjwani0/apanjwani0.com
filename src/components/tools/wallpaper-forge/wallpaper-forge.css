@@ -101,7 +101,7 @@ div[data-type="wf-controls"] [data-group="transport"] button:is([data-action="do
 
 div[data-type="wf-controls"] button:disabled {
   cursor: wait;
-  opacity: 0.65;
+  opacity: var(--opacity-disabled);
 }
 
 output[data-type="wf-export-status"] {

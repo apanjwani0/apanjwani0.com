@@ -64,6 +64,18 @@
   --space-section: 2.5rem;  /* vertical rhythm between blocks    */
   --space-header-offset: 4.75rem; /* height of the sticky header — scroll-padding for anchors */
 
+  /* ── State ───────────────────────────────────────────────── */
+  /* One "this control is dead" value for the whole site. Before this token the
+     answer was seven different numbers — 0.4 (draftboard), 0.45 (2048, json-tidy
+     panes, the games floor), 0.5 (json-tidy repair + tree search), 0.6 (the two
+     daily-leaderboard forms), 0.65 (wallpaper-forge) — and, in the tools lane's
+     shared button chrome, no dimming at all. So "disabled" read as a slightly
+     different shade of grey on every page, and flowmap's Undo/Redo (the only
+     disabled buttons in that lane) were indistinguishable from live ones and lit
+     up on hover. Opacity, not a colour, so it is theme-agnostic and dims the
+     border and the label together. */
+  --opacity-disabled: 0.45;
+
   /* ── Layout ──────────────────────────────────────────────── */
   /* Radius scale — corner rounding from fine UI up to panels. Component CSS
      references these rungs; never hardcode a px radius. */

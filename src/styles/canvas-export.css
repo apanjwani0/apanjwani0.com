@@ -57,8 +57,12 @@
   border-color: var(--color-accent);
 }
 
+/* Dimmed with `--opacity-disabled`, not a colour swap: the old rule muted the
+   label and left the border at full strength, which is a fourth dialect of
+   "dead" on a bar that appears under every canvas engine and every game. Opacity
+   takes the border with it and matches both lane floors. */
 [data-type='cx-actions'] button:disabled {
-  color: var(--color-muted);
+  opacity: var(--opacity-disabled);
   cursor: default;
 }
 
