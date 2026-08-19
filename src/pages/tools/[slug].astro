@@ -25,7 +25,7 @@ import '../../components/tools/cron-whisperer/cron-whisperer.css'
 import '../../components/tools/regex-lab/regex-lab.css'
 import '../../components/tools/webhook-inspector/webhook-inspector.css'
 import '../../components/tools/token-bench/token-bench.css'
-import '../../components/tools/trellis/trellis.css'
+import '../../components/tools/flowmap/flowmap.css'
 
 const { slug } = Astro.params
 
@@ -167,11 +167,11 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
       <p>{tool.intro || tool.description}</p>
     </regex-lab-tool>
   )}
-  {slug === 'trellis' && (
-    <trellis-tool data-tool="trellis">
+  {slug === 'flowmap' && (
+    <flowmap-tool data-tool="flowmap">
       <h1>{tool.title}</h1>
       <p>{tool.intro || tool.description}</p>
-    </trellis-tool>
+    </flowmap-tool>
   )}
   {slug === 'token-bench' && (
     <token-bench-tool data-tool="token-bench">
@@ -208,7 +208,7 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
     else if (slug === 'regex-lab') import('../../components/tools/regex-lab/RegexLab.ts')
     else if (slug === 'webhook-inspector') import('../../components/tools/webhook-inspector/WebhookInspector.ts')
     else if (slug === 'token-bench') import('../../components/tools/token-bench/TokenBench.ts')
-    else if (slug === 'trellis') import('../../components/tools/trellis/Trellis.ts')
+    else if (slug === 'flowmap') import('../../components/tools/flowmap/Flowmap.ts')
   }
   document.addEventListener('astro:page-load', mountTool)
   mountTool()

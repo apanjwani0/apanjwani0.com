@@ -22,7 +22,7 @@ export const tools: Tool[] = [
     description: 'Get a unique URL, send any webhook to it, and inspect the requests live.',
     status: 'live',
     seoTitle: 'Webhook Tester & Inspector — Webhook Inspector',
-    metaDescription: 'Free webhook tester: get an instant URL, watch real requests arrive with full headers and body, and verify the Stripe, GitHub or Slack signature against your secret.',
+    metaDescription: 'Free webhook tester: get an instant URL, watch requests arrive with headers and body, then verify the Stripe, GitHub or Slack signature against your secret.',
     keywords: 'webhook tester, webhook inspector, test webhook, webhook debugger, request bin, requestbin, http request inspector, capture webhook, inspect webhook, webhook url, receive webhook, webhook.site alternative, test http request, mock http endpoint, webhook testing tool, online webhook, debug webhook, http echo, request catcher, verify webhook signature, webhook signature checker, stripe signature verification, x-hub-signature-256, slack signing secret, shopify hmac, webhook hmac, signature mismatch, raw body hmac',
     intro: 'A live webhook and HTTP request tester that uses a real server, not just your browser. You get a unique capture URL that is saved on this device so you can reuse and share it; point any webhook sender or HTTP client at it — Stripe, GitHub, Slack, Shopify, Zapier, a cron job, or your own code — and every request it makes appears here within a couple of seconds, complete with the method, query string, every header, and the raw or pretty-printed body. Expand any request to read the full details, copy the body in one click, and clear the log when you are done. The capture URL doubles as a controllable HTTP target for debugging clients: append ?status=500 to make it return that status and exercise your retry logic, ?delay=2000 to simulate a slow upstream (2s is the cap), or ?echo=1 to have it send your request body straight back. Send a sample request with one button to see it work immediately. Paste the signing secret and every captured request is checked against it: Stripe, GitHub, Slack and Shopify are recognised from their headers and verified with the exact payload each one signs, and for any other sender the raw body is HMAC-ed with SHA-256, SHA-1 and SHA-512 and matched against every header, which tells you which header is the signature and how it is encoded. It keeps "correctly signed" and "still inside the replay window" as separate answers, and it never takes the algorithm from a label inside the message. The secret is used in your browser with Web Crypto and is never saved or uploaded. Captured requests live on the server only long enough to inspect — a few hours of inactivity — and are visible only to whoever holds the unguessable URL: there is no account and no public listing. Press R to refresh, C to clear, N for a fresh URL, and P to pause the live feed.',
     seoContent: `## How to use Webhook Inspector
@@ -84,17 +84,17 @@ No. The HMAC runs in your tab with Web Crypto, the secret is never written to br
 Requests are held in memory and dropped after a few hours of inactivity, and the most recent 50 per URL are kept. Treat it as a live inspection tool, not storage.`,
   },
   {
-    slug: 'trellis',
-    title: 'Trellis',
+    slug: 'flowmap',
+    title: 'Flowmap',
     description: 'Paste an outline or a mermaid flowchart and it draws itself, then rearrange by hand. Share the whole board as a link.',
     status: 'live',
-    seoTitle: 'Mind Map & Flowchart Maker from Text — Trellis',
+    seoTitle: 'Mind Map & Flowchart Maker from Text — Flowmap',
     metaDescription: 'Turn an indented outline or mermaid flowchart into a diagram instantly, then drag it into shape. Export Mermaid or PNG, or share the board as a single link.',
     keywords: 'mind map maker, text to diagram, mermaid editor, outline to mind map, flowchart from text, node graph editor, ideation canvas, concept map tool',
     intro: 'A canvas for thinking on. Paste an indented outline or a mermaid flowchart and it lays itself out; then add, connect and drag nodes into the shape you actually meant. Three layouts, a searchable node list, and export as Mermaid, PNG, or a link that carries the whole board.',
     seoContent: `## Start from text, finish by hand
 
-Hand-placing thirty boxes is the reason most diagrams never get drawn. Trellis takes structure you already have and does the placing, so the work you do is the thinking.
+Hand-placing thirty boxes is the reason most diagrams never get drawn. Flowmap takes structure you already have and does the placing, so the work you do is the thinking.
 
 Paste either of two things — it detects which:
 

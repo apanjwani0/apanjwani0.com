@@ -1,5 +1,5 @@
 /**
- * Text ⇄ graph, for Trellis.
+ * Text ⇄ graph, for Flowmap.
  *
  * Two input dialects, auto-detected, because the tool has two jobs and they want
  * different notations:
@@ -15,12 +15,30 @@
  * dropping edges.
  */
 
+/**
+ * The node shapes a diagram may use. Shape is meaning in a flow diagram — a
+ * diamond is a decision, a pill is a start or an end — so one shape is not
+ * enough, but an ARBITRARY shape is not safe either: the value reaches a
+ * Cytoscape style, and a graph can arrive from a share link a stranger wrote.
+ * Matched against this fixed list on decode rather than passed through, for the
+ * same reason the callout `kind` in markdown.ts is matched rather than
+ * interpolated.
+ */
+export const GRAPH_SHAPES = ['rounded', 'rect', 'diamond', 'pill'] as const
+export type GraphShape = (typeof GRAPH_SHAPES)[number]
+
+export function isGraphShape(value: unknown): value is GraphShape {
+  return typeof value === 'string' && (GRAPH_SHAPES as readonly string[]).includes(value)
+}
+
 export interface GraphNode {
   id: string
   label: string
   /** 0-based source line, when the node came from a document. Lets a map act as
    *  a navigator — click a node, jump the editor there. */
   line?: number
+  /** Defaults to 'rounded' when absent, so every existing graph stays valid. */
+  shape?: GraphShape
 }
 
 export interface GraphEdge {
@@ -288,7 +306,13 @@ export function decodeGraph(encoded: string): Graph | null {
     // Re-validate rather than trust: this came out of a URL someone else wrote.
     const nodes: GraphNode[] = parsed.n
       .filter((n: any) => n && typeof n.id === 'string' && typeof n.label === 'string')
-      .map((n: any) => ({ id: n.id, label: n.label }))
+      .map((n: any) => ({
+        id: n.id,
+        label: n.label,
+        // Unknown or absent shape silently becomes the default rather than
+        // rejecting the whole graph — a share link should degrade, not 404.
+        ...(isGraphShape(n.shape) ? { shape: n.shape } : {}),
+      }))
     const ids = new Set(nodes.map(n => n.id))
     const edges: GraphEdge[] = parsed.e
       .filter((e: any) => e && typeof e.id === 'string' && ids.has(e.source) && ids.has(e.target))

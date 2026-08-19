@@ -98,6 +98,9 @@ export function driftfieldMode(slug: string | undefined): DriftfieldMode | undef
 
 /** Old `/games/<slug>` → new home, for the 301s the games route serves. */
 export const MOVED_GAMES: Record<string, string> = {
+  // The poker game became the trainer. Without this its URL 404s, and it is the
+  // one removed page whose successor is a direct replacement rather than a move.
+  poker: '/games/poker-trainer',
   ...Object.fromEntries(
     DRIFTFIELD_MODES.map(m => [m.slug, `/tools/${DRIFTFIELD_SLUG}/${m.slug}`]),
   ),

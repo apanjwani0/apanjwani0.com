@@ -375,7 +375,7 @@ no assertion, it will be undone by a later refactor that looks harmless.
   (`--tool-width`), side gutter, keyboard focus ring and `<kbd>` styling come
   from (`src/styles/shared.css` + `tools-common.css`). A tool that invents its
   own root silently opts out of all four and no longer lines up with its
-  neighbours — which is what `token-bench` and `trellis` did for weeks, while
+  neighbours — which is what `token-bench` and `flowmap` did for weeks, while
   `wallpaper-forge` pinned itself to `--max-width` (768px, the PROSE column) and
   rendered at half the width of every other tool. **A tool styles its internals,
   never its own container width.** `security:smoke` asserts both halves.
@@ -442,7 +442,7 @@ no assertion, it will be undone by a later refactor that looks harmless.
 - **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
 - **Heavy deps are lazy-loaded per route**: `cytoscape` (~400KB) is imported
-  *inside* `connectedCallback` in `src/components/tools/trellis/Trellis.ts` and
+  *inside* `connectedCallback` in `src/components/tools/flowmap/Flowmap.ts` and
   nowhere else, so no other page pays for it. Any dependency of that size gets
   the same treatment — a static import at module scope would put it in a shared
   chunk and tax every tool page. It earns its place: hand-rolling pan/zoom, force

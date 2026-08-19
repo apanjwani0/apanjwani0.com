@@ -10,7 +10,7 @@ Written 2026-08-18. **Phases 1–3 and P-1 and T-1 are shipped on `develop`.**
 | 4 — T-1 Token Bench | **Done.** JWT signature verification, extracted to `src/lib/jwt.ts` and asserted |
 | 4 — T-2 tool renames | **Not started — needs a decision from you.** See Open below |
 | 4 — T-3 MD Enhanced mind map | **Done.** Map view: headings or outline, click a node to jump to that line |
-| 4 — I-1 Ideation canvas | **Done.** Shipped as **Trellis** — paste text to draw, then rearrange |
+| 4 — I-1 Ideation canvas | **Done.** Shipped as **Flowmap** — paste text to draw, then rearrange |
 | 5 — P-1 Projects rewrite | **Done.** Production work leads; excalidraw fork dropped |
 
 Deviations from the plan as written, both deliberate:
@@ -359,7 +359,7 @@ existing routes are left standing because they cost little and the `/games/*`
 - **The four remaining `-Forge/-Lab/-Smith/-Wizard` names**: Codec Forge,
   Hash Smith, Epoch Wizard, Chroma Lab. Suggested: Sift, Fingerprint (or Assay),
   Meridian, Pigment. Cosmetic; batch with T-2 if done at all.
-- **Editable maps.** Both Trellis and MD Enhanced's map are navigators; the map
+- **Editable maps.** Both Flowmap and MD Enhanced's map are navigators; the map
   never writes back into the markdown. Dragging a node to reorder a section means
   rewriting the document correctly, which is a larger build than everything else
   in T-3 combined. Deferred deliberately, not forgotten.

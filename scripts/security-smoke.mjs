@@ -75,6 +75,7 @@ import {
   verifyJwt,
 } from '../src/lib/jwt.ts'
 import {
+  GRAPH_SHAPES,
   decodeGraph,
   detectDialect,
   encodeGraph,
@@ -627,7 +628,12 @@ for (const [from, to] of Object.entries(MOVED_GAMES)) {
   assert.equal(games.some(g => g.slug === from), false, `"${from}" redirects away but is still in the games config`)
   const isMode = DRIFTFIELD_MODES.some(m => to === `/tools/driftfield/${m.slug}`)
   const isLearning = learnings.some(l => to === `/learnings/${l.slug}` && isPublishedLearning(l))
-  assert.ok(isMode || isLearning, `"${from}" redirects to ${to}, which is not a published page`)
+  // A game is a valid target too: `poker` was replaced by `poker-trainer` rather
+  // than moved out of /games, which is a case this list did not have until then.
+  // Still checked against isPlayableGame — a redirect to a "coming soon" page is
+  // the same broken promise as a redirect to a 404.
+  const isGame = games.some(g => to === `/games/${g.slug}` && isPlayableGame(g))
+  assert.ok(isMode || isLearning || isGame, `"${from}" redirects to ${to}, which is not a published page`)
 }
 
 // Config validation rejects what the admin form could otherwise save.
@@ -860,7 +866,7 @@ const wiSigSrc = await readFile(
 assert.ok(!wiSigSrc.includes('fetch('), 'signature verification stays local — no request may carry the secret')
 
 // ---------------------------------------------------------------------------
-// Trellis: the text→graph parsers, and the share link.
+// Flowmap: the text→graph parsers, and the share link.
 //
 // Parsers are where the bugs are, and these fail silently — a dropped edge just
 // looks like a diagram you drew slightly wrong.
@@ -912,6 +918,39 @@ assert.equal(decodeGraph(btoa('{"n":"nope","e":[]}')), null, 'a malformed payloa
 // reference, so it is dropped on the way in.
 const dangling = encodeGraph({ nodes: [{ id: 'a', label: 'a' }], edges: [{ id: 'e', source: 'a', target: 'ghost' }] })
 assert.equal(decodeGraph(dangling).edges.length, 0, 'edges to missing nodes are dropped')
+
+// Node shape reaches a Cytoscape style, and a graph arrives from a `#g=` fragment
+// a stranger wrote — so shape is matched against a fixed list on decode, never
+// passed through. Same rule as the callout `kind` in markdown.ts: a value that
+// picks how it is rendered must come from a vocabulary the code owns.
+{
+  const shaped = { nodes: [{ id: 'a', label: 'A', shape: 'diamond' }], edges: [] }
+  assert.equal(
+    decodeGraph(encodeGraph(shaped)).nodes[0].shape, 'diamond',
+    'a valid shape survives the share link',
+  )
+  for (const bad of ['polygon', 'round-rectangle', '"; fill: red; x: "', 42, null, {}, ['diamond']]) {
+    const graph = decodeGraph(encodeGraph({ nodes: [{ id: 'a', label: 'A', shape: bad }], edges: [] }))
+    assert.ok(graph, `a bad shape must degrade, not reject the whole graph (${JSON.stringify(bad)})`)
+    assert.equal(
+      graph.nodes[0].shape, undefined,
+      `shape ${JSON.stringify(bad)} is not in GRAPH_SHAPES and must be dropped, not rendered`,
+    )
+  }
+  // The renderer maps every shape the model allows; a new name without a mapping
+  // would silently draw as the Cytoscape default.
+  const flowmapSrc = await readFile(new URL('../src/components/tools/flowmap/Flowmap.ts', import.meta.url), 'utf-8')
+  // Scoped to the FM_SHAPE_CY body, not the whole file: a bare `name:` search
+  // also matches TR_SHAPE_LABEL, so deleting a renderer mapping still passed.
+  const cyMap = flowmapSrc.match(/const FM_SHAPE_CY[^{]*\{([\s\S]*?)\n\}/)
+  assert.ok(cyMap, 'FM_SHAPE_CY must still exist — it is what turns a model shape into a drawn one')
+  for (const name of GRAPH_SHAPES) {
+    assert.ok(
+      new RegExp(`\\b${name}:`).test(cyMap[1]),
+      `FM_SHAPE_CY must map "${name}" — an unmapped shape falls back to the default silhouette`,
+    )
+  }
+}
 
 // MD Enhanced's map reads the same parsers. Fenced code is the case that breaks
 // it in practice: a shell snippet is full of `#` comments and `-` flags, and
@@ -969,7 +1008,7 @@ assert.deepEqual(
 // Width, side gutter, focus ring and <kbd> styling all hang off
 // `div[data-type="tool-page"]` in shared.css. A tool that invents its own root
 // silently opts out of all four and visibly does not match the hub — which is
-// exactly what token-bench and trellis did until Aug 2026. Nothing about that
+// exactly what token-bench and flowmap did until Aug 2026. Nothing about that
 // failure is loud: the tool works, it is just narrower and unfocusable, so it
 // survives review and is only caught by looking at two tabs side by side.
 const toolDirs = await readdir(new URL('../src/components/tools/', import.meta.url), {
