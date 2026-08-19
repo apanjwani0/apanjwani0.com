@@ -2,6 +2,15 @@
 
 Written 2026-08-18. **Phases 1–3 and P-1 and T-1 are shipped on `develop`.**
 
+> **Superseded 2026-08-20 — the whole article series below was deleted.** All nine
+> articles were removed and replaced by a single one,
+> `the-test-that-shared-the-bug`. Everything from *The article series* down is
+> kept as a record of what was built and why, not as a description of what
+> ships; the two `Outstanding: npm run og` notes are moot — their pages no
+> longer exist and their cards are deleted. Note especially that Article 9's
+> "own b/(pot+bet)" is the bug the surviving article is *about*: the assertion
+> restated the formula it was checking instead of deriving it.
+
 | Phase | State |
 |---|---|
 | 1 — Learnings, end to end (L-1…L-9) | **Done.** Section, routes, admin tab, predicate, sitemap, cards, smoke assertions |

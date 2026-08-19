@@ -109,6 +109,4 @@ export const MOVED_GAMES: Record<string, string> = {
   ...Object.fromEntries(
     DRIFTFIELD_MODES.map(m => [m.slug, `/tools/${DRIFTFIELD_SLUG}/${m.slug}`]),
   ),
-  // Game of Life is not a Driftfield mode — it is discrete and rule-based rather
-  // than generative wallpaper — so its page becomes the article about it.
 }

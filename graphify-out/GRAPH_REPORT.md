@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-08-20)
 
 ## Corpus Check
-- 142 files · ~209,312 words
+- 142 files · ~209,384 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2294 nodes · 4927 edges · 96 communities (78 shown, 18 thin omitted)
+- 2294 nodes · 4927 edges · 96 communities (79 shown, 17 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8396b51b`
+- Built from commit: `37bafd24`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -143,7 +143,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (96 total, 18 thin omitted)
+## Communities (96 total, 17 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.05
@@ -326,8 +326,12 @@ Cohesion: 0.19
 Nodes (16): $(), activeIndex(), b(), cleanup(), connectedCallback(), disconnectedCallback(), #e(), emit() (+8 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.17
-Nodes (10): v(), TB_PALETTES, TB_PRESETS, tbMulberry32(), TbPalette, TbPreset, tbReadExact(), tbReadStored() (+2 more)
+Cohesion: 0.21
+Nodes (8): v(), TB_PALETTES, TB_PRESETS, TbPalette, TbPreset, tbReadExact(), tbReadStored(), tbReadStoredNumber()
+
+### Community 56 - "Community 56"
+Cohesion: 0.14
+Nodes (4): tbClamp(), tbMulberry32(), tbWriteStored(), TuringBloomGame
 
 ### Community 57 - "Community 57"
 Cohesion: 0.08
@@ -448,7 +452,7 @@ Nodes (4): byteLength(), escapeHtml(), formatBytes(), toCsv()
 ## Knowledge Gaps
 - **619 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+614 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
