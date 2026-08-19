@@ -33,6 +33,7 @@ export function mountGame(): Promise<unknown> {
   else if (slug === 'turing-bloom') return import('../components/games/turing-bloom/TuringBloom.ts')
   else if (slug === 'sand-loom') return import('../components/games/sand-loom/SandLoom.ts')
   else if (slug === 'lsystem-tree') return import('../components/games/lsystem/LSystem.ts')
+  else if (slug === 'poker-trainer') return import('../components/games/poker-trainer/PokerTrainer.ts')
   return Promise.resolve()
 }
 

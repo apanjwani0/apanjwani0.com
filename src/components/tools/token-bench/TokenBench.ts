@@ -74,7 +74,7 @@ class TokenBenchTool extends HTMLElement {
   connectedCallback() {
     this.restore()
     this.innerHTML = `
-      <div data-type="tb-tool">
+      <div data-type="tool-page" data-tool="token-bench">
         <div data-type="tb-header">
           <div data-type="tb-titlebar">
             <h1>Token Bench</h1>

@@ -10,6 +10,7 @@ import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
 import { MOVED_GAMES } from '../../lib/driftfield'
+import { getInterest } from '../../lib/interest'
 import '../../styles/seo-support.css'
 import '../../styles/games-embed.css'
 
@@ -82,6 +83,11 @@ const GameTag = gameTag(game)
 // Card only when the generator emits one AND the PNG is really on disk — a
 // forgotten `npm run og` must degrade to the avatar, not a 404ing og:image.
 const ogCard = gameHasOgCard(game) ? await existingOgCardPath('games', game.slug) : undefined
+
+// Rendered server-side so the count is there with JavaScript off, and so the
+// button has a real starting number rather than flashing in. Only meaningful on
+// a coming-soon page, so it is not read for a playable one.
+const interestCount = GameTag ? 0 : await getInterest(game.slug)
 ---
 
 <Base
@@ -107,8 +113,29 @@ const ogCard = gameHasOgCard(game) ? await existingOgCardPath('games', game.slug
   {!GameTag && (
     <>
       <h1>{game.title}</h1>
-      <h2 data-type="coming-soon">Coming Soon</h2>
+      <p data-type="coming-soon">Not playable yet — being built</p>
       <div data-type="project-description" set:html={gameIntroHtml} />
+
+      {/* The one thing a placeholder page can honestly offer: a way to say you
+          want it. A counter and not a form — a form needs moderation, storage
+          bounds on free text and an escaping story, and answers no question the
+          page is asking. Server-rendered count, so it works without JS. */}
+      <section data-type="interest" data-slug={game.slug}>
+        <h2>Want this sooner?</h2>
+        <p>
+          One press bumps a counter I actually check when deciding what to build next.
+          No sign-up, no email, nothing recorded about you — just the number going up.
+        </p>
+        <button data-action="want" type="button">Build this sooner</button>
+        <p data-type="interest-count" aria-live="polite" data-count={interestCount}>
+          {interestCount === 0
+            ? 'Nobody has asked yet. Be the first.'
+            : interestCount === 1
+              ? '1 person wants this'
+              : `${interestCount.toLocaleString()} people want this`}
+        </p>
+      </section>
+
       {liveGame && (
         <p>
           Want to play something now? <a href={`/games/${liveGame.slug}`}>{liveGame.title}</a> is live and ready.
@@ -129,15 +156,130 @@ const ogCard = gameHasOgCard(game) ? await existingOgCardPath('games', game.slug
       mountGame()
     </script>
   )}
+
+  {!GameTag && (
+    <script>
+      // "Want this sooner?" — one POST, then the button retires itself.
+      //
+      // The already-voted flag is localStorage, which the visitor can clear: that
+      // is fine and deliberate. It exists so the page does not invite the same
+      // person to press twice, NOT to enforce one vote each — enforcing that would
+      // need a per-visitor identity, which this site does not keep for anything
+      // (AGENTS.md → Analytics). The server's actual defence is its rate limiter.
+      const wire = () => {
+        const host = document.querySelector<HTMLElement>('[data-type="interest"]')
+        if (!host) return
+        // Guard against wiring twice. Game pages set clientRouter={false} today,
+        // so astro:page-load never fires here and the module-scope call is the
+        // only one — but if the router is ever switched on, both would run and a
+        // single press would send two votes. Cheap to prevent, invisible to debug.
+        if (host.dataset.wired) return
+        host.dataset.wired = '1'
+        const slug = host.dataset.slug!
+        const button = host.querySelector<HTMLButtonElement>('[data-action="want"]')!
+        const label = host.querySelector<HTMLElement>('[data-type="interest-count"]')!
+        const voted = `interest:${slug}`
+
+        const show = (count: number) => {
+          label.textContent = count === 1 ? '1 person wants this'
+            : `${count.toLocaleString()} people want this`
+        }
+
+        const retire = (message: string) => {
+          button.disabled = true
+          button.textContent = message
+        }
+
+        if (localStorage.getItem(voted)) retire('Noted — thanks')
+
+        button.addEventListener('click', async () => {
+          retire('Sending…')
+          try {
+            const response = await fetch('/api/games/interest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ slug }),
+            })
+            const data = await response.json()
+            if (!response.ok) throw new Error(data.error ?? 'failed')
+            localStorage.setItem(voted, '1')
+            show(data.count)
+            retire('Noted — thanks')
+          } catch {
+            // Say so rather than leaving a dead button: a silent failure here
+            // reads as "the site is broken", which is worse than the ask failing.
+            button.disabled = false
+            button.textContent = "Didn't send — try again"
+          }
+        })
+      }
+      document.addEventListener('astro:page-load', wire)
+      wire()
+    </script>
+  )}
 </Base>
 
 <style>
-  /* "Coming soon" subheading on the non-interactive game pages — muted, with
-     space before the description. Was an inline style; moved here to a scoped
-     data-type rule to match the project's no-inline-styles convention. Tokens
-     only, so it renders identically. */
-  h2[data-type="coming-soon"] {
+  /* Status line on the non-interactive game pages. A small muted label rather
+     than an <h2>: "Coming Soon" as a heading claimed the same rank as the real
+     section below it, and outranked the description it was labelling. */
+  p[data-type="coming-soon"] {
+    margin: 0 0 var(--space-section);
     color: var(--color-muted);
-    margin-bottom: var(--space-section);
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* The ask block — a bordered panel so it reads as the page's one action
+     rather than another paragraph. Tokens only. */
+  section[data-type="interest"] {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    background: var(--color-surface);
+  }
+
+  section[data-type="interest"] h2 {
+    margin: 0 0 0.5rem;
+    text-transform: none;
+    font-size: var(--text-lg);
+  }
+
+  section[data-type="interest"] p {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    max-width: 42rem;
+  }
+
+  section[data-type="interest"] button {
+    margin: 1rem 0 0.6rem;
+    padding: 0.55rem 1.1rem;
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
+    color: var(--color-bg);
+    font: inherit;
+    font-size: var(--text-base);
+    cursor: pointer;
+  }
+
+  section[data-type="interest"] button:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  section[data-type="interest"] button:disabled {
+    background: transparent;
+    border-color: var(--color-border);
+    color: var(--color-muted);
+    cursor: default;
+  }
+
+  section[data-type="interest"] p[data-type="interest-count"] {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text);
   }
 </style>

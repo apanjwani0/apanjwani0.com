@@ -31,6 +31,8 @@
  * would collide with the other games at `astro check` time.
  */
 
+import { attachCanvasExport } from '../../../lib/canvas-export'
+
 interface FgPalette {
   id: string
   name: string
@@ -287,6 +289,16 @@ class LSystemGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="fg-canvas"]') as HTMLCanvasElement
+
+    // Every one of these engines draws something someone would want to keep, and
+
+    // until Aug 2026 not one of them had a way to save it. The bar is attached
+
+    // here rather than written into the markup above so all six share one
+
+    // implementation — see src/lib/canvas-export.ts.
+
+    attachCanvasExport(this, () => this.canvas, { name: 'lsystem' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.readTheme()
     this.wire()

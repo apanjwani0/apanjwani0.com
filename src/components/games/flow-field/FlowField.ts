@@ -17,6 +17,8 @@
  * disconnectedCallback so it never leaks across View Transitions.
  */
 
+import { attachCanvasExport } from '../../../lib/canvas-export'
+
 interface Palette {
   id: string
   name: string
@@ -209,6 +211,16 @@ class FlowFieldGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="ff-canvas"]') as HTMLCanvasElement
+
+    // Every one of these engines draws something someone would want to keep, and
+
+    // until Aug 2026 not one of them had a way to save it. The bar is attached
+
+    // here rather than written into the markup above so all six share one
+
+    // implementation — see src/lib/canvas-export.ts.
+
+    attachCanvasExport(this, () => this.canvas, { name: 'flow-field' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.readTheme()
     this.seed = (Math.floor(Math.random() * 900000) + 100000)

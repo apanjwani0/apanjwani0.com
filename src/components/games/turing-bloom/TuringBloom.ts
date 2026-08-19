@@ -31,6 +31,8 @@
  * LS_*, mulberry32…) would collide with the sibling toys at `astro check` time.
  */
 
+import { attachCanvasExport } from '../../../lib/canvas-export'
+
 interface TbPalette {
   id: string
   name: string
@@ -286,6 +288,16 @@ class TuringBloomGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="tb-canvas"]') as HTMLCanvasElement
+
+    // Every one of these engines draws something someone would want to keep, and
+
+    // until Aug 2026 not one of them had a way to save it. The bar is attached
+
+    // here rather than written into the markup above so all six share one
+
+    // implementation — see src/lib/canvas-export.ts.
+
+    attachCanvasExport(this, () => this.canvas, { name: 'turing-bloom' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.grid = document.createElement('canvas')
     this.gctx = this.grid.getContext('2d', { alpha: false }) as CanvasRenderingContext2D

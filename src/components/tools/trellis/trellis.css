@@ -1,6 +1,9 @@
 /* Trellis — tokens only, no hardcoded colours or sizes (see AGENTS.md). */
 
-[data-type='tr-tool'] {
+/* Rhythm only — width and gutter come from the shared `[data-type="tool-page"]`
+   rule in shared.css. See the same note in token-bench.css: rendering a bespoke
+   root here silently opted the tool out of every shared workbench style. */
+[data-tool='trellis'] {
   display: flex;
   flex-direction: column;
   gap: var(--space-section);

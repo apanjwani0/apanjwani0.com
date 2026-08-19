@@ -40,7 +40,7 @@ class MdEnhancedTool extends HTMLElement {
     `).join('')
 
     this.innerHTML = `
-      <div data-type="tool-page">
+      <div data-type="tool-page" data-tool="md-enhanced">
         <div data-type="tool-header">
           <h1>MD Enhanced</h1>
           <p>Write and export markdown. Clean editor, no distractions.</p>

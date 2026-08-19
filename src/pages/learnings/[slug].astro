@@ -8,7 +8,7 @@ import { getSite, getLearnings } from '../../lib/config'
 import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
 import { isPublishedLearning, learningEmbedTag } from '../../lib/learnings'
 import { existingOgCardPath, learningHasOgCard } from '../../lib/og'
-import { render } from '../../lib/markdown'
+import { render, splitOnEmbed } from '../../lib/markdown'
 import { formatDisplayDate } from '../../lib/date'
 import '../../styles/games-embed.css'
 
@@ -28,10 +28,21 @@ if (!learning || (isDraft && !import.meta.env.DEV)) {
 
 const canonicalUrl = `${site.url}/learnings/${learning.slug}`
 const pageDescription = learning.metaDescription || learning.summary
-const contentHtml = render(learning.content)
 
 // The component to mount inline, or undefined for a prose-only article.
 const EmbedTag = learningEmbedTag(learning)
+
+// The figure goes where the WRITING puts it, via a {{embed}} line in the
+// markdown. It used to be pinned between the summary and the prose, which is the
+// worst available position: the reader meets a simulation before being told what
+// it is, and every article then had to open by pointing at "the thing above" —
+// which is a large part of why they all read identically.
+//
+// No marker is a valid article: everything lands in `before` and the figure goes
+// after it. A missing marker should cost the position, never the simulation.
+const { before, after } = splitOnEmbed(learning.content)
+const beforeHtml = render(before)
+const afterHtml = after.trim() ? render(after) : ''
 
 const related = learnings
   .filter(l => isPublishedLearning(l) && l.slug !== learning.slug)
@@ -89,9 +100,12 @@ const breadcrumbLd = breadcrumbListJsonLd([
       <h1>{learning.title}</h1>
       <time datetime={learning.date}>{formatDisplayDate(learning.date)}</time>
     </header>
-    <section data-type="post-summary">
-      <p><em>Summary:</em> {learning.summary}</p>
-    </section>
+    {/* The standfirst — display-size, not a labelled "Summary:" field. It is the
+        second thing a reader looks at after the headline, and its job is to make
+        them start; a form-label in front of it announced that this was metadata
+        about an article rather than the opening of one. */}
+    <p data-type="standfirst">{learning.summary}</p>
+    <section data-type="post-content" set:html={beforeHtml} />
     {EmbedTag && (
       <figure data-type="learning-embed">
         {/* data-game is what src/lib/game-mount.ts dispatches on — the same
@@ -100,7 +114,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
         {learning.embedCaption && <figcaption>{learning.embedCaption}</figcaption>}
       </figure>
     )}
-    <section data-type="post-content" set:html={contentHtml} />
+    {afterHtml && <section data-type="post-content" set:html={afterHtml} />}
   </article>
   <RelatedLinks heading="More learnings" items={related} />
 
@@ -109,9 +123,13 @@ const breadcrumbLd = breadcrumbListJsonLd([
       // Mount on initial load AND after every View Transition navigation. Bundled
       // scripts run once per session, so without astro:page-load an article
       // reached by in-site nav shows an empty element until a hard reload.
-      // The component writes its own <h1> and blurb into itself; inside an article
-      // both duplicate the header above. mountEmbed strips them and mounts — see
-      // src/lib/game-mount.ts for why that needs an observer, not a sweep.
+      // The component writes its own top-level heading and blurb into itself;
+      // inside an article both duplicate the header above. mountEmbed strips them
+      // and mounts — see src/lib/game-mount.ts for why that needs an observer,
+      // not a sweep. (Angle-bracketed tag names are deliberately spelled out in
+      // this comment: a script inside a JSX conditional has its body parsed as
+      // JSX, so a literal h1 in angle brackets opens an element that never
+      // closes, and the whole file then fails to type-check.)
       import { mountEmbed } from '../../lib/game-mount'
       const mount = () => mountEmbed('figure[data-type="learning-embed"]')
       document.addEventListener('astro:page-load', mount)
@@ -121,10 +139,167 @@ const breadcrumbLd = breadcrumbListJsonLd([
 </Base>
 
 <style>
-  /* The embed sits between the summary and the prose, so it needs to read as a
-     figure rather than as the page's main subject: full content width, its own
-     breathing room, and a caption that tells the reader what they are looking
-     at. Tokens only — no hardcoded colours, sizes or spacing. */
+  /* ── Article typography ───────────────────────────────────────────────
+     These articles are meant to be READ, and they were rendering at UI size
+     with UI rhythm: 16px, headings a hair larger than body, uniform paragraph
+     spacing. The result was a slab — nothing on the page told a skimmer where
+     the argument turned, and nothing told a reader where to breathe.
+
+     Everything below is size, weight and space. Tokens only. */
+
+  article {
+    max-width: 40rem;
+    margin-inline: auto;
+  }
+
+  article header h1 {
+    font-size: clamp(2rem, 5.5vw, 3rem);
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    margin-bottom: 0.75rem;
+  }
+
+  article header time {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    color: var(--color-muted);
+    text-transform: lowercase;
+  }
+
+  /* The standfirst — the sentence that decides whether they read the piece. */
+  p[data-type="standfirst"] {
+    margin: 1.5rem 0 var(--space-section);
+    font-size: var(--text-prose-lead);
+    line-height: 1.45;
+    color: var(--color-muted);
+    text-wrap: pretty;
+  }
+
+  section[data-type="post-content"] {
+    margin-top: 0;
+    font-size: var(--text-prose);
+    line-height: 1.68;
+  }
+
+  section[data-type="post-content"] > :global(p) {
+    margin: 0 0 1.25em;
+    text-wrap: pretty;
+  }
+
+  /* Opening paragraph carries a little more weight than the rest, so the eye
+     has somewhere obvious to start after the standfirst. */
+  section[data-type="post-content"] > :global(p:first-child) {
+    font-size: 1.06em;
+  }
+
+  /* Section headings have to be unmistakably heavier than body text — that gap
+     IS the document's structure. At the old 1.1rem they were near-invisible. */
+  section[data-type="post-content"] :global(h2) {
+    margin: 2.4em 0 0.6em;
+    font-size: 1.5em;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    text-wrap: balance;
+  }
+
+  section[data-type="post-content"] :global(h3) {
+    margin: 2em 0 0.5em;
+    font-size: 1.15em;
+    line-height: 1.3;
+  }
+
+  section[data-type="post-content"] :global(ul),
+  section[data-type="post-content"] :global(ol) {
+    margin: 0 0 1.25em;
+    padding-left: 1.2em;
+  }
+
+  section[data-type="post-content"] :global(li) {
+    margin-bottom: 0.5em;
+  }
+
+  section[data-type="post-content"] :global(a) {
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-underline-offset: 0.15em;
+  }
+
+  /* ==highlight== — the clause a section turns on. A tinted background rather
+     than bold: bold is already doing a job inside these articles, and a reader
+     scanning for "the important bit" should find one signal, not two. */
+  section[data-type="post-content"] :global(mark) {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    color: inherit;
+    padding: 0.08em 0.22em;
+    border-radius: var(--radius-sm);
+  }
+
+  /* >> pull quote — breaks the column so the page has a visible pulse. */
+  section[data-type="post-content"] :global(p[data-type="pull-quote"]) {
+    margin: 2em 0;
+    padding-left: 1em;
+    border-left: 3px solid var(--color-accent);
+    font-size: 1.35em;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--color-text);
+    text-wrap: balance;
+  }
+
+  /* :::note / :::key / :::aside / :::warn — the takeaway and the tangent, so
+     neither has to sit in the main line pretending to be a paragraph. */
+  section[data-type="post-content"] :global(aside[data-type="callout"]) {
+    margin: 1.8em 0;
+    padding: 1rem 1.15rem;
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-muted);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    font-size: 0.94em;
+  }
+
+  section[data-type="post-content"] :global(aside[data-kind="key"]) {
+    border-left-color: var(--color-accent);
+  }
+
+  section[data-type="post-content"] :global(aside[data-kind="warn"]) {
+    border-left-color: var(--color-error);
+  }
+
+  section[data-type="post-content"] :global(aside[data-type="callout"] > *:last-child) {
+    margin-bottom: 0;
+  }
+
+  section[data-type="post-content"] :global(p[data-type="callout-label"]) {
+    margin: 0 0 0.4em;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-muted);
+  }
+
+  /* A real quotation, kept visually distinct from the pull quote above. */
+  section[data-type="post-content"] :global(blockquote) {
+    margin: 1.8em 0;
+    padding-left: 1.1em;
+    border-left: 1px solid var(--color-border);
+    color: var(--color-muted);
+    font-style: italic;
+  }
+
+  @media (max-width: 560px) {
+    article {
+      max-width: none;
+    }
+  }
+
+  /* The embed reads as a figure rather than as the page's main subject: its own
+     breathing room and a caption saying what the reader is looking at. Its
+     POSITION now comes from a {{embed}} line in the article source — see the
+     frontmatter. Tokens only. */
   figure[data-type="learning-embed"] {
     margin: var(--space-section) 0;
   }

@@ -25,6 +25,7 @@ export const EMBED_TAGS: Record<string, string> = {
   'maze-weaver': 'maze-weaver-game',
   'type-trial': 'type-trial-game',
   'hue-hunt': 'hue-hunt-game',
+  'poker-trainer': 'poker-trainer-game',
   // Simulations — no /games page; they live in articles and/or Driftfield.
   'game-of-life': 'game-of-life-game',
   'flow-field': 'flow-field-game',

@@ -76,7 +76,7 @@ class TrellisTool extends HTMLElement {
 
   async connectedCallback() {
     this.innerHTML = `
-      <div data-type="tr-tool">
+      <div data-type="tool-page" data-tool="trellis">
         <div data-type="tr-header">
           <div data-type="tr-titlebar">
             <h1>Trellis</h1>

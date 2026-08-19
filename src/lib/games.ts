@@ -16,7 +16,7 @@ import { EMBED_TAGS } from './embeds'
  * middleware regenerates the config files wholesale from `generateGames()` — an
  * export added there is silently deleted on the next admin save.
  */
-const GAME_SLUGS = ['2048', 'quintle', 'maze-weaver', 'type-trial', 'hue-hunt'] as const
+const GAME_SLUGS = ['2048', 'quintle', 'maze-weaver', 'type-trial', 'hue-hunt', 'poker-trainer'] as const
 
 export const GAME_TAGS: Record<string, string> = Object.fromEntries(
   GAME_SLUGS.map(slug => [slug, EMBED_TAGS[slug]]),

@@ -1,0 +1,485 @@
+/* Poker Trainer — tokens only, no hardcoded colours or sizes (see AGENTS.md). */
+
+[data-type='pt-game'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+}
+
+[data-type='pt-titlebar'] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+[data-type='pt-badge'] {
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── the spot: three slots, the active one marked ── */
+
+[data-type='pt-spot'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+[data-type='pt-slot'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
+  min-width: 8rem;
+}
+
+[data-type='pt-slot'][data-active] {
+  border-color: var(--color-accent);
+}
+
+[data-type='pt-cards'] {
+  display: flex;
+  gap: var(--space-2xs);
+  min-height: 3.5rem;
+  align-items: center;
+}
+
+[data-type='pt-card'] svg {
+  width: 2.4rem;
+  height: auto;
+  display: block;
+}
+
+[data-type='pt-empty'] {
+  color: var(--color-muted);
+  letter-spacing: 0.4em;
+}
+
+/* ── card picker ──
+   A 13×4 grid of real card faces. Cards already in play are dimmed rather than
+   removed, so the layout never reflows under the cursor mid-pick. */
+
+[data-type='pt-grid'] {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: var(--space-2xs);
+  margin: var(--space-2xs) 0;
+}
+
+button[data-type='pt-pick'] {
+  padding: 0;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  border-radius: 3px;
+  line-height: 0;
+}
+
+button[data-type='pt-pick'] svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+button[data-type='pt-pick']:hover {
+  border-color: var(--color-accent);
+}
+
+button[data-type='pt-pick'][data-used] {
+  opacity: 0.22;
+}
+
+[data-type='pt-picker-hint'],
+[data-type='pt-note'] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  margin: var(--space-2xs) 0 0;
+}
+
+[data-type='pt-picker-actions'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+/* ── results ── */
+
+[data-type='pt-result'] {
+  display: block;
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-muted);
+}
+
+[data-type='pt-result'][data-state='ok'] { border-color: var(--color-accent); color: var(--color-text); }
+[data-type='pt-result'][data-state='warn'] { border-color: var(--color-warning, var(--color-accent)); }
+
+table[data-type='pt-lines'] {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+table[data-type='pt-lines'] th,
+table[data-type='pt-lines'] td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--space-2xs) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+table[data-type='pt-lines'] th {
+  color: var(--color-muted);
+  font-weight: 400;
+  padding-right: var(--space-xs);
+}
+
+table[data-type='pt-lines'] td {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-type='pt-outs'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  margin-top: var(--space-2xs);
+}
+
+[data-type='pt-outs'] svg {
+  width: 1.8rem;
+  height: auto;
+  display: block;
+}
+
+/* ── pot odds ── */
+
+[data-type='pt-odds-inputs'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+[data-type='pt-odds-inputs'] label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+[data-type='pt-odds-inputs'] input {
+  width: 8rem;
+  font-family: var(--font-mono);
+}
+
+/* The 13-wide card grid stops being legible on a phone; two rows of ranks read
+   better than 13 slivers. */
+@media (max-width: 40rem) {
+  [data-type='pt-grid'] {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+/* ────────────────────────  tabs  ──────────────────────── */
+
+[data-type='pt-tabs'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-type='pt-tabs'] button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+[data-type='pt-tabs'] button:hover {
+  color: var(--color-text);
+}
+
+[data-type='pt-tabs'] button[data-active] {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+}
+
+[data-panel][hidden] {
+  display: none;
+}
+
+/* ────────────────────  the drill spot card  ──────────────────── */
+
+[data-type='pt-spotcard'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+[data-type='pt-street'] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+}
+
+[data-type='pt-row'] {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+[data-type='pt-label'] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+/* Their cards are face down and stay that way. This is the whole point of the
+   drill: a decision made against known cards is a lookup, and no such decision
+   exists at a table. */
+[data-type='pt-hidden'] {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+[data-type='pt-facedown'] {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 3.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-bg),
+    var(--color-bg) 3px,
+    var(--color-surface) 3px,
+    var(--color-surface) 6px
+  );
+  color: var(--color-muted);
+  font-size: var(--text-lg);
+}
+
+[data-type='pt-rangetag'] {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+[data-type='pt-emph'] {
+  color: var(--color-text);
+}
+
+[data-type='pt-ask'] {
+  margin: 0.4rem 0 0;
+  font-size: var(--text-lg);
+}
+
+[data-type='pt-choices'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+[data-type='pt-choices'] button {
+  flex: 1 1 8rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+[data-type='pt-choices'] button:hover {
+  border-color: var(--color-accent);
+}
+
+[data-type='pt-verdict'] {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--color-error);
+}
+
+[data-type='pt-verdict'][data-right='true'] {
+  color: var(--color-success);
+}
+
+[data-type='pt-score'] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+[data-type='pt-spotcard'] > button[data-action='next'] {
+  align-self: flex-start;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+/* Best/worst combos side by side — the shape behind the average. */
+[data-type='pt-splits'] {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+[data-type='pt-splits'] h3 {
+  margin: 0 0 0.4rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+[data-type='pt-comborow'] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+[data-type='pt-caveat'],
+[data-type='pt-term'] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+}
+
+[data-type='pt-caveat'] summary,
+[data-type='pt-term'] summary {
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+[data-type='pt-caveat'] p,
+[data-type='pt-term'] p {
+  margin: 0.6rem 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  max-width: 44rem;
+}
+
+/* ────────────────────  solve controls + ranges  ──────────────────── */
+
+[data-type='pt-controls'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+[data-type='pt-controls'] label,
+[data-type='pt-rangebox'] label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+[data-type='pt-controls'] select,
+[data-type='pt-rangebox'] select,
+[data-type='pt-rangebox'] input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+[data-type='pt-rangebox'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+[data-type='pt-rangebox'] input[data-field='rangeText'] {
+  font-family: var(--font-mono);
+}
+
+[data-type='pt-rangeinfo'] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+[data-type='pt-solve'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+}
+
+/* ────────────────────────  learn panel  ──────────────────────── */
+
+[data-type='pt-learn'] {
+  max-width: 44rem;
+  font-size: var(--text-prose);
+  line-height: 1.65;
+}
+
+[data-type='pt-learn'] h2 {
+  margin: 0 0 1rem;
+  font-size: 1.5em;
+  text-transform: none;
+}
+
+[data-type='pt-learn'] h3 {
+  margin: 2em 0 0.4em;
+  font-size: 1.15em;
+}
+
+[data-type='pt-learn'] p {
+  margin: 0 0 1em;
+  text-wrap: pretty;
+}

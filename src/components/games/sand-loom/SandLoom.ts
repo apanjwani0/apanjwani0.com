@@ -30,6 +30,8 @@
  * would collide with the sibling toys at `astro check` time.
  */
 
+import { attachCanvasExport } from '../../../lib/canvas-export'
+
 /* ── material ids ── */
 const SL_EMPTY = 0
 const SL_SAND = 1
@@ -264,6 +266,16 @@ class SandLoomGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="sl-canvas"]') as HTMLCanvasElement
+
+    // Every one of these engines draws something someone would want to keep, and
+
+    // until Aug 2026 not one of them had a way to save it. The bar is attached
+
+    // here rather than written into the markup above so all six share one
+
+    // implementation — see src/lib/canvas-export.ts.
+
+    attachCanvasExport(this, () => this.canvas, { name: 'sand-loom' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.grid = document.createElement('canvas')
     this.gctx = this.grid.getContext('2d', { alpha: false }) as CanvasRenderingContext2D

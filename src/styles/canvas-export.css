@@ -1,0 +1,112 @@
+/* Export bar shared by every canvas engine (src/lib/canvas-export.ts).
+   One stylesheet rather than per component, for the same reason the module is
+   shared: the six generative engines had no export UI at all, and six copies of
+   this would drift the first time one changed. Tokens only. */
+
+[data-type='canvas-export'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+[data-type='cx-actions'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+[data-type='cx-actions'] label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+[data-type='cx-actions'] select {
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+[data-type='cx-actions'] button,
+[data-type='cx-preview-actions'] button {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+[data-type='cx-actions'] button:hover:not(:disabled),
+[data-type='cx-preview-actions'] button:hover {
+  border-color: var(--color-accent);
+}
+
+[data-type='cx-actions'] button:disabled {
+  color: var(--color-muted);
+  cursor: default;
+}
+
+[data-type='cx-status'] {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+/* The preview. This block is the feature: an export that lands in the downloads
+   folder unseen is the thing the owner called out. */
+[data-type='cx-preview'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+[data-type='cx-preview'][hidden] {
+  display: none;
+}
+
+[data-type='cx-preview-label'] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+[data-type='cx-preview'] img {
+  display: block;
+  max-width: 100%;
+  max-height: 22rem;
+  width: auto;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+[data-type='cx-preview-actions'] {
+  display: flex;
+  gap: 0.5rem;
+}
+
+[data-type='cx-preview-actions'] button[data-cx='save'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-bg);
+}

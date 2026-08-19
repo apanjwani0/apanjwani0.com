@@ -23,3 +23,7 @@
 @import '../components/games/sand-loom/sand-loom.css';
 @import '../components/games/lsystem/lsystem.css';
 @import '../components/games/quintle/quintle.css';
+@import '../components/games/poker-trainer/poker-trainer.css';
+
+/* Export bar for every canvas engine — see src/lib/canvas-export.ts. */
+@import './canvas-export.css';

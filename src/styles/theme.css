@@ -33,12 +33,25 @@
   --font-serif: 'Source Serif 4', Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* ── Type scale ──────────────────────────────────────────── */
-  --text-xs: 0.8rem;      /* tags, stats, fine print            */
-  --text-sm: 0.9rem;      /* meta: dates, roles, captions       */
-  --text-base: 1rem;      /* body + section headings            */
-  --text-lg: 1.1rem;      /* large heading                      */
-  --text-title: 1.75rem;  /* page title (h1)                    */
+  /* ── Type scale ──────────────────────────────────────────────
+     Raised across the board in Aug 2026: the site read as small on desktop,
+     where a 16px base with a 768px column is a browser default rather than a
+     reading size. Every rung moved together so the relationships hold.
+
+     The h2/body gap widened most (1.1 → 1.3). At 1.1rem a section heading was
+     within a hair of body text, so a long article arrived as one undifferen-
+     tiated slab — the reader had no way to see structure without reading it.
+     Heading size IS the prioritisation. */
+  --text-xs: 0.85rem;     /* tags, stats, fine print            */
+  --text-sm: 0.95rem;     /* meta: dates, roles, captions       */
+  --text-base: 1.0625rem; /* body + section headings (17px)     */
+  --text-lg: 1.3rem;      /* large heading                      */
+  --text-title: 2.1rem;   /* page title (h1)                    */
+  /* Long-form article body only (learnings, blogs). Deliberately larger than
+     --text-base: a UI label and a paragraph someone reads for six minutes have
+     different optimal sizes, and one token cannot serve both. */
+  --text-prose: 1.1875rem;                      /* 19px article body */
+  --text-prose-lead: clamp(1.25rem, 3vw, 1.45rem); /* article standfirst */
   --text-display: clamp(2rem, 7vw, 3.5rem);   /* home hero name  */
   --text-lead: clamp(1rem, 2.7vw, 1.3rem);    /* home tagline    */
   --text-label: clamp(0.72rem, 2vw, 0.8rem);  /* mono nav + small links */

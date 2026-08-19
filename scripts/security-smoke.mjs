@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
-import { render, renderInline } from '../src/lib/markdown.ts'
+import { readFile, readdir } from 'node:fs/promises'
+import { INTEREST_MAX_COUNT, sanitizeStore } from '../src/lib/interest.ts'
+import { render, renderInline, splitOnEmbed } from '../src/lib/markdown.ts'
 import {
   createRateLimiter,
   getClientIp,
@@ -56,6 +57,38 @@ assert.equal(unsafeMarkdown.includes('&lt;img src=x'), true)
 
 const safeInline = renderInline('hello **world**')
 assert.equal(safeInline, 'hello <strong>world</strong>')
+
+// Editorial extensions (==mark==, :::callout, >> pull quote). Each one emits
+// markup from author-supplied text, so each is a place raw HTML could escape if
+// the body were interpolated instead of parsed. The bodies go back through
+// marked, which is what keeps renderer.html's escaping in force inside them.
+assert.equal(render('a ==b== c').trim(), '<p>a <mark>b</mark> c</p>')
+assert.ok(render(':::key T\nbody\n:::').startsWith('<aside data-type="callout" data-kind="key">'))
+assert.ok(render('>> line').includes('data-type="pull-quote"'))
+// `>` is still a real blockquote — the pull quote is a SEPARATE mark on purpose,
+// so that quoting a person and emphasising a line stay distinguishable.
+assert.ok(render('> quoted').includes('<blockquote>'))
+// The kind is matched against a fixed list, never interpolated: otherwise a
+// content author could close the attribute and add their own.
+assert.equal(render(':::evil x\nbody\n:::').includes('<aside'), false, 'unknown callout kinds are not markup')
+assert.equal(
+  render(':::note "><script>alert(1)</script>\nbody\n:::').includes('<script>'),
+  false,
+  'a callout label cannot break out of its element',
+)
+assert.equal(
+  render(':::note L\n<img src=x onerror=alert(1)>\n:::').includes('<img src=x'),
+  false,
+  'raw HTML inside a callout body is escaped like anywhere else',
+)
+assert.equal(render('==<b>x</b>==').includes('<b>'), false, 'raw HTML inside a highlight is escaped')
+
+// {{embed}} placement. No marker means the whole article is `before` — the
+// caller then falls back to putting the figure after the prose, never dropping
+// it, because a typo in /admin should cost the position and not the simulation.
+assert.deepEqual(splitOnEmbed('a\n{{embed}}\nb'), { before: 'a\n', after: '\nb' })
+assert.deepEqual(splitOnEmbed('a only'), { before: 'a only', after: '' })
+assert.equal(splitOnEmbed('inline {{embed}} text').after, '', 'the marker must be on its own line')
 
 assert.equal(safeExternalUrl('https://github.com/apanjwani0/repo'), 'https://github.com/apanjwani0/repo')
 assert.equal(safeExternalUrl('http://example.com'), null)
@@ -372,12 +405,29 @@ assert.equal(
 // safeMarkdownUrl. Handing it to set:html directly would be an XSS hole that no
 // unit test would notice, because the page would still look correct.
 const learningRouteSrc = await readFile(new URL('../src/pages/learnings/[slug].astro', import.meta.url), 'utf-8')
-assert.ok(learningRouteSrc.includes("render(learning.content)"), 'learning content is rendered through markdown.ts')
-assert.equal(
-  /set:html=\{learning\.(content|summary)\}/.test(learningRouteSrc),
-  false,
-  'raw learning fields are never handed to set:html',
+// The content is split on {{embed}} and each half rendered, so this asserts the
+// PROPERTY (nothing reaches set:html without passing through render) rather than
+// one call spelling — an earlier version pinned the exact string `render(
+// learning.content)` and broke the moment the placement marker was added, which
+// is a test failing for a reason that has nothing to do with the invariant.
+assert.ok(
+  learningRouteSrc.includes('splitOnEmbed(learning.content)'),
+  'learning content is split for embed placement',
 )
+for (const half of ['before', 'after']) {
+  assert.ok(
+    new RegExp(`render\\(${half}\\)`).test(learningRouteSrc),
+    `the ${half} half is rendered through markdown.ts`,
+  )
+}
+// Whatever gets handed to set:html must be a *Html variable, i.e. the output of
+// render() — never a config field.
+for (const [, expr] of learningRouteSrc.matchAll(/set:html=\{([^}]+)\}/g)) {
+  assert.ok(
+    /Html$|Json$|^ldJson$|^breadcrumbLd$/.test(expr.trim()),
+    `set:html={${expr.trim()}} — only rendered/serialized values may reach set:html`,
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Token Bench: the tool's entire claim is that it tells you whether a signature
@@ -524,5 +574,71 @@ assert.equal(skipped.edges.length, 1)
 assert.equal(parseHeadings('## Closed ##').nodes[0].label, 'Closed')
 // `#hashtag` with no space is not a heading.
 assert.equal(parseHeadings('#nospace').nodes.length, 0)
+
+/* ─────────────  interest counter: a corrupt file must not reach a page  ───────────── */
+
+// data/interest.json outlives deploys and can be hand-edited, and its value is
+// rendered straight onto a public page. Every row is re-validated on load so a
+// bad file degrades to "no votes yet" rather than printing NaN or Infinity.
+assert.deepEqual(sanitizeStore(null), {}, 'a missing file is an empty store')
+assert.deepEqual(sanitizeStore([1, 2]), {}, 'an array is not a store')
+assert.deepEqual(sanitizeStore({ 'flash-cricket': 12 }), { 'flash-cricket': 12 })
+assert.deepEqual(sanitizeStore({ 'flash-cricket': -1 }), {}, 'negative counts are dropped')
+assert.deepEqual(sanitizeStore({ 'flash-cricket': 1.5 }), {}, 'non-integer counts are dropped')
+assert.deepEqual(sanitizeStore({ 'flash-cricket': 'many' }), {}, 'non-numeric counts are dropped')
+assert.deepEqual(sanitizeStore({ '../../etc': 3 }), {}, 'a slug that is not a slug is dropped')
+assert.deepEqual(
+  sanitizeStore({ 'flash-cricket': INTEREST_MAX_COUNT * 10 }),
+  { 'flash-cricket': INTEREST_MAX_COUNT },
+  'a count above the cap is clamped, not trusted',
+)
+
+/* ─────────────  every tool renders the SHARED workbench root  ───────────── */
+
+// Width, side gutter, focus ring and <kbd> styling all hang off
+// `div[data-type="tool-page"]` in shared.css. A tool that invents its own root
+// silently opts out of all four and visibly does not match the hub — which is
+// exactly what token-bench and trellis did until Aug 2026. Nothing about that
+// failure is loud: the tool works, it is just narrower and unfocusable, so it
+// survives review and is only caught by looking at two tabs side by side.
+const toolDirs = await readdir(new URL('../src/components/tools/', import.meta.url), {
+  withFileTypes: true,
+})
+for (const dir of toolDirs.filter(d => d.isDirectory())) {
+  const files = await readdir(new URL(`../src/components/tools/${dir.name}/`, import.meta.url))
+  const entry = files.find(f => f.endsWith('.ts'))
+  if (!entry) continue
+  const source = await readFile(
+    new URL(`../src/components/tools/${dir.name}/${entry}`, import.meta.url),
+    'utf-8',
+  )
+  assert.ok(
+    source.includes('data-type="tool-page"'),
+    `${dir.name} must render div[data-type="tool-page"] — that is where the shared tool width and focus ring come from`,
+  )
+  assert.ok(
+    source.includes(`data-tool="${dir.name}"`),
+    `${dir.name} must tag its root data-tool="${dir.name}" so per-tool rules can target it`,
+  )
+}
+
+// And no tool may set its own container width — that is the shared rule's job,
+// and an override here is invisible until someone compares two tool pages.
+for (const dir of toolDirs.filter(d => d.isDirectory())) {
+  const files = await readdir(new URL(`../src/components/tools/${dir.name}/`, import.meta.url))
+  for (const file of files.filter(f => f.endsWith('.css'))) {
+    const css = await readFile(
+      new URL(`../src/components/tools/${dir.name}/${file}`, import.meta.url),
+      'utf-8',
+    )
+    const rootWidthRule = new RegExp(
+      `\\[data-tool=["']${dir.name}["']\\][^{]*\\{[^}]*max-width`,
+    )
+    assert.ok(
+      !rootWidthRule.test(css),
+      `${dir.name}/${file} sets a max-width on its own root — remove it; shared.css owns tool width`,
+    )
+  }
+}
 
 console.log('security smoke ok')

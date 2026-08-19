@@ -1,6 +1,12 @@
 /* Token Bench — tokens only, no hardcoded colours or sizes (see AGENTS.md). */
 
-[data-type='tb-tool'] {
+/* Vertical rhythm between the tool's own sections. The container's WIDTH and
+   side gutter are not set here on purpose — those come from the shared
+   `[data-type="tool-page"]` rule in shared.css so every tool lines up. This tool
+   used to render its own `tb-tool` root instead, which opted it out of the
+   shared width, the focus ring and the <kbd> treatment, and it visibly did not
+   match the rest of the hub. */
+[data-tool='token-bench'] {
   display: flex;
   flex-direction: column;
   gap: var(--space-section);

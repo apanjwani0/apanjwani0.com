@@ -30,7 +30,7 @@ class AudioTranscriberTool extends HTMLElement {
     ).join('')
 
     this.innerHTML = `
-      <div data-type="tool-page">
+      <div data-type="tool-page" data-tool="audio-transcriber">
         <div data-type="tool-header">
           <h1>Audio Transcriber</h1>
           <p>Real-time speech-to-text in your browser. No data leaves your device.</p>

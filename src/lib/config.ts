@@ -126,7 +126,7 @@ export async function getPosts(locals: unknown): Promise<Post[]> {
 
 export async function getGames(locals: unknown): Promise<Game[]> {
   return (await getConfig(locals, 'games', staticGames as Game[]))
-    .filter(game => game.slug !== 'poker' && game.slug !== 'wallpaper-forge')
+    .filter(game => game.slug !== 'wallpaper-forge')
 }
 
 export async function getTools(locals: unknown): Promise<Tool[]> {
