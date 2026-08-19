@@ -13,7 +13,7 @@ div[data-type="tool-header"] p {
   font-size: 0.95rem;
 }
 
-div[data-type="md-enhanced"] {
+div[data-type="draftboard"] {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -226,7 +226,7 @@ div[data-type="md-preview"] blockquote {
 /* ── Mobile ── */
 
 @media (max-width: 600px) {
-  div[data-type="md-enhanced"] {
+  div[data-type="draftboard"] {
     padding-bottom: 3.5rem;
   }
 

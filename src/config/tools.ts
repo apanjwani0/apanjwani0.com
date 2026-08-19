@@ -605,11 +605,11 @@ A GIF holds 24 frames, so a full-resolution loop would be enormous. The GIF expo
 Not quite. Density and Detail map to whatever is meaningful for the engine you picked — particle count, contour spacing, tile size — and the readout under the slider tells you what Density currently controls.`,
   },
   {
-    slug: 'md-enhanced',
-    title: 'MD Enhanced',
+    slug: 'draftboard',
+    title: 'Draftboard',
     description: 'Markdown editor with live preview, a structure map of the document, and multi-format export.',
     status: 'live',
-    seoTitle: 'Markdown Editor with Live Preview & Mind Map — MD Enhanced',
+    seoTitle: 'Markdown Editor with Live Preview & Mind Map — Draftboard',
     metaDescription: 'Write Markdown with a live preview and see your document as a mind map of its own headings — click a node to jump there. Export to MD, TXT, PDF or image.',
     keywords: 'markdown editor, markdown preview, markdown to pdf, online markdown editor, markdown export, live markdown preview, markdown mind map, document outline map, markdown structure view',
     intro: 'A browser-based markdown editor with real-time preview. Write in markdown on the left, see the formatted result on the right — or switch to Map and see the document as a tree of its own headings, where clicking a node jumps you straight to that section. Export as PDF, PNG image, raw markdown, or plain text, all locally with no server uploads.',
@@ -628,7 +628,7 @@ The map is a navigator, not an editor: it never rewrites your markdown. It redra
 
 ## A quick markdown editor for export
 
-MD Enhanced is for short documents you want to write, preview and export without opening a full writing app. Paste markdown, check the rendered preview, then export the result.
+Draftboard is for short documents you want to write, preview and export without opening a full writing app. Paste markdown, check the rendered preview, then export the result.
 
 ## Common jobs
 
@@ -649,7 +649,7 @@ Yes. Use the export controls to download a PDF from the current preview.
 
 ### Is this a replacement for Dillinger?
 
-Not fully. Dillinger is stronger for cloud sync. MD Enhanced is simpler: open, write, preview, export and leave.
+Not fully. Dillinger is stronger for cloud sync. Draftboard is simpler: open, write, preview, export and leave.
 
 ### Does it work for code snippets?
 

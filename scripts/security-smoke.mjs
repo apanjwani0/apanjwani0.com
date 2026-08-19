@@ -952,7 +952,7 @@ assert.equal(decodeGraph(dangling).edges.length, 0, 'edges to missing nodes are 
   }
 }
 
-// MD Enhanced's map reads the same parsers. Fenced code is the case that breaks
+// Draftboard's map reads the same parsers. Fenced code is the case that breaks
 // it in practice: a shell snippet is full of `#` comments and `-` flags, and
 // without blanking the fences every code block becomes a branch of the map.
 const doc = [
@@ -1019,7 +1019,7 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   const entries = files.filter(f => f.endsWith('.ts'))
   if (entries.length === 0) continue
   // Every .ts in the folder, concatenated, rather than "the first one readdir
-  // handed back": a tool may split a helper module out (md-enhanced's
+  // handed back": a tool may split a helper module out (draftboard's
   // help-content, webhook-inspector's signature), and readdir order is not
   // sorted on every filesystem — so picking the first would assert against the
   // helper on Linux and the component on macOS.

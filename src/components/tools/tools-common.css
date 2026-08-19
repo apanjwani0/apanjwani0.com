@@ -5,7 +5,7 @@
 
    Every tool renders a `div[data-type="tool-page"]` root, so these rules reach
    all of them (json-tidy / list-forge / epoch-wizard / chroma-lab /
-   codec-forge / hash-smith / wallpaper-forge / md-enhanced /
+   codec-forge / hash-smith / wallpaper-forge / draftboard /
    audio-transcriber). */
 
 [data-tool] {
@@ -42,7 +42,7 @@ div[data-type="tool-page"] kbd {
 
    Kept as an explicit selector list — NOT a blanket div[data-type="tool-page"]
    rule — so the tools with their own button language are untouched: json-tidy
-   scopes buttons to its toolbar, and wallpaper-forge / md-enhanced /
+   scopes buttons to its toolbar, and wallpaper-forge / draftboard /
    audio-transcriber style their own controls. Specificity is byte-identical to
    the per-tool rules this replaces, and this file loads BEFORE the per-tool
    stylesheets, so every higher-specificity or later per-tool override (the

@@ -12,7 +12,7 @@ import { validateSession } from '../../lib/session'
 import { getSessionToken } from '../../lib/security'
 import '../../styles/seo-support.css'
 import '../../components/tools/tools-common.css'
-import '../../components/tools/md-enhanced/md-enhanced.css'
+import '../../components/tools/draftboard/draftboard.css'
 import '../../components/tools/audio-transcriber/audio-transcriber.css'
 import '../../components/tools/wallpaper-forge/wallpaper-forge.css'
 import '../../components/tools/json-tidy/json-tidy.css'
@@ -38,6 +38,10 @@ const MOVED: Record<string, string> = {
   // /games moved in alongside it. Both of its old names land on the new hub.
   'pattern-forge': '/tools/driftfield',
   'wallpaper-forge': '/tools/driftfield',
+  // "MD Enhanced" named a file format, not a job. The tool is a writing desk, so
+  // it is Draftboard now — but /tools/md-enhanced is live in production and
+  // indexed, so the old URL keeps working.
+  'md-enhanced': '/tools/draftboard',
 }
 const movedTo = MOVED[slug as string]
 if (movedTo) return Astro.redirect(movedTo, 301)
@@ -106,11 +110,11 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
-  {slug === 'md-enhanced' && (
-    <md-enhanced-tool data-tool="md-enhanced">
+  {slug === 'draftboard' && (
+    <draftboard-tool data-tool="draftboard">
       <h1>{tool.title}</h1>
       <p>{tool.intro || tool.description}</p>
-    </md-enhanced-tool>
+    </draftboard-tool>
   )}
   {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
   {slug === 'wallpaper-forge' && (
@@ -195,7 +199,7 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
   // a tool reached via in-site nav renders blank until a hard reload.
   function mountTool() {
     const slug = document.querySelector('[data-tool]')?.getAttribute('data-tool')
-    if (slug === 'md-enhanced') import('../../components/tools/md-enhanced/MdEnhanced.ts')
+    if (slug === 'draftboard') import('../../components/tools/draftboard/Draftboard.ts')
     else if (slug === 'audio-transcriber') import('../../components/tools/audio-transcriber/AudioTranscriber.ts')
     else if (slug === 'wallpaper-forge') import('../../components/tools/wallpaper-forge/WallpaperForge.ts')
     else if (slug === 'json-tidy') import('../../components/tools/json-tidy/JsonTidy.ts')

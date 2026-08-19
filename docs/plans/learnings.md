@@ -9,7 +9,7 @@ Written 2026-08-18. **Phases 1–3 and P-1 and T-1 are shipped on `develop`.**
 | 3 — Driftfield (D-1…D-5) | **Done.** Six mode routes, 301s from `/games/*` and `/tools/wallpaper-forge`, games config pruned 14 → 7 |
 | 4 — T-1 Token Bench | **Done.** JWT signature verification, extracted to `src/lib/jwt.ts` and asserted |
 | 4 — T-2 tool renames | **Not started — needs a decision from you.** See Open below |
-| 4 — T-3 MD Enhanced mind map | **Done.** Map view: headings or outline, click a node to jump to that line |
+| 4 — T-3 Draftboard mind map | **Done.** Map view: headings or outline, click a node to jump to that line |
 | 4 — I-1 Ideation canvas | **Done.** Shipped as **Flowmap** — paste text to draw, then rearrange |
 | 5 — P-1 Projects rewrite | **Done.** Production work leads; excalidraw fork dropped |
 
@@ -52,7 +52,7 @@ So the games cull is not cleanup. It is the content pipeline.
 | Cron Whisperer / Epoch Wizard | **Stay separate.** No merge |
 | JSON Tidy, List Forge, Regex Lab | **Keep.** Rename + deepen, stay simple |
 | Codec Forge + Hash Smith | **Merge** into Token Bench, with real JWT signature verification |
-| MD Enhanced | Deepen into writing tool + mind map |
+| Draftboard | Deepen into writing tool + mind map |
 | Ideation canvas | **New tool**, Cytoscape.js, same framework as Snap Call Screen Map |
 | Wallpaper Forge + 6 generative engines | Merge into **Driftfield** |
 | excalidraw-cli | Removed from projects |
@@ -279,7 +279,7 @@ Each is one worklog entry.
 - **T-2** Deepen + rename JSON Tidy, List Forge, Regex Lab. Constraint from you:
   richer, still simple. Each needs one capability a static page cannot do —
   otherwise it stays a thin page under a new name. Name proposals before code.
-- **T-3** MD Enhanced → writing tool + mind map. Outline pane ⇄ node graph, same
+- **T-3** Draftboard → writing tool + mind map. Outline pane ⇄ node graph, same
   document. Reuses I-1's canvas.
 - **I-1** Ideation canvas, new tool. Cytoscape.js, the Snap Call Screen Map
   framework: multi-layout (flow / band / force), filter rail, detail panel,
@@ -359,7 +359,7 @@ existing routes are left standing because they cost little and the `/games/*`
 - **The four remaining `-Forge/-Lab/-Smith/-Wizard` names**: Codec Forge,
   Hash Smith, Epoch Wizard, Chroma Lab. Suggested: Sift, Fingerprint (or Assay),
   Meridian, Pigment. Cosmetic; batch with T-2 if done at all.
-- **Editable maps.** Both Flowmap and MD Enhanced's map are navigators; the map
+- **Editable maps.** Both Flowmap and Draftboard's map are navigators; the map
   never writes back into the markdown. Dragging a node to reorder a section means
   rewriting the document correctly, which is a larger build than everything else
   in T-3 combined. Deferred deliberately, not forgotten.

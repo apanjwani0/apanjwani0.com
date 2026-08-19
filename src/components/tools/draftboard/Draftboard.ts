@@ -4,8 +4,8 @@ import { helpSections } from './help-content'
 import { parseHeadings, parseMarkdownOutline, type Graph } from '../../../lib/graph-text'
 import { flashLabel } from '../../../lib/flash'
 
-const STORAGE_KEY = 'md-enhanced-draft'
-const MAP_MODE_KEY = 'md-enhanced-map-mode'
+const STORAGE_KEY = 'draftboard-draft'
+const MAP_MODE_KEY = 'draftboard-map-mode'
 
 type MdMapMode = 'headings' | 'outline'
 
@@ -22,7 +22,7 @@ const MD_MAP_LAYOUT = {
   animate: false,
 }
 
-class MdEnhancedTool extends HTMLElement {
+class DraftboardTool extends HTMLElement {
   private cy: any = null
   private mapMode: MdMapMode = 'headings'
   private mapTimer: number | undefined
@@ -41,12 +41,12 @@ class MdEnhancedTool extends HTMLElement {
     `).join('')
 
     this.innerHTML = `
-      <div data-type="tool-page" data-tool="md-enhanced">
+      <div data-type="tool-page" data-tool="draftboard">
         <div data-type="tool-header">
-          <h1>MD Enhanced</h1>
+          <h1>Draftboard</h1>
           <p>Write and export markdown. Clean editor, no distractions.</p>
         </div>
-        <div data-type="md-enhanced">
+        <div data-type="draftboard">
           <div data-type="md-view-bar">
             <button data-view="edit" title="Editor only">Edit</button>
             <button data-view="split" title="Side by side">Split</button>
@@ -387,6 +387,6 @@ class MdEnhancedTool extends HTMLElement {
   }
 }
 
-customElements.define('md-enhanced-tool', MdEnhancedTool)
+customElements.define('draftboard-tool', DraftboardTool)
 
 export {}
