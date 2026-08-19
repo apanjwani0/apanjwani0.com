@@ -227,3 +227,81 @@ main {
   padding: 2rem var(--space-page-x);
   box-sizing: border-box;
 }
+
+/* ── Shared listing idioms ─────────────────────────────────────────────────
+   The card grid and the page lede are rendered by BOTH layouts, so they belong
+   here and not in global.css, which only Base.astro loads.
+
+   They were in global.css, and the tools lane paid for it: /tools/driftfield is
+   a hub rendered through ToolBase, and it writes the same
+   `<ul data-type="card-grid">` / `<h3 data-type="card-title">` markup that
+   /tools, /games, /projects and /blogs write. With the rules unreachable, its
+   six live simulations shipped as a default bulleted list — disc markers, list
+   indent, no grid, no border, no radius, no hover — beside four other hubs that
+   render bordered cards. The same miss left `p[data-type="page-intro"]` at full
+   --color-text with no rhythm on every /tools/driftfield/<mode> page, where the
+   identical element on /tools and /games is muted and spaced.
+
+   The rule: an idiom that ToolBase pages render must be defined in a stylesheet
+   ToolBase loads. `security:smoke` derives that from the pages themselves
+   rather than from a list, so the next shared idiom cannot repeat this.
+
+   Order matters and is preserved: `:focus-visible` above sets a border-radius at
+   the same (0,1,0) specificity as `[data-type="card-grid"] > *`, so the card's
+   --radius-lg wins on source order only while it is declared after — which is
+   exactly the relation it had when this block sat in global.css (imported after
+   shared.css). Keep this block below the focus ring. */
+
+/* One-line lede that sits under a page's h1 to give listing pages context
+   (for readers) and descriptive copy (for search engines). */
+p[data-type="page-intro"] {
+  margin: -0.25rem 0 var(--space-section);
+  max-width: 42rem;
+  color: var(--color-muted);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  /* Avoid ragged single-word last lines in the lede. */
+  text-wrap: pretty;
+}
+
+/* Listing cards — projects, games, blogs, tools and the Driftfield hub all
+   render as bordered cards in a responsive grid, so a short listing fills the
+   page instead of a stranded single column. One token-driven idiom shared
+   across every hub; the grid collapses to a single column on narrow screens
+   with no extra media query. */
+[data-type="card-grid"] {
+  list-style: none;
+  margin: var(--space-section) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 1.25rem;
+}
+
+[data-type="card-grid"] > * {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.15s ease;
+}
+
+/* Card lights up on hover AND when a control inside it takes keyboard focus, so
+   the whole card responds to keyboard users the same way it does to the mouse. */
+[data-type="card-grid"] > *:hover,
+[data-type="card-grid"] > *:focus-within {
+  border-color: var(--color-muted);
+}
+
+/* Listing card titles are real headings (<h2>/<h3>) so screen readers can jump
+   between cards by heading; the reset makes the heading visually identical to
+   the former bold link — it just inherits the card's type scale. */
+[data-type="card-title"] {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}

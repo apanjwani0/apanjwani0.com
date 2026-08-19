@@ -4,7 +4,7 @@ import type { APIRoute } from 'astro'
 import { getSite, getPosts, getGames, getTools, getLearnings, isBlogsPublic } from '../lib/config'
 import { isPlayableGame } from '../lib/games'
 import { isPublishedLearning } from '../lib/learnings'
-import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG } from '../lib/driftfield'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from '../lib/driftfield'
 import { escapeHtml } from '../lib/escape'
 
 export const GET: APIRoute = async ({ locals }) => {
@@ -76,8 +76,7 @@ export const GET: APIRoute = async ({ locals }) => {
   // appear here — one indexable page per engine is the whole reason the six were
   // merged into a tool rather than deleted. Listed only when the hub itself is
   // live, so the sitemap cannot advertise modes of a tool that is not published.
-  const driftfieldLive = tools.some(t => t.slug === DRIFTFIELD_SLUG && t.status === 'live')
-  const driftfieldPages: SitemapUrl[] = driftfieldLive
+  const driftfieldPages: SitemapUrl[] = isDriftfieldPublic(tools)
     ? DRIFTFIELD_MODES.map(m => ({ loc: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` }))
     : []
 

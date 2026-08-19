@@ -5,7 +5,7 @@ import ToolBase from '../../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../../components/Breadcrumbs.astro'
 import { getLearnings, getSite, getTools } from '../../../lib/config'
 import { breadcrumbListJsonLd, itemListJsonLd } from '../../../lib/jsonld'
-import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG } from '../../../lib/driftfield'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from '../../../lib/driftfield'
 import { existingOgCardPath, toolHasOgCard } from '../../../lib/og'
 import { learningsAboutEmbed } from '../../../lib/learnings'
 import '../../../styles/seo-support.css'
@@ -22,8 +22,9 @@ const tool = tools.find(t => t.slug === DRIFTFIELD_SLUG)
 
 // The hub is a real route, but its listing and share card still come from the
 // tools config, so /tools, the sitemap and this page cannot disagree about
-// whether Driftfield exists.
-if (!tool || tool.status !== 'live') {
+// whether Driftfield exists. One predicate, read here and by every mode route,
+// the sitemap and the card generator — src/lib/driftfield.ts.
+if (!tool || !isDriftfieldPublic(tools)) {
   return new Response(null, { status: 404, statusText: 'Not Found' })
 }
 

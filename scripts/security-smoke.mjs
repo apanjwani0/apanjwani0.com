@@ -2205,3 +2205,297 @@ console.log('poker fast path ok')
 }
 
 console.log('cron whisperer crontab ok')
+
+
+/* ─────  role: projects — a same-origin project URL must be a page we serve  ─────
+
+   The projects block earlier in this file checks /tools/<slug> and /games/<slug>
+   against their one indexing predicate and `continue`s on everything else — so
+   every OTHER apanjwani0.com path in that config is asserted by nothing at all.
+
+   That gap is not theoretical. Sections here move: blogs is hidden behind
+   site.sections.blogs and both its routes are noindex, and learnings is mid-
+   rename. A project entry is also the one place a URL to this site is written by
+   hand rather than derived from a slug, so it is the one place a stale path can
+   survive. A card plus an ItemList entry pointing at a hidden or renamed section
+   is exactly the contradicting-signals failure the Indexing rule exists to
+   prevent, and it renders perfectly while being wrong.
+
+   So the shapes /projects may advertise are enumerated. Widening the list is
+   then a deliberate act rather than a fall-through nobody notices. */
+{
+  const PROJECTS_SELF_ORIGIN = 'https://apanjwani0.com'
+  const projectPathShapes = [
+    /^\/$/,                      // the site itself
+    /^\/tools\/[a-z0-9-]+\/?$/,  // status must be 'live' — checked above
+    /^\/games\/[a-z0-9-]+\/?$/,  // isPlayableGame() — checked above
+  ]
+
+  let projectsOnSite = 0
+  for (const p of smokeProjects) {
+    let projectUrl
+    try {
+      projectUrl = new URL(p.url)
+    } catch {
+      assert.fail(`project "${p.title}" has a url that does not parse: ${p.url}`)
+    }
+    // safeExternalUrl() drops anything that is not https, and the ItemList is
+    // built through it while the card's own link is not — so a non-https entry
+    // would render on the page and silently vanish from the structured data.
+    assert.equal(
+      projectUrl.protocol,
+      'https:',
+      `project "${p.title}" must link over https, or it renders as a card but drops out of the ItemList`,
+    )
+    if (projectUrl.origin !== PROJECTS_SELF_ORIGIN) continue
+    projectsOnSite++
+    assert.ok(
+      projectPathShapes.some(re => re.test(projectUrl.pathname)),
+      `project "${p.title}" links to ${projectUrl.pathname} on this site, which is not a shape /projects is allowed to advertise — add it to projectPathShapes deliberately, once something asserts that page is indexable`,
+    )
+  }
+  assert.ok(projectsOnSite >= 4, `expected the on-site project entries to be checked, matched ${projectsOnSite}`)
+}
+
+console.log('projects link only at pages this site serves')
+
+
+/* ══════════  role: seo-reach — ONE predicate decides a Driftfield page  ══════════
+
+   AGENTS.md, "Indexing: one predicate decides whether a page is real": a page
+   search engines are told to noindex must not be in the sitemap, must not be in
+   a hub's ItemList, and must not carry a share card. Games, tools, learnings and
+   the hidden blogs section each have exactly one predicate. Driftfield did not.
+
+   Its three consumers gave two different answers. `/tools/driftfield` 404'd
+   unless the tools config said `live`, and the sitemap listed the six modes only
+   when it said `live` — but `/tools/driftfield/<mode>` never read the tools
+   config at all. Withdraw Driftfield and those six routes still answered 200
+   with `index, follow`, a summary_large_image card and WebApplication JSON-LD,
+   above a breadcrumb pointing at a hub that was serving 404: indexable, carded,
+   unlisted and unsitemapped, all at once. `npm run og` was the fourth consumer
+   and the only entry in its list with no eligibility check whatsoever.
+
+   `isDriftfieldPublic()` (src/lib/driftfield.ts) is now that one predicate and
+   all four read it. The unit cases below are cheap; the ones that matter drive
+   the REAL sitemap route with a synthetic config and pin the two files that
+   cannot be imported to the CALL, not to the import — deleting the guard and
+   leaving the import is exactly the regression this is here to catch. */
+{
+  const { isDriftfieldPublic: dfPublic, DRIFTFIELD_MODES: dfModes, DRIFTFIELD_SLUG: dfSlug } =
+    await import('../src/lib/driftfield.ts')
+
+  const asStatus = status => tools.map(t => (t.slug === dfSlug ? { ...t, status } : t))
+
+  assert.equal(dfPublic(tools), true, 'driftfield ships live, so the modes really are sitemapped today')
+  for (const status of ['wip', 'external', 'disabled']) {
+    assert.equal(dfPublic(asStatus(status)), false, `a "${status}" driftfield must not be a public page`)
+  }
+  assert.equal(
+    dfPublic(tools.filter(t => t.slug !== dfSlug)), false,
+    'no driftfield entry at all means no driftfield pages — not "assume live"',
+  )
+  assert.equal(
+    dfPublic([{ slug: 'json-tidy', status: 'live' }]), false,
+    'the predicate must read the driftfield entry, not "some tool is live"',
+  )
+
+  // The signal that a crawler actually consumes. Driving the route (same
+  // technique as the sitemap block above) rather than reading its source,
+  // because what matters is the emitted document, not how it decides.
+  const localsWith = toolsConfig => ({
+    runtime: { env: { SITE_CONFIG: { get: async key => (key === 'tools' ? toolsConfig : null) } } },
+  })
+  const { GET: sitemapGET } = await import('../src/pages/sitemap.xml.ts')
+  const dfLiveXml = await (await sitemapGET({ locals: localsWith(asStatus('live')) })).text()
+  const dfWipXml = await (await sitemapGET({ locals: localsWith(asStatus('wip')) })).text()
+
+  for (const m of dfModes) {
+    assert.ok(
+      dfLiveXml.includes(`/tools/${dfSlug}/${m.slug}<`),
+      `mode "${m.slug}" is missing from the sitemap while driftfield is live`,
+    )
+  }
+  assert.ok(
+    !dfWipXml.includes(`/tools/${dfSlug}`),
+    'a withdrawn driftfield still has its hub or a mode in the sitemap',
+  )
+  assert.ok(
+    dfWipXml.includes('/tools/json-tidy'), 'the withdrawn-driftfield sitemap lost everything, not just driftfield',
+  )
+
+  // The two consumers that cannot be driven from here: an .astro route and a
+  // Chrome-shelling script. Matched on the guard, not the identifier.
+  const modeRoute = await readFile(new URL('../src/pages/tools/driftfield/[mode].astro', import.meta.url), 'utf-8')
+  assert.match(
+    modeRoute,
+    /if \(!isDriftfieldPublic\(tools\)\)\s*\{\s*\n\s*return new Response\(null, \{ status: 404/,
+    'the mode route must 404 when driftfield is not public — this is the route that read no config at all',
+  )
+  assert.match(
+    modeRoute, /getTools\(Astro\.locals\)/,
+    'the mode route must actually load the tools config it gates on',
+  )
+
+  const hubRoute = await readFile(new URL('../src/pages/tools/driftfield/index.astro', import.meta.url), 'utf-8')
+  assert.match(
+    hubRoute, /if \(!tool \|\| !isDriftfieldPublic\(tools\)\)/,
+    'the hub must gate on the shared predicate, not on its own copy of the status check',
+  )
+
+  const ogScript = await readFile(new URL('../scripts/generate-og.mjs', import.meta.url), 'utf-8')
+  assert.match(
+    ogScript,
+    /\.\.\.\(isDriftfieldPublic\(tools\) \? DRIFTFIELD_MODES : \[\]\)\.map\(/,
+    'the card generator must gate the mode cards on the same predicate — a card must not outlive its page',
+  )
+}
+
+/* ══════  design-ux: a shared idiom must live where BOTH layouts can see it  ══════
+
+   The site has two shells. `Base.astro` loads `src/styles/global.css`;
+   `ToolBase.astro` loads only `src/styles/shared.css`. So a `data-type` idiom
+   defined in global.css is invisible to every ToolBase page — and that is not
+   hypothetical, it shipped: `/tools/driftfield` is a hub rendered through
+   ToolBase, writing the same `<ul data-type="card-grid">` / `<h3
+   data-type="card-title">` markup as /tools, /games, /projects and /blogs, and
+   with the rules unreachable its six live simulations rendered as a default
+   bulleted list — disc markers, list indent, no grid, no border, no radius, no
+   hover — next to four hubs showing bordered cards. `p[data-type="page-intro"]`
+   was the same miss on every /tools/driftfield/<mode> page: full --color-text,
+   no rhythm, where the identical element elsewhere is muted and spaced.
+
+   Nothing catches this. The build is green, `astro check` is silent, the page
+   renders, and the two hubs are never on screen together — which is exactly why
+   it survived. So the check is derived from the pages themselves rather than
+   from a list of idioms someone has to remember to extend: find the ToolBase
+   pages, read the idioms they actually render, and fail on any that only
+   global.css styles.
+
+   Base-only REFINEMENTS stay legal — `div[data-type="project-header"] >
+   [data-type="card-title"]` is a higher-specificity extra that global.css
+   rightly owns. What must be reachable is the base idiom. */
+{
+  const pagesUrl = new URL('../src/pages/', import.meta.url)
+  const styleUrl = n => new URL(`../src/styles/${n}`, import.meta.url)
+
+  // A selector match, not a mention: both global.css and shared.css discuss
+  // these idioms in prose, and a comment must never count as a definition.
+  const stylesIdiom = (css, idiom) => {
+    const needle = `[data-type="${idiom}"]`
+    for (let i = css.indexOf(needle); i !== -1; i = css.indexOf(needle, i + 1)) {
+      const openedComment = css.lastIndexOf('/*', i)
+      if (openedComment !== -1 && openedComment > css.lastIndexOf('*/', i)) continue
+      const rest = css.slice(i + needle.length)
+      const open = rest.indexOf('{')
+      const close = rest.indexOf('}')
+      if (open === -1 || (close !== -1 && close < open)) continue
+      // The BASE rule, not a refinement. `[data-type="card-grid"] > *` styles the
+      // cards and leaves the grid container itself unstyled, so a sheet holding
+      // only that has NOT given the idiom a home: move just the base block back
+      // to global.css and /tools/driftfield returns to a bulleted list while the
+      // hover and focus-within rules stay put. That partial split is the likelier
+      // future shape of the shipped bug, and counting any selector that merely
+      // contains the idiom let it through. Only trailing pseudo-classes are still
+      // the same element.
+      const comma = rest.indexOf(',')
+      const tail = rest.slice(0, comma === -1 ? open : Math.min(open, comma)).trim()
+      if (tail && !/^(?::[a-z-]+(?:\([^)]*\))?)+$/i.test(tail)) continue
+      return true
+    }
+    return false
+  }
+
+  // Vite inlines @import at build time, so an imported sheet is as reachable as
+  // the sheet that pulls it in — shared.css reaches theme.css this way.
+  const readCss = async (url, seen = new Set()) => {
+    if (seen.has(url.href)) return ''
+    seen.add(url.href)
+    let css
+    try { css = await readFile(url, 'utf-8') } catch { return '' }
+    let out = css
+    for (const m of css.matchAll(/@import\s+['"]([^'"]+)['"]/g)) {
+      out += '\n' + await readCss(new URL(m[1], url), seen)
+    }
+    return out
+  }
+  const astroStyles = src => [...src.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n')
+
+  const globalCss = await readFile(styleUrl('global.css'), 'utf-8')
+  const baseSharedCss = await readCss(styleUrl('shared.css'))
+  const layoutUrl = new URL('../src/layouts/ToolBase.astro', import.meta.url)
+  const layoutSrc = await readFile(layoutUrl, 'utf-8')
+  const layoutCss = astroStyles(layoutSrc)
+    + '\n' + (await Promise.all(
+      [...layoutSrc.matchAll(/^import\s+['"]([^'"]+\.css)['"]/gm)].map(m => readCss(new URL(m[1], layoutUrl))),
+    )).join('\n')
+
+  assert.ok(
+    stylesIdiom(globalCss, 'writing-date'),
+    'global.css lost its Base-only idioms — this check would then pass vacuously',
+  )
+
+  const pageFiles = (await readdir(pagesUrl, { recursive: true })).filter(f => f.endsWith('.astro'))
+  const toolBasePages = []
+  for (const rel of pageFiles) {
+    const url = new URL(rel, pagesUrl)
+    const src = await readFile(url, 'utf-8')
+    if (src.includes('layouts/ToolBase.astro')) toolBasePages.push([rel, url, src])
+  }
+  assert.ok(
+    toolBasePages.length >= 3,
+    `expected the ToolBase routes (tools/[slug] + both driftfield pages), found ${toolBasePages.length}`,
+  )
+
+  let checkedIdioms = 0
+  for (const [rel, url, src] of toolBasePages) {
+    // The page's own markup only. A data-type owned by a rendered .astro
+    // component (Breadcrumbs, RelatedLinks, Footer) travels with that
+    // component's scoped <style> and is not this page's problem.
+    const template = src.split(/^---$/m).slice(2).join('---')
+    const reachable = layoutCss + '\n' + astroStyles(src) + '\n' + (await Promise.all(
+      [...src.matchAll(/^import\s+['"]([^'"]+\.css)['"]/gm)].map(m => readCss(new URL(m[1], url))),
+    )).join('\n')
+
+    for (const idiom of new Set([...template.matchAll(/data-type="([a-z0-9-]+)"/g)].map(m => m[1]))) {
+      // Site-level idioms only — one of the two shells' base sheets styles it.
+      // A page-scoped name (driftfield-stage, driftfield-story) is styled by the
+      // page's own <style> and is nobody else's business.
+      if (!stylesIdiom(globalCss, idiom) && !stylesIdiom(baseSharedCss, idiom)) continue
+      checkedIdioms++
+      assert.ok(
+        stylesIdiom(reachable, idiom),
+        `src/pages/${rel} renders [data-type="${idiom}"], which only global.css styles — `
+        + 'ToolBase does not load global.css, so it renders unstyled there. '
+        + 'Move the base rule to src/styles/shared.css (both layouts load it); '
+        + 'a higher-specificity Base-only refinement may stay in global.css.',
+      )
+    }
+  }
+  assert.ok(
+    checkedIdioms >= 3,
+    `expected the shared card/lede idioms to be exercised, checked ${checkedIdioms} — `
+    + 'if the ToolBase pages stopped rendering site-level idioms this guard asserts nothing',
+  )
+
+  // The move is only a fix while shared.css is the base idiom's one home; a
+  // re-added copy in global.css would be a second source of truth that drifts.
+  for (const idiom of ['card-grid', 'card-title', 'page-intro']) {
+    assert.ok(
+      stylesIdiom(await readCss(styleUrl('shared.css')), idiom),
+      `shared.css must define [data-type="${idiom}"] — both layouts render it`,
+    )
+  }
+
+  // Source order, not specificity, decides this one: shared.css's :focus-visible
+  // and `[data-type="card-grid"] > *` both set border-radius at (0,1,0), so the
+  // card's --radius-lg only wins while it is declared later. That relation is
+  // what the block had in global.css (imported after shared.css) and moving it
+  // must not have flipped it.
+  const sharedCss = await readFile(styleUrl('shared.css'), 'utf-8')
+  assert.ok(
+    sharedCss.indexOf(':focus-visible {') < sharedCss.indexOf('[data-type="card-grid"] > * {'),
+    'shared.css declares the card grid before :focus-visible — the focus ring\'s --radius-sm '
+    + 'now wins the (0,1,0) tie and squares off every listing card',
+  )
+}

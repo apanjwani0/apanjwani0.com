@@ -21,6 +21,8 @@
  * this pattern to new engines without demand data; see docs/plans/learnings.md.
  */
 
+import type { Tool } from '../config/tools'
+
 export interface DriftfieldMode {
   /** URL segment AND the EMBED_TAGS key for the component this mode mounts. */
   slug: string
@@ -83,6 +85,40 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
 ]
 
 export const DRIFTFIELD_SLUG = 'driftfield'
+
+/** The only fields the predicate below reads — exported so callers state this
+ *  shape instead of hand-rolling a second, looser one, exactly as `GameFlags`
+ *  (src/lib/games.ts) and `LearningFlags` (src/lib/learnings.ts) do. */
+export type DriftfieldToolFlags = Pick<Tool, 'slug' | 'status'>
+
+/**
+ * The ONE predicate that decides whether Driftfield's routes are real pages.
+ *
+ * Driftfield is a tool with sub-routes, so "is this page real" is the tools
+ * rule — `status === 'live'` — asked of the single `driftfield` entry in the
+ * tools config. Every consumer reads THIS function: the hub route, each mode
+ * route, the sitemap, and the share-card generator.
+ *
+ * It exists because Driftfield was the one kind of page on this site with no
+ * such predicate, and the three consumers that existed gave two different
+ * answers. The hub 404'd unless the tool was live and the sitemap listed the
+ * modes only when it was live, but `/tools/driftfield/<mode>` never read the
+ * tools config at all: it answered 200 with `index, follow`, a
+ * `summary_large_image` card and WebApplication JSON-LD no matter what the
+ * config said, above a breadcrumb pointing at a hub that was serving 404. Six
+ * indexable pages advertising a product the rest of the site had withdrawn is
+ * exactly the "signals that contradict each other" failure the Indexing rule in
+ * AGENTS.md exists to prevent — a crawler resolves the conflict by trusting
+ * none of them.
+ *
+ * Note this is deliberately stricter than `/tools/[slug]`, where `wip` renders
+ * publicly behind a noindex: the hub has always 404'd on anything but `live`,
+ * and softening that is a product decision, not an indexing one. What matters
+ * here is that the hub, the modes, the sitemap and the cards agree.
+ */
+export function isDriftfieldPublic(tools: DriftfieldToolFlags[]): boolean {
+  return tools.some(t => t.slug === DRIFTFIELD_SLUG && t.status === 'live')
+}
 
 export function driftfieldMode(slug: string | undefined): DriftfieldMode | undefined {
   return DRIFTFIELD_MODES.find(m => m.slug === slug)

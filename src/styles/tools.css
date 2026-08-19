@@ -1,5 +1,5 @@
 /* Tools hub cards — the card frame (border/padding/grid) comes from the shared
-   [data-type="card-grid"] rule in global.css; here we style only the internals:
+   [data-type="card-grid"] rule in shared.css; here we style only the internals:
    a prominent name, a status badge, and a muted one-line description. */
 div[data-type="tool-head"] {
   display: flex;

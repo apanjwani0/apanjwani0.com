@@ -506,6 +506,21 @@ was a second, mirrored fixture that does.
 
 - **Never hardcode** a colour, font, or type size in `global.css`, `home.css`, `shared.css`, component CSS, or scoped `<style>` blocks — reference a token: `var(--color-*)`, `var(--font-*)`, `var(--text-*)`, `var(--space-*)`.
 - **Load order**: `theme.css` (tokens) → `shared.css` (base elements + header, shared by both layouts) → `global.css` (content pages) / `home.css` (home hero) / component CSS.
+- **A `data-type` idiom BOTH layouts render belongs in `shared.css`, not
+  `global.css`** — `ToolBase.astro` does not load `global.css`. This shipped:
+  `/tools/driftfield` is a hub rendered through `ToolBase` writing the same
+  `[data-type="card-grid"]` markup as `/tools`, `/games`, `/projects` and
+  `/blogs`, so with the rules unreachable its six live simulations rendered as a
+  plain bulleted `<ul>` next to four hubs showing bordered cards, and
+  `p[data-type="page-intro"]` was unstyled on all six mode pages. A
+  higher-specificity Base-only *refinement* (`div[data-type="project-header"] >
+  [data-type="card-title"]`) may stay in `global.css`; the **base** rule may not.
+  `security:smoke` derives this from the ToolBase pages themselves rather than
+  from a list, so the next shared idiom cannot repeat it — and it requires the
+  base selector specifically, because a sheet holding only
+  `[data-type="card-grid"] > *` styles the cards and leaves the grid container
+  unstyled. That partial split is the likelier future shape of the same bug and
+  it escaped the first version of the assertion.
 - **One disabled treatment**: `--opacity-disabled` in `theme.css` is the single
   "this control is dead" value. It is an opacity and not a colour on purpose —
   theme-agnostic, and it dims the border and the label together. Both lane floors
@@ -604,6 +619,23 @@ So each kind has exactly **one** predicate, and every consumer reads it:
   && content.trim()`. The second condition is the one the flag cannot express —
   an entry saved from /admin with the box ticked and the body still empty would
   otherwise be sitemapped and carry a card while its page rendered nothing.
+- **Driftfield** — `isDriftfieldPublic()` in `src/lib/driftfield.ts`: the
+  `driftfield` entry in the tools config is `status === 'live'`. The hub, every
+  `/tools/driftfield/<mode>` route, the sitemap and `scripts/generate-og.mjs`
+  all read it. Before it there was no one predicate and the three consumers gave
+  two answers: the hub 404'd and the sitemap dropped the modes unless `live`,
+  but the mode route **read no config at all**, so a withdrawn Driftfield still
+  answered 200 with `index, follow`, a `summary_large_image` card and
+  WebApplication JSON-LD — above a breadcrumb pointing at a hub serving 404.
+  Deliberately stricter than `/tools/[slug]`, where `wip` renders publicly
+  behind a noindex; the Driftfield hub has always 404'd on anything but `live`.
+
+A project entry is the one place an on-site URL is **hand-written** rather than
+derived from a slug, so `security:smoke` holds any `apanjwani0.com` link in
+`src/config/projects.ts` to an enumerated set of path shapes (`/`,
+`/tools/<slug>`, `/games/<slug>`) and checks the slug against that kind's
+predicate. Adding a shape is a deliberate edit to `projectPathShapes`, made once
+something asserts that page is indexable — not a fall-through.
 
 `EMBED_TAGS` (`src/lib/embeds.ts`) and `GAME_TAGS` (`src/lib/games.ts`) both
 live in `src/lib/` and **not** in `src/config/games.ts`, because the `/admin`

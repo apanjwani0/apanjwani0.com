@@ -30,7 +30,7 @@ import { promisify } from 'node:util'
 import { tools } from '../src/config/tools.ts'
 import { games } from '../src/config/games.ts'
 import { learnings } from '../src/config/learnings.ts'
-import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG } from '../src/lib/driftfield.ts'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from '../src/lib/driftfield.ts'
 import { escapeHtml } from '../src/lib/escape.ts'
 import {
   OG_CARD_HEIGHT,
@@ -162,7 +162,12 @@ async function main() {
     // Driftfield's modes are sub-routes of one tool, so their cards are named
     // `tools-driftfield-<mode>` — the same prefix+slug rule as everything else,
     // with the mode folded into the slug. The page derives the identical name.
-    ...DRIFTFIELD_MODES.map(m => ({
+    //
+    // Gated like every other item above, and by the SAME predicate the mode
+    // routes and the sitemap read: a card is a promise that a real product sits
+    // behind the link, so it must not outlive the page. This list was the one
+    // entry here with no eligibility check at all.
+    ...(isDriftfieldPublic(tools) ? DRIFTFIELD_MODES : []).map(m => ({
       kind: 'tools',
       slug: `${DRIFTFIELD_SLUG}-${m.slug}`,
       label: 'Driftfield',

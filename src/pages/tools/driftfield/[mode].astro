@@ -4,9 +4,9 @@ export const prerender = false
 import ToolBase from '../../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../../components/Breadcrumbs.astro'
 import RelatedLinks from '../../../components/RelatedLinks.astro'
-import { getLearnings, getSite } from '../../../lib/config'
+import { getLearnings, getSite, getTools } from '../../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../../lib/jsonld'
-import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, driftfieldMode } from '../../../lib/driftfield'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, driftfieldMode, isDriftfieldPublic } from '../../../lib/driftfield'
 import { embedTag } from '../../../lib/embeds'
 import { existingOgCardPath } from '../../../lib/og'
 import { learningsAboutEmbed } from '../../../lib/learnings'
@@ -21,7 +21,20 @@ if (!mode) {
   return new Response(null, { status: 404, statusText: 'Not Found' })
 }
 
-const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
+const [site, learnings, tools] = await Promise.all([
+  getSite(Astro.locals),
+  getLearnings(Astro.locals),
+  getTools(Astro.locals),
+])
+
+// Same predicate the hub, the sitemap and `npm run og` read. Without it this
+// route answered 200 and `index, follow` for a Driftfield that the rest of the
+// site had withdrawn — six indexable pages with share cards, no sitemap entry,
+// no hub listing, and a breadcrumb into a 404. See src/lib/driftfield.ts.
+if (!isDriftfieldPublic(tools)) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
 const cspNonce = (Astro.locals as any).cspNonce
 const canonicalUrl = `${site.url}/tools/${DRIFTFIELD_SLUG}/${mode.slug}`
 
