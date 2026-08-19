@@ -101,6 +101,7 @@ function trToken(el: Element, name: string, fallback: string): string {
 
 class FlowmapTool extends HTMLElement {
   private cy: any = null
+  private ro: ResizeObserver | null = null
   private graph: Graph = { nodes: [], edges: [] }
   private layout: TrLayout = 'flow'
   private connectFrom: string | null = null
@@ -204,6 +205,10 @@ class FlowmapTool extends HTMLElement {
   }
 
   disconnectedCallback() {
+    // Before destroy(): the observer fires on the teardown reflow otherwise, and
+    // its callback would touch a half-destroyed instance.
+    this.ro?.disconnect()
+    this.ro = null
     this.cy?.destroy()
     this.cy = null
   }
@@ -370,6 +375,19 @@ class FlowmapTool extends HTMLElement {
       if (event.target !== this.cy) return
       this.addNode(event.position)
     })
+
+    // Cytoscape caches its container's size at init and never re-reads it, so
+    // any later change to that box — the window resizing, the rails reflowing
+    // when the detail panel fills, the three-column grid collapsing at 64rem —
+    // leaves the renderer drawing to the OLD dimensions. The visible symptom is
+    // a graph painted outside its own border, which is what shipped. Every other
+    // canvas component here already observes its container; this one did not.
+    this.ro = new ResizeObserver(() => {
+      if (!this.cy) return
+      this.cy.resize()
+      this.cy.fit(undefined, 40)
+    })
+    this.ro.observe(host)
   }
 
   private toElements() {

@@ -38,7 +38,11 @@ div[data-type="tool-page"] kbd {
 /* Toolbar layout + the shared button chrome, hoisted here from the five tools
    that share this exact language (list-forge / epoch-wizard / chroma-lab /
    codec-forge / hash-smith) so it lives in one place instead of five identical
-   copies. A new tool opts in by adding its [data-tool] selector to these lists.
+   copies. A new tool opts in by adding its [data-tool] selector to these lists,
+   and a new tool SHOULD unless it has a real reason not to: flowmap and
+   token-bench shipped without opting in, so their buttons fell back to the
+   browser default while every neighbour rendered the mono outline — the tools
+   lane looked like three different products.
 
    Kept as an explicit selector list — NOT a blanket div[data-type="tool-page"]
    rule — so the tools with their own button language are untouched: json-tidy
@@ -56,7 +60,9 @@ div[data-tool="codec-forge"] [data-group="toolbar"],
 div[data-tool="hash-smith"] [data-group="toolbar"],
 div[data-tool="cron-whisperer"] [data-group="toolbar"],
 div[data-tool="regex-lab"] [data-group="toolbar"],
-div[data-tool="webhook-inspector"] [data-group="toolbar"] {
+div[data-tool="webhook-inspector"] [data-group="toolbar"],
+div[data-tool="flowmap"] [data-group="toolbar"],
+div[data-tool="token-bench"] [data-group="toolbar"] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -71,7 +77,9 @@ div[data-tool="codec-forge"] button,
 div[data-tool="hash-smith"] button,
 div[data-tool="cron-whisperer"] button,
 div[data-tool="regex-lab"] button,
-div[data-tool="webhook-inspector"] button {
+div[data-tool="webhook-inspector"] button,
+div[data-tool="flowmap"] button,
+div[data-tool="token-bench"] button {
   padding: 0.32rem 0.85rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -91,7 +99,9 @@ div[data-tool="codec-forge"] button:hover,
 div[data-tool="hash-smith"] button:hover,
 div[data-tool="cron-whisperer"] button:hover,
 div[data-tool="regex-lab"] button:hover,
-div[data-tool="webhook-inspector"] button:hover {
+div[data-tool="webhook-inspector"] button:hover,
+div[data-tool="flowmap"] button:hover,
+div[data-tool="token-bench"] button:hover {
   color: var(--color-text);
   border-color: var(--color-muted);
 }
