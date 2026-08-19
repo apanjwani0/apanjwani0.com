@@ -24,6 +24,8 @@ import {
 import { GAME_TAGS, gameTag, isPlayableGame } from '../src/lib/games.ts'
 import { games } from '../src/config/games.ts'
 import { tools } from '../src/config/tools.ts'
+import { site } from '../src/config/site.ts'
+import { isBlogsPublic, navLinks } from '../src/lib/config.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
 import {
   DAILY_MAX_ENTRIES_PER_DAY,
@@ -500,6 +502,25 @@ for (const drop of [{ published: false }, { content: '' }, { content: '   ' }]) 
       `an article with ${JSON.stringify(drop)} is still linked from "${embed}"`,
     )
   }
+}
+
+// A hidden section is hidden in every signal at once. `sections.blogs` is the
+// one predicate; nav, footer, sitemap, ItemList and the routes' noindex all read
+// it, and the failure this prevents is the section being delisted in one place
+// and still advertised in another.
+{
+  const hidden = { ...site, sections: { ...site.sections, blogs: false } }
+  const shown = { ...site, sections: { ...site.sections, blogs: true } }
+  assert.equal(isBlogsPublic(hidden), false, 'sections.blogs false means hidden')
+  assert.equal(isBlogsPublic(shown), true, 'sections.blogs true means public')
+  assert.equal(
+    navLinks(hidden).some(i => /^\/blogs(\/|$)/.test(i.href)), false,
+    'a hidden blogs section is still in the nav',
+  )
+  assert.ok(
+    navLinks(shown).some(i => /^\/blogs(\/|$)/.test(i.href)),
+    'a public blogs section is missing from the nav — the filter is unconditional',
+  )
 }
 
 // Config validation rejects what the admin form could otherwise save.
@@ -1101,10 +1122,28 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     { title: 'Angle', href: '/blogs/a<b', date: '2026-01-03', summary: 's' },
     { title: 'Cross-posted', href: 'https://example.com/elsewhere', date: '2026-01-04', summary: 's' },
   ]
-  const locals = {
-    runtime: { env: { SITE_CONFIG: { get: async key => (key === 'blogs' ? posts : null) } } },
-  }
-  const body = await (await GET({ locals })).text()
+  // Blogs ship hidden (`sections.blogs`), and a hidden section emits no <loc> at
+  // all — so this fixture must turn the section back ON or the escaping guard
+  // below would pass by having nothing to escape. Hiding a section must not
+  // quietly retire the test that keeps the sitemap parseable.
+  const withBlogs = { ...site, sections: { ...site.sections, blogs: true } }
+  const envFor = s => ({
+    runtime: {
+      env: {
+        SITE_CONFIG: {
+          get: async key => (key === 'blogs' ? posts : key === 'site' ? s : null),
+        },
+      },
+    },
+  })
+  const body = await (await GET({ locals: envFor(withBlogs) })).text()
+
+  // …and with the flag as shipped, none of those URLs are in the document.
+  const hiddenBody = await (
+    await GET({ locals: envFor({ ...site, sections: { ...site.sections, blogs: false } }) })
+  ).text()
+  assert.ok(!hiddenBody.includes('/blogs'), 'a hidden blogs section still appears in the sitemap')
+  assert.ok(hiddenBody.includes('/tools/'), 'the hidden-blogs sitemap lost everything, not just blogs')
 
   assert.ok(
     body.includes('/blogs/tabs-&amp;-spaces'),

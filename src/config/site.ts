@@ -34,7 +34,7 @@ export const site = {
   },
   "sections": {
     "projects": true,
-    "blogs": true,
+    "blogs": false,
     "experience": false
   }
 } as const

@@ -1,7 +1,7 @@
 export const prerender = false
 
 import type { APIRoute } from 'astro'
-import { getSite, getPosts, getGames, getTools, getLearnings } from '../lib/config'
+import { getSite, getPosts, getGames, getTools, getLearnings, isBlogsPublic } from '../lib/config'
 import { isPlayableGame } from '../lib/games'
 import { isPublishedLearning } from '../lib/learnings'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG } from '../lib/driftfield'
@@ -9,6 +9,7 @@ import { escapeHtml } from '../lib/escape'
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = await getSite(locals)
+  const blogsPublic = isBlogsPublic(site)
   const posts = await getPosts(locals)
   // isPlayableGame, not `enabled && interactive`: a game flagged interactive but
   // with no component registered renders "coming soon" behind a noindex, and
@@ -42,7 +43,7 @@ export const GET: APIRoute = async ({ locals }) => {
   const staticPages: SitemapUrl[] = [
     { loc: '/' },
     { loc: '/projects' },
-    { loc: '/blogs', lastmod: latestPostDate || undefined },
+
     { loc: '/learnings', lastmod: latestLearningDate || undefined },
     { loc: '/games' },
     { loc: '/tools' },
@@ -52,7 +53,7 @@ export const GET: APIRoute = async ({ locals }) => {
   // cross-posted piece) — that page is not ours to sitemap, and deriving a slug
   // from it would emit a bogus `/blogs/https://…` entry, so external posts are
   // skipped rather than normalised.
-  const blogPages: SitemapUrl[] = posts
+  const blogPages: SitemapUrl[] = (blogsPublic ? posts : [])
     .filter(p => !/^https?:\/\//i.test(p.href))
     .map(p => {
       const slug = p.href.replace(/^\/?(blogs\/)?/, '')

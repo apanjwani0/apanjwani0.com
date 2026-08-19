@@ -88,9 +88,14 @@ export interface NavItem {
  * Nav's flatMap badly enough that the call sites fell back to `any`. Widen `nav`
  * once here, at the boundary where the override actually happens.
  */
-export type Site = Omit<typeof staticSite, 'nav' | 'theme'> & {
+export type Site = Omit<typeof staticSite, 'nav' | 'theme' | 'sections'> & {
   nav: NavItem[]
   theme: 'light' | 'dark'
+  // Widened for the same reason as `nav` above: `as const` makes each flag its
+  // own literal type, so `sections.blogs === true` reads as comparing `false`
+  // to `true` and TypeScript calls it unreachable — while at runtime KV can set
+  // it to either. A flag whose type says it can never change is not a flag.
+  sections: Record<string, boolean>
 }
 
 /**
@@ -104,8 +109,29 @@ export type Site = Omit<typeof staticSite, 'nav' | 'theme'> & {
  * both would still render successfully — so the mismatch would surface as a
  * header and footer listing different sections on the same page.
  */
+/**
+ * The one predicate that decides whether the blogs section is public.
+ *
+ * `sections.blogs` already existed and nothing read it. Now everything does:
+ * the nav and footer (through `navLinks` below), the sitemap, the hub's
+ * ItemList, and the `noindex` on both blog routes. Same rule as games, tools
+ * and reads — a section that is delisted in one signal and advertised in
+ * another is worse than either alone, because a crawler resolves the
+ * contradiction by trusting neither.
+ *
+ * Hidden, not deleted: the routes still resolve, so links that already exist in
+ * the wild keep working while the pages drop out of search. Flip the flag back
+ * to `true` to restore the section; make the two routes 404 to retire it for
+ * good.
+ */
+export function isBlogsPublic(site: Site): boolean {
+  return site.sections.blogs === true
+}
+
 export function navLinks(site: Site): NavItem[] {
-  return site.nav.flatMap(item => item.children ?? [item])
+  return site.nav
+    .flatMap(item => item.children ?? [item])
+    .filter(item => isBlogsPublic(site) || !/^\/blogs(\/|$)/.test(item.href))
 }
 
 export async function getSite(locals: unknown): Promise<Site> {
