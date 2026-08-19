@@ -166,7 +166,6 @@ class StarfieldVoyagerGame extends HTMLElement {
             <button data-action="play" type="button" aria-pressed="false" title="Fly / hold position (space)">Pause</button>
             <button data-action="boost" type="button" title="Punch the warp drive (B, or click the field)">Warp</button>
             <button data-action="reset" type="button" title="Scatter a fresh field (R)">Reset</button>
-            <button data-action="download" type="button" title="Save the current frame as a PNG (D)">Download PNG</button>
           </div>
           <div data-type="sf-sliders">
             <div data-type="sf-slider">
@@ -214,15 +213,12 @@ class StarfieldVoyagerGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="sf-canvas"]') as HTMLCanvasElement
-
-    // Every one of these engines draws something someone would want to keep, and
-
-    // until Aug 2026 not one of them had a way to save it. The bar is attached
-
-    // here rather than written into the markup above so all six share one
-
-    // implementation — see src/lib/canvas-export.ts.
-
+    // The shared export bar, replacing this engine's own "Download PNG".
+    // Each engine had a one-line toDataURL download and nothing else: no GIF for
+    // something that is only interesting because it MOVES, no choice of
+    // resolution, and no sight of the file before it landed in the downloads
+    // folder. All six shared that gap, so the fix is shared too — see
+    // src/lib/canvas-export.ts. The D shortcut still calls the old download().
     attachCanvasExport(this, () => this.canvas, { name: 'starfield' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.readTheme()

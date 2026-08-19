@@ -21,6 +21,8 @@
  * are ef-/EF_-prefixed because tool component files share one global script scope.
  */
 
+import { flashBadge, flashLabel } from '../../../lib/flash'
+
 type EfUnit = 'auto' | 's' | 'ms' | 'us' | 'ns'
 type EfTz = 'utc' | 'local'
 
@@ -668,15 +670,8 @@ class EpochWizardTool extends HTMLElement {
 
   private flash(btn: HTMLButtonElement, label: string) {
     // Snippet buttons hold markup — flash a data-attr badge instead of the text.
-    if (btn.dataset.action === 'copy-snippet') {
-      btn.setAttribute('data-flash', label)
-      window.setTimeout(() => btn.removeAttribute('data-flash'), 1200)
-      return
-    }
-    const original = btn.dataset.label ?? btn.textContent ?? ''
-    if (!btn.dataset.label) btn.dataset.label = original
-    btn.textContent = label
-    window.setTimeout(() => { btn.textContent = btn.dataset.label ?? original }, 1200)
+    if (btn.dataset.action === 'copy-snippet') { flashBadge(btn, label, 1200); return }
+    flashLabel(btn, label, 1200)
   }
 
   private setStatus(label: string) {

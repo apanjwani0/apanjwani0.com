@@ -1,3 +1,5 @@
+import { flashLabel } from '../../../lib/flash'
+
 const MIC_SVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <rect x="9" y="1" width="6" height="11" rx="3"/>
   <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
@@ -135,8 +137,7 @@ class AudioTranscriberTool extends HTMLElement {
         switch (btn.dataset.action) {
           case 'copy':
             navigator.clipboard.writeText(this.finalTranscript.trim()).then(() => {
-              btn.textContent = 'Copied'
-              setTimeout(() => { btn.textContent = 'Copy' }, 1500)
+              flashLabel(btn, 'Copied', 1500)
             })
             break
           case 'clear':

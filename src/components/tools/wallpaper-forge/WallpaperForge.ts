@@ -34,6 +34,7 @@
  */
 
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
+import { flashLabel } from '../../../lib/flash'
 
 interface Palette {
   id: string
@@ -251,7 +252,6 @@ class WallpaperForgeTool extends HTMLElement {
   private ctx!: CanvasRenderingContext2D
   private ro?: ResizeObserver
   private pendingFrame = 0
-  private copyTimer = 0
   private exportToken = 0
 
   // tunables
@@ -385,9 +385,7 @@ class WallpaperForgeTool extends HTMLElement {
     this.exportToken++
     this.ro?.disconnect()
     if (this.pendingFrame) window.cancelAnimationFrame(this.pendingFrame)
-    if (this.copyTimer) window.clearTimeout(this.copyTimer)
     this.pendingFrame = 0
-    this.copyTimer = 0
   }
 
   /* ── theme palette resolution ── */
@@ -940,13 +938,7 @@ class WallpaperForgeTool extends HTMLElement {
   private flashCopyStatus(label: string) {
     if (!this.isConnected) return
     const btn = this.querySelector('[data-action="copy-seed"]') as HTMLButtonElement | null
-    if (!btn) return
-    if (this.copyTimer) window.clearTimeout(this.copyTimer)
-    btn.textContent = label
-    this.copyTimer = window.setTimeout(() => {
-      this.copyTimer = 0
-      if (this.isConnected) btn.textContent = 'Copy'
-    }, 1200)
+    flashLabel(btn, label, 1200)
   }
 
   private setExportStatus(message: string) {

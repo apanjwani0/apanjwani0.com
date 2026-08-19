@@ -7,11 +7,15 @@
  * tool which has export gif button, the gif isn't even visible on screen what is
  * about to be exported."
  *
- * Both halves of that are addressed here rather than per component, because
- * per-component was how it went wrong: the export code lived inside Driftfield,
- * so the six generative engines — every one of which draws to a canvas and is
- * the exact thing someone would want as a wallpaper — shipped with no way to
- * save anything at all.
+ * What was actually there, on checking: all six generative engines DID have a
+ * one-line `toDataURL` "Download PNG", and the Driftfield shell had a second one
+ * that did the same thing to the same canvas. What none of them had was a GIF —
+ * for engines whose entire point is that they MOVE — or any choice of
+ * resolution, or any sight of the file before it landed in the downloads folder.
+ *
+ * That is addressed here rather than per component, because per-component is how
+ * it drifted: seven copies of the same two lines, no two quite alike, and the
+ * capability everyone actually wanted in none of them.
  *
  * Two ways in, because the engines genuinely differ:
  *
@@ -135,6 +139,8 @@ export interface GifOptions {
   frames?: number
   /** Milliseconds per frame. 83ms ≈ 12fps, which GIF's centisecond clock rounds cleanly. */
   delay?: number
+  /** Palette size. Fewer colours quantize faster and shrink the file. */
+  colors?: number
   onProgress?: (done: number, total: number) => void
 }
 
@@ -153,7 +159,7 @@ export async function encodeGif(
   drawFrame: (ctx: CanvasRenderingContext2D, w: number, h: number, frame: number, total: number) => void | Promise<void>,
   options: GifOptions,
 ): Promise<Blob> {
-  const { width, height, frames = 24, delay = 83, onProgress } = options
+  const { width, height, frames = 24, delay = 83, colors = 128, onProgress } = options
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -165,8 +171,14 @@ export async function encodeGif(
     ctx.clearRect(0, 0, width, height)
     await drawFrame(ctx, width, height, frame, frames)
     const { data } = ctx.getImageData(0, 0, width, height)
-    const palette = quantize(data, 256)
-    const indexed = applyPalette(data, palette)
+    // `rgb444` buckets colour into 4 bits per channel before clustering. It is
+    // several times faster than the default and the difference is invisible on
+    // what these engines draw — 128 colours out of a 12-bit space is still more
+    // than the eye separates in a dark gradient. At 256 colours in full RGB a
+    // 640px frame took ~0.65s to quantize, so a 24-frame GIF spent 16 seconds
+    // looking like a hung tab.
+    const palette = quantize(data, colors, { format: 'rgb444' })
+    const indexed = applyPalette(data, palette, 'rgb444')
     gif.writeFrame(indexed, width, height, { palette, delay, repeat: 0 })
     onProgress?.(frame + 1, frames)
     // Yield so the progress text repaints; a synchronous 24-frame encode locks
@@ -212,7 +224,11 @@ export function attachCanvasExport(
   getCanvas: () => HTMLCanvasElement | null,
   options: LiveExportOptions,
 ): HTMLElement {
-  const { name, seconds = 2, frames = 24, maxGifEdge = 640 } = options
+  // 20 frames over 2s is 10fps — enough for these slow drifting motions, and the
+  // frame count is what the encode time is linear in. 480px rather than 640 for
+  // the same reason: quantize cost scales with pixels, and a GIF wallpaper is
+  // not something anyone views at full resolution.
+  const { name, seconds = 2, frames = 20, maxGifEdge = 480 } = options
 
   const bar = document.createElement('div')
   bar.dataset.type = 'canvas-export'
@@ -248,6 +264,25 @@ export function attachCanvasExport(
 
   let pending: { blob: Blob; filename: string; url: string } | null = null
 
+  /**
+   * The canvas, but only once the engine has actually sized it.
+   *
+   * A `<canvas>` with no width/height attributes has a 300x150 backing store
+   * regardless of how big its layout box is, and these engines size themselves
+   * on a ResizeObserver a frame or two after mount. Exporting in that window
+   * silently produces a 300x150 file that looks fine in the preview and is
+   * useless as a wallpaper — which is exactly what happened the first time this
+   * was tested. So: if the backing store is still at the default while the
+   * element is laid out much wider, it is not ready yet.
+   */
+  const readyCanvas = (): HTMLCanvasElement | null => {
+    const canvas = getCanvas()
+    if (!canvas) return null
+    const box = canvas.getBoundingClientRect()
+    if (canvas.width === 300 && canvas.height === 150 && box.width > 320) return null
+    return canvas
+  }
+
   const clearPending = () => {
     if (pending) URL.revokeObjectURL(pending.url)
     pending = null
@@ -266,8 +301,11 @@ export function attachCanvasExport(
   }
 
   bar.querySelector('[data-cx="png"]')!.addEventListener('click', () => {
-    const source = getCanvas()
-    if (!source) return
+    const source = readyCanvas()
+    if (!source) {
+      status.textContent = 'Still drawing — try again in a moment.'
+      return
+    }
     const scale = Number(scaleSelect.value) || 1
     const w = source.width * scale
     const h = source.height * scale
@@ -297,8 +335,11 @@ export function attachCanvasExport(
 
   bar.querySelector('[data-cx="gif"]')!.addEventListener('click', async event => {
     const button = event.currentTarget as HTMLButtonElement
-    const source = getCanvas()
-    if (!source) return
+    const source = readyCanvas()
+    if (!source) {
+      status.textContent = 'Still drawing — try again in a moment.'
+      return
+    }
     button.disabled = true
     clearPending()
     try {
@@ -309,22 +350,40 @@ export function attachCanvasExport(
       const h = Math.max(2, Math.round(source.height * ratio))
       const gap = (seconds * 1000) / frames
 
+      // Two phases, and they are kept separate on purpose.
+      //
+      // Interleaving them — grab a frame, quantize it, grab the next — made the
+      // "recording" take as long as the encoding, which is over a second per
+      // frame on a busy simulation. So a 2-second loop was sampled across 20+
+      // real seconds and came out as a time-lapse rather than the motion the
+      // user was watching. It also meant the progress line said "Recording
+      // 5/20" while it was in fact encoding, which is the kind of small lie
+      // that makes a slow thing feel broken.
+      //
+      // Now: capture 20 frames over a real 2 seconds (a drawImage each, cheap),
+      // then encode them back to back with a progress line that says so.
+      const captured: ImageData[] = []
+      const scratch = document.createElement('canvas')
+      scratch.width = w
+      scratch.height = h
+      const sctx = scratch.getContext('2d', { willReadFrequently: true })!
+      for (let i = 0; i < frames; i++) {
+        const live = readyCanvas()
+        if (live) sctx.drawImage(live, 0, 0, w, h)
+        captured.push(sctx.getImageData(0, 0, w, h))
+        status.textContent = `Recording ${((i + 1) / frames * seconds).toFixed(1)}s of ${seconds}s…`
+        await new Promise(resolve => setTimeout(resolve, gap))
+      }
+
       const blob = await encodeGif(
-        async (ctx, width, height) => {
-          const live = getCanvas()
-          if (live) ctx.drawImage(live, 0, 0, width, height)
-          // Wait real time between grabs — this is a RECORDING of a running
-          // animation, not a re-render at computed phases. The engine owns its
-          // own clock and this deliberately does not reach into it.
-          await new Promise(resolve => setTimeout(resolve, gap))
-        },
+        (ctx, _width, _height, frame) => { ctx.putImageData(captured[frame], 0, 0) },
         {
           width: w,
           height: h,
           frames,
           delay: Math.round(gap),
           onProgress: (done, total) => {
-            status.textContent = `Recording frame ${done}/${total}…`
+            status.textContent = `Encoding frame ${done}/${total}…`
           },
         },
       )

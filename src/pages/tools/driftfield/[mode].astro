@@ -90,10 +90,12 @@ const breadcrumbLd = breadcrumbListJsonLd([
     <p>This mode is not wired up yet.</p>
   )}
 
-  <div data-type="driftfield-actions">
-    <button type="button" data-action="driftfield-export">Download PNG</button>
-    <span data-type="driftfield-export-note" role="status"></span>
-  </div>
+  {/* The export controls used to live here, as a single "Download PNG" the shell
+      wired to whatever canvas the engine had drawn. That is now the shared export
+      bar the engine attaches to itself (src/lib/canvas-export.ts), which adds the
+      GIF, the resolution choice and — the part that was missing — a preview of
+      the file before it is written. Two export buttons on one screen doing almost
+      the same thing was worse than either alone. */}
 
   {mode.learning && (
     <p data-type="driftfield-story">
@@ -112,43 +114,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
       mountEmbed('[data-type="driftfield-stage"]')
     }
 
-    // Export whatever the engine has drawn. Every engine renders to a <canvas>,
-    // so the shell does not need to know anything about the engine itself — which
-    // is what lets one export button serve all six.
-    function wireExport() {
-      const button = document.querySelector('[data-action="driftfield-export"]')
-      if (!button || button.hasAttribute('data-wired')) return
-      button.setAttribute('data-wired', '')
-      const note = document.querySelector('[data-type="driftfield-export-note"]')
-
-      button.addEventListener('click', () => {
-        const canvas = document.querySelector('[data-type="driftfield-stage"] canvas')
-        if (!(canvas instanceof HTMLCanvasElement)) {
-          if (note) note.textContent = 'Nothing to export yet.'
-          return
-        }
-        // toDataURL throws a SecurityError on a tainted canvas. Nothing here
-        // draws cross-origin images, but a future mode might, and a thrown
-        // exception in a click handler would look like a dead button.
-        let url: string
-        try {
-          url = canvas.toDataURL('image/png')
-        } catch {
-          if (note) note.textContent = 'This mode cannot be exported.'
-          return
-        }
-        const slug = document.querySelector('[data-game]')?.getAttribute('data-game') ?? 'driftfield'
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `driftfield-${slug}-${canvas.width}x${canvas.height}.png`
-        link.click()
-        if (note) note.textContent = `Saved at ${canvas.width}×${canvas.height}.`
-      })
-    }
-
     function init() {
       mount()
-      wireExport()
     }
     document.addEventListener('astro:page-load', init)
     init()
@@ -175,18 +142,6 @@ const breadcrumbLd = breadcrumbListJsonLd([
   nav[data-type="driftfield-modes"] a[aria-current="page"] {
     color: var(--color-text);
     border-color: var(--color-accent);
-  }
-
-  div[data-type="driftfield-actions"] {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-    margin-top: var(--space-section);
-  }
-
-  span[data-type="driftfield-export-note"] {
-    color: var(--color-muted);
-    font-size: var(--text-sm);
   }
 
   p[data-type="driftfield-story"] {

@@ -89,6 +89,10 @@ div[data-tool="webhook-inspector"] [data-type="wi-list"] > li > details {
 
 div[data-tool="webhook-inspector"] [data-type="wi-summary"] {
   display: flex;
+  /* Wraps because the row gained a verdict badge: method + time + size + a
+     "GitHub · mismatch" pill is wider than a phone, and an un-wrapped summary
+     pushed the whole page into a horizontal scroll. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
   padding: 0.5rem 0.7rem;
@@ -276,5 +280,141 @@ div[data-tool="webhook-inspector"] [data-type="wi-explainer"] summary {
 
 div[data-tool="webhook-inspector"] [data-type="wi-explainer"] code {
   font-family: var(--font-mono);
+  color: var(--color-accent);
+}
+
+/* ── Signature verification ─────────────────────────────────────────────────
+   The secret row mirrors the capture-URL row above it deliberately: the two are
+   the tool's only inputs and reading as one pair makes the asymmetry between
+   them legible — the URL is saved and shareable, the secret is neither. */
+div[data-tool="webhook-inspector"] [data-group="wi-secretrow"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+div[data-tool="webhook-inspector"] [data-input="secret"] {
+  flex: 1 1 16rem;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+div[data-tool="webhook-inspector"] [data-input="secret-encoding"] {
+  flex: 0 0 auto;
+  padding: 0.32rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-secretnote"] {
+  min-height: 1.2em;
+  margin: 0.5rem 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-secretnote"][data-state="match"] {
+  color: var(--color-success);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-secretnote"][data-state="error"] {
+  color: var(--color-error);
+}
+
+/* Row badge. Four colours, not two: a correct signature outside the sender's
+   replay window is neither a pass nor a forgery, and painting it green or red
+   would be the collapsed-boolean mistake the tool exists to talk people out of. */
+div[data-tool="webhook-inspector"] [data-type="wi-verdict"] {
+  flex: 0 0 auto;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-verdict"][data-state="match"],
+div[data-tool="webhook-inspector"] [data-type="wi-verdict"][data-state="found"] {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-verdict"][data-state="stale"] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-verdict"][data-state="mismatch"],
+div[data-tool="webhook-inspector"] [data-type="wi-verdict"][data-state="error"] {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+/* Detail panel — a left rule in the verdict colour so the answer is readable
+   before any of the words are. */
+div[data-tool="webhook-inspector"] [data-type="wi-sig"] {
+  margin: 0.6rem 0;
+  padding: 0.5rem 0.7rem;
+  border-left: 2px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-sig"] p {
+  margin: 0 0 0.35rem;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-sig"] p:last-child {
+  margin-bottom: 0;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-sig"] b {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-sig"] code {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-sig"][data-state="match"],
+div[data-tool="webhook-inspector"] [data-type="wi-sig"][data-state="found"] {
+  border-left-color: var(--color-success);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-sig"][data-state="stale"] {
+  border-left-color: var(--color-accent);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-sig"][data-state="mismatch"],
+div[data-tool="webhook-inspector"] [data-type="wi-sig"][data-state="error"] {
+  border-left-color: var(--color-error);
+}
+
+/* Caveats: the sender named an algorithm we did not obey, the body was not
+   valid UTF-8, the header was malformed. Set apart from the verdict because
+   they explain WHY a verdict may not mean what it looks like. */
+div[data-tool="webhook-inspector"] [data-type="wi-signote"] {
   color: var(--color-accent);
 }

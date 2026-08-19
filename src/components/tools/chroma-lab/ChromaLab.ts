@@ -17,6 +17,8 @@
  * are cl-/CL_-prefixed because tool component files share one global script scope.
  */
 
+import { flashLabel } from '../../../lib/flash'
+
 interface ClRGB { r: number; g: number; b: number }   // channels 0–255 (ints)
 interface ClHSL { h: number; s: number; l: number }   // h 0–360, s/l 0–100
 
@@ -582,10 +584,7 @@ class ChromaLabTool extends HTMLElement {
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
-    const original = btn.dataset.label ?? btn.textContent ?? ''
-    if (!btn.dataset.label) btn.dataset.label = original
-    btn.textContent = label
-    window.setTimeout(() => { btn.textContent = btn.dataset.label ?? original }, 1100)
+    flashLabel(btn, label, 1100)
   }
 
   private setStatus(label: string) {

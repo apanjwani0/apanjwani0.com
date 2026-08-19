@@ -18,6 +18,7 @@
  */
 
 import { attachCanvasExport } from '../../../lib/canvas-export'
+import { flashLabel } from '../../../lib/flash'
 
 interface Palette {
   id: string
@@ -162,7 +163,6 @@ class FlowFieldGame extends HTMLElement {
             <button data-action="play" type="button" aria-pressed="false" title="Run / pause the flow (space)">Pause</button>
             <button data-action="regen" type="button" title="New random seed (R)">Regenerate</button>
             <button data-action="clear" type="button" title="Wipe the canvas, keep the field (C)">Clear</button>
-            <button data-action="download" type="button" title="Save the current frame as a PNG (D)">Download PNG</button>
           </div>
           <div data-type="ff-sliders">
             <div data-type="ff-slider">
@@ -211,15 +211,12 @@ class FlowFieldGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="ff-canvas"]') as HTMLCanvasElement
-
-    // Every one of these engines draws something someone would want to keep, and
-
-    // until Aug 2026 not one of them had a way to save it. The bar is attached
-
-    // here rather than written into the markup above so all six share one
-
-    // implementation — see src/lib/canvas-export.ts.
-
+    // The shared export bar, replacing this engine's own "Download PNG".
+    // Each engine had a one-line toDataURL download and nothing else: no GIF for
+    // something that is only interesting because it MOVES, no choice of
+    // resolution, and no sight of the file before it landed in the downloads
+    // folder. All six shared that gap, so the fix is shared too — see
+    // src/lib/canvas-export.ts. The D shortcut still calls the old download().
     attachCanvasExport(this, () => this.canvas, { name: 'flow-field' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.readTheme()
@@ -525,7 +522,7 @@ class FlowFieldGame extends HTMLElement {
   private copySeed() {
     const btn = this.querySelector('[data-action="copy-seed"]') as HTMLButtonElement | null
     const text = String(this.seed)
-    const done = () => { if (btn) { const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = t || 'Copy' }, 1200) } }
+    const done = () => flashLabel(btn, 'Copied')
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(done)
     else done()
   }

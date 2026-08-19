@@ -57,6 +57,14 @@ div[data-tool="cron-whisperer"] select {
   font-size: var(--text-sm);
 }
 
+/* The zone picker holds the whole tz database, so its labels are long. Give it a
+   fixed size rather than letting the widest option stretch the preferences row.
+   `width`, not `max-width`: this file may not declare a max-width under a
+   [data-tool=…] selector — shared.css owns tool width and security:smoke says so. */
+div[data-tool="cron-whisperer"] select[data-control="zone"] {
+  width: min(100%, 20rem);
+}
+
 /* ── Cards ───────────────────────────────────────────────── */
 /* The card container and the card <h2> label styling both come from the shared
    tools-common.css (identical across the card-based tools); this tool's card
@@ -210,6 +218,88 @@ p[data-type="cw-freq"] {
   line-height: 1.6;
 }
 
+/* ── Daylight-saving marks on a run row ──────────────────── */
+/* A marked row is the whole point of the tool, so it gets a rule and a full-width
+   sentence rather than a badge nobody would decode. */
+span[data-type="cw-run-flag"] {
+  grid-column: 2 / -1;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-muted);
+  max-width: 68ch;
+}
+
+ol[data-type="cw-runs"] li[data-dst] {
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--color-accent);
+}
+
+ol[data-type="cw-runs"] li[data-dst="gap"],
+ol[data-type="cw-runs"] li[data-dst="skip"] {
+  border-left-color: var(--color-error);
+}
+
+ol[data-type="cw-runs"] li[data-dst="skip"] span[data-type="cw-run-time"],
+ol[data-type="cw-runs"] li[data-dst="skip"] span[data-type="cw-run-rel"] {
+  color: var(--color-error);
+  text-decoration: line-through;
+}
+
+/* ── Daylight-saving card ────────────────────────────────── */
+p[data-type="cw-dst-lead"],
+p[data-type="cw-dst-none"] {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--color-muted);
+  max-width: 68ch;
+}
+
+div[data-type="cw-dst-row"] {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-left-width: 2px;
+  border-left-color: var(--color-accent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+}
+
+div[data-type="cw-dst-row"][data-dir="forward"] {
+  border-left-color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 6%, transparent);
+}
+
+span[data-type="cw-dst-when"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+span[data-type="cw-dst-shift"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+span[data-type="cw-dst-shift"] small {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+span[data-type="cw-dst-effect"] {
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--color-muted);
+  max-width: 68ch;
+}
+
 /* ── Field breakdown ─────────────────────────────────────── */
 div[data-type="cw-fields"] {
   display: grid;
@@ -324,5 +414,8 @@ details[data-type="cw-explainer"] code {
   }
   span[data-type="cw-run-rel"] {
     grid-column: 2;
+  }
+  span[data-type="cw-run-flag"] {
+    grid-column: 1 / -1;
   }
 }

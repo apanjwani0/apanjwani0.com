@@ -302,8 +302,12 @@ class PokerTrainerGame extends HTMLElement {
 
     // Answered — reveal the arithmetic.
     const result = equityVsRange(d.hero, d.combos, d.board)
-    const required = requiredEquity(d.pot, d.bet)
-    const ev = callEv(d.pot, d.bet, result.equity)
+    // d.pot is the pot BEFORE they bet; both helpers take the pot before the
+    // CALL, which already contains that bet. Passing d.pot alone computed
+    // bet/(pot+bet) — the frequency a bluff must work, not the price of a call —
+    // and graded every spot between the two numbers as a fold when it was a call.
+    const required = requiredEquity(d.pot + d.bet, d.bet)
+    const ev = callEv(d.pot + d.bet, d.bet, result.equity)
     // Graded on pot odds, deliberately: whether this call makes money right now.
     // A true GTO answer also weighs later streets and bluff frequency, which
     // needs a solver — see the caveat rendered below. Claiming this IS the GTO
@@ -397,7 +401,7 @@ class PokerTrainerGame extends HTMLElement {
         <p>The reason it matters is that it turns "am I probably ahead?" into a number you can compare against a price. Poker is almost entirely that comparison.</p>
 
         <h3>Pot odds, and the only decision they answer</h3>
-        <p>If the pot has 100 and someone bets 50, calling costs you 50 to win 150. So you need to be right <strong>50 / 150 = 33.3%</strong> of the time to break even. That percentage is the price.</p>
+        <p>If the pot has 100 and someone bets 50, calling costs you 50 to win the 150 already out there — and your 50 joins it, so a pot of 200 is what you are winning a share of. You need to be right <strong>50 / 200 = 25%</strong> of the time to break even. That percentage is the price. The trap is dividing by the 150 you can see instead of the 200 the pot becomes.</p>
         <p>Then: <strong>if your equity is bigger than the price, calling makes money.</strong> That is the whole of pot odds, and it is the single most useful thing to learn first, because it applies on every street of every hand.</p>
 
         <h3>Outs, and why the shortcut lies</h3>
@@ -484,7 +488,7 @@ class PokerTrainerGame extends HTMLElement {
 
         <section data-type="pt-odds">
           <h2>Should you call?</h2>
-          ${ptTerm('What are pot odds?', 'The price you are being offered. Calling 50 into a pot of 100 costs 50 to win 150, so you break even if you win 33.3% of the time. Compare that number against your equity: bigger equity than price means calling makes money.')}
+          ${ptTerm('What are pot odds?', 'The price you are being offered. Call 50 into a pot that already holds 100 and you are risking 50 to win that 100, making a pot of 150 — so you break even at 50 / 150 = 33.3%. Note this box wants the pot BEFORE your call, with their bet already in it. Compare the answer against your equity: bigger equity than price means calling makes money.')}
           <div data-type="pt-odds-inputs">
             <label>Pot before your call
               <input data-field="pot" type="number" min="0" step="1" value="100" />

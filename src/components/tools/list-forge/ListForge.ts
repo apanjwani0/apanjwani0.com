@@ -23,6 +23,8 @@
  * (see the astro:page-load wiring in tools/[slug].astro).
  */
 
+import { flashLabel } from '../../../lib/flash'
+
 type Quotes = 'none' | 'double' | 'single'
 type DelimKey =
   | 'comma'
@@ -648,10 +650,7 @@ class ListForgeTool extends HTMLElement {
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
-    const original = btn.dataset.label ?? btn.textContent ?? ''
-    if (!btn.dataset.label) btn.dataset.label = original
-    btn.textContent = label
-    window.setTimeout(() => { btn.textContent = btn.dataset.label ?? original }, 1400)
+    flashLabel(btn, label, 1400)
   }
 
   private setStatus(label: string) {

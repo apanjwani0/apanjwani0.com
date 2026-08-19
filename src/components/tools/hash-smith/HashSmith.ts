@@ -22,6 +22,8 @@
  * (see the astro:page-load wiring in tools/[slug].astro).
  */
 
+import { flashLabel } from '../../../lib/flash'
+
 type HsTab = 'text' | 'file' | 'uuid'
 type HsAlgo = 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512'
 type HsEncoding = 'hex' | 'base64'
@@ -207,7 +209,6 @@ class HashSmithTool extends HTMLElement {
   private computeToken = 0
   private fileComputeToken = 0
   private debounceTimer = 0
-  private copyTimers = new Map<HTMLButtonElement, number>()
 
   private root!: HTMLElement
   // text tab
@@ -458,8 +459,6 @@ class HashSmithTool extends HTMLElement {
     this.removeEventListener('keydown', this.onKeydown)
     this.fileComputeToken++
     window.clearTimeout(this.debounceTimer)
-    this.copyTimers.forEach(timer => window.clearTimeout(timer))
-    this.copyTimers.clear()
   }
 
   private q<T extends HTMLElement = HTMLElement>(sel: string): T {
@@ -738,14 +737,7 @@ class HashSmithTool extends HTMLElement {
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
-    const original = btn.dataset.label ?? btn.textContent ?? ''
-    if (!btn.dataset.label) btn.dataset.label = original
-    btn.textContent = label
-    window.clearTimeout(this.copyTimers.get(btn))
-    this.copyTimers.set(btn, window.setTimeout(() => {
-      btn.textContent = btn.dataset.label ?? original
-      this.copyTimers.delete(btn)
-    }, 1400))
+    flashLabel(btn, label, 1400)
   }
 
   // ── UI plumbing ────────────────────────────────────────────────────────────

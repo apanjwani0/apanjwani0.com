@@ -1,3 +1,4 @@
+import { flashLabel } from '../../../lib/flash'
 /**
  * Maze Weaver — a seeded maze generator + pathfinding visualizer, zero deps.
  *
@@ -926,7 +927,7 @@ class MazeWeaverGame extends HTMLElement {
   private copySeed() {
     const btn = this.querySelector('[data-action="copy-seed"]') as HTMLButtonElement | null
     const text = String(this.seed)
-    const done = () => { if (btn) { const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = t || 'Copy' }, 1200) } }
+    const done = () => flashLabel(btn, 'Copied')
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(done)
     else done()
   }

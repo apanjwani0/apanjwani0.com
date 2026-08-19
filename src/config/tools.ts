@@ -22,9 +22,9 @@ export const tools: Tool[] = [
     description: 'Get a unique URL, send any webhook to it, and inspect the requests live.',
     status: 'live',
     seoTitle: 'Webhook Tester & Inspector — Webhook Inspector',
-    metaDescription: 'Free online webhook tester. Get an instant unique URL, send real webhooks or HTTP requests to it, and inspect the method, headers, query and body live. No sign-up.',
-    keywords: 'webhook tester, webhook inspector, test webhook, webhook debugger, request bin, requestbin, http request inspector, capture webhook, inspect webhook, webhook url, receive webhook, webhook.site alternative, test http request, mock http endpoint, webhook testing tool, online webhook, debug webhook, http echo, request catcher',
-    intro: 'A live webhook and HTTP request tester that uses a real server, not just your browser. You get a unique capture URL that is saved on this device so you can reuse and share it; point any webhook sender or HTTP client at it — Stripe, GitHub, Slack, Shopify, Zapier, a cron job, or your own code — and every request it makes appears here within a couple of seconds, complete with the method, query string, every header, and the raw or pretty-printed body. Expand any request to read the full details, copy the body in one click, and clear the log when you are done. The capture URL doubles as a controllable HTTP target for debugging clients: append ?status=500 to make it return that status and exercise your retry logic, ?delay=2000 to simulate a slow upstream (2s is the cap), or ?echo=1 to have it send your request body straight back. Send a sample request with one button to see it work immediately. Captured requests live on the server only long enough to inspect — a few hours of inactivity — and are visible only to whoever holds the unguessable URL: there is no account and no public listing. Press R to refresh, C to clear, N for a fresh URL, and P to pause the live feed.',
+    metaDescription: 'Free webhook tester: get an instant URL, watch real requests arrive with full headers and body, and verify the Stripe, GitHub or Slack signature against your secret.',
+    keywords: 'webhook tester, webhook inspector, test webhook, webhook debugger, request bin, requestbin, http request inspector, capture webhook, inspect webhook, webhook url, receive webhook, webhook.site alternative, test http request, mock http endpoint, webhook testing tool, online webhook, debug webhook, http echo, request catcher, verify webhook signature, webhook signature checker, stripe signature verification, x-hub-signature-256, slack signing secret, shopify hmac, webhook hmac, signature mismatch, raw body hmac',
+    intro: 'A live webhook and HTTP request tester that uses a real server, not just your browser. You get a unique capture URL that is saved on this device so you can reuse and share it; point any webhook sender or HTTP client at it — Stripe, GitHub, Slack, Shopify, Zapier, a cron job, or your own code — and every request it makes appears here within a couple of seconds, complete with the method, query string, every header, and the raw or pretty-printed body. Expand any request to read the full details, copy the body in one click, and clear the log when you are done. The capture URL doubles as a controllable HTTP target for debugging clients: append ?status=500 to make it return that status and exercise your retry logic, ?delay=2000 to simulate a slow upstream (2s is the cap), or ?echo=1 to have it send your request body straight back. Send a sample request with one button to see it work immediately. Paste the signing secret and every captured request is checked against it: Stripe, GitHub, Slack and Shopify are recognised from their headers and verified with the exact payload each one signs, and for any other sender the raw body is HMAC-ed with SHA-256, SHA-1 and SHA-512 and matched against every header, which tells you which header is the signature and how it is encoded. It keeps "correctly signed" and "still inside the replay window" as separate answers, and it never takes the algorithm from a label inside the message. The secret is used in your browser with Web Crypto and is never saved or uploaded. Captured requests live on the server only long enough to inspect — a few hours of inactivity — and are visible only to whoever holds the unguessable URL: there is no account and no public listing. Press R to refresh, C to clear, N for a fresh URL, and P to pause the live feed.',
     seoContent: `## How to use Webhook Inspector
 
 Copy your unique webhook URL from the top of the page and paste it into whatever service or client you want to test. As soon as it sends a request, it appears in the log below — click any entry to see the method, headers, query parameters and body. Use "Send test request" to fire a sample request and confirm everything works.
@@ -35,6 +35,31 @@ Copy your unique webhook URL from the top of the page and paste it into whatever
 - Debugging an HTTP client: append \`?status=429\` or \`?status=500\` to test how your code handles error responses and retries.
 - Simulating a slow endpoint with \`?delay=3000\` to test timeouts.
 - Round-tripping a payload with \`?echo=1\`, which sends your request body straight back.
+
+## Verify the signature, not just the payload
+
+A webhook URL is public, so the signature header is the only thing separating a real delivery from anyone who guessed the URL. Paste your signing secret and every captured request gets checked here, in your browser, with Web Crypto — the secret is never saved and never uploaded.
+
+The bug almost everyone hits first is the same one: they parse the JSON and HMAC the re-serialised object. The sender signed **the bytes it sent**, and re-serialising changes key order, spacing and unicode escapes, so the digest never matches and the secret gets blamed. This page hashes the captured raw body and shows the expected digest next to the one that arrived.
+
+Four senders are recognised by their headers and checked with the payload each one actually signs:
+
+- **Stripe** — \`stripe-signature\`, HMAC-SHA256 hex over \`timestamp.rawBody\`. The dot and the timestamp are part of the signed string; hashing the body alone fails against a perfectly valid header.
+- **GitHub** — \`x-hub-signature-256\`, HMAC-SHA256 hex over the raw body. The deprecated SHA-1 \`x-hub-signature\` is checked too, and labelled as deprecated.
+- **Slack** — \`x-slack-signature\`, HMAC-SHA256 hex over \`v0:timestamp:rawBody\`, with the timestamp from \`x-slack-request-timestamp\`.
+- **Shopify** — \`x-shopify-hmac-sha256\`, HMAC-SHA256 **base64** over the raw body. Comparing a hex digest against a base64 header is why a correct Shopify secret so often looks wrong.
+
+Anything else falls through to a search: the raw body is HMAC-ed with SHA-256, SHA-1 and SHA-512 and each result is looked for in every header. When one turns up, you have learnt which header is the signature and how it is encoded — the thing a sender's docs most often leave out.
+
+### A valid signature and a fresh one are different answers
+
+Stripe and Slack both fold a timestamp into the signed payload and both reject deliveries outside a five-minute window. A correctly signed request that arrived twenty minutes ago is a stale delivery, not a forgery, and this page says so as two separate statements. Collapsing them into one pass/fail is how people end up widening a replay window to make a red badge go green.
+
+### The algorithm never comes from the message
+
+The hash is chosen by which header the sender used, never by the \`sha256=\` label inside the value. A verifier that reads its algorithm out of the thing it is verifying lets whoever wrote the message choose how it gets checked — the webhook shape of JWT algorithm confusion. When the label and the header disagree, this page reports the disagreement instead of obeying it.
+
+One thing to copy carefully: this page compares digests with \`===\`, which is fine when the secret is your own and the comparison runs in your own tab. A server comparing an attacker-supplied digest must use a constant-time comparison, or its response time leaks the correct signature one byte at a time.
 
 ## Privacy
 
@@ -49,6 +74,10 @@ Yes — it gives you a throwaway URL that captures and displays incoming HTTP re
 ### Can I control the response it sends back?
 
 Yes. Add \`?status=NNN\` to set the HTTP status, \`?delay=MS\` to slow the response down, and \`?echo=1\` to echo your request body back.
+
+### Does my signing secret leave the browser?
+
+No. The HMAC runs in your tab with Web Crypto, the secret is never written to browser storage, and closing the tab forgets it.
 
 ### How long are requests kept?
 
@@ -417,15 +446,26 @@ Use v7 for database primary keys — the timestamp prefix keeps inserts roughly 
   {
     slug: 'cron-whisperer',
     title: 'Cron Whisperer',
-    description: 'Explain a cron expression in plain English and see its next run times.',
+    description: 'Explain a cron expression in plain English, preview its next runs in any time zone, and see exactly what daylight saving does to it.',
     status: 'live',
-    seoTitle: 'Cron Expression Explainer — Cron Whisperer',
-    metaDescription: 'Explain cron expressions in plain English and preview the next run times in local time or UTC. Handles ranges, steps, names and @daily.',
-    keywords: 'cron expression explainer, crontab explainer, cron parser, cron schedule, cron to english, explain cron, cron expression, crontab guru, cron next run, cron schedule preview, cron generator, cron builder, cron syntax, cron every 5 minutes, cron weekday, cron nickname, cron seconds, quartz cron, node-cron, cron validator',
-    intro: 'A cron expression explainer that runs entirely in your browser. Type or paste a crontab schedule and read it back in plain English — in the same phrasing crontab.guru uses, like “At 22:00 on every day-of-week from Monday through Friday.” — then see the next run times computed in your local time zone or in UTC, each with a relative “in x”. It understands the full standard 5-field syntax: any value (*), single numbers, lists (1,15,30), ranges (9-17), and steps (*/5, 0-30/10), plus month and weekday names (JAN–DEC and SUN–SAT, with both 0 and 7 meaning Sunday). Shorthand @nicknames — @yearly, @monthly, @weekly, @daily, @hourly and @reboot — are expanded and explained, and a 6-field expression is read with a leading seconds field the way Quartz and node-cron do. A field-by-field breakdown shows each field’s raw token and the exact values it expands to, a frequency line tells you how often the job fires, and one click loads any of the common examples. It even flags the classic day-of-month / day-of-week gotcha — when both are set, cron runs when either matches. Copy the expression, the description, or the next-run list in one click; your last expression and preferences are remembered on your device, and nothing is ever uploaded.',
+    seoTitle: 'Cron Expression Explainer with DST — Cron Whisperer',
+    metaDescription: 'Explain cron expressions in plain English and preview the next runs in any IANA time zone — including the runs daylight saving skips or repeats.',
+    keywords: 'cron expression explainer, crontab explainer, cron parser, cron schedule, cron to english, explain cron, cron expression, crontab guru, cron next run, cron schedule preview, cron timezone, cron dst, cron daylight saving, cron skipped run, cron ran twice, crontab timezone, cron utc, cron generator, cron builder, cron syntax, cron every 5 minutes, cron weekday, cron nickname, cron seconds, quartz cron, node-cron, cron validator',
+    intro: 'A cron expression explainer that runs entirely in your browser and is honest about time zones. Type or paste a crontab schedule and read it back in plain English — in the same phrasing crontab.guru uses, like “At 22:00 on every day-of-week from Monday through Friday.” — then see the next run times computed in whichever time zone the job actually runs in. Not just this browser and UTC: any IANA zone, picked from your own machine’s copy of the tz database, so you can check a crontab on a server in America/New_York while sitting in Asia/Kolkata. Then comes the part every other cron explainer skips. A crontab line names a wall clock, not a moment, and twice a year those stop being the same thing: when the clocks go forward an hour of readings never happens, and when they go back an hour of readings happens twice. Cron Whisperer marks every affected run in the list, and a daylight-saving card spells out each upcoming change in your chosen zone — what the clocks do, which of your runs land inside the missing or repeated hour, and what cron does about them. It applies the real rule from man 8 cron, the one almost nobody knows: a job counts as running “at a particular time” only when neither the hour nor the minute field contains a *, and only those jobs get made up after a forward jump or held to a single run after a backward one. Everything else follows the new wall clock, which is why a step schedule quietly loses two runs every spring. It understands the full standard 5-field syntax: any value (*), single numbers, lists (1,15,30), ranges (9-17), and steps (*/5, 0-30/10), plus month and weekday names (JAN–DEC and SUN–SAT, with both 0 and 7 meaning Sunday). Shorthand @nicknames — @yearly, @monthly, @weekly, @daily, @hourly and @reboot — are expanded and explained, and a 6-field expression is read with a leading seconds field the way Quartz and node-cron do. A field-by-field breakdown shows each field’s raw token and the exact values it expands to, a frequency line tells you how often the job fires, and one click loads any of the common examples. It also flags the classic day-of-month / day-of-week gotcha — when both are set, cron runs when either matches. Copy the expression, the description or the next-run list in one click, or copy a link that carries the expression and the zone to a colleague in the URL fragment — which browsers never send to a server. Your last expression and preferences are remembered on your device, and nothing is ever uploaded.',
     seoContent: `## How to read a cron expression
 
-A standard crontab line has five fields: minute, hour, day-of-month, month and day-of-week. Paste one in and Cron Whisperer reads it back in plain English, then lists the next run times in your local time zone or UTC, each with a relative "in x". A field-by-field breakdown shows every field's raw token next to the exact values it expands to, which is usually where a wrong schedule gives itself away.
+A standard crontab line has five fields: minute, hour, day-of-month, month and day-of-week. Paste one in and Cron Whisperer reads it back in plain English, then lists the next run times in whichever time zone you pick — this device, UTC, or any IANA zone such as \`America/New_York\`. A field-by-field breakdown shows every field's raw token next to the exact values it expands to, which is usually where a wrong schedule gives itself away.
+
+## Daylight saving is the part that bites
+
+A crontab names a **wall clock**, not a moment. Twice a year in most of the world those stop being the same thing:
+
+- **Clocks go forward** and an hour of readings never happens. \`30 2 * * *\` has no 02:30 at all on the changeover day.
+- **Clocks go back** and an hour of readings happens twice. 01:30 comes round in both the old offset and the new one.
+
+What cron does about it is documented in \`man 8 cron\` and turns on a distinction almost nobody knows: a job counts as running "at a particular time" only when **neither** the hour nor the minute field contains a \`*\`. Those jobs are made up once, right after a forward jump, and are **not** repeated after a backward one. Every other schedule simply follows the new wall clock — so \`*/30 * * * *\` loses two runs in spring and gains two in autumn.
+
+Cron Whisperer applies exactly that rule. Affected runs are marked in the next-run list, and the daylight-saving card names each upcoming change in your zone, what the clocks do, and which of your runs it moves, loses or repeats.
 
 ## What the parser understands
 
@@ -434,13 +474,13 @@ A standard crontab line has five fields: minute, hour, day-of-month, month and d
 - Shorthand nicknames: \`@yearly\`, \`@annually\`, \`@monthly\`, \`@weekly\`, \`@daily\`, \`@midnight\`, \`@hourly\` and \`@reboot\`.
 - Six-field expressions, read with a leading seconds field the way Quartz and node-cron do.
 
-## The gotcha it flags for you
+## The other gotcha it flags for you
 
 When both day-of-month and day-of-week are restricted, cron fires when either one matches — not both. So \`0 0 13 * 5\` runs on the 13th of every month and on every Friday. Cron Whisperer calls this out on screen instead of letting you discover it in production.
 
 ## Privacy
 
-The parser, the plain-English description and the next-run calculation all run in your browser. Nothing is uploaded; your last expression and preferences stay on this device.
+The parser, the plain-English description, the zone maths and the next-run calculation all run in your browser. Nothing is uploaded; your last expression and preferences stay on this device. **Copy link** puts the expression and the zone in the URL fragment, which browsers never send to a server, so sharing a schedule does not put it on anyone's wire.
 
 ## FAQ
 
@@ -456,9 +496,21 @@ Put \`1-5\` in the day-of-week field. \`0 9 * * 1-5\` runs at 09:00 Monday throu
 
 Standard Unix crontab does not. Give Cron Whisperer six fields and it reads the first as seconds, matching Quartz, node-cron and Spring.
 
-### Can I preview runs in UTC?
+### Why did my 2:30am cron job not run?
 
-Yes. The time zone selector switches between your local time and UTC, the clock can be 12- or 24-hour, and you can show 5, 10 or 20 upcoming runs.`,
+Almost certainly daylight saving. If the clocks went forward that morning, 02:30 never existed. Vixie cron makes up a job whose hour and minute are both fixed, running it right at the jump — but if either field is a wildcard it just loses the run. Pick the zone here and the run is marked in the list with what happened to it.
+
+### Why did my job run twice?
+
+The clocks went back and your schedule has a wildcard hour or minute, so it followed the wall clock through the repeated hour. A job with a fixed hour and minute would have run once.
+
+### Can I preview runs in another time zone?
+
+Yes — that is the point. The zone picker offers this device, UTC, and every IANA zone your browser knows, so you can check a server's crontab from anywhere. The clock can be 12- or 24-hour, and you can show 5, 10 or 20 upcoming runs.
+
+### How do I avoid daylight-saving problems entirely?
+
+Run the job in UTC, or set \`CRON_TZ=UTC\` (or \`TZ=UTC\`) on the crontab. A zone with no offset changes cannot skip or repeat a run, and Cron Whisperer says so on the daylight-saving card when you pick one.`,
   },
   {
     slug: 'regex-lab',

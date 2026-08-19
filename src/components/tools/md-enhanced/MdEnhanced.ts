@@ -2,6 +2,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { helpSections } from './help-content'
 import { parseHeadings, parseMarkdownOutline, type Graph } from '../../../lib/graph-text'
+import { flashLabel } from '../../../lib/flash'
 
 const STORAGE_KEY = 'md-enhanced-draft'
 const MAP_MODE_KEY = 'md-enhanced-map-mode'
@@ -288,10 +289,7 @@ class MdEnhancedTool extends HTMLElement {
         break
       case 'copy':
         navigator.clipboard.writeText(input.value).then(() => {
-          const btn = this.querySelector<HTMLButtonElement>('[data-action="copy"]')!
-          const original = btn.textContent
-          btn.textContent = 'Copied'
-          setTimeout(() => { btn.textContent = original }, 1500)
+          flashLabel(this.querySelector<HTMLButtonElement>('[data-action="copy"]'), 'Copied', 1500)
         })
         break
       case 'help':

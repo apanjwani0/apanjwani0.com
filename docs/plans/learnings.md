@@ -122,6 +122,61 @@ Ship **#1 first** — highest search volume, and the Conway-resented-it angle pr
 the "surprising fact" format. **#2 is the strongest story on the list** and should
 follow immediately.
 
+### Article 8 — `maze-generation-bias`, shipped 2026-08-18
+
+The first article whose embed is a **playable game that keeps its own `/games`
+page** (`maze-weaver`), rather than one of the seven engines the cull displaced.
+Nothing had to change to allow it — `EMBED_TAGS` was already the superset of
+`GAME_TAGS` — so the pool of article subjects is every entry in `src/lib/embeds.ts`,
+not only the retired simulations. Quintle, 2048, Type Trial, Hue Hunt and the
+poker trainer are all still unwritten.
+
+It is also the first article whose central claim is a **measurement of the
+component below it** rather than a history: the recursive backtracker reaches 14
+of the 192 perfect mazes a 3×3 grid admits, and the reader can watch the same
+seed change texture when they switch builder. That shape is only available to
+this section, and it is worth repeating where a component supports it.
+
+**Outstanding: `npm run og` for `learnings-maze-generation-bias.png`.** Without
+the card the page falls back to the avatar and the small Twitter card.
+
+### Article 9 — `pot-odds-and-bluff-frequency`, shipped 2026-08-18
+
+Embed: `poker-trainer`. Picked over the other four unwritten embeds (`2048`,
+`quintle`, `type-trial`, `hue-hunt`) on one criterion — which component sits on
+top of a real, citable, primary-source history *and* a mathematics the reader can
+check. Poker wins that outright: it is the worked example in von Neumann and
+Morgenstern's §19 (1944), it has a closed-form solution in Kuhn's three-card game
+(*Contributions to the Theory of Games I*, Annals of Mathematics Studies 24, 1950,
+97–103), and it has a dated, measured "solved" claim in Bowling et al., *Science*
+347(6218), 145–149 (2015). 2048 and Quintle have clone histories; Type Trial's
+history is QWERTY, which is contested folklore more than record; Hue Hunt's is
+colour science, which is the better second pick.
+
+Shape (deliberately unlike the eight before it): **one fraction followed through
+four settings** — the caller's price, the maximum fold frequency, the bluffer's
+ratio, and the two solved games at either end of the scale — ending where exact
+computation stops rather than on a takeaway. Nothing about the arc is a timeline,
+a reverse chronology, a second-person walk or a death.
+
+Facts verified rather than recalled. Kuhn's game value (−1/18 to the first
+player), his one-parameter family (bluff the jack with α ≤ 1/3, bet the king 3α,
+never bet the queen) and his twelve information sets were **recomputed here** —
+CFR over the full Kuhn tree, 600,000 passes, settling on −0.0558 — rather than
+taken from a summary. The Cepheus figures (4,800 CPUs, 68 days, 900 core-years,
+262 TiB → 10.9 TiB, 0.986 mbb/g exploitability) come from the IJCAI 2015 CFR+
+paper, not from secondary write-ups. The Bronowski quotation is flagged in the
+prose as a recollection, because he says so himself.
+
+Second article whose numbers are claims about our own code (after
+`maze-generation-bias`): the four prices 24.8/33.3/39.8/50.0 are functions of the
+drill's `pot = 100` and `sizes = [33, 50, 66, 100]`, and "the trainer refuses
+pre-flop" holds only while `PT_MAX_RUNOUTS` stays under C(48,5) = 1,712,304. A
+`security:smoke` block recomputes all of it independently — own binomial, own
+suit loops, own b/(pot+bet) — and pins the readout strings the caption names.
+
+**Outstanding: `npm run og` for `learnings-pot-odds-and-bluff-frequency.png`.**
+
 ## Architecture: the lazy embed
 
 Do not build a new interactive content type. Both halves already exist.

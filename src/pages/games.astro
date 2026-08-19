@@ -26,17 +26,18 @@ const ldJson = itemListJsonLd(
 <Base
   wide
   title="games"
-  description="Free browser games and playable experiments — Quintle (a daily five-letter word puzzle), 2048, Conway's Game of Life, a boids flocking sim, a falling-sand physics sandbox, a reaction-diffusion Turing-pattern playground, a seeded flow-field particle canvas, an L-system fractal garden, a self-solving maze, a warp-speed starfield, a hex-colour guessing game, and a daily typing race with a shared leaderboard. No downloads, no sign-up."
-  keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, conway's game of life, cellular automaton, falling sand game, sand simulation, powder game, physics sandbox, flow field generator, generative art, starfield, warp speed, boids, flocking simulation, murmuration, swarm, reaction diffusion, gray-scott, turing pattern, morphogenesis, l-system, lindenmayer system, fractal plant, fractal tree, koch curve, dragon curve, sierpinski, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, hex color game, playable experiments, no-download games"
+  description="Free browser games — Quintle (a daily five-letter word puzzle), 2048, a seeded maze generator that solves itself, a daily typing race with a shared leaderboard, Hue Hunt (a daily hex-colour guessing game), and a poker trainer with exact equity and pot odds. No downloads, no sign-up."
+  keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, typing race, daily typing challenge, typing leaderboard, hex color game, color guessing game, guess the hex, daily color game, poker trainer, poker equity calculator, pot odds trainer, poker practice, daily games, daily puzzle, no-download games, playable experiments"
 >
   {games.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>games</h1>
   <p data-type="page-intro">
-    Browser games and playable experiments — a daily five-letter word puzzle, a game of 2048, a maze that solves itself,
-    a flock that swarms from three simple rules, a falling-sand sandbox where powders, water and fire obey simple physics,
-    a reaction-diffusion dish that blooms Turing patterns, a fractal garden that grows itself
-    from an L-system, a flow field that sweeps thousands of particles into rivers, a starfield you fly through, a colour-guessing game to test your eye, a daily typing race where everyone on Earth gets the same passage, and a few other things I built for the fun of it.
-    Everything marked play runs right here, no downloads and no sign-up; the rest are on the way.
+    Browser games and playable experiments — a daily five-letter word puzzle, a game of 2048, a maze that weaves
+    itself and then solves itself, a daily typing race where everyone on Earth gets the same passage, a colour-guessing
+    game that scores your eye out of 500 each day, and a poker trainer that counts every runout instead of estimating.
+    Everything marked play runs right here, no downloads and no sign-up; the rest are on the way. The generative
+    pieces that used to live here — the flow field, the flock, the falling sand and friends — moved into
+    <a href="/tools/driftfield">Driftfield</a>, where each one still runs live.
   </p>
   {games.length === 0 ? (
     <p>Coming soon.</p>

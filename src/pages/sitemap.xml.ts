@@ -5,6 +5,7 @@ import { getSite, getPosts, getGames, getTools, getLearnings } from '../lib/conf
 import { isPlayableGame } from '../lib/games'
 import { isPublishedLearning } from '../lib/learnings'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG } from '../lib/driftfield'
+import { escapeHtml } from '../lib/escape'
 
 export const GET: APIRoute = async ({ locals }) => {
   const site = await getSite(locals)
@@ -47,11 +48,16 @@ export const GET: APIRoute = async ({ locals }) => {
     { loc: '/tools' },
   ]
 
-  // Dynamic pages from config
-  const blogPages: SitemapUrl[] = posts.map(p => {
-    const slug = p.href.replace(/^\/?(blogs\/)?/, '')
-    return { loc: `/blogs/${slug}`, lastmod: p.date }
-  })
+  // Dynamic pages from config. A post's href may be a full external URL (a
+  // cross-posted piece) — that page is not ours to sitemap, and deriving a slug
+  // from it would emit a bogus `/blogs/https://…` entry, so external posts are
+  // skipped rather than normalised.
+  const blogPages: SitemapUrl[] = posts
+    .filter(p => !/^https?:\/\//i.test(p.href))
+    .map(p => {
+      const slug = p.href.replace(/^\/?(blogs\/)?/, '')
+      return { loc: `/blogs/${slug}`, lastmod: p.date }
+    })
 
   const learningPages: SitemapUrl[] = learnings.map(l => ({
     loc: `/learnings/${l.slug}`,
@@ -83,8 +89,12 @@ export const GET: APIRoute = async ({ locals }) => {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${allPages
   .map(u => {
-    const lastmod = u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ''
-    return `  <url><loc>${normalize(u.loc)}</loc>${lastmod}</url>`
+    // Escaped, not interpolated raw. The five characters escapeHtml handles are
+    // exactly XML's predefined entities, and a single `&` anywhere in a slug makes
+    // the whole document unparseable — which fails closed on the entire site's
+    // indexing, not just on the one bad URL.
+    const lastmod = u.lastmod ? `<lastmod>${escapeHtml(u.lastmod)}</lastmod>` : ''
+    return `  <url><loc>${escapeHtml(normalize(u.loc))}</loc>${lastmod}</url>`
   })
   .join('\n')}
 </urlset>`

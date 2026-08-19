@@ -1,16 +1,16 @@
-# Graph Report - portfolio-apanjwani0  (2026-08-18)
+# Graph Report - portfolio-apanjwani0  (2026-08-19)
 
 ## Corpus Check
-- 135 files · ~193,551 words
+- 141 files · ~224,133 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2121 nodes · 4423 edges · 87 communities (74 shown, 13 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.82)
+- 2286 nodes · 4905 edges · 94 communities (79 shown, 15 thin omitted)
+- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8df74ca8`
+- Built from commit: `e558de6b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -74,7 +74,6 @@
 - [[_COMMUNITY_Community 57|Community 57]]
 - [[_COMMUNITY_Community 58|Community 58]]
 - [[_COMMUNITY_Community 59|Community 59]]
-- [[_COMMUNITY_Community 60|Community 60]]
 - [[_COMMUNITY_Community 61|Community 61]]
 - [[_COMMUNITY_Community 62|Community 62]]
 - [[_COMMUNITY_Community 63|Community 63]]
@@ -95,35 +94,42 @@
 - [[_COMMUNITY_Community 79|Community 79]]
 - [[_COMMUNITY_Community 80|Community 80]]
 - [[_COMMUNITY_Community 81|Community 81]]
-- [[_COMMUNITY_Community 82|Community 82]]
 - [[_COMMUNITY_Community 83|Community 83]]
+- [[_COMMUNITY_Community 84|Community 84]]
+- [[_COMMUNITY_Community 85|Community 85]]
+- [[_COMMUNITY_Community 88|Community 88]]
+- [[_COMMUNITY_Community 89|Community 89]]
+- [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 91|Community 91]]
+- [[_COMMUNITY_Community 92|Community 92]]
+- [[_COMMUNITY_Community 94|Community 94]]
 - [[_COMMUNITY_Community 175|Community 175]]
 - [[_COMMUNITY_Community 176|Community 176]]
 - [[_COMMUNITY_Community 178|Community 178]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `JsonTidyTool` - 60 edges
-2. `MazeWeaverGame` - 45 edges
-3. `../../components/tools/json-tidy/JsonTidy.ts` - 44 edges
+2. `../../components/tools/json-tidy/JsonTidy.ts` - 46 edges
+3. `MazeWeaverGame` - 45 edges
 4. `Twenty48Game` - 41 edges
-5. `SandLoomGame` - 38 edges
+5. `HueHuntGame` - 38 edges
 6. `QuintleGame` - 37 edges
-7. `WallpaperForgeTool` - 34 edges
-8. `../../components/tools/cron-whisperer/CronWhisperer.ts` - 33 edges
-9. `LSystemGame` - 30 edges
-10. `EpochWizardTool` - 30 edges
+7. `SandLoomGame` - 37 edges
+8. `../../components/tools/cron-whisperer/CronWhisperer.ts` - 37 edges
+9. `WallpaperForgeTool` - 34 edges
+10. `WebhookInspectorTool` - 34 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `main()` --calls--> `ogCardFile()`  [EXTRACTED]
-  scripts/generate-og.mjs → src/lib/og.ts
+- `cwRunsFor()` --calls--> `cwCollectRuns()`  [EXTRACTED]
+  scripts/security-smoke.mjs → src/components/tools/cron-whisperer/schedule.ts
 - `esc()` --calls--> `escapeHtml()`  [EXTRACTED]
   scripts/generate-og.mjs → src/lib/escape.ts
+- `main()` --calls--> `ogCardFile()`  [EXTRACTED]
+  scripts/generate-og.mjs → src/lib/og.ts
 - `size()` --calls--> `parseRange()`  [EXTRACTED]
   scripts/poker-check.mjs → src/components/games/poker-trainer/engine/ranges.ts
 - `size()` --calls--> `rangeCombos()`  [EXTRACTED]
   scripts/poker-check.mjs → src/components/games/poker-trainer/engine/ranges.ts
-- `tools/index.astro tools listing` --references--> `../../layouts/Base.astro`  [EXTRACTED]
-  src/pages/tools/index.astro → src/layouts/Base.astro
 
 ## Import Cycles
 - None detected.
@@ -135,15 +141,15 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (87 total, 13 thin omitted)
+## Communities (94 total, 15 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
-Cohesion: 0.09
-Nodes (29): Post, Post (interface), posts, Company, Company (interface), experience, Role, Role (interface) (+21 more)
+Cohesion: 0.07
+Nodes (36): adminSavePlugin, Post, Post (interface), posts, Company, Company (interface), experience, Role (+28 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.10
-Nodes (21): accuracyPct(), buildOptions(), clampByte(), colorDistance(), DiffConfig, DiffId, DIFFS, farEnough() (+13 more)
+Cohesion: 0.06
+Nodes (51): allowRead, allowSubmit, GET(), json(), NO_STORE, POST(), buildOptions(), DailyRun (+43 more)
 
 ### Community 2 - "Config KV-with-Fallback Chain"
 Cohesion: 0.05
@@ -162,12 +168,12 @@ Cohesion: 0.14
 Nodes (11): DOMPurify library, exportImage() (html2canvas), exportPdf(), handleExport(), HelpEntry interface, HelpSection interface, helpSections const, marked library (+3 more)
 
 ### Community 7 - "Admin API Route Handlers (login/logout/save)"
-Cohesion: 0.08
-Nodes (33): ../../../components/RelatedLinks.astro, breadcrumbLd, crumbs, ldJson, tool, breadcrumbLd, crumbs, EngineTag (+25 more)
+Cohesion: 0.06
+Nodes (48): ../../../components/RelatedLinks.astro, breadcrumbLd, crumbs, ldJson, tool, breadcrumbLd, crumbs, EngineTag (+40 more)
 
 ### Community 8 - "astro.config.mjs Plugin Generators"
-Cohesion: 0.04
-Nodes (33): A verifier's algorithm must not come from the thing it is verifying, Admin Config Management, Analytics, `/antigravity <task>`, Before merging anything that touches a trust boundary, `/browser-debug [url] [what to check]`, Build / Test / Run, Caching & Performance (+25 more)
+Cohesion: 0.13
+Nodes (13): Analytics, Build / Test / Run, Caching & Performance, Code graph (graphify), Coming-soon pages have a working ask, Configuration, Design System, Key Conventions (+5 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.08
@@ -182,12 +188,12 @@ Cohesion: 0.38
 Nodes (7): buildResult, fetchStats, getProjectStats, GitHubStats (interface), parseGithubUrl, readCache, writeCache
 
 ### Community 12 - "Community 12"
-Cohesion: 0.17
-Nodes (15): blogPostingJsonLd(), BlogPostingSchema, BreadcrumbEntry, breadcrumbListJsonLd(), ItemListEntry, itemListJsonLd(), personJsonLd(), PersonSchema (+7 more)
+Cohesion: 0.10
+Nodes (30): CW_DAYS_IN_MONTH, CW_DOW_MAP, CW_DOW_NAMES, CW_FIELD_RANGE, CW_MONTH_MAP, CW_MONTH_NAMES, CW_NICKNAMES, CW_ZONE_FALLBACK (+22 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.16
-Nodes (17): bump(), flushVisits(), looksAutomated(), mergeRow(), mergeStore(), pending, pruneVisits(), recordVisit() (+9 more)
+Cohesion: 0.15
+Nodes (18): isFromCloudflare(), bump(), flushVisits(), looksAutomated(), mergeRow(), mergeStore(), pending, pruneVisits() (+10 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.07
@@ -195,11 +201,11 @@ Nodes (24): Q_ANSWERS, q_bestState(), q_dailyAnswer(), q_dayNumber(), q_el(), Q_
 
 ### Community 19 - "Community 19"
 Cohesion: 0.10
-Nodes (20): breadcrumbLd, crumbs, ldJson, relatedTools, string, tool, ../../components/tools/audio-transcriber/audio-transcriber.css, ../../components/tools/chroma-lab/chroma-lab.css (+12 more)
+Nodes (19): breadcrumbLd, crumbs, ldJson, relatedTools, string, tool, ../../components/tools/audio-transcriber/audio-transcriber.css, ../../components/tools/chroma-lab/chroma-lab.css (+11 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.09
-Nodes (38): AnalyticsAggregate, AnalyticsEvent, analyticsKey(), AnalyticsKind, AnalyticsKV, AnalyticsMetricKey, analyticsMetricKeys, AnalyticsMetrics (+30 more)
+Cohesion: 0.11
+Nodes (33): allowEvent, POST(), AnalyticsAggregate, AnalyticsEvent, analyticsKey(), AnalyticsKind, AnalyticsKV, AnalyticsMetricKey (+25 more)
 
 ### Community 21 - "Community 21"
 Cohesion: 0.22
@@ -230,8 +236,8 @@ Cohesion: 0.09
 Nodes (26): ../../../components/tools/wallpaper-forge/WallpaperForge.ts, AspectId, clamp(), fade(), fbm(), hash2(), LEGACY_PALETTE, lerp() (+18 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.09
-Nodes (27): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, Tool, Tool (interface), ToolStatus (type) (+19 more)
+Cohesion: 0.22
+Nodes (11): fade(), hash2(), lerp(), mulberry32(), Palette, PALETTES, Particle, valueNoise() (+3 more)
 
 ### Community 31 - "Community 31"
 Cohesion: 0.20
@@ -249,13 +255,9 @@ Nodes (8): directEntryFor(), initAnalytics(), markSessionEntry(), observeInitial
 Cohesion: 0.09
 Nodes (29): AVATAR_COLORS, avatarSvg(), BTN, ButtonKind, buttonSvg(), CHIP, CHIP_VALUES, chipLabel() (+21 more)
 
-### Community 35 - "Community 35"
-Cohesion: 0.12
-Nodes (10): clamp(), fade(), FlowFieldGame, hash2(), lerp(), mulberry32(), Palette, PALETTES (+2 more)
-
 ### Community 36 - "Community 36"
-Cohesion: 0.17
-Nodes (21): CONFIG_TYPES, ConfigType, isRecord(), isString(), optionalSafeExternalUrl(), optionalString(), safeBlogHref(), TOOL_STATUSES (+13 more)
+Cohesion: 0.14
+Nodes (24): CONFIG_TYPES, ConfigType, isRecord(), isString(), optionalSafeExternalUrl(), optionalString(), safeBlogHref(), TOOL_STATUSES (+16 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.11
@@ -270,20 +272,20 @@ Cohesion: 0.09
 Nodes (27): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), childPath(), cleanMessage(), ErrorLoc, Indent, isPrimitive(), jtDeepEqual() (+19 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.27
-Nodes (3): ../../components/tools/audio-transcriber/AudioTranscriber.ts, AudioTranscriberTool, LANGUAGES
+Cohesion: 0.20
+Nodes (9): edge, event, first, fresh, kept, now, second, stale (+1 more)
 
 ### Community 41 - "Community 41"
 Cohesion: 0.50
 Nodes (3): Design Thinking, Frontend Aesthetics Guidelines, Portfolio Override (apanjwani0)
 
 ### Community 42 - "Community 42"
-Cohesion: 0.18
-Nodes (21): allowEvent, POST(), allowRead, allowVote, comingSoonSlug(), GET(), json(), NO_STORE (+13 more)
+Cohesion: 0.24
+Nodes (16): allowRead, allowVote, comingSoonSlug(), GET(), json(), NO_STORE, POST(), addInterest() (+8 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.12
-Nodes (18): ../../components/tools/epoch-wizard/EpochWizard.ts, EF_DEFAULTS, EF_UNIT_LABEL, EfBreakdown, efDetectUnit(), efDigits(), efEsc(), efFormatDate() (+10 more)
+Cohesion: 0.08
+Nodes (25): ../../components/tools/audio-transcriber/AudioTranscriber.ts, AudioTranscriberTool, LANGUAGES, ../../components/tools/epoch-wizard/EpochWizard.ts, EF_DEFAULTS, EF_UNIT_LABEL, EfBreakdown, efDetectUnit() (+17 more)
 
 ### Community 44 - "Community 44"
 Cohesion: 0.35
@@ -294,72 +296,68 @@ Cohesion: 0.09
 Nodes (14): TW_SIZES, TW_VECTORS, twBestKey(), twClamp(), TwDir, twEaseOutCubic(), Twenty48Game, twLuminance() (+6 more)
 
 ### Community 46 - "Community 46"
-Cohesion: 0.16
-Nodes (12): ../components/Avatar.astro, ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout), ToolBase.astro (tools layout), getSite(), githubUrl, ldJson (+4 more)
+Cohesion: 0.13
+Nodes (18): ../../components/tools/cron-whisperer/CronWhisperer.ts, CW_DEFAULTS, CW_EXAMPLES, cwClockAt(), cwFmtDay(), cwPlural(), CwSettings, cwTimeList() (+10 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.08
+Cohesion: 0.09
 Nodes (15): SandLoomGame, SL_BASE, SL_DENSITY, SL_LR, SL_MATERIALS, SL_RL, SL_TEX, SL_TYPE (+7 more)
 
 ### Community 48 - "Community 48"
 Cohesion: 0.05
-Nodes (39): dependencies, astro, @astrojs/node, cytoscape, dompurify, gifenc, html2canvas, marked (+31 more)
+Nodes (40): dependencies, astro, @astrojs/node, cytoscape, dompurify, gifenc, html2canvas, marked (+32 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.11
-Nodes (18): Architecture: the lazy embed, Cache, Decisions locked, Deferred: ads, Keyword reality check (2026-08-18), Learnings section + content/tool restructure, Naming: Driftfield, One predicate, as AGENTS.md requires (+10 more)
+Cohesion: 0.10
+Nodes (20): Architecture: the lazy embed, Article 8 — `maze-generation-bias`, shipped 2026-08-18, Article 9 — `pot-odds-and-bluff-frequency`, shipped 2026-08-18, Cache, Decisions locked, Deferred: ads, Keyword reality check (2026-08-18), Learnings section + content/tool restructure (+12 more)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.06
-Nodes (29): ../../components/tools/cron-whisperer/CronWhisperer.ts, CronWhispererTool, CW_DEFAULTS, CW_DOW_MAP, CW_DOW_NAMES, CW_EXAMPLES, CW_FIELD_LABEL, CW_FIELD_RANGE (+21 more)
+Cohesion: 0.17
+Nodes (4): CronWhispererTool, cwPartsFmt(), cwZoneList(), cwZoneValid()
 
 ### Community 51 - "Community 51"
 Cohesion: 0.40
 Nodes (4): bytes, frames, gif, header
 
 ### Community 52 - "Community 52"
-Cohesion: 0.50
-Nodes (3): Encoder, FrameOptions, Palette
+Cohesion: 0.33
+Nodes (5): Encoder, FrameOptions, Palette, PixelFormat, QuantizeOptions
 
 ### Community 54 - "Community 54"
 Cohesion: 0.19
 Nodes (16): $(), activeIndex(), b(), cleanup(), connectedCallback(), disconnectedCallback(), #e(), emit() (+8 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.21
-Nodes (10): attachCanvasExport(), TB_PALETTES, TB_PRESETS, tbClamp(), tbMulberry32(), TbPalette, TbPreset, tbReadExact() (+2 more)
+Cohesion: 0.16
+Nodes (12): attachCanvasExport(), v(), TB_PALETTES, TB_PRESETS, tbClamp(), tbMulberry32(), TbPalette, TbPreset (+4 more)
 
 ### Community 57 - "Community 57"
 Cohesion: 0.08
 Nodes (27): ../../components/tools/codec-forge/CodecForge.ts, CF_DEFAULTS, CF_REV, CF_TABS, CfB64Source, cfB64Status(), cfB64ToText(), CfB64Variant (+19 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.16
-Nodes (7): ../../components/tools/webhook-inspector/WebhookInspector.ts, WebhookInspectorTool, wiFmtSize(), WiHeader, wiNewBinId(), wiRelTime(), WiRequest
+Cohesion: 0.07
+Nodes (31): WI_DISCOVERY_HASHES, wiDecodeSecret(), wiDetectScheme(), WiDigestEncoding, wiDiscoverSignature(), WiDiscovery, wiGithub(), WiHash (+23 more)
 
 ### Community 59 - "Community 59"
 Cohesion: 0.30
 Nodes (11): outsAgainst(), rankHand(), combinations(), compareRank(), evaluate5(), evaluateBest(), evaluateOmaha(), RANK_PLURAL (+3 more)
-
-### Community 60 - "Community 60"
-Cohesion: 0.17
-Nodes (11): adminSavePlugin, site, generateBlogs, generateExperience, generateGames, generateProjects, generateSite, cards (+3 more)
 
 ### Community 61 - "Community 61"
 Cohesion: 0.33
 Nodes (5): Client wiring (not yet — comes with the rooms slice), Layout, Online-play collections (the sequencer), PocketBase — local backend (dev only, for now), Run
 
 ### Community 62 - "Community 62"
-Cohesion: 0.07
-Nodes (36): breadcrumbLd, crumbs, ldJson, post, ../../../components/Breadcrumbs.astro, ExperienceItem Props, { before, after }, beforeHtml (+28 more)
+Cohesion: 0.06
+Nodes (42): breadcrumbLd, crumbs, ldJson, post, ../../../components/Breadcrumbs.astro, ExperienceItem Props, ../components/ProjectCard.astro, forksUrl (+34 more)
 
 ### Community 66 - "Community 66"
 Cohesion: 0.06
 Nodes (29): blankFencedCode(), decodeGraph(), detectDialect(), encodeGraph(), Graph, GraphDialect, GraphEdge, GraphNode (+21 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.17
-Nodes (6): EXPORT_SIZES, ExportSize, GifOptions, LiveExportOptions, SizeError, SizeResult
+Cohesion: 0.12
+Nodes (10): EXPORT_SIZES, ExportSize, GifOptions, LiveExportOptions, SizeError, SizeResult, SF_PALETTES, SfPalette (+2 more)
 
 ### Community 68 - "Community 68"
 Cohesion: 0.12
@@ -374,12 +372,12 @@ Cohesion: 0.19
 Nodes (8): callEv(), requiredEquity(), Variant, pct(), pct2(), PokerTrainerGame, ptShuffledDeck(), ptTerm()
 
 ### Community 71 - "Community 71"
-Cohesion: 0.20
-Nodes (13): Game (interface), games, getGames, escapeHtml(), toolHasOgCard(), cardHtml(), esc(), main() (+5 more)
+Cohesion: 0.10
+Nodes (24): ../components/Avatar.astro, blogPostingJsonLd(), BlogPostingSchema, BreadcrumbEntry, breadcrumbListJsonLd(), ItemListEntry, itemListJsonLd(), personJsonLd() (+16 more)
 
 ### Community 73 - "Community 73"
-Cohesion: 0.06
-Nodes (45): Game, Learning, learnings, EMBED_TAGS, embedTag(), GAME_SLUGS, GAME_TAGS, GameFlags (+37 more)
+Cohesion: 0.04
+Nodes (49): allow, apiNoStore, board, cache404, CSRF_EXEMPT, cwFallDouble, cwFallFixed, cwFallWild (+41 more)
 
 ### Community 74 - "Community 74"
 Cohesion: 0.18
@@ -398,20 +396,44 @@ Cohesion: 0.60
 Nodes (5): bad(), note(), ok(), warn(), origin-check.sh script
 
 ### Community 80 - "Community 80"
-Cohesion: 0.12
-Nodes (20): ../components/ProjectCard.astro, forksUrl, projectUrl, ProjectCard Props, stargazersUrl, buildResult(), CACHE_PATH, getProjectStats() (+12 more)
+Cohesion: 0.29
+Nodes (8): buildResult(), CACHE_PATH, getProjectStats(), memCache, parseGithubUrl(), readCache(), StatsCache, writeCache()
 
 ### Community 81 - "Community 81"
-Cohesion: 0.11
-Nodes (23): ../components/Footer.astro, links, social, year, ../components/Head.astro, ../components/Nav.astro, links, ../../layouts/Base.astro (+15 more)
-
-### Community 82 - "Community 82"
-Cohesion: 0.20
-Nodes (8): mountEmbed(), mountGame(), stripEmbedChrome(), v(), SF_PALETTES, SfPalette, SfStar, sfToRGB()
+Cohesion: 0.07
+Nodes (34): ../components/Footer.astro, links, social, year, ../components/Head.astro, ../components/Nav.astro, links, Tool (+26 more)
 
 ### Community 83 - "Community 83"
 Cohesion: 0.29
 Nodes (6): Hard bans, Learnings — house voice, Requirements, The four failures, named, The marks available, What good looks like
+
+### Community 84 - "Community 84"
+Cohesion: 0.14
+Nodes (15): Game, Game (interface), games, Learning, learnings, getGames, EMBED_TAGS, embedTag() (+7 more)
+
+### Community 85 - "Community 85"
+Cohesion: 0.17
+Nodes (12): A verifier's algorithm must not come from the thing it is verifying, Before merging anything that touches a trust boundary, Escaping, Never authorize on a client-controlled value, Origin exposure, Public endpoints must be bounded in every dimension, Rate limits must be bounded, Security (+4 more)
+
+### Community 89 - "Community 89"
+Cohesion: 0.40
+Nodes (5): `/antigravity <task>`, `/browser-debug [url] [what to check]`, `/frontent-design`, Skills & Commands, `/update-project-memory`
+
+### Community 90 - "Community 90"
+Cohesion: 0.50
+Nodes (4): Admin Config Management, Indexing: one predicate decides whether a page is real, Learnings: articles that mount a live component, Learnings: writing, not just rendering
+
+### Community 91 - "Community 91"
+Cohesion: 0.22
+Nodes (6): cwLocalZoneName(), cwRunFormatter(), cwWallFormatter(), cwFiringCount(), cwIsFixedTime(), CwParsed
+
+### Community 92 - "Community 92"
+Cohesion: 0.36
+Nodes (4): cwCollectRuns(), cwDowOf(), cwWallToNaive(), CwZoneClock
+
+### Community 94 - "Community 94"
+Cohesion: 0.10
+Nodes (27): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout) (+19 more)
 
 ### Community 175 - "Community 175"
 Cohesion: 0.11
@@ -426,24 +448,24 @@ Cohesion: 0.27
 Nodes (3): indentString(), repairJson(), sortDeep()
 
 ## Knowledge Gaps
-- **569 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+564 more)
+- **612 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+607 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `mountGame()` connect `Community 82` to `Community 32`, `Community 1`, `Community 35`, `Community 4`, `Community 69`, `Community 76`, `Community 45`, `Community 175`, `Community 47`, `Community 18`, `Community 55`, `Community 25`?**
-  _High betweenness centrality (0.138) - this node is a cross-community bridge._
-- **Why does `../../components/tools/json-tidy/JsonTidy.ts` connect `Community 39` to `MdEnhanced Tool (markdown render)`, `Community 75`, `Community 176`, `Community 178`, `Community 19`, `Community 53`, `Community 27`?**
-  _High betweenness centrality (0.100) - this node is a cross-community bridge._
-- **Why does `../../components/tools/codec-forge/CodecForge.ts` connect `Community 57` to `Community 19`?**
-  _High betweenness centrality (0.084) - this node is a cross-community bridge._
+- **Why does `mountGame()` connect `Community 30` to `Community 32`, `Community 1`, `Community 67`, `Community 4`, `Community 69`, `Community 76`, `Community 45`, `Community 175`, `Community 47`, `Community 18`, `Community 55`, `Community 25`?**
+  _High betweenness centrality (0.128) - this node is a cross-community bridge._
+- **Why does `flashLabel()` connect `Community 43` to `Community 32`, `Community 66`, `Community 68`, `Community 37`, `Community 38`, `Community 39`, `Community 46`, `Community 50`, `Community 178`, `Community 55`, `Community 57`, `Community 58`, `Community 28`, `Community 29`, `Community 30`?**
+  _High betweenness centrality (0.106) - this node is a cross-community bridge._
+- **Why does `../../components/tools/chroma-lab/ChromaLab.ts` connect `Community 38` to `Community 19`, `Community 43`?**
+  _High betweenness centrality (0.061) - this node is a cross-community bridge._
 - **What connects `name`, `type`, `version` to the rest of the system?**
-  _569 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _612 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Content Types + AdminSavePlugin Dispatch` be split into smaller, more focused modules?**
-  _Cohesion score 0.08912655971479501 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07200929152148665 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.09745293466223699 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.055900621118012424 - nodes in this community are weakly interconnected._
 - **Should `Config KV-with-Fallback Chain` be split into smaller, more focused modules?**
   _Cohesion score 0.05 - nodes in this community are weakly interconnected._

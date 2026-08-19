@@ -225,7 +225,6 @@ class SandLoomGame extends HTMLElement {
             <button data-action="step" type="button" title="Advance one frame while paused (.)">Step</button>
             <button data-action="clear" type="button" title="Empty the whole grid (C)">Clear</button>
             <button data-action="scene" type="button" title="Load the next demo scene (N)">Scene</button>
-            <button data-action="download" type="button" title="Save the current frame as a PNG (D)">Download PNG</button>
           </div>
           <div data-group="materials" role="group" aria-label="Material">
             <span data-type="sl-group-label">Material</span>
@@ -266,15 +265,12 @@ class SandLoomGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="sl-canvas"]') as HTMLCanvasElement
-
-    // Every one of these engines draws something someone would want to keep, and
-
-    // until Aug 2026 not one of them had a way to save it. The bar is attached
-
-    // here rather than written into the markup above so all six share one
-
-    // implementation — see src/lib/canvas-export.ts.
-
+    // The shared export bar, replacing this engine's own "Download PNG".
+    // Each engine had a one-line toDataURL download and nothing else: no GIF for
+    // something that is only interesting because it MOVES, no choice of
+    // resolution, and no sight of the file before it landed in the downloads
+    // folder. All six shared that gap, so the fix is shared too — see
+    // src/lib/canvas-export.ts. The D shortcut still calls the old download().
     attachCanvasExport(this, () => this.canvas, { name: 'sand-loom' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.grid = document.createElement('canvas')
@@ -425,7 +421,6 @@ class SandLoomGame extends HTMLElement {
   }
 
   /* ── simulation ── */
-  private idx(x: number, y: number) { return y * this.cols + x }
   private movable(m: number) { return m !== SL_EMPTY && SL_TYPE[m] !== SL_T_SOLID }
   private canDisplace(moverDensity: number, target: number) {
     return target === SL_EMPTY || (this.movable(target) && SL_DENSITY[target] < moverDensity)
@@ -478,7 +473,7 @@ class SandLoomGame extends HTMLElement {
           case SL_T_LIQUID: this.doLiquid(x, y, i, e); break
           case SL_T_GAS: this.doGas(x, y, i, e); break
           case SL_T_FIRE: this.doFire(x, y, i); break
-          case SL_T_SOLID: this.doSolid(x, y, i, e); break
+          case SL_T_SOLID: this.doSolid(x, y, e); break
         }
       }
     }
@@ -595,7 +590,7 @@ class SandLoomGame extends HTMLElement {
     }
   }
 
-  private doSolid(x: number, y: number, i: number, e: number) {
+  private doSolid(x: number, y: number, e: number) {
     if (e === SL_PLANT && Math.random() < 0.02) {
       // grow into an adjacent water cell
       this.forNeighbors(x, y, (_nx, _ny, ni) => {

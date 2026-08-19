@@ -26,6 +26,8 @@
  * are cf-/CF_-prefixed because tool component files share one global script scope.
  */
 
+import { flashLabel } from '../../../lib/flash'
+
 type CfTab = 'base64' | 'url' | 'query'
 type CfB64Variant = 'standard' | 'urlsafe'
 type CfUrlMode = 'component' | 'uri'
@@ -253,10 +255,8 @@ class CodecForgeTool extends HTMLElement {
   private urlSource: CfUrlSource = 'text'
   private querySource: CfQuerySource = 'raw'
   private syncing = false
-  private lastFileBytes: Uint8Array | null = null
   private lastFileName = ''
   private lastFileType = ''
-  private copyTimer = 0
 
   private root!: HTMLElement
   // base64
@@ -508,7 +508,6 @@ class CodecForgeTool extends HTMLElement {
 
   disconnectedCallback() {
     this.removeEventListener('keydown', this.onKeydown)
-    window.clearTimeout(this.copyTimer)
   }
 
   private q<T extends HTMLElement = HTMLElement>(sel: string): T {
@@ -723,7 +722,6 @@ class CodecForgeTool extends HTMLElement {
     const reader = new FileReader()
     reader.onload = () => {
       const bytes = new Uint8Array(reader.result as ArrayBuffer)
-      this.lastFileBytes = bytes
       this.lastFileName = file.name
       this.lastFileType = file.type
       // Result goes into the Base64 pane; the pane is now the source of truth.
@@ -750,7 +748,6 @@ class CodecForgeTool extends HTMLElement {
   }
 
   private clearFile() {
-    this.lastFileBytes = null
     this.lastFileName = ''
     this.lastFileType = ''
     this.filePreviewEl.hidden = true
@@ -808,13 +805,7 @@ class CodecForgeTool extends HTMLElement {
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
-    const original = btn.dataset.label ?? btn.textContent ?? ''
-    if (!btn.dataset.label) btn.dataset.label = original
-    btn.textContent = label
-    window.clearTimeout(this.copyTimer)
-    this.copyTimer = window.setTimeout(() => {
-      btn.textContent = btn.dataset.label ?? original
-    }, 1400)
+    flashLabel(btn, label, 1400)
   }
 
   // ── UI plumbing ────────────────────────────────────────────────────────────

@@ -237,7 +237,6 @@ class TokenBenchTool extends HTMLElement {
       this.setVerdict('error', this.parseError || 'Paste a token first.')
       return
     }
-    const headerAlg = this.parsed.header.alg
     if (isUnsigned(this.parsed)) {
       this.setVerdict('bad', 'UNSIGNED — this token declares alg "none" and carries no signature. It proves nothing about who issued it.')
       return

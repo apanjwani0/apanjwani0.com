@@ -32,6 +32,17 @@ const pageDescription = learning.metaDescription || learning.summary
 // The component to mount inline, or undefined for a prose-only article.
 const EmbedTag = learningEmbedTag(learning)
 
+// The decorative star canvas competes for CPU with an embedded simulation — the
+// same reason it is off on game pages. Prose-only articles keep it.
+//
+// Derived here rather than written inline as `starfield={!EmbedTag}` with a
+// `{/* … */}` note beside it: a JSX comment is only legal where a CHILD can go,
+// and one sitting between two attributes of `<Base>` made the whole file
+// unparseable to `astro check` — three parse errors, and every real type error
+// in the file silently unreported behind them. The Astro compiler tolerated it,
+// so the build stayed green and nothing said the file had stopped being checked.
+const starfield = !EmbedTag
+
 // The figure goes where the WRITING puts it, via a {{embed}} line in the
 // markdown. It used to be pinned between the summary and the prose, which is the
 // worst available position: the reader meets a simulation before being told what
@@ -88,9 +99,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
   ogType="article"
   publishedTime={learning.date}
   ogCard={ogCard}
-  {/* The decorative star canvas competes for CPU with an embedded simulation —
-      the same reason it is off on game pages. Prose-only articles keep it. */}
-  starfield={!EmbedTag}
+  starfield={starfield}
 >
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />

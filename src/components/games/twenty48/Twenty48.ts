@@ -124,7 +124,6 @@ class Twenty48Game extends HTMLElement {
   // resolved theme colours
   private bgRGB: [number, number, number] = [11, 15, 24]
   private emptyRGB: [number, number, number] = [20, 26, 40]
-  private gridRGB: [number, number, number] = [26, 33, 50]
   private lowRGB: [number, number, number] = [40, 48, 66]
   private accentRGB: [number, number, number] = [155, 140, 255]
   private goldRGB: [number, number, number] = [255, 207, 90]
@@ -224,12 +223,10 @@ class Twenty48Game extends HTMLElement {
     const cs = getComputedStyle(document.documentElement)
     const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback
     this.bgRGB = twToRGB(v('--color-surface', '#0b0f18')) || [11, 15, 24]
-    const pageBg = twToRGB(v('--color-bg', '#05070c')) || [5, 7, 12]
     const text = twToRGB(v('--color-text', '#dde6f2')) || [221, 230, 242]
     this.accentRGB = twToRGB(v('--color-accent', '#9b8cff')) || [155, 140, 255]
-    // empty-cell + gridline tones sit between the page bg and the board surface
+    // empty-cell tone sits between the board surface and the text colour
     this.emptyRGB = twMix(this.bgRGB, text, 0.06)
-    this.gridRGB = twMix(this.bgRGB, pageBg, 0.55)
     // the "2" tile is a subtle lift off the board; higher tiles ramp to accent→gold
     this.lowRGB = twMix(this.bgRGB, text, 0.16)
     this.fontFamily = v('--font-mono', 'ui-monospace, monospace')
