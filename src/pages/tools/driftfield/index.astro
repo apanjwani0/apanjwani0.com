@@ -3,15 +3,20 @@ export const prerender = false
 
 import ToolBase from '../../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../../components/Breadcrumbs.astro'
-import { getSite, getTools } from '../../../lib/config'
+import { getLearnings, getSite, getTools } from '../../../lib/config'
 import { breadcrumbListJsonLd, itemListJsonLd } from '../../../lib/jsonld'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG } from '../../../lib/driftfield'
 import { existingOgCardPath, toolHasOgCard } from '../../../lib/og'
+import { learningsAboutEmbed } from '../../../lib/learnings'
 import '../../../styles/seo-support.css'
 import '../../../components/tools/tools-common.css'
 import '../../../components/tools/wallpaper-forge/wallpaper-forge.css'
 
-const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
+const [site, tools, learnings] = await Promise.all([
+  getSite(Astro.locals),
+  getTools(Astro.locals),
+  getLearnings(Astro.locals),
+])
 const cspNonce = (Astro.locals as any).cspNonce
 const tool = tools.find(t => t.slug === DRIFTFIELD_SLUG)
 
@@ -77,11 +82,11 @@ const breadcrumbLd = breadcrumbListJsonLd([
             <a href={`/tools/${DRIFTFIELD_SLUG}/${m.slug}`}>{m.title}</a>
           </h3>
           <p>{m.description}</p>
-          {m.learning && (
+          {learningsAboutEmbed(m.slug, learnings).map(story => (
             <p data-type="driftfield-story">
-              <a href={`/learnings/${m.learning}`}>The story behind it →</a>
+              <a href={`/learnings/${story.slug}`}>{story.title} →</a>
             </p>
-          )}
+          ))}
         </li>
       ))}
     </ul>

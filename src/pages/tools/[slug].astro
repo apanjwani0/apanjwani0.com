@@ -4,12 +4,13 @@ export const prerender = false
 import ToolBase from '../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import RelatedLinks from '../../components/RelatedLinks.astro'
-import { getSite, getTools } from '../../lib/config'
+import { getSite, getTools, getLearnings } from '../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, toolHasOgCard } from '../../lib/og'
 import { render } from '../../lib/markdown'
 import { validateSession } from '../../lib/session'
 import { getSessionToken } from '../../lib/security'
+import { learningsAboutEmbed } from '../../lib/learnings'
 import '../../styles/seo-support.css'
 import '../../components/tools/tools-common.css'
 import '../../components/tools/draftboard/draftboard.css'
@@ -46,7 +47,11 @@ const MOVED: Record<string, string> = {
 const movedTo = MOVED[slug as string]
 if (movedTo) return Astro.redirect(movedTo, 301)
 
-const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
+const [site, tools, learnings] = await Promise.all([
+  getSite(Astro.locals),
+  getTools(Astro.locals),
+  getLearnings(Astro.locals),
+])
 const cspNonce = (Astro.locals as any).cspNonce
 const tool = tools.find(t => t.slug === slug)
 
@@ -94,6 +99,11 @@ const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
 const relatedTools = tools
   .filter(t => t.status === 'live' && t.slug !== tool.slug)
   .map(t => ({ title: t.title, href: `/tools/${t.slug}` }))
+
+// …and the article about this tool, if one is published — same reasoning as the
+// siblings above, one section over.
+const stories = learningsAboutEmbed(tool.slug, learnings)
+  .map(l => ({ title: l.title, href: `/learnings/${l.slug}` }))
 // Card only when the generator emits one AND the PNG is really on disk — a
 // forgotten `npm run og` must degrade to the avatar, not a 404ing og:image.
 const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug) : undefined
@@ -190,6 +200,7 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
     </webhook-inspector-tool>
   )}
   {toolSeoContentHtml && <section data-type="seo-support" set:html={toolSeoContentHtml} />}
+  <RelatedLinks heading="Read about it" items={stories} />
   <RelatedLinks heading="More tools" items={relatedTools} />
 </ToolBase>
 

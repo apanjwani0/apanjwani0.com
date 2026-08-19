@@ -43,3 +43,19 @@ export function isPublishedLearning(learning: LearningFlags): boolean {
 export function learningEmbedTag(learning: { embed?: string }): string | undefined {
   return embedTag(learning.embed)
 }
+
+/**
+ * The published articles whose simulation is THIS component — the reverse of
+ * `embed`, read by the game, tool and Driftfield pages to link the article that
+ * tells their story.
+ *
+ * Derived rather than stored. Driftfield modes used to carry a `learning` slug
+ * of their own, which is a second copy of a fact the article already states, and
+ * it dangled the moment an article was deleted: six modes shipped links to
+ * `/learnings/*` pages that 404'd, on the hub and on every mode page. A reverse
+ * lookup cannot dangle — an article that is gone has no entry to find, and one
+ * that is unpublished fails the predicate here rather than in each caller.
+ */
+export function learningsAboutEmbed(embed: string, all: Learning[]): Learning[] {
+  return all.filter(l => l.embed === embed && isPublishedLearning(l))
+}

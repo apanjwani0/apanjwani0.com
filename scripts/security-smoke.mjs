@@ -34,7 +34,7 @@ import {
   sanitizeName,
 } from '../src/lib/type-trial-leaderboard.ts'
 import { dailyPassage, todayUtcDay } from '../src/lib/type-trial-daily.ts'
-import { isPublishedLearning, learningEmbedTag } from '../src/lib/learnings.ts'
+import { isPublishedLearning, learningEmbedTag, learningsAboutEmbed } from '../src/lib/learnings.ts'
 import { learningHasOgCard } from '../src/lib/og.ts'
 import { learnings } from '../src/config/learnings.ts'
 import { EMBED_TAGS } from '../src/lib/embeds.ts'
@@ -477,6 +477,29 @@ for (const [from, to] of Object.entries(MOVED_GAMES)) {
   // indexable" guarantee that makes this assertion worth having.
   const isTool = tools.some(t => to === `/tools/${t.slug}` && t.status === 'live')
   assert.ok(isMode || isLearning || isGame || isTool, `"${from}" redirects to ${to}, which is not a published page`)
+}
+
+// The same rule one link out. A game, tool or Driftfield mode links the article
+// that tells its story, and that link is DERIVED from the article's own `embed`
+// rather than stored beside the component — six modes once carried a `learning`
+// slug of their own and every one of them 404'd the day those articles were
+// deleted. So the property to hold is that the reverse lookup only ever yields
+// published articles, which is what each caller renders a link to.
+for (const embed of [...Object.keys(EMBED_TAGS), 'not-an-embed']) {
+  for (const article of learningsAboutEmbed(embed, learnings)) {
+    assert.equal(article.embed, embed, `learningsAboutEmbed("${embed}") returned an article about something else`)
+    assert.ok(isPublishedLearning(article), `learningsAboutEmbed("${embed}") returned unpublished "${article.slug}"`)
+  }
+}
+// An unpublished article is never linked, however it is unpublished.
+for (const drop of [{ published: false }, { content: '' }, { content: '   ' }]) {
+  const hidden = learnings.map(l => ({ ...l, ...drop }))
+  for (const embed of Object.keys(EMBED_TAGS)) {
+    assert.equal(
+      learningsAboutEmbed(embed, hidden).length, 0,
+      `an article with ${JSON.stringify(drop)} is still linked from "${embed}"`,
+    )
+  }
 }
 
 // Config validation rejects what the admin form could otherwise save.

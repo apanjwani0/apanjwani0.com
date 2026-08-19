@@ -4,11 +4,12 @@ export const prerender = false
 import ToolBase from '../../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../../components/Breadcrumbs.astro'
 import RelatedLinks from '../../../components/RelatedLinks.astro'
-import { getSite } from '../../../lib/config'
+import { getLearnings, getSite } from '../../../lib/config'
 import { breadcrumbListJsonLd, webAppJsonLd } from '../../../lib/jsonld'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, driftfieldMode } from '../../../lib/driftfield'
 import { embedTag } from '../../../lib/embeds'
 import { existingOgCardPath } from '../../../lib/og'
+import { learningsAboutEmbed } from '../../../lib/learnings'
 import '../../../styles/seo-support.css'
 import '../../../components/tools/tools-common.css'
 import '../../../styles/games-embed.css'
@@ -20,13 +21,17 @@ if (!mode) {
   return new Response(null, { status: 404, statusText: 'Not Found' })
 }
 
-const [site] = await Promise.all([getSite(Astro.locals)])
+const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
 const cspNonce = (Astro.locals as any).cspNonce
 const canonicalUrl = `${site.url}/tools/${DRIFTFIELD_SLUG}/${mode.slug}`
 
 // The engine to mount. Driftfield modes are the same components the articles
 // embed — EMBED_TAGS, not GAME_TAGS, because none of these are games any more.
 const EngineTag = embedTag(mode.slug)
+
+// The article about this engine, if one is published. Derived from the article's
+// own `embed`, so a deleted article removes the link instead of dangling.
+const stories = learningsAboutEmbed(mode.slug, learnings)
 
 // Siblings, so no mode is a crawl leaf reachable only through the hub.
 const siblings = DRIFTFIELD_MODES
@@ -97,11 +102,11 @@ const breadcrumbLd = breadcrumbListJsonLd([
       the file before it is written. Two export buttons on one screen doing almost
       the same thing was worse than either alone. */}
 
-  {mode.learning && (
+  {stories.map(story => (
     <p data-type="driftfield-story">
-      Where this came from: <a href={`/learnings/${mode.learning}`}>read the story behind it</a>.
+      Where this came from: <a href={`/learnings/${story.slug}`}>{story.title}</a>.
     </p>
-  )}
+  ))}
 
   <RelatedLinks heading="More Driftfield modes" items={siblings} />
 

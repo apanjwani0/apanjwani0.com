@@ -29,8 +29,6 @@ export interface DriftfieldMode {
   seoTitle: string
   description: string
   keywords: string
-  /** The article that tells this engine's story, cross-linked both ways. */
-  learning?: string
 }
 
 export const DRIFTFIELD_MODES: DriftfieldMode[] = [
@@ -41,7 +39,6 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
     description:
       'Particles released into a field of Perlin noise, tracing long curved paths. Tune the noise scale, particle count and fade, then export at your screen resolution.',
     keywords: 'flow field generator, perlin noise wallpaper, generative art wallpaper, particle flow field, noise field art',
-    learning: 'perlin-noise',
   },
   {
     slug: 'murmuration',
@@ -50,7 +47,6 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
     description:
       'Craig Reynolds’ three flocking rules, running live. Adjust separation, alignment and cohesion and watch the flock hold together or fall apart.',
     keywords: 'boids simulation, flocking simulation online, murmuration generator, starling flock simulation, separation alignment cohesion',
-    learning: 'boids-three-rules',
   },
   {
     slug: 'turing-bloom',
@@ -59,7 +55,6 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
     description:
       'Two chemicals, different diffusion rates, and the patterns Alan Turing predicted in 1952. Change the feed and kill rates to move between spots, stripes and mazes.',
     keywords: 'reaction diffusion simulator, turing pattern generator, gray scott model online, morphogenesis simulation',
-    learning: 'turing-last-paper',
   },
   {
     slug: 'lsystem-tree',
@@ -68,7 +63,6 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
     description:
       'Grow plants from a rewriting rule, the way Lindenmayer described algae in 1968. Change the rule, angle and depth to get a different species.',
     keywords: 'l-system generator, fractal tree generator, procedural plant generator, lindenmayer system online, turtle graphics tree',
-    learning: 'lindenmayer-systems',
   },
   {
     slug: 'sand-loom',
@@ -77,7 +71,6 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
     description:
       'Grains falling one at a time until the pile finds its own critical slope, and every avalanche size becomes possible.',
     keywords: 'falling sand simulation, sandpile model online, cellular automata sand, self organized criticality demo',
-    learning: 'sandpile-critical-state',
   },
   {
     slug: 'starfield-toy',
@@ -86,7 +79,6 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
     description:
       'The screensaver that outlived the problem it was invented for: an endless fall through stars, at whatever speed and density you like.',
     keywords: 'starfield generator, space screensaver, star field animation, retro screensaver maker',
-    learning: 'screensavers-solved-a-dead-problem',
   },
 ]
 

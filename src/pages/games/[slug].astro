@@ -2,7 +2,7 @@
 export const prerender = false
 
 import Base from '../../layouts/Base.astro'
-import { getSite, getGames } from '../../lib/config'
+import { getSite, getGames, getLearnings } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import RelatedLinks from '../../components/RelatedLinks.astro'
@@ -11,6 +11,7 @@ import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
 import { MOVED_GAMES } from '../../lib/driftfield'
 import { getInterest } from '../../lib/interest'
+import { learningsAboutEmbed } from '../../lib/learnings'
 import '../../styles/seo-support.css'
 import '../../styles/games-embed.css'
 
@@ -24,7 +25,11 @@ if (slug === 'wallpaper-forge') return Astro.redirect('/tools/driftfield', 301)
 const movedGame = MOVED_GAMES[slug as string]
 if (movedGame) return Astro.redirect(movedGame, 301)
 
-const [site, games] = await Promise.all([getSite(Astro.locals), getGames(Astro.locals)])
+const [site, games, learnings] = await Promise.all([
+  getSite(Astro.locals),
+  getGames(Astro.locals),
+  getLearnings(Astro.locals),
+])
 const cspNonce = (Astro.locals as any).cspNonce
 const game = games.find(g => g.slug === slug && g.enabled)
 
@@ -41,6 +46,12 @@ const liveGame = games.find(g => isPlayableGame(g) && g.slug !== slug)
 const relatedGames = games
   .filter(g => isPlayableGame(g) && g.slug !== slug)
   .map(g => ({ title: g.title, href: `/games/${g.slug}` }))
+
+// …and the article about this game, if one is published. The article embeds this
+// very component, which makes this page the most relevant one on the site to
+// link it from — and the article's own hub is otherwise its only way in.
+const stories = learningsAboutEmbed(slug as string, learnings)
+  .map(l => ({ title: l.title, href: `/learnings/${l.slug}` }))
 const pageDescription = game.metaDescription || game.description
 const gameIntro = game.intro || game.description
 const gameIntroHtml = render(gameIntro)
@@ -144,6 +155,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
     </>
   )}
   {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
+  <RelatedLinks heading="Read about it" items={stories} />
   <RelatedLinks heading="More games" items={relatedGames} />
 
   {GameTag && (
