@@ -86,7 +86,11 @@ div[data-group="cw-inputrow"] {
   gap: 0.6rem;
 }
 
-div[data-tool="cron-whisperer"] input[data-input="expr"] {
+/* One box for both jobs: a single expression on one line, or a whole pasted
+   crontab. `rows` is set from the content in JS, so the box is the size of what
+   is in it rather than a fixed slab; `wrap: off` keeps a long command on its own
+   line so the line numbers on screen still match the file. */
+div[data-tool="cron-whisperer"] textarea[data-input="expr"] {
   flex: 1 1 18rem;
   min-width: 0;
   padding: 0.55rem 0.7rem;
@@ -97,13 +101,19 @@ div[data-tool="cron-whisperer"] input[data-input="expr"] {
   font-family: var(--font-mono);
   font-size: var(--text-lg);
   letter-spacing: 0.08em;
+  line-height: 1.5;
+  resize: vertical;
+  overflow-x: auto;
 }
 
-div[data-group="cw-inputrow"] button {
-  align-self: center;
+div[data-group="cw-inputbtns"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-self: flex-start;
 }
 
-div[data-tool="cron-whisperer"][data-invalid] input[data-input="expr"] {
+div[data-tool="cron-whisperer"][data-invalid] textarea[data-input="expr"] {
   border-color: var(--color-error);
   color: var(--color-error);
 }
@@ -398,6 +408,136 @@ details[data-type="cw-explainer"] p {
 details[data-type="cw-explainer"] code {
   font-family: var(--font-mono);
   color: var(--color-text);
+}
+
+/* ── Crontab view ────────────────────────────────────────── */
+/* One row per meaningful line, in file order. An assignment row is deliberately
+   *inside* the list rather than summarised above it: the whole point being made
+   is that a CRON_TZ= applies to what comes after it, and a list that hides the
+   line cannot show that. */
+p[data-type="cw-tab-lead"] {
+  margin: 0 0 0.9rem;
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--color-muted);
+  max-width: 68ch;
+}
+
+div[data-type="cw-entries"] {
+  display: grid;
+  gap: 0.5rem;
+}
+
+div[data-type="cw-entry"],
+div[data-type="cw-assign"] {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-left-width: 2px;
+  border-left-color: var(--color-accent);
+  border-radius: var(--radius-md);
+}
+
+div[data-type="cw-assign"] {
+  border-left-style: dashed;
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+}
+
+div[data-type="cw-entry"][data-bad],
+div[data-type="cw-assign"][data-bad] {
+  border-left-color: var(--color-error);
+}
+
+div[data-type="cw-entry-head"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.7rem;
+}
+
+span[data-type="cw-entry-n"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+code[data-type="cw-entry-expr"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-accent);
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+span[data-type="cw-entry-zone"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-muted);
+}
+
+span[data-type="cw-entry-zone"][data-src="CRON_TZ"],
+span[data-type="cw-entry-zone"][data-src="TZ"] {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+span[data-type="cw-entry-zone"][data-bad] {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+span[data-type="cw-entry-desc"] {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+  max-width: 68ch;
+}
+
+code[data-type="cw-entry-cmd"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+span[data-type="cw-entry-next"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  overflow-wrap: anywhere;
+}
+
+span[data-type="cw-entry-note"],
+span[data-type="cw-entry-err"] {
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-muted);
+  max-width: 68ch;
+}
+
+span[data-type="cw-entry-err"] {
+  color: var(--color-error);
+}
+
+/* Two jobs starting on the same instant is the answer to "why does the box
+   stall at midnight", so the row says so rather than leaving it to be spotted. */
+ol[data-type="cw-runs"] li[data-collide] {
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--color-success);
+}
+
+span[data-type="cw-dst-hit"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text);
+  max-width: 68ch;
 }
 
 /* ── Narrow screens ──────────────────────────────────────── */

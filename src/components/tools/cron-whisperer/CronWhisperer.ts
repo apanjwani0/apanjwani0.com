@@ -1,5 +1,6 @@
 /**
- * Cron Whisperer — a cron expression explainer that is honest about time zones.
+ * Cron Whisperer — a cron explainer that is honest about time zones, and reads
+ * a whole crontab rather than one line at a time.
  *
  * Paste a standard 5-field cron expression (or a 6-field one with a leading
  * seconds field, or an @nickname) and get, entirely client-side:
@@ -11,6 +12,16 @@
  *      that never happens, which fall into one that happens twice, and what
  *      Vixie cron does about each.
  *   4. A per-field breakdown, a frequency read-out, and a shareable link.
+ *
+ * Paste more than one line and it switches to reading the text as a **crontab**
+ * — comments, `CRON_TZ=`/`TZ=` assignments that apply to the entries below
+ * them, a user column if it is a system crontab — and previews every entry
+ * together: one row each, one merged timeline of what fires next across the
+ * whole file with simultaneous starts marked, and a daylight-saving panel that
+ * names which lines break at the next transition. That is the loop this tool
+ * was missing: nobody debugs one cron line, they debug a crontab. The file
+ * grammar lives in ./crontab.ts for the same reason the engine lives in
+ * ./schedule.ts — the claims are checkable, so `security:smoke` checks them.
  *
  * The parsing, the zone maths and the run iterator all live in ./schedule.ts so
  * `security:smoke` can assert them against the real tz database; this file is
@@ -47,6 +58,16 @@ import {
   type CwTransition,
   type CwWall,
 } from './schedule'
+import {
+  CW_CRONTAB_MAX_ENTRIES,
+  cwCollisions,
+  cwLooksLikeSystemCrontab,
+  cwParseEnvLine,
+  cwMergeRuns,
+  cwParseCrontab,
+  type CwCrontabDoc,
+  type CwCrontabEntry,
+} from './crontab'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +76,8 @@ interface CwSettings {
   zone: string
   hour12: boolean
   runs: number // 5 | 10 | 20
+  /** Read a user column between the schedule and the command (/etc/cron.d). */
+  systemUser: boolean
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -62,15 +85,52 @@ interface CwSettings {
 const CW_LS_EXPR = 'cron-whisperer:expr:v1'
 const CW_LS_SETTINGS = 'cron-whisperer:settings:v1'
 
-const CW_DEFAULTS: CwSettings = { zone: 'local', hour12: false, runs: 5 }
+const CW_DEFAULTS: CwSettings = { zone: 'local', hour12: false, runs: 5, systemUser: false }
 
 /** How far ahead the daylight-saving card looks. */
 const CW_DST_HORIZON_MS = 400 * 86400_000
 /** Window either side of a transition that is searched for affected runs. */
 const CW_DST_WINDOW_MS = 6 * 3600_000
 
-/** Longest `#e=` value accepted from a shared link. Real expressions are tiny. */
-const CW_MAX_LINK_EXPR = 200
+/** How far ahead simultaneous starts are looked for across a whole crontab. */
+const CW_COLLIDE_WINDOW_MS = 24 * 3600_000
+/**
+ * Per-entry ceiling on that scan. A per-minute entry contributes 1 440 runs a
+ * day by itself, and a crontab may hold a hundred entries; this keeps the whole
+ * comparison to tens of thousands of resolved instants in the worst case. An
+ * entry over the ceiling is named rather than half-compared — see cwCollisions.
+ */
+const CW_COLLIDE_MAX_RUNS = 500
+
+/**
+ * Longest `#e=` value accepted from a shared link. A single expression is tiny;
+ * a shared crontab is not, so the bound is the crontab reader's own line budget
+ * rather than one expression's — still bounded, because the value is attacker-
+ * supplied text that ends up in the DOM.
+ */
+const CW_MAX_LINK_EXPR = 4000
+
+/**
+ * The sample the "Sample crontab" button loads. Every line earns its place: two
+ * jobs collide at midnight, the `CRON_TZ=` applies only downward, 02:30 in New
+ * York is the run that vanishes each spring, and the `%` in `date +%Y%m%d` is
+ * the one cron silently turns into stdin.
+ */
+const CW_SAMPLE_CRONTAB = [
+  '# deploy box crontab — paste your own over this',
+  'MAILTO=ops@example.com',
+  'PATH=/usr/local/bin:/usr/bin:/bin',
+  '',
+  '*/5 * * * * /usr/local/bin/health-check.sh',
+  '0 0 * * * /usr/local/bin/rotate-logs.sh',
+  '0 0 * * * /usr/local/bin/nightly-backup.sh',
+  '',
+  "# everything below runs on the reporting server's clock",
+  'CRON_TZ=America/New_York',
+  '30 2 * * * /opt/reports/nightly.sh',
+  '0 9 * * 1-5 /opt/reports/standup.sh',
+  '15 3 1 * * tar czf /backup/$(date +%Y%m%d).tgz /srv',
+].join('\n')
 
 const CW_EXAMPLES: [string, string][] = [
   ['* * * * *', 'Every minute'],
@@ -176,12 +236,17 @@ function cwPlural(n: number, one: string, many: string): string {
   return n === 1 ? one : many
 }
 
+/** Trim a command for display without letting one long line own the panel. */
+function cwClip(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 class CronWhispererTool extends HTMLElement {
   private settings: CwSettings = { ...CW_DEFAULTS }
   private root!: HTMLElement
-  private input!: HTMLInputElement
+  private input!: HTMLTextAreaElement
   private statusEl!: HTMLElement
   private describeEl!: HTMLElement
   private orNoteEl!: HTMLElement
@@ -189,8 +254,18 @@ class CronWhispererTool extends HTMLElement {
   private freqEl!: HTMLElement
   private fieldsEl!: HTMLElement
   private dstEl!: HTMLElement
+  private leadEl!: HTMLElement
+  private entriesEl!: HTMLElement
+  private timelineEl!: HTMLElement
+  private tlNoteEl!: HTMLElement
   private lastRunsText = ''
-  private clock: CwZoneClock | null = null
+  /**
+   * One clock per zone, not one clock. A crontab can name several zones through
+   * its `CRON_TZ=` lines, and building a `CwZoneClock` scans the tz database —
+   * doing that per entry per keystroke is the difference between instant and
+   * sluggish. Keyed by zone id, so changing the picker cannot serve a stale one.
+   */
+  private clocks = new Map<string, CwZoneClock>()
 
   private onKeydown = (e: KeyboardEvent) => {
     const t = e.target as HTMLElement
@@ -213,7 +288,7 @@ class CronWhispererTool extends HTMLElement {
       <div data-type="tool-page" data-tool="cron-whisperer">
         <div data-type="tool-header">
           <h1>Cron Whisperer</h1>
-          <p>Paste a cron expression and read it in plain English, then see the next run times <strong>in the zone your server actually runs in</strong> — any IANA zone, not just this browser's. Cron Whisperer also works out what daylight saving does to the schedule: which runs fall into an hour that never happens, which fall into one that happens twice, and what cron does about each. Understands standard 5-field crontab syntax, month and weekday names, @nicknames, and 6-field (with-seconds) expressions. Everything runs in your browser — press <kbd>C</kbd> to clear, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> to copy the description.</p>
+          <p>Paste a cron expression and read it in plain English, then see the next run times <strong>in the zone your server actually runs in</strong> — any IANA zone, not just this browser's. Cron Whisperer also works out what daylight saving does to the schedule: which runs fall into an hour that never happens, which fall into one that happens twice, and what cron does about each. <strong>Paste more than one line and it reads the whole crontab</strong> — <code>CRON_TZ=</code> and <code>TZ=</code> lines applying to the entries below them, comments, a system crontab's user column — and previews every entry together, with one merged timeline that marks the jobs starting at the same instant. Everything runs in your browser — press <kbd>C</kbd> to clear, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> to copy the description.</p>
         </div>
 
         <div data-group="toolbar">
@@ -231,6 +306,12 @@ class CronWhispererTool extends HTMLElement {
                   <option value="true">12-hour</option>
                 </select>
               </label>
+              <label data-type="cw-field"><span>Crontab kind</span>
+                <select data-control="systemUser" aria-label="How to read a pasted crontab">
+                  <option value="false">User crontab</option>
+                  <option value="true">System (/etc/cron.d)</option>
+                </select>
+              </label>
               <label data-type="cw-field"><span>Runs to show</span>
                 <select data-control="runs" aria-label="Number of upcoming runs to show">
                   <option value="5">5</option>
@@ -243,11 +324,14 @@ class CronWhispererTool extends HTMLElement {
         </div>
 
         <section data-type="cw-card" data-card="input" aria-labelledby="cw-in-h">
-          <h2 id="cw-in-h">Cron expression</h2>
+          <h2 id="cw-in-h">Cron expression or crontab</h2>
           <div data-group="cw-inputrow">
-            <input data-input="expr" type="text" spellcheck="false" autocomplete="off" autocapitalize="off"
-              inputmode="text" placeholder="* * * * *" aria-label="Cron expression" value="" />
-            <button data-action="copy-expr" type="button">Copy</button>
+            <textarea data-input="expr" rows="1" spellcheck="false" autocomplete="off" autocapitalize="off"
+              wrap="off" placeholder="* * * * *" aria-label="Cron expression, or a whole crontab"></textarea>
+            <div data-group="cw-inputbtns">
+              <button data-action="copy-expr" type="button">Copy</button>
+              <button data-action="sample" type="button">Sample crontab</button>
+            </div>
           </div>
           <pre data-type="cw-legend" aria-hidden="true">┌─ <b>minute</b> (0–59)
 │ ┌─ <b>hour</b> (0–23)
@@ -267,6 +351,21 @@ class CronWhispererTool extends HTMLElement {
           <p data-type="cw-ornote" data-for="ornote" hidden>Because both the day-of-month and day-of-week fields are restricted, cron runs the job when <em>either</em> matches — not only when both do.</p>
           <div data-group="cw-actions">
             <button data-action="copy-describe" type="button">Copy description</button>
+          </div>
+        </section>
+
+        <section data-type="cw-card" data-card="crontab" aria-labelledby="cw-tab-h" hidden>
+          <h2 id="cw-tab-h">Crontab</h2>
+          <p data-type="cw-tab-lead" data-for="crontab-lead"></p>
+          <div data-type="cw-entries" data-for="entries"></div>
+        </section>
+
+        <section data-type="cw-card" data-card="timeline" aria-labelledby="cw-tl-h" hidden>
+          <h2 id="cw-tl-h">What fires next</h2>
+          <ol data-type="cw-runs" data-for="timeline"></ol>
+          <p data-type="cw-freq" data-for="timeline-note"></p>
+          <div data-group="cw-actions">
+            <button data-action="copy-timeline" type="button">Copy timeline</button>
           </div>
         </section>
 
@@ -308,6 +407,10 @@ class CronWhispererTool extends HTMLElement {
           <p><strong>The day-of-month / day-of-week gotcha:</strong> when <em>both</em> of those fields are restricted (neither is <code>*</code>), the job runs whenever <em>either</em> one matches, not when both do. <code>0 0 1 * 1</code> runs on the 1st of the month <em>and</em> on every Monday.</p>
           <p><strong>A crontab names a wall clock, not a moment.</strong> Twice a year that stops being the same thing. When the clocks go forward, an hour of readings never happens — <code>30 2 * * *</code> has no 02:30 at all that day. When they go back, an hour of readings happens twice.</p>
           <p><strong>What cron does about it</strong> is in <code>man 8 cron</code>, and it turns on a distinction almost nobody knows: a job counts as running "at a particular time" only when <em>neither</em> the hour nor the minute field contains a <code>*</code>. Those jobs are made up once, right after a forward jump, and are <em>not</em> repeated after a backward one. Every other schedule simply follows the new wall clock — so a step schedule like <code>*/30 * * * *</code> loses two runs in spring and gains two in autumn. The card above applies exactly that rule to your expression.</p>
+          <p><strong>Paste more than one line and it is read as a crontab.</strong> A line is a comment only when <code>#</code> is its first non-blank character — a trailing <code># note</code> on an entry is part of the command, which is a real way to break a working job. An <em>assignment</em> line (<code>NAME=value</code>, value optionally quoted) is recognised with Vixie cron's own rule, so <code>MAILTO=""</code> is configuration and <code>0 0 * * * cmd</code> is not.</p>
+          <p><strong><code>CRON_TZ=</code> applies downward.</strong> It sets the zone for the entries <em>after</em> it, not for the file — the line above one is unaffected, which is the most common way a crontab gets misread. <code>TZ=</code> is marked rather than trusted: implementations disagree about whether it moves the schedule or only sets the job's environment, so entries under one are previewed in that zone <em>and</em> flagged. If you meant the schedule, write <code>CRON_TZ=</code>.</p>
+          <p><strong><code>%</code> is not an ordinary character.</strong> Unescaped, it ends the command: everything after it is handed to the job on standard input, and each further <code>%</code> becomes a newline. <code>date +%Y%m%d</code> in a crontab runs <code>date +</code> and posts the rest through stdin. Write <code>\%</code> for a literal percent. Every entry here shows what cron would really run.</p>
+          <p>Files in <code>/etc/cron.d</code> and <code>/etc/crontab</code> carry a <em>user</em> column between the schedule and the command. Switch <strong>Crontab kind</strong> in Preferences to read a paste that way; the tool says so when a paste looks like one.</p>
           <p>Everything here is computed locally in your browser; your last expression and preferences are remembered on this device and never uploaded. <strong>Copy link</strong> puts the expression and the zone in the URL fragment, which browsers never send to a server — so a link you share stays as private as the tool.</p>
         </details>
       </div>
@@ -322,6 +425,10 @@ class CronWhispererTool extends HTMLElement {
     this.freqEl = this.q('[data-for="freq"]')
     this.fieldsEl = this.q('[data-for="fields"]')
     this.dstEl = this.q('[data-for="dst"]')
+    this.leadEl = this.q('[data-for="crontab-lead"]')
+    this.entriesEl = this.q('[data-for="entries"]')
+    this.timelineEl = this.q('[data-for="timeline"]')
+    this.tlNoteEl = this.q('[data-for="timeline-note"]')
 
     // A shared link wins over this device's saved state, but is deliberately not
     // written back to localStorage: opening someone else's link should not
@@ -398,11 +505,26 @@ class CronWhispererTool extends HTMLElement {
     }
   }
 
+  private clockFor(zone: string, nowMs: number): CwZoneClock {
+    const hit = this.clocks.get(zone)
+    if (hit) return hit
+    // Bounded, because the keys come from the pasted text: typing a CRON_TZ=
+    // line names a new valid zone every few keystrokes, and each clock holds a
+    // scanned transition table. A crontab naming more than this many zones is
+    // not a thing; dropping the cache costs a rescan, never an answer.
+    if (this.clocks.size >= 24) this.clocks.clear()
+    const made = new CwZoneClock(zone, nowMs)
+    this.clocks.set(zone, made)
+    return made
+  }
+
   private zoneClock(nowMs: number): CwZoneClock {
-    if (!this.clock || this.clock.zone !== this.settings.zone) {
-      this.clock = new CwZoneClock(this.settings.zone, nowMs)
-    }
-    return this.clock
+    return this.clockFor(this.settings.zone, nowMs)
+  }
+
+  /** The zone an entry is really scheduled in — its own, or the picker's. */
+  private entryZone(e: CwCrontabEntry): string {
+    return e.zone && e.zoneOk ? e.zone : this.settings.zone
   }
 
   private zoneLabel(): string {
@@ -410,26 +532,60 @@ class CronWhispererTool extends HTMLElement {
   }
 
   // ── evaluation ────────────────────────────────────────────────────────────
+  /**
+   * One line that parses as a bare expression is the tool this has always been.
+   * Everything else is a crontab.
+   *
+   * The precedence matters and is deliberate: `0 0 12 * * *` stays the 6-field
+   * seconds expression the tool advertises rather than becoming "5 fields and a
+   * command called `*`", because the expression parser is asked first. Only when
+   * it refuses does the line get read as a crontab — which is what lets a single
+   * pasted line *with* a command work at all.
+   */
+  private looksLikeCrontab(trimmed: string): boolean {
+    if (/\n/.test(trimmed)) return true
+    if (trimmed.startsWith('#')) return true
+    if (cwParseEnvLine(trimmed)) return true
+    return trimmed.split(/\s+/).length >= 6
+  }
+
   private evaluate() {
     const expr = this.input.value
     this.writeLS(CW_LS_EXPR, expr)
+    this.autoGrow()
 
     if (!expr.trim()) {
+      this.showCards('expression')
       this.root.removeAttribute('data-invalid')
       this.statusEl.removeAttribute('data-error')
-      this.setStatus('Enter a cron expression to decode it.')
+      this.setStatus('Enter a cron expression, or paste a whole crontab.')
       this.clearOutputs()
       return
     }
 
-    let P: CwParsed
-    try {
-      P = cwParse(expr)
-    } catch (err) {
-      this.showError((err as Error).message)
+    const trimmed = expr.trim()
+    const crontabby = this.looksLikeCrontab(trimmed)
+
+    let P: CwParsed | null = null
+    let parseError = ''
+    if (!crontabby) {
+      try {
+        P = cwParse(trimmed)
+      } catch (err) {
+        parseError = (err as Error).message
+      }
+    }
+
+    if (!P) {
+      if (!crontabby) {
+        this.showError(parseError)
+        return
+      }
+      this.renderCrontab(expr, Date.now())
       return
     }
 
+    this.showCards('expression')
     this.root.removeAttribute('data-invalid')
     this.statusEl.removeAttribute('data-error')
     this.setStatus(P.nickname && P.nickname !== '@reboot'
@@ -454,10 +610,33 @@ class CronWhispererTool extends HTMLElement {
     this.freqEl.textContent = ''
     this.fieldsEl.innerHTML = ''
     this.dstEl.innerHTML = ''
+    this.leadEl.textContent = ''
+    this.entriesEl.innerHTML = ''
+    this.timelineEl.innerHTML = ''
+    this.tlNoteEl.textContent = ''
     this.lastRunsText = ''
   }
 
+  /** Which cards this input has anything to say through. */
+  private showCards(mode: 'expression' | 'crontab') {
+    const single = mode === 'expression'
+    for (const [card, on] of [
+      ['describe', single], ['next', single], ['fields', single],
+      ['crontab', !single], ['timeline', !single], ['dst', true],
+    ] as [string, boolean][]) {
+      const el = this.root.querySelector<HTMLElement>(`section[data-card="${card}"]`)
+      if (el) el.hidden = !on
+    }
+  }
+
+  /** Grow the box to the paste rather than making a crontab scroll one line. */
+  private autoGrow() {
+    const lines = this.input.value.split('\n').length
+    this.input.rows = Math.min(16, Math.max(1, lines))
+  }
+
   private showError(msg: string) {
+    this.showCards('expression')
     this.root.setAttribute('data-invalid', '')
     this.statusEl.setAttribute('data-error', '')
     this.setStatus(msg)
@@ -622,6 +801,277 @@ class CronWhispererTool extends HTMLElement {
       + '</div>'
   }
 
+  // ── the whole crontab ─────────────────────────────────────────────────────
+  /**
+   * The file view. Three panels, and each answers a question the one-expression
+   * view structurally cannot: what does every line mean *given the assignments
+   * above it*, what fires next across the file, and which lines break at the
+   * next daylight-saving transition.
+   */
+  private renderCrontab(text: string, nowMs: number) {
+    const doc = cwParseCrontab(text, { systemUser: this.settings.systemUser })
+    this.showCards('crontab')
+    this.root.removeAttribute('data-invalid')
+    this.statusEl.removeAttribute('data-error')
+
+    const notes = [`${doc.entries.length} ${cwPlural(doc.entries.length, 'entry', 'entries')}`]
+    if (doc.errors.length) {
+      notes.push(`${doc.errors.length} ${cwPlural(doc.errors.length, 'line', 'lines')} cron would reject`)
+      this.statusEl.setAttribute('data-error', '')
+    }
+    if (doc.truncated) notes.push(`only the first ${CW_CRONTAB_MAX_ENTRIES} entries are read`)
+    if (!this.settings.systemUser && cwLooksLikeSystemCrontab(text)) {
+      notes.push('every entry carries a user column — switch Crontab kind to System in Preferences')
+    }
+    this.setStatus(notes.join(' · '))
+
+    this.describeEl.textContent = '—'
+    this.orNoteEl.hidden = true
+    this.runsEl.innerHTML = ''
+    this.freqEl.textContent = ''
+    this.fieldsEl.innerHTML = ''
+
+    // Collected once and shared: the row list wants each entry's next run and
+    // the timeline wants its next few, and asking the engine twice for the same
+    // schedules is the kind of waste that only shows up on a long crontab.
+    //
+    // `count + 1` per entry, not `count`: the global first N is a subset of each
+    // entry's own first N (nothing can be ahead of N runs globally while being
+    // behind fewer than N inside its own schedule), and the extra row makes the
+    // tie group at the cap complete, so a collision is never shown half.
+    const lists = doc.entries.map((e, entry) => ({
+      entry,
+      runs: e.parsed.reboot
+        ? []
+        : cwCollectRuns(e.parsed, nowMs, { count: this.settings.runs + 1 }, this.clockFor(this.entryZone(e), nowMs)),
+    }))
+
+    this.renderEntries(doc, lists, nowMs)
+    this.renderTimeline(doc, lists, nowMs)
+    this.renderCrontabDst(doc, nowMs)
+  }
+
+  /** One row per meaningful line, in file order, so the scope of an assignment is visible. */
+  private renderEntries(doc: CwCrontabDoc, lists: { entry: number; runs: CwRun[] }[], nowMs: number) {
+    const indexOf = new Map(doc.entries.map((e, i) => [e, i]))
+    const fmts = new Map<string, Intl.DateTimeFormat>()
+    const fmtFor = (zone: string) => {
+      const hit = fmts.get(zone)
+      if (hit) return hit
+      const made = cwRunFormatter(zone, this.settings.hour12, false)
+      fmts.set(zone, made)
+      return made
+    }
+
+    this.leadEl.textContent = doc.entries.length === 0
+      ? 'No cron entries here — only comments, blank lines or settings.'
+      : `Read top to bottom, the way cron reads it: a CRON_TZ= or TZ= line applies to every entry below it, not to the file. Entries with no assignment above them use the zone in Preferences (${this.zoneLabel()}).`
+
+    const rows = doc.lines.filter(l =>
+      l.kind === 'entry' || l.kind === 'error'
+      || (l.kind === 'env' && (l.env?.name === 'CRON_TZ' || l.env?.name === 'TZ')))
+
+    this.entriesEl.innerHTML = rows.map(line => {
+      const n = `line ${line.n}`
+      if (line.kind === 'env') {
+        const bad = line.message ? ` ${line.message}` : ''
+        const warn = line.env?.name === 'TZ'
+          ? ' TZ= moves the schedule in some crons and only sets the job’s environment in others — write CRON_TZ= if you mean the schedule.'
+          : ''
+        return `<div data-type="cw-assign"${line.message ? ' data-bad' : ''}>`
+          + `<span data-type="cw-entry-n">${escapeHtml(n)}</span>`
+          + `<code data-type="cw-entry-expr">${escapeHtml(line.text.trim())}</code>`
+          + `<span data-type="cw-entry-note">applies to every entry below this line.${escapeHtml(warn)}${escapeHtml(bad)}</span>`
+          + '</div>'
+      }
+      if (line.kind === 'error') {
+        return '<div data-type="cw-entry" data-bad>'
+          + `<div data-type="cw-entry-head"><span data-type="cw-entry-n">${escapeHtml(n)}</span>`
+          + `<code data-type="cw-entry-expr">${escapeHtml(cwClip(line.text.trim(), 90))}</code></div>`
+          + `<span data-type="cw-entry-err">${escapeHtml(line.message ?? 'Not a schedule cron would accept.')}</span>`
+          + '</div>'
+      }
+
+      const e = line.entry as CwCrontabEntry
+      const zone = this.entryZone(e)
+      const zoneChip = e.zone
+        ? `<span data-type="cw-entry-zone" data-src="${escapeHtml(e.zoneSource ?? '')}"${e.zoneOk ? '' : ' data-bad'}>${escapeHtml(e.zone)}${e.zoneOk ? '' : ' (unknown)'}</span>`
+        : `<span data-type="cw-entry-zone" data-src="default">${escapeHtml(this.zoneLabel())}</span>`
+
+      let next: string
+      if (e.parsed.reboot) {
+        next = 'Next: at the next system startup.'
+      } else {
+        const run = lists[indexOf.get(e) as number].runs.find(r => r.fires)
+        next = run
+          ? `Next: ${fmtFor(zone).format(new Date(run.ms))} · ${cwRelFuture(run.ms, nowMs)}`
+          : 'Next: nothing in the next 25 years — this schedule may never match.'
+      }
+
+      const notes: string[] = []
+      if (e.user) notes.push(`Runs as ${e.user}.`)
+      if (e.stdin !== null) {
+        notes.push(`The % is not a character here: cron runs the command up to it and feeds “${cwClip(e.stdin.replace(/\n/g, ' '), 40)}” in on standard input. Write \\% for a literal percent.`)
+      }
+      if (!e.zoneOk && e.zone) notes.push(`${e.zone} is not a zone this browser knows, so this row uses ${this.zoneLabel()} instead.`)
+
+      return '<div data-type="cw-entry">'
+        + `<div data-type="cw-entry-head"><span data-type="cw-entry-n">${escapeHtml(n)}</span>`
+        + `<code data-type="cw-entry-expr">${escapeHtml(e.schedule)}</code>${zoneChip}</div>`
+        + `<span data-type="cw-entry-desc">${escapeHtml(cwDescribe(e.parsed))}</span>`
+        + `<code data-type="cw-entry-cmd">${escapeHtml(cwClip(e.command, 160))}</code>`
+        + `<span data-type="cw-entry-next">${escapeHtml(next)}</span>`
+        + (notes.length ? `<span data-type="cw-entry-note">${escapeHtml(notes.join(' '))}</span>` : '')
+        + '</div>'
+    }).join('')
+  }
+
+  /**
+   * The merged timeline. Every entry is resolved on its own clock and then
+   * printed in one zone — the picker's — because a list whose rows are each in a
+   * different zone cannot be read in order, which is the only thing this list is
+   * for.
+   */
+  private renderTimeline(doc: CwCrontabDoc, lists: { entry: number; runs: CwRun[] }[], nowMs: number) {
+    const want = this.settings.runs
+    const rows = cwMergeRuns(lists, want)
+    const fmt = cwRunFormatter(this.settings.zone, this.settings.hour12, false)
+    const lines: string[] = []
+
+    this.timelineEl.innerHTML = rows.map((row, i) => {
+      const e = doc.entries[row.entry]
+      const time = fmt.format(new Date(row.ms))
+      const rel = cwRelFuture(row.ms, nowMs)
+      const zoneNote = this.entryZone(e) === this.settings.zone ? '' : ` (scheduled in ${this.entryZone(e)})`
+      const label = `line ${e.n} · ${e.schedule}${zoneNote} · ${cwClip(e.command, 60)}`
+      const collide = row.collides ? ' — starts at the same instant as another entry.' : ''
+      lines.push(`${time}  (${rel})  ${label}${collide}`)
+      return `<li${row.collides ? ' data-collide' : ''}${row.run.dst ? ` data-dst="${row.run.dst}"` : ''}>`
+        + `<span data-type="cw-run-idx">${i + 1}</span>`
+        + `<span data-type="cw-run-time">${escapeHtml(time)}</span>`
+        + `<span data-type="cw-run-rel">${escapeHtml(rel)}</span>`
+        + `<span data-type="cw-run-flag">${escapeHtml(label + collide)}</span></li>`
+    }).join('')
+    this.lastRunsText = lines.join('\n')
+
+    const reboots = doc.entries.filter(e => e.parsed.reboot).length
+    const note: string[] = []
+    if (rows.length === 0) {
+      note.push(doc.entries.length ? 'None of these entries has an upcoming run.' : 'Nothing to show until there is an entry.')
+    } else {
+      note.push(`Every entry resolved on its own clock, then printed in ${this.zoneLabel()}.`)
+      // Which jobs start together must not depend on how many rows are shown —
+      // on a crontab with one frequent job the whole visible list is that job,
+      // and the midnight pile-up everyone is actually looking for is off-screen.
+      // So the answer comes from the window every entry has complete data for,
+      // which reaches well past the rows above.
+      const horizon = nowMs + CW_COLLIDE_WINDOW_MS
+      const scan = doc.entries.map((e, entry) => ({
+        entry,
+        runs: e.parsed.reboot
+          ? []
+          : cwCollectRuns(e.parsed, nowMs, { count: CW_COLLIDE_MAX_RUNS, untilMs: horizon }, this.clockFor(this.entryZone(e), nowMs)),
+      }))
+      const { hits, busy } = cwCollisions(scan, horizon, CW_COLLIDE_MAX_RUNS)
+      if (hits.length) {
+        const soonest = hits[0]
+        const lines = soonest.entries.map(i => `line ${doc.entries[i].n}`).join(' and ')
+        const n = hits.length
+        note.push(
+          `${n} ${cwPlural(n, 'instant', 'instants')} in the next 24 hours ${cwPlural(n, 'has', 'have')} `
+          + `more than one job starting — the soonest is ${fmt.format(new Date(soonest.ms))}, shared by ${lines}. `
+          + 'Simultaneous starts are the usual reason a box stalls on the hour.',
+        )
+      } else if (doc.entries.length > 1 && busy.length < doc.entries.length) {
+        note.push('No two of these entries start at the same instant in the next 24 hours.')
+      }
+      if (busy.length) {
+        const lines = busy.map(i => `line ${doc.entries[i].n}`).join(', ')
+        note.push(
+          `${lines} ${cwPlural(busy.length, 'fires', 'fire')} more than ${CW_COLLIDE_MAX_RUNS} times a day, `
+          + `so ${cwPlural(busy.length, 'it is', 'they are')} left out of that comparison — a job that frequent coincides with almost everything.`,
+        )
+      }
+    }
+    if (reboots) note.push(`${reboots} @reboot ${cwPlural(reboots, 'entry has', 'entries have')} no clock time and cannot appear here.`)
+    this.tlNoteEl.textContent = note.join(' ')
+  }
+
+  /**
+   * Daylight saving for the file: for each zone the crontab actually uses, the
+   * next transitions, and which *lines* they break. "Two of your twelve jobs
+   * vanish on 8 March" is the answer a crontab owner needs; per-expression it
+   * has to be asked twelve times.
+   */
+  private renderCrontabDst(doc: CwCrontabDoc, nowMs: number) {
+    if (doc.entries.length === 0) {
+      this.dstEl.innerHTML = '<p data-type="cw-dst-none">No entries to check against a clock change.</p>'
+      return
+    }
+
+    const byZone = new Map<string, number[]>()
+    doc.entries.forEach((e, i) => {
+      if (e.parsed.reboot) return
+      const zone = this.entryZone(e)
+      const list = byZone.get(zone)
+      if (list) list.push(i)
+      else byZone.set(zone, [i])
+    })
+
+    let html = ''
+    for (const [zone, indices] of byZone) {
+      const clock = this.clockFor(zone, nowMs)
+      const transitions = clock.transitionsFrom(nowMs, 2, nowMs + CW_DST_HORIZON_MS)
+      const named = zone === this.settings.zone ? this.zoneLabel() : zone
+      const who = `${indices.length} ${cwPlural(indices.length, 'entry', 'entries')} in ${escapeHtml(named)}`
+      if (transitions.length === 0) {
+        html += `<p data-type="cw-dst-none">${who}: no offset change in the next 400 days, so none of those runs can be skipped or repeated.</p>`
+        continue
+      }
+      html += `<p data-type="cw-dst-lead">${who} — ${transitions.length === 1 ? 'one clock change' : 'two clock changes'} ahead.</p>`
+      html += transitions.map(t => this.crontabDstRow(doc, indices, clock, t)).join('')
+    }
+    this.dstEl.innerHTML = html
+  }
+
+  private crontabDstRow(doc: CwCrontabDoc, indices: number[], clock: CwZoneClock, t: CwTransition): string {
+    const forward = t.after > t.before
+    const zone = clock.zone
+    const when = cwFmtDay(t.ms, zone)
+    const shift = `${cwClockAt(t.ms, t.before)} becomes ${cwClockAt(t.ms, t.after)}`
+    const offsets = `${cwOffsetLabel(t.before)} → ${cwOffsetLabel(t.after)}`
+
+    const hits: string[] = []
+    let clean = 0
+    for (const i of indices) {
+      const e = doc.entries[i]
+      const window = cwCollectRuns(e.parsed, t.ms - CW_DST_WINDOW_MS, { untilMs: t.ms + CW_DST_WINDOW_MS }, clock)
+      const affected = window.filter(r => r.dst === (forward ? 'gap' : 'first'))
+      if (affected.length === 0) { clean++; continue }
+      const n = affected.length
+      const fixed = cwIsFixedTime(e.parsed)
+      const what = forward
+        ? fixed
+          ? `${n} ${cwPlural(n, 'run', 'runs')} (${cwTimeList(affected)}) ${cwPlural(n, 'lands', 'land')} in the hour that never happens — made up at the jump.`
+          : `${n} ${cwPlural(n, 'run', 'runs')} (${cwTimeList(affected)}) ${cwPlural(n, 'lands', 'land')} in the hour that never happens — lost, because the hour or minute field is a wildcard.`
+        : fixed
+          ? `${cwTimeList(affected)} ${cwPlural(n, 'comes', 'come')} round twice — cron holds a particular-time job to the first pass.`
+          : `${n} ${cwPlural(n, 'run', 'runs')} (${cwTimeList(affected)}) ${cwPlural(n, 'happens', 'happen')} twice — a wildcard schedule follows the wall clock through both passes.`
+      hits.push(`line ${e.n} · ${e.schedule} — ${what}`)
+    }
+
+    const summary = hits.length === 0
+      ? 'No entry in this zone is scheduled inside the affected window.'
+      : `${hits.length} of ${indices.length} ${cwPlural(indices.length, 'entry is', 'entries are')} affected${clean ? `; the other ${clean} ${cwPlural(clean, 'is', 'are')} untouched` : ''}.`
+
+    return `<div data-type="cw-dst-row" data-dir="${forward ? 'forward' : 'back'}">`
+      + `<span data-type="cw-dst-when">${escapeHtml(when)}</span>`
+      + `<span data-type="cw-dst-shift">Clocks go ${forward ? 'forward' : 'back'} — ${escapeHtml(shift)} <small>(${escapeHtml(offsets)})</small></span>`
+      + `<span data-type="cw-dst-effect">${escapeHtml(summary)}</span>`
+      + hits.map(h => `<span data-type="cw-dst-hit">${escapeHtml(h)}</span>`).join('')
+      + '</div>'
+  }
+
   // ── field breakdown ───────────────────────────────────────────────────────
   private renderFields(P: CwParsed) {
     const rows: { kind: CwKind; f: CwField }[] = []
@@ -699,7 +1149,13 @@ class CronWhispererTool extends HTMLElement {
         this.copyText(this.describeEl.textContent ?? '', btn)
         break
       case 'copy-runs':
+      case 'copy-timeline':
         this.copyText(this.lastRunsText, btn)
+        break
+      case 'sample':
+        this.input.value = CW_SAMPLE_CRONTAB
+        this.evaluate()
+        this.input.focus()
         break
       case 'copy-link': {
         if (!this.input.value.trim()) { this.setStatus('Enter an expression before sharing it.'); break }
@@ -741,6 +1197,7 @@ class CronWhispererTool extends HTMLElement {
     if (key === 'zone') this.settings.zone = cwZoneValid(el.value) ? el.value : CW_DEFAULTS.zone
     else if (key === 'hour12') this.settings.hour12 = el.value === 'true'
     else if (key === 'runs') this.settings.runs = parseInt(el.value, 10)
+    else if (key === 'systemUser') this.settings.systemUser = el.value === 'true'
     this.saveSettings()
     this.evaluate()
   }
@@ -763,6 +1220,7 @@ class CronWhispererTool extends HTMLElement {
       else if (merged.zone === 'utc') merged.zone = 'UTC'
       if (!cwZoneValid(merged.zone)) merged.zone = CW_DEFAULTS.zone
       merged.hour12 = Boolean(merged.hour12)
+      merged.systemUser = Boolean(merged.systemUser)
       if (![5, 10, 20].includes(merged.runs)) merged.runs = CW_DEFAULTS.runs
       return merged
     } catch {

@@ -53,23 +53,39 @@ import { RANK_LABEL, SUITS, SUIT_SYMBOL, type Card, type Suit } from './engine/t
 /**
  * Above this many runouts a single hand-vs-hand query stops feeling interactive.
  *
- * A preflop Hold'em spot is C(48,5) = 1,712,304 boards and this evaluator checks
- * all 21 five-card subsets of each seven-card hand. Rather than silently
- * switching to Monte Carlo to stay responsive, the UI refuses and says why: the
- * whole promise is that every number shown is exact, and a sampled number
- * wearing the same styling would quietly break it.
+ * Rather than silently switching to Monte Carlo to stay responsive, the UI
+ * refuses and says why: the whole promise is that every number shown is exact,
+ * and a sampled number wearing the same styling would quietly break it.
+ *
+ * The ceiling used to be about raw speed — a preflop Hold'em spot is
+ * C(48,5) = 1,712,304 boards, which the old enumerator needed the better part of
+ * a minute for. It no longer is: the bitmask scorer takes 312ms over the same
+ * boards. ==What holds the ceiling here now is that `renderSolve` recomputes the
+ * equity from scratch on every input event==, including each keystroke in the pot
+ * and bet boxes, which cannot change it. 312ms per keypress is its own kind of
+ * broken. Memoise the result per spot and this number can rise to let preflop in.
+ *
+ * Note the ceiling is in runouts, so it reads Hold'em and Omaha as equally
+ * expensive and they are not — an Omaha hand is the best of 60 five-card hands
+ * against Hold'em's one bitmask read, and preflop PLO still takes 7.1s. Any
+ * raise has to count hands ranked, not boards dealt.
  */
 const PT_MAX_RUNOUTS = 300_000
 
 /**
  * The same ceiling for range queries, where cost is combos x runouts.
  *
- * This is what decides which street a drill is dealt on. A 570-combo button
- * range on a flop is 564,300 boards — half a minute of blocking work. On a turn
- * it is 25,080, which is instant. So the drill picks the street to fit the
- * range rather than capping the range to fit the street: a wide range is the
- * interesting case, and narrowing it to keep the flop would be optimising the
+ * This is what decides which street a drill is dealt on, so it is a lesson
+ * setting and not only a speed one: the drill picks the street to fit the range
+ * rather than capping the range to fit the street, because a wide range is the
+ * interesting case and narrowing it to keep the flop would be optimising the
  * lesson away to preserve a cosmetic preference.
+ *
+ * It was also chosen against a much slower enumerator — a 570-combo button range
+ * on a flop is 564,300 boards, which used to be half a minute of blocking work
+ * and now measures ~115ms. Widening it would move drills onto earlier streets,
+ * which changes what the drill teaches, so it is left where it is deliberately
+ * rather than by omission.
  */
 const PT_MAX_RANGE_WORK = 60_000
 

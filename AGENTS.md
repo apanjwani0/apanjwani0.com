@@ -47,6 +47,10 @@ tolerant parser and **`npm run check` does not**. A `{/* … */}` JSX comment
 placed between two attributes of a component tag built green for four commits
 while making `src/pages/learnings/[slug].astro` unparseable to `astro check`,
 which silently excluded every type error in that file from being reported.
+A second instance, so this is a class and not a one-off: `const f = (a) => ({…})`
+followed immediately by a bare `{` block builds green under esbuild and throws
+five phantom parse errors under `astro check`, because TypeScript reads the
+object literal as the next arrow's parameter list.
 Run both; `check` must stay at 0 errors. For
 UI/route changes, also run `/browser-debug` against the dev server.
 The production GitHub deploy builds a Docker image on `main`, restarts the OCI
@@ -368,6 +372,13 @@ rule, a header the edge rewrites, whether the origin answers) goes in
 `scripts/origin-check.sh`, because nothing in this repo can see it. If a fix has
 no assertion, it will be undone by a later refactor that looks harmless.
 
+Then **break the thing the assertion guards and watch it fail.** A mutation that
+survives means the *assertion* is wrong, not that the mutation was a poor choice
+— the temptation is to pick an easier mutation and record a pass. The poker fast
+path is the worked example: a mutation that turned a split pot into a loss
+survived, because the integration fixture used a spot that never chops. The fix
+was a second, mirrored fixture that does.
+
 ## Key Conventions
 
 - **Every tool renders `div[data-type="tool-page"]`** with a matching
@@ -382,7 +393,8 @@ no assertion, it will be undone by a later refactor that looks harmless.
 - **A tool's claims live in a module, not in the component.** Where a tool
   asserts something checkable about the world, that logic goes in a sibling
   module the component imports — `webhook-inspector/signature.ts`,
-  `cron-whisperer/schedule.ts`, and `src/lib/jwt.ts` before both — so
+  `cron-whisperer/schedule.ts`, `cron-whisperer/crontab.ts`, and `src/lib/jwt.ts`
+  before them — so
   `security:smoke` can run it against the real thing rather than against a
   screenshot of it. A claim buried in a DOM handler cannot be tested and will
   quietly stop being true.
@@ -423,6 +435,31 @@ no assertion, it will be undone by a later refactor that looks harmless.
   on the field's first character and so would AND. Settle it against real cronie
   before changing it — the two readings disagree, and the man page is what the
   tool currently documents.
+
+  `crontab.ts` is the file **grammar**; `schedule.ts` is the **semantics**. They
+  are separate modules so a file-format change cannot perturb the wall-clock walk
+  above. Two grammar claims that get silently re-derived otherwise: a `CRON_TZ=`
+  or `TZ=` assignment applies **downward only**, so the entry *above* one is not
+  in that zone — the panel renders plausibly either way, which is what makes the
+  mistake invisible — and a bare `TZ=` is **flagged, not resolved**, because
+  implementations disagree about whether it moves the schedule or only sets the
+  job's environment. Settle that against real cronie and Debian source (and
+  record the versions) before turning the flag into an answer; same shape as the
+  `restricted` reading above.
+
+- **A hot path replaced for speed keeps the slow one as an untouched reference,
+  and asserts the fast one equal to it.** Poker Trainer's `evaluateBest` is
+  byte-for-byte unchanged and still defines what a hand is worth; `scoreBest`
+  (bitmasks in, one packed integer out) is the 600x fast path the enumerator
+  actually calls, and `security:smoke` proves the two agree over **all** 2,598,960
+  five-card hands rather than against remembered values. That structure is the
+  whole reason a rewrite of code an on-site article quotes numbers from can land
+  unattended: the equivalence assertion is what stops the two copies drifting.
+  Deleting the slow one to "clean up" removes the only definition the fast one is
+  checked against. Note `types.ts` still warns that a `HandRank` supports no
+  numeric shortcut — that warning is about `tb` alone, and the escape is that
+  `tb`'s length is fixed by `cat`, so leading the packing with `cat` keeps every
+  comparison inside one category.
 
 - **Canvas export is shared**: `src/lib/canvas-export.ts` +
   `src/styles/canvas-export.css`. Any component with a canvas calls

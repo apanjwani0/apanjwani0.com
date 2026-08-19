@@ -8,15 +8,25 @@
  * approximately right teaches you to be approximately right.
  *
  * The cost of that is a real bound on what can be asked. Enumerating a preflop
- * hand-vs-hand runout is C(48,5) = 1,712,304 boards, which is seconds of work in
- * a browser; a flop is C(45,2) = 990 and a turn is 44, both instant. So the
- * caller is told the size before it runs (`countRunouts`) and can refuse, rather
- * than the module silently switching to sampling to stay fast. Silently
- * degrading exactness to preserve responsiveness is the one thing it must not
- * do.
+ * hand-vs-hand runout is C(48,5) = 1,712,304 boards; a flop is C(45,2) = 990 and
+ * a turn is 44. So the caller is told the size before it runs (`countRunouts`)
+ * and can refuse, rather than the module silently switching to sampling to stay
+ * fast. Silently degrading exactness to preserve responsiveness is the one thing
+ * it must not do.
+ *
+ * What that bound costs is now roughly two orders of magnitude smaller than it
+ * was. The enumerator used to rank every hand through `evaluateBest`, which
+ * builds all 21 five-card subsets of the seven cards, allocates its way through
+ * each of them and composes an English name for every one — 44,000 hands a
+ * second, so the Solve tab's default range query took 5.8s and the tab ran it
+ * twice per render. The loop below now ranks through `scoreBest`, which reads
+ * the same hand as bitmasks and returns one comparable integer: 27M hands a
+ * second, and that query takes 35ms. ==Not one number changed==, and that is
+ * asserted rather than hoped — see the note over the fast path in
+ * `evaluator.ts`.
  */
 
-import { compareRank, evaluateBest, evaluateOmaha } from './evaluator'
+import { compareRank, evaluateBest, evaluateOmaha, scoreBest, scoreOmaha } from './evaluator'
 import { SUITS, type Card, type HandRank, type Suit } from './types'
 
 /**
@@ -135,38 +145,42 @@ export function exactEquity(
   const fill: Card[] = new Array(fillCount)
   const fullBoard: Card[] = new Array(5)
   const combined: Card[] = new Array(5 + holeCount(variant))
-  const ranks: (HandRank | null)[] = new Array(n).fill(null)
+  const scores = new Int32Array(n)
 
   const evaluateAll = () => {
     runouts++
     for (let b = 0; b < board.length; b++) fullBoard[b] = board[b]
     for (let f = 0; f < fillCount; f++) fullBoard[board.length + f] = fill[f]
 
-    let best: HandRank | null = null
+    let best = -1
     let bestCount = 0
-    // Ranks are compared with compareRank, never by a packed number: `tb` is a
-    // variable-length tiebreaker array, so there is no single integer that
-    // orders hands correctly. An earlier version assumed there was.
+    // Hands are compared as packed scores rather than as `HandRank` objects.
+    // `types.ts` warns that `tb` is variable-length and so supports no numeric
+    // shortcut, and that warning stands for `tb` on its own — the escape is that
+    // its length is fixed by `cat`, so `scoreBest` leads with `cat` and only
+    // ever compares digits within one category. See the long note in
+    // `evaluator.ts`; `security:smoke` holds the two paths to the same answer on
+    // every one of the 2,598,960 five-card hands, which is what makes this a
+    // speed change and not a numbers change.
     for (let i = 0; i < n; i++) {
-      let rank: HandRank
+      let score: number
       if (variant === 'plo') {
         // Omaha's exactly-2-of-4 rule cannot be expressed by handing nine cards
         // to the best-of-any evaluator — that would let a hand play one hole
         // card, or none, and every flush number would come out too high.
-        rank = evaluateOmaha(holeCards[i], fullBoard)
+        score = scoreOmaha(holeCards[i], fullBoard)
       } else {
         let k = 0
         for (const card of holeCards[i]) combined[k++] = card
         for (let b = 0; b < 5; b++) combined[k++] = fullBoard[b]
-        rank = evaluateBest(combined)
+        score = scoreBest(combined)
       }
-      ranks[i] = rank
-      const cmp = best === null ? 1 : compareRank(rank, best)
-      if (cmp > 0) { best = rank; bestCount = 1 }
-      else if (cmp === 0) bestCount++
+      scores[i] = score
+      if (score > best) { best = score; bestCount = 1 }
+      else if (score === best) bestCount++
     }
     for (let i = 0; i < n; i++) {
-      if (compareRank(ranks[i] as HandRank, best as HandRank) !== 0) continue
+      if (scores[i] !== best) continue
       if (bestCount === 1) wins[i]++
       else { ties[i]++; equity[i] += 1 / bestCount }
     }

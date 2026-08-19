@@ -1710,3 +1710,498 @@ for (const p of smokeProjects) {
 
 
 console.log('security smoke ok')
+
+
+/* ─────────────  the poker fast path ranks hands identically to the slow one  ───────────── */
+
+// Poker Trainer's Solve tab used to block the main thread for 5.8s on its
+// default range preset, and it ran that query twice per render. The enumerator
+// now ranks hands through `scoreBest` — bitmasks in, one comparable integer out,
+// 27M hands/second against `evaluateBest`'s 44k — which is a ~166x end-to-end
+// win and, crucially, is supposed to be a SPEED change and not a numbers change.
+//
+// An article on this site quotes these equities, so "supposed to" is not good
+// enough. This block is the proof, and it is exhaustive where exhaustive is
+// affordable: every one of the 2,598,960 five-card hands, not a sample. Set
+// POKER_FAST_STRIDE=n to thin that sweep when iterating locally; the gate runs
+// it whole.
+{
+  const { compareRank, evaluateBest, evaluateOmaha, packRank, packScore, score5, scoreBest, scoreOmaha } =
+    await import('../src/components/games/poker-trainer/engine/evaluator.ts')
+  const { exactEquity } = await import('../src/components/games/poker-trainer/engine/equity.ts')
+  const { SUITS } = await import('../src/components/games/poker-trainer/engine/types.ts')
+
+  const deck = []
+  for (const s of SUITS) for (let r = 2; r <= 14; r++) deck.push({ r, s })
+  assert.equal(deck.length, 52)
+  const show = cards => cards.map(c => `${c.r}${c.s}`).join(' ')
+
+  // The packing is order-isomorphic to compareRank BY CONSTRUCTION — it is a
+  // fixed six-digit base-16 numeral [cat, tb0..tb4] and compareRank is
+  // lexicographic on that same padded tuple — but only while every digit stays
+  // inside its nibble. That precondition is the whole argument, so it is checked
+  // on every hand below rather than asserted once in a comment.
+  const stride = Number(process.env.POKER_FAST_STRIDE ?? 1)
+  const distinct = new Map()
+  let seen = 0
+  let skip = 0
+  const five = new Array(5)
+  for (let a = 0; a < 48; a++) {
+    five[0] = deck[a]
+    for (let b = a + 1; b < 49; b++) {
+      five[1] = deck[b]
+      for (let c = b + 1; c < 50; c++) {
+        five[2] = deck[c]
+        for (let d = c + 1; d < 51; d++) {
+          five[3] = deck[d]
+          for (let e = d + 1; e < 52; e++) {
+            if (skip++ % stride !== 0) continue
+            five[4] = deck[e]
+            const rank = evaluateBest(five)
+            assert.ok(rank.cat >= 0 && rank.cat < 16, `hand category ${rank.cat} does not fit a nibble`)
+            assert.ok(rank.tb.length <= 5, `tiebreakers ${rank.tb} are longer than the five packed digits`)
+            for (const t of rank.tb) assert.ok(t >= 0 && t < 16, `tiebreaker ${t} does not fit a nibble`)
+            const packed = packRank(rank)
+            assert.equal(
+              scoreBest(five), packed,
+              `scoreBest disagrees with evaluateBest on ${show(five)} (${rank.name})`,
+            )
+            if (!distinct.has(packed)) distinct.set(packed, { cat: rank.cat, tb: rank.tb.slice(), name: rank.name })
+            seen++
+          }
+        }
+      }
+    }
+  }
+  if (stride === 1) {
+    assert.equal(seen, 2_598_960, 'the five-card sweep must be exhaustive')
+    // Every distinct five-card hand value, a number that is not ours to choose.
+    assert.equal(distinct.size, 7462, 'there are exactly 7462 distinct five-card hand ranks')
+  }
+
+  // …and the two orderings agree on every rank the sweep found, which is the
+  // property `exactEquity` actually leans on when it compares integers.
+  const ranks = [...distinct.entries()].map(([packed, r]) => ({ packed, ...r }))
+  const byCompare = [...ranks].sort(compareRank)
+  const byPacked = [...ranks].sort((x, y) => x.packed - y.packed)
+  for (let i = 0; i < ranks.length; i++) {
+    assert.equal(
+      byPacked[i].packed, byCompare[i].packed,
+      `packed order and compareRank order diverge at ${i}: "${byCompare[i].name}" vs "${byPacked[i].name}"`,
+    )
+  }
+  // A tie must stay a tie: equal scores and compareRank === 0 have to mean the
+  // same thing, or a split pot silently becomes a win.
+  for (let i = 1; i < byPacked.length; i++) {
+    assert.ok(byPacked[i - 1].packed < byPacked[i].packed, 'distinct ranks must pack to distinct scores')
+    assert.ok(compareRank(byCompare[i - 1], byCompare[i]) < 0, 'distinct ranks must be strictly ordered')
+  }
+  assert.equal(packScore(8, 14, 0, 0, 0, 0) > packScore(7, 14, 13, 0, 0), true, 'category leads the packing')
+
+  // Seven cards, where the fast path stops enumerating subsets altogether and
+  // reads the flush and the rank multiset separately. Deterministic draws so a
+  // failure is reproducible.
+  let state = 0x9e3779b9
+  const rnd = () => {
+    state ^= state << 13; state >>>= 0
+    state ^= state >>> 17
+    state ^= state << 5; state >>>= 0
+    return state / 4294967296
+  }
+  const draw = k => {
+    const d = deck.slice()
+    for (let i = 0; i < k; i++) {
+      const j = i + Math.floor(rnd() * (52 - i))
+      const t = d[i]; d[i] = d[j]; d[j] = t
+    }
+    return d.slice(0, k)
+  }
+
+  for (let i = 0; i < 25_000; i++) {
+    const h = draw(7)
+    assert.equal(scoreBest(h), packRank(evaluateBest(h)), `scoreBest disagrees on seven cards: ${show(h)}`)
+  }
+
+  // The same claim against the cheap oracle — the max over the 21 five-card
+  // subsets, which is what "best five of seven" means by definition and is only
+  // a valid reference because the sweep above pinned score5 to evaluate5 on
+  // every five-card hand. This is the form that let the full C(52,7) =
+  // 133,784,560 run offline; 150k of them stay here.
+  const subsets = []
+  for (let a = 0; a < 3; a++) for (let b = a + 1; b < 4; b++) for (let c = b + 1; c < 5; c++)
+    for (let d = c + 1; d < 6; d++) for (let e = d + 1; e < 7; e++) subsets.push([a, b, c, d, e])
+  assert.equal(subsets.length, 21)
+  for (let i = 0; i < 150_000; i++) {
+    const h = draw(7)
+    let best = 0
+    for (const [a, b, c, d, e] of subsets) {
+      const s = score5(h[a], h[b], h[c], h[d], h[e])
+      if (s > best) best = s
+    }
+    assert.equal(scoreBest(h), best, `scoreBest is not the best of the 21 subsets on ${show(h)}`)
+  }
+
+  // Omaha keeps its own rule — exactly two hole cards, exactly three board —
+  // and `scoreOmaha` walks those 60 combinations rather than the 21.
+  for (let i = 0; i < 3_000; i++) {
+    const d = draw(9)
+    const hole = d.slice(0, 4)
+    const board = d.slice(4, 9)
+    assert.equal(
+      scoreOmaha(hole, board), packRank(evaluateOmaha(hole, board)),
+      `scoreOmaha disagrees on ${show(hole)} | ${show(board)}`,
+    )
+  }
+
+  // Finally the integration, because agreeing on hands is not the same as
+  // agreeing on equities: re-run one flop from scratch through the OLD path —
+  // evaluateBest and compareRank, counting wins, ties and shares the way
+  // exactEquity does — and demand the floats match bit for bit, not to some
+  // tolerance. Rewiring the enumerator's inner loop was allowed to change the
+  // clock and nothing else.
+  //
+  // Two spots, and the second one is the point: the first has no split pots at
+  // all, so on its own it never exercises the tie branch — deleting tie handling
+  // from the rewired loop left this assertion green until a mirrored hand was
+  // added beside it. A reference run that cannot chop does not test an
+  // enumerator that has to divide pots.
+  const card = t => ({ r: '23456789TJQKA'.indexOf(t[0]) + 2, s: t[1] })
+  const spots = [
+    { hero: [card('As'), card('Kh')], villain: [card('Qd'), card('Qc')], board: [card('2s'), card('7s'), card('9h')], chops: false },
+    // Mirrored ace-king: neither can out-rank the other except by making a
+    // flush, so most runouts are dead chops.
+    { hero: [card('As'), card('Kh')], villain: [card('Ad'), card('Kc')], board: [card('2s'), card('7d'), card('9h')], chops: true },
+  ]
+
+  for (const spot of spots) {
+    const fast = exactEquity([spot.hero, spot.villain], spot.board)
+    const known = new Set([...spot.hero, ...spot.villain, ...spot.board].map(c => `${c.r}${c.s}`))
+    const rest = deck.filter(c => !known.has(`${c.r}${c.s}`))
+    const wins = [0, 0]
+    const ties = [0, 0]
+    const share = [0, 0]
+    let boards = 0
+    for (let i = 0; i < rest.length; i++) {
+      for (let j = i + 1; j < rest.length; j++) {
+        boards++
+        const full = [...spot.board, rest[i], rest[j]]
+        const cmp = compareRank(
+          evaluateBest([...spot.hero, ...full]),
+          evaluateBest([...spot.villain, ...full]),
+        )
+        if (cmp === 0) { ties[0]++; ties[1]++; share[0] += 1 / 2; share[1] += 1 / 2 }
+        else wins[cmp > 0 ? 0 : 1]++
+      }
+    }
+    const where = `${show(spot.hero)} vs ${show(spot.villain)} on ${show(spot.board)}`
+    assert.equal(spot.chops, ties[0] > 0, `${where}: this spot's role here depends on whether it chops`)
+    assert.equal(boards, fast.runouts, `${where}: both paths must enumerate the same number of boards`)
+    assert.deepEqual(fast.win, wins.map(w => w / boards), `${where}: win counts must be identical, not close`)
+    assert.deepEqual(fast.tie, ties.map(t => t / boards), `${where}: tie counts must be identical, not close`)
+    assert.deepEqual(
+      fast.equity, share.map((s, i) => (wins[i] + s) / boards),
+      `${where}: the fast enumerator must return the same equity floats as the reference one`,
+    )
+  }
+}
+
+console.log('poker fast path ok')
+
+
+/* ────────  role: tools — Cron Whisperer reads a whole crontab  ────────────── */
+// The tool now claims it can read a pasted crontab, not just an expression: that
+// `CRON_TZ=` applies to the entries BELOW it, that `%` is not an ordinary
+// character, that a trailing `#` is part of the command, and that a system
+// crontab has a user column. Every one of those is a claim about a file format
+// that is easy to get subtly wrong and impossible to notice — the panel renders
+// happily either way, and only the schedules are misattributed.
+//
+// So the file grammar lives in a module (src/components/tools/cron-whisperer/
+// crontab.ts) and these run it. The engine assertions further up already pin
+// what a schedule means; these pin which schedule the reader thinks it is
+// looking at, and in which zone.
+{
+  const {
+    CW_CRONTAB_MAX_ENTRIES,
+    cwCollisions,
+    cwLooksLikeSystemCrontab,
+    cwMergeRuns,
+    cwParseCrontab,
+    cwParseEnvLine,
+    cwSplitPercent,
+  } = await import('../src/components/tools/cron-whisperer/crontab.ts')
+
+  // ── An assignment line is not an entry, and cron's own rule decides which ──
+  // Vixie's `load_env()`: NAME, optional space, `=`, optional space, VALUE, with
+  // VALUE optionally wrapped in matching quotes. A "looks like KEY=VALUE" regex
+  // gets both of the last two cases wrong in opposite directions.
+  assert.deepEqual(cwParseEnvLine('PATH=/usr/local/bin:/usr/bin'), { name: 'PATH', value: '/usr/local/bin:/usr/bin' })
+  assert.deepEqual(cwParseEnvLine('MAILTO=""'), { name: 'MAILTO', value: '' }, 'an empty quoted value is still an assignment')
+  assert.deepEqual(cwParseEnvLine('CRON_TZ = "Europe/Berlin"'), { name: 'CRON_TZ', value: 'Europe/Berlin' })
+  assert.deepEqual(cwParseEnvLine("TZ='Asia/Kolkata'"), { name: 'TZ', value: 'Asia/Kolkata' })
+  assert.deepEqual(cwParseEnvLine('SHELL=/bin/sh   '), { name: 'SHELL', value: '/bin/sh' }, 'an unquoted value is right-trimmed')
+  assert.equal(cwParseEnvLine('0 0 * * * cmd'), null, 'a schedule is not an assignment')
+  assert.equal(cwParseEnvLine('*/5 * * * * echo a=b'), null, 'an = inside a command does not make the line configuration')
+  assert.equal(cwParseEnvLine('@reboot X=1'), null, 'nor does one after a nickname')
+  assert.equal(cwParseEnvLine('=nope'), null, 'an empty name is not an assignment')
+
+  // ── The whole point: an assignment applies DOWNWARD ───────────────────────
+  // The entry above a CRON_TZ= is not in that zone. Reading a crontab as if the
+  // assignment applied to the file is the single most common misreading of one,
+  // and it is exactly what a one-expression tool cannot show you.
+  const cwTab = [
+    '# deploy box',                                   // 1
+    'MAILTO=""',                                      // 2
+    '',                                               // 3
+    '*/5 * * * * /usr/local/bin/health-check.sh',     // 4  — no zone
+    'CRON_TZ=America/New_York',                       // 5
+    '30 2 * * * /opt/nightly.sh   # not a comment',   // 6  — NY
+    'TZ=Asia/Kolkata',                                // 7
+    '0 9 * * 1-5 /opt/standup.sh',                    // 8  — Kolkata, flagged
+    'CRON_TZ=Mars/Olympus_Mons',                      // 9
+    '0 1 * * * /opt/bad-zone.sh',                     // 10 — named zone is unknown
+    'CRON_TZ=',                                       // 11
+    '0 4 * * * /opt/back-to-default.sh',              // 12 — override cleared
+  ].join('\n')
+  const cwDoc = cwParseCrontab(cwTab)
+
+  assert.deepEqual(
+    cwDoc.entries.map(e => [e.n, e.zone, e.zoneSource, e.zoneOk]),
+    [
+      [4, null, null, true],
+      [6, 'America/New_York', 'CRON_TZ', true],
+      [8, 'Asia/Kolkata', 'TZ', true],
+      [10, 'Mars/Olympus_Mons', 'CRON_TZ', false],
+      [12, null, null, true],
+    ],
+    'a CRON_TZ=/TZ= line applies to the entries BELOW it and stays in force until reassigned; an empty value clears it',
+  )
+  assert.equal(cwDoc.usesTz, true, 'a bare TZ= must be reported — implementations disagree about whether it moves the schedule at all')
+  assert.equal(
+    cwDoc.entries.find(e => e.n === 10).zoneOk, false,
+    'a zone this runtime cannot resolve must be marked, not silently treated as UTC',
+  )
+  assert.equal(cwDoc.lines.find(l => l.n === 1).kind, 'comment')
+  assert.equal(cwDoc.lines.find(l => l.n === 3).kind, 'blank')
+  assert.equal(cwDoc.lines.find(l => l.n === 2).kind, 'env')
+
+  // A `#` only opens a comment at the start of a line. Cron hands a trailing one
+  // straight to the shell, which is a real way to break a job by "just adding a
+  // comment" — so the command shown must keep it.
+  assert.equal(
+    cwDoc.entries.find(e => e.n === 6).command,
+    '/opt/nightly.sh   # not a comment',
+    'a trailing # is part of the command, not a comment',
+  )
+
+  // ── The percent rule (man 5 crontab) ──────────────────────────────────────
+  // Unescaped, `%` ends the command and the rest becomes stdin, with each
+  // further `%` a newline. `date +%Y%m%d` is the classic casualty.
+  assert.deepEqual(
+    cwSplitPercent('tar czf /backup/$(date +%Y%m%d).tgz /srv'),
+    { command: 'tar czf /backup/$(date +', stdin: 'Y\nm\nd).tgz /srv' },
+    'cron truncates the command at the first % and feeds the rest in on stdin',
+  )
+  assert.deepEqual(cwSplitPercent('echo hi'), { command: 'echo hi', stdin: null })
+  assert.deepEqual(
+    cwSplitPercent('echo 100\\% done'),
+    { command: 'echo 100% done', stdin: null },
+    '\\% is an escaped literal percent and does not split the command',
+  )
+  assert.equal(
+    cwParseCrontab('15 3 1 * * tar czf /b/$(date +%Y).tgz /srv').entries[0].stdin,
+    'Y).tgz /srv',
+    'the reader must surface the split, not print the line back as if cron ran all of it',
+  )
+
+  // ── A 6-field expression pasted into a crontab is not a 5-field one ───────
+  // Left alone it reads as a schedule whose command is a lone cron field, which
+  // is a confident answer to a question nobody asked.
+  const cwSix = cwParseCrontab('0 0 12 * * *')
+  assert.equal(cwSix.entries.length, 0)
+  assert.match(cwSix.errors[0].message, /6-field/, 'a seconds-first expression in a crontab must be named, not previewed')
+  // …and one with no command at all is not an entry either.
+  assert.match(cwParseCrontab('0 0 * * *\n0 1 * * *').errors[0].message, /no command/)
+
+  // ── The system crontab user column ────────────────────────────────────────
+  const cwSys = '0 5 * * * root /usr/bin/certbot renew\n17 * * * * www-data /usr/bin/php /srv/app/cron.php'
+  assert.deepEqual(
+    cwParseCrontab(cwSys, { systemUser: true }).entries.map(e => [e.user, e.command]),
+    [['root', '/usr/bin/certbot renew'], ['www-data', '/usr/bin/php /srv/app/cron.php']],
+  )
+  assert.deepEqual(
+    cwParseCrontab(cwSys).entries.map(e => e.user), [null, null],
+    'a user crontab has no user column — reading one where there is none would relabel the command',
+  )
+  // The hint that offers the switch has to be strict in the direction that
+  // matters: guessing "system" at a user crontab silently renames the command.
+  assert.equal(cwLooksLikeSystemCrontab(cwSys), true)
+  assert.equal(
+    cwLooksLikeSystemCrontab('0 5 * * * php /srv/app/cron.php\n0 6 * * * echo hi'), false,
+    'a command in the first position must not be mistaken for a user',
+  )
+  assert.equal(cwLooksLikeSystemCrontab('0 5 * * * root /a\n0 6 * * * /b'), false, 'the whole file has to agree')
+  assert.equal(cwLooksLikeSystemCrontab(''), false)
+
+  // ── The payoff: the zone on an entry really reaches the run computation ───
+  // Everything above is grammar. This is the part that would let a wrong answer
+  // through: the same line, above and below one CRON_TZ=, must resolve to
+  // different instants — and the one below must hit the New York spring-forward
+  // gap the engine assertions further up already pinned to 2027-03-14T07:00Z.
+  const cwPair = cwParseCrontab('30 2 * * * /a\nCRON_TZ=America/New_York\n30 2 * * * /b').entries
+  const cwFrom = cwAt('2027-03-12T12:00:00Z')
+  const cwBelow = cwCollectRuns(cwPair[1].parsed, cwFrom, { count: 4 }, new CwZoneClock(cwPair[1].zone, cwFrom))
+  const cwGap = cwBelow.find(r => r.dst === 'gap')
+  assert.ok(cwGap, 'the entry below CRON_TZ=America/New_York must hit that zone’s spring-forward gap')
+  assert.equal(
+    new Date(cwGap.ms).toISOString(), '2027-03-14T07:00:00.000Z',
+    'and land on the same instant the engine assertions pin for that expression in that zone',
+  )
+  const cwAbove = cwCollectRuns(cwPair[0].parsed, cwFrom, { count: 4 }, new CwZoneClock('UTC', cwFrom))
+  assert.ok(
+    !cwAbove.some(r => r.dst),
+    'the identical entry ABOVE the assignment is not in that zone — resolved in UTC it meets no transition at all',
+  )
+
+  // ── The merged timeline ───────────────────────────────────────────────────
+  const cwAtNow = cwAt('2026-08-20T10:00:00Z')
+  const cwClk = new CwZoneClock('UTC', cwAtNow)
+  const cwMDoc = cwParseCrontab('0 0 * * * /a\n0 0 * * * /b\n*/30 * * * * /c\n0 12 * * * /d')
+  const cwLists = k => cwMDoc.entries.map((e, entry) => ({
+    entry, runs: cwCollectRuns(e.parsed, cwAtNow, { count: k }, cwClk),
+  }))
+  // Property 1: the global first K is a subset of each entry's own first K, so
+  // collecting count+1 apiece is enough and the caller never guesses a horizon.
+  // Compared against collecting 40x as many — if the claim were false, the
+  // generous collection would surface a run the tight one missed.
+  assert.deepEqual(
+    cwMergeRuns(cwLists(6), 5).map(r => [r.ms, r.entry]),
+    cwMergeRuns(cwLists(200), 5).map(r => [r.ms, r.entry]),
+    'collecting count+1 runs per entry must give the same timeline as collecting far more',
+  )
+  // Property 2: `collides` means another ENTRY fires at this exact instant.
+  const cwRows = cwMergeRuns(cwLists(6), 6)
+  const cwSeen = new Map()
+  for (const r of cwRows) cwSeen.set(r.ms, (cwSeen.get(r.ms) ?? 0) + 1)
+  for (const r of cwRows) {
+    assert.equal(r.collides, cwSeen.get(r.ms) > 1, 'collides must be exactly "more than one entry at this instant"')
+  }
+  assert.ok(cwRows.some(r => r.collides), 'two jobs at 0 0 * * * start together — the usual reason a box stalls on the hour')
+  assert.ok(cwRows.some(r => !r.collides), '…and a job on its own does not')
+  // Property 3: the cap never cuts a tie in half. Showing one of two simultaneous
+  // jobs is worse than showing neither, because it answers the question wrongly.
+  const cwPairRows = cwMergeRuns(
+    cwParseCrontab('0 0 * * * /a\n0 0 * * * /b').entries.map((e, entry) => ({
+      entry, runs: cwCollectRuns(e.parsed, cwAtNow, { count: 2 }, cwClk),
+    })),
+    1,
+  )
+  assert.equal(cwPairRows.length, 2, 'a collision group must survive the count cap whole')
+  assert.equal(cwPairRows[0].ms, cwPairRows[1].ms)
+  // A run the scheduler never makes up is not "what fires next" and must not be
+  // in this list — the per-entry panel is where a lost run gets explained.
+  assert.ok(
+    cwMergeRuns([{ entry: 0, runs: [{ ms: 1, wall: null, dst: 'gap', fires: false }] }], 5).length === 0,
+    'a skipped run is not a run',
+  )
+
+  // ── Which jobs start together, over a window the answer is exact for ─────
+  // The other file-level question. It must not be answered from the displayed
+  // rows: on a crontab holding one five-minute job, every visible row IS that
+  // job and the midnight pile-up is off-screen. So the scan takes its own
+  // window, and the cap on it fails in the honest direction.
+  // A function declaration and not `const cwRun = (…) => ({…})`: an arrow whose
+  // body is a parenthesised object literal, immediately followed by a bare
+  // block, is ambiguous to TypeScript's parser — it reads the object literal as
+  // the NEXT arrow's parameter list. esbuild parses it correctly, so `npm run
+  // build` stays green while `npm run check` reports five phantom errors. Same
+  // trap AGENTS.md records for the JSX comment in a component tag.
+  function cwRun(ms, fires = true) {
+    return { ms, wall: null, dst: '', fires }
+  }
+  {
+    const scan = [
+      { entry: 0, runs: [cwRun(100), cwRun(200), cwRun(300)] },
+      { entry: 1, runs: [cwRun(200), cwRun(400)] },
+      { entry: 2, runs: [cwRun(200), cwRun(300)] },
+    ]
+    const { hits, busy } = cwCollisions(scan, 350, 99)
+    assert.deepEqual(busy, [])
+    assert.deepEqual(
+      hits, [{ ms: 200, entries: [0, 1, 2] }, { ms: 300, entries: [0, 2] }],
+      'a collision is an instant shared by more than one ENTRY, listed soonest first',
+    )
+    assert.ok(!hits.some(h => h.ms > 350), 'nothing past the stated horizon may be claimed')
+  }
+  // A non-firing run is not a start, so a spring-forward reading a wildcard
+  // schedule never makes up cannot manufacture a collision.
+  assert.deepEqual(
+    cwCollisions([
+      { entry: 0, runs: [cwRun(500, false)] },
+      { entry: 1, runs: [cwRun(500)] },
+    ], 999, 99).hits,
+    [],
+    'a run the scheduler skips does not collide with anything',
+  )
+  // An entry over the cap is NAMED, not half-compared: a partial enumeration of
+  // a job that runs constantly would report fewer collisions than really happen,
+  // and under-reporting is the wrong direction to be wrong in here.
+  {
+    const busyRuns = Array.from({ length: 5 }, (_, i) => cwRun(i + 1))
+    const { hits, busy } = cwCollisions(
+      [{ entry: 0, runs: busyRuns }, { entry: 1, runs: [cwRun(1)] }], 999, 5,
+    )
+    assert.deepEqual(busy, [0], 'an entry at the cap is reported as too busy to compare')
+    assert.deepEqual(hits, [], 'and contributes nothing, rather than a truncated answer')
+  }
+
+  // End to end, and the case only a whole-file view can answer at all: two
+  // entries in DIFFERENT zones that land on the same instant. 09:00 in New York
+  // on a January day is 14:00Z is 19:30 in Kolkata — nothing about either line
+  // read on its own says they start together.
+  {
+    const cwCross = cwParseCrontab([
+      'CRON_TZ=America/New_York',
+      '0 9 * * * /opt/reports/standup.sh',
+      'CRON_TZ=Asia/Kolkata',
+      '30 19 * * * /opt/india/standup.sh',
+    ].join('\n'))
+    const cwStart = cwAt('2027-01-14T00:00:00Z')
+    const cwScan = cwCross.entries.map((e, entry) => ({
+      entry,
+      runs: cwCollectRuns(e.parsed, cwStart, { count: 400, untilMs: cwStart + 86400_000 }, new CwZoneClock(e.zone, cwStart)),
+    }))
+    const cwHits = cwCollisions(cwScan, cwStart + 86400_000, 400).hits
+    assert.equal(cwHits.length, 1, 'the two entries meet exactly once in the day')
+    assert.deepEqual(cwHits[0].entries, [0, 1])
+    assert.equal(
+      new Date(cwHits[0].ms).toISOString(), '2027-01-14T14:00:00.000Z',
+      '09:00 New York and 19:30 Kolkata are the same instant in January — the collision only exists across the file',
+    )
+  }
+
+  // ── Bounded, like every other input this repo accepts ─────────────────────
+  const cwBig = Array.from({ length: CW_CRONTAB_MAX_ENTRIES + 40 }, (_, i) => `0 ${i % 24} * * * /job-${i}`).join('\n')
+  const cwBigDoc = cwParseCrontab(cwBig)
+  assert.equal(cwBigDoc.entries.length, CW_CRONTAB_MAX_ENTRIES, 'the entry count is bounded')
+  assert.equal(cwBigDoc.truncated, true, 'and a clipped paste says so rather than quietly dropping the tail')
+  assert.equal(cwParseCrontab('0 0 * * * /a'.padEnd(30_000, ' ')).truncated, true, 'so is a single absurd line')
+
+  // ── The component stays a DOM shell ───────────────────────────────────────
+  // Same rule as webhook-inspector/signature.ts and ./schedule.ts: a claim that
+  // lives in a DOM handler cannot be tested and will quietly stop being true.
+  const cwShell = await readFile(
+    new URL('../src/components/tools/cron-whisperer/CronWhisperer.ts', import.meta.url), 'utf-8',
+  )
+  assert.ok(/from '\.\/crontab'/.test(cwShell), 'CronWhisperer.ts must read the file grammar from ./crontab.ts')
+  assert.ok(
+    !/function cwParseCrontab|function cwParseEnvLine|function cwSplitPercent/.test(cwShell),
+    'the crontab grammar must have exactly one home — a second copy in the component drifts the first time either changes',
+  )
+  assert.ok(
+    cwShell.includes('data-type="tool-page"') && cwShell.includes('data-tool="cron-whisperer"'),
+    'the shared workbench root must survive the rewrite of the input',
+  )
+}
+
+console.log('cron whisperer crontab ok')
