@@ -503,6 +503,34 @@ Every content section displayed on the portfolio must be manageable via the `/ad
 
 Current config keys: `site`, `projects`, `experience`, `blogs`, `learnings`, `games`, `tools`
 
+### Hiding a section: `sections.blogs`
+
+Blogs ships hidden as of 2026-08-20 — the owner asked for it off the public site
+without retiring the URLs. `isBlogsPublic()` (`src/lib/config.ts`) is the one
+predicate, and it reads `site.sections.blogs`, a flag that already existed and
+which nothing read. Now the nav and footer (through `navLinks`), the sitemap, the
+hub's `ItemList` and the `noindex` on both blog routes all read it, for the same
+reason the Indexing section below gives: a section delisted in one signal and
+advertised in another is worse than either alone.
+
+Hidden, not deleted — both routes still answer 200, so links already in the wild
+keep working while the pages leave search. Flip the flag to restore it; make the
+routes 404 to retire it for good.
+
+Two things this cost, both worth knowing before hiding the next section:
+
+- `Site['sections']` had to be **widened** to `Record<string, boolean>`. The
+  config object is `as const`, so each flag was its own literal type and
+  `sections.blogs === true` read as comparing `false` to `true` — `astro check`
+  correctly called it unreachable. A flag whose type says it can never change is
+  not a flag. Same false-precision fix `nav` and `theme` already carry there.
+- The sitemap's **XML-escaping assertion used blog posts as its test data**, so
+  gating blogs off left that guard asserting nothing while still passing. Its
+  fixture now turns the section back on explicitly, and asserts separately that
+  the shipped (hidden) flag emits no `/blogs` URL. Hiding a section must not
+  quietly retire the test that keeps the sitemap parseable — check what a
+  fixture depends on before you remove its data source.
+
 ### Indexing: one predicate decides whether a page is real
 
 A page that search engines are told to `noindex` must not appear in the sitemap,
@@ -538,6 +566,20 @@ are still mounted, just not as games. Collapsing them back would either empty
 every article embed or resurrect six pages that no longer exist, and both
 failures are silent. `security:smoke` asserts the subset relation and that no
 Driftfield mode is still a game.
+
+A cross-link between two kinds is **derived, never stored twice**. Driftfield
+modes used to carry a `learning` slug naming the article about that engine, which
+is a second copy of a fact the article already states in its own `embed` — and
+every one of them 404'd the day those articles were deleted, on the hub and on
+six mode pages. `learningsAboutEmbed()` (`src/lib/learnings.ts`) reverses the
+lookup instead: an article that is gone has no entry to find, and an unpublished
+one fails the predicate in one place rather than in each caller. Game, tool and
+Driftfield pages all read it. `security:smoke` asserts the reverse lookup only
+ever yields published articles.
+
+Note `RelatedLinks` derives its heading `id` from the heading text — a product
+page renders it twice (siblings, plus the article), and two navs sharing one id
+is invalid HTML that also makes `aria-labelledby` ambiguous.
 
 Detail pages also cross-link their siblings via `src/components/RelatedLinks.astro`.
 Without it each product page is a crawl leaf reachable only through its hub, so
