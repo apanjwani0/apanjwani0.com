@@ -320,20 +320,24 @@ assert.equal(isValidRequestId(crypto.randomUUID()), true, 'what the capture rout
 // getRequest resolves exactly the recorded request and nothing else: an unknown
 // request id and an unknown bin are both null, indistinguishably, so the share
 // endpoint can 404 them identically without confirming which half was wrong.
+// One captured-request shape, shared by the store assertions below and by the
+// route assertions after them — so the two cannot drift into testing different
+// objects and disagreeing about what a captured request looks like.
+const smokeShape = {
+  method: 'POST',
+  query: '',
+  headers: [{ name: 'content-type', value: 'application/json' }],
+  contentType: 'application/json',
+  source: null,
+  bodyText: '{"hello":"smoke"}',
+  bodyTruncated: false,
+  size: 17,
+  receivedAt: Date.now(),
+}
+
 {
   const smokeBin = 'smoke-share-bin-0123456789abcdef'
-  const smokeReq = {
-    id: crypto.randomUUID(),
-    method: 'POST',
-    query: '',
-    headers: [{ name: 'content-type', value: 'application/json' }],
-    contentType: 'application/json',
-    source: null,
-    bodyText: '{"hello":"smoke"}',
-    bodyTruncated: false,
-    size: 17,
-    receivedAt: Date.now(),
-  }
+  const smokeReq = { ...smokeShape, id: crypto.randomUUID() }
   assert.equal(isValidBinId(smokeBin), true, 'fixture bin must pass the real validator')
   recordRequest(smokeBin, smokeReq)
   assert.deepEqual(getRequest(smokeBin, smokeReq.id), smokeReq)
@@ -341,17 +345,55 @@ assert.equal(isValidRequestId(crypto.randomUUID()), true, 'what the capture rout
   assert.equal(getRequest('smoke-share-bin-none-0123456789', smokeReq.id), null, 'unknown bin')
 }
 
-// The share route must validate BOTH path params before the store lookup and
-// must never let a captured payload into any cache.
+// The share route must validate BOTH path params before the store lookup, must
+// never let a captured payload into any cache, and must be rate-limited.
+//
+// RUN the route rather than grep it. The first version of this block asserted
+// that the strings `'Cache-Control': 'no-store'` and `createRateLimiter(`
+// appeared somewhere in the file, which is satisfied by the surviving `const`
+// declaration alone: deleting the whole `if (!allowShareRead(...))` enforcement
+// block, or replacing every `headers: NO_STORE` with `headers: {}`, both left
+// this green. A guard that a mutation survives is not a guard.
 {
-  const shareRoute = await readFile(
-    new URL('../src/pages/api/hook/[bin]/requests/[id].ts', import.meta.url),
-    'utf-8',
-  )
-  assert.ok(shareRoute.includes('isValidBinId('), 'share route validates the bin id')
-  assert.ok(shareRoute.includes('isValidRequestId('), 'share route validates the request id')
-  assert.ok(shareRoute.includes("'Cache-Control': 'no-store'"), 'share route responses are no-store')
-  assert.ok(shareRoute.includes('createRateLimiter('), 'share route reads are rate-limited')
+  const { GET: shareGet } = await import('../src/pages/api/hook/[bin]/requests/[id].ts')
+  const shareReq = () => new Request('http://localhost/api/hook/x/y', {
+    headers: { 'cf-connecting-ip': '203.0.113.77' },
+  })
+  const call = (bin, id) => shareGet({ params: { bin, id }, request: shareReq() })
+
+  const shareBin = 'smoke-share-route-0123456789abcd'
+  const shareId = crypto.randomUUID()
+  assert.equal(isValidBinId(shareBin), true, 'route fixture bin must pass the real validator')
+  recordRequest(shareBin, { ...smokeShape, id: shareId })
+
+  const hit = await call(shareBin, shareId)
+  assert.equal(hit.status, 200, 'a real bin+request resolves')
+  assert.equal(hit.headers.get('cache-control'), 'no-store', 'share responses must never be cacheable')
+  assert.equal((await hit.json()).request.id, shareId, 'and it is the request that was asked for')
+
+  // Both halves 404 identically, so the response never says which one was wrong.
+  for (const [bin, id, what] of [
+    [shareBin, crypto.randomUUID(), 'unknown request id'],
+    ['smoke-share-route-absent-01234567', shareId, 'unknown bin'],
+    ['too-short', shareId, 'bin id below the unguessability floor'],
+    [shareBin, '../../../etc/passwd', 'a traversal-shaped request id'],
+  ]) {
+    const miss = await call(bin, id)
+    assert.equal(miss.status, 404, `${what} must 404`)
+    assert.equal(miss.headers.get('cache-control'), 'no-store', `${what} response must be no-store`)
+  }
+
+  // …and the limiter really enforces. 60/min, so the 61st from one address trips.
+  let tripped = 0
+  for (let i = 0; i < 70; i++) {
+    const r = await call(shareBin, shareId)
+    if (r.status === 429) {
+      tripped++
+      assert.equal(r.headers.get('retry-after'), '60', 'a 429 must say when to come back')
+      assert.equal(r.headers.get('cache-control'), 'no-store', 'a 429 must not be cached either')
+    }
+  }
+  assert.ok(tripped > 0, 'the share route must rate-limit — 70 reads from one address drew no 429')
 }
 
 
@@ -1758,9 +1800,16 @@ for (const p of smokeProjects) {
     // copy, which would repaint borders those controls deliberately lack.
     const hoverProps = [...css.matchAll(/([^{}]*button:hover[^{}]*)\{([^}]*)\}/g)]
       .flatMap(m => [...m[2].matchAll(/^\s*([a-z-]+)\s*:/gm)].map(p => p[1]))
+    // Compare PARSED property names, never a substring. `border-color:` contains
+    // `color:`, so the substring form accepted a disabled rule that reset only the
+    // border and dropped `color` — the one property whose loss is actually visible,
+    // since a dead button would keep the hover's brightened text.
+    const disabledProps = new Set(
+      [...rule[2].matchAll(/^\s*([a-z-]+)\s*:/gm)].map(p => p[1]),
+    )
     for (const prop of new Set(hoverProps)) {
       assert.ok(
-        rule[2].includes(`${prop}:`),
+        disabledProps.has(prop),
         `${rel}: the shared hover sets "${prop}" but the disabled rule does not reset it — a dead button lights up on hover`,
       )
     }
