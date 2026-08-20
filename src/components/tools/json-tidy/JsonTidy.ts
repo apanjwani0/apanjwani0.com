@@ -15,6 +15,8 @@
  * (see the astro:page-load wiring in tools/[slug].astro).
  */
 
+import { flashLabel } from '../../../lib/flash'
+
 type Indent = '2' | '3' | '4' | 'tab'
 type OutputKind = 'format' | 'minify' | 'stringify' | 'yaml' | 'csv' | 'xml' | 'repair'
 type ViewMode = 'text' | 'tree'
@@ -1993,11 +1995,7 @@ class JsonTidyTool extends HTMLElement {
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
-    if (!btn) return
-    const original = btn.dataset.label ?? btn.textContent ?? ''
-    if (!btn.dataset.label) btn.dataset.label = original
-    btn.textContent = label
-    window.setTimeout(() => { btn.textContent = btn.dataset.label ?? original }, 1400)
+    flashLabel(btn, label, 1400)
   }
 
   private setStatus(state: 'idle' | 'ok' | 'err', label: string) {

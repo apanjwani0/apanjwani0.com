@@ -24,6 +24,8 @@
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
+import { flashLabel } from '../../../lib/flash'
+
 const RL_LS_PATTERN = 'regex-lab:pattern:v1'
 const RL_LS_FLAGS = 'regex-lab:flags:v1'
 const RL_LS_TEXT = 'regex-lab:text:v1'
@@ -651,10 +653,7 @@ class RegexLabTool extends HTMLElement {
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
-    const original = btn.dataset.label ?? btn.textContent ?? ''
-    if (!btn.dataset.label) btn.dataset.label = original
-    btn.textContent = label
-    window.setTimeout(() => { btn.textContent = btn.dataset.label ?? original }, 1200)
+    flashLabel(btn, label, 1200)
   }
 
   private setStatus(label: string) {

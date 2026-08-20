@@ -2,7 +2,8 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
-import { getSite, getProjects, getExperience, getPosts, getGames, getTools } from '../lib/config'
+import { getSite, getProjects, getExperience, getPosts, getGames, getTools, getLearnings } from '../lib/config'
+import { GAME_TAGS } from '../lib/games'
 import { validateSession } from '../lib/session'
 import { adminNotFound, getAdminSecret, getRuntimeEnv, getSessionToken, isAdminRequestAllowed } from '../lib/security'
 
@@ -24,17 +25,22 @@ const isAuth = bypassAuth || await validateSession(token, runtimeEnv?.SITE_CONFI
 const loginError = Astro.url.searchParams.get('error')
 
 // Load from KV (or fallback to bundled TS) so admin always shows live values
-const [siteConfig, projectItems, companyItems, postItems, gameItems, tools] = await Promise.all([
+const [siteConfig, projectItems, companyItems, postItems, gameItems, tools, learningItems] = await Promise.all([
   getSite(Astro.locals),
   getProjects(Astro.locals),
   getExperience(Astro.locals),
   getPosts(Astro.locals),
   getGames(Astro.locals),
   getTools(Astro.locals),
+  getLearnings(Astro.locals),
 ])
 
 const navJson = JSON.stringify(siteConfig.nav)
 const sectionsJson = JSON.stringify(siteConfig.sections)
+// The embeddable component keys, so the form can name the valid values instead of
+// leaving the author to remember them. An unrecognised embed still degrades to a
+// prose article (see learningEmbedTag) — this is a convenience, not the guard.
+const embedKeys = Object.keys(GAME_TAGS).join(', ')
 ---
 
 <Base title="admin" noindex={true}>
@@ -61,6 +67,7 @@ const sectionsJson = JSON.stringify(siteConfig.sections)
     <button class="tab" data-tab="projects">projects</button>
     <button class="tab" data-tab="experience">experience</button>
     <button class="tab" data-tab="blogs">blogs</button>
+    <button class="tab" data-tab="learnings">learnings</button>
     <button class="tab" data-tab="games">games</button>
     <button class="tab" data-tab="tools">tools</button>
     <button class="tab" data-tab="analytics">analytics</button>
@@ -162,6 +169,37 @@ const sectionsJson = JSON.stringify(siteConfig.sections)
     <div class="form-actions">
       <button type="button" id="add-post" class="add-btn">+ add post</button>
       <button type="button" id="save-blogs">save blogs</button>
+    </div>
+  </section>
+
+  <!-- Learnings -->
+  <section id="tab-learnings" class="tab-panel hidden">
+    {/* The valid embed keys ride on the container so the "add learning" template
+        can reuse them without a second copy of the list drifting out of date. */}
+    <div id="learnings-list" data-embed-keys={embedKeys}>
+      {learningItems.map((l) => (
+        <div class="item">
+          <label>title<input name="title" value={l.title} /></label>
+          <label>slug<input name="slug" value={l.slug} /></label>
+          <label>date<input name="date" type="date" value={l.date} /></label>
+          <label>summary<textarea name="summary">{l.summary}</textarea></label>
+          <label>content (markdown)<textarea name="content" rows="16">{l.content}</textarea></label>
+          <label>embed (optional)<input name="embed" value={l.embed ?? ''} placeholder={embedKeys} /></label>
+          <label>embed caption (optional)<input name="embedCaption" value={l.embedCaption ?? ''} /></label>
+          <label>seo title<input name="seoTitle" value={l.seoTitle ?? ''} /></label>
+          <label>meta description<input name="metaDescription" value={l.metaDescription ?? ''} /></label>
+          <label>keywords (optional seo)<input name="keywords" value={l.keywords ?? ''} /></label>
+          <label class="toggle-label">
+            published
+            <input name="published" type="checkbox" checked={l.published} />
+          </label>
+          <button type="button" class="remove-btn">remove</button>
+        </div>
+      ))}
+    </div>
+    <div class="form-actions">
+      <button type="button" id="add-learning" class="add-btn">+ add learning</button>
+      <button type="button" id="save-learnings">save learnings</button>
     </div>
   </section>
 
@@ -370,6 +408,7 @@ const sectionsJson = JSON.stringify(siteConfig.sections)
   #save-projects,
   #save-experience,
   #save-blogs,
+  #save-learnings,
   #save-games {
     background: var(--color-text);
     color: var(--color-bg);
@@ -965,6 +1004,55 @@ const sectionsJson = JSON.stringify(siteConfig.sections)
       keywords: (item.querySelector('[name="keywords"]') as HTMLInputElement).value.trim() || undefined,
     }))
     await save('blogs', data)
+  })
+
+  // --- Learnings ---
+  function learningsItemHTML() {
+    const list = document.getElementById('learnings-list')!
+    // Escaped: it lands in an HTML attribute, and the call site's quoting is not
+    // this function's to assume (see AGENTS.md, Escaping).
+    const keys = (list.dataset.embedKeys ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+    return `<div class="item">
+      <label>title<input name="title" value="" /></label>
+      <label>slug<input name="slug" value="" /></label>
+      <label>date<input name="date" type="date" value="" /></label>
+      <label>summary<textarea name="summary"></textarea></label>
+      <label>content (markdown)<textarea name="content" rows="16"></textarea></label>
+      <label>embed (optional)<input name="embed" value="" placeholder="${keys}" /></label>
+      <label>embed caption (optional)<input name="embedCaption" value="" /></label>
+      <label>seo title<input name="seoTitle" value="" /></label>
+      <label>meta description<input name="metaDescription" value="" /></label>
+      <label>keywords (optional seo)<input name="keywords" value="" /></label>
+      <label class="toggle-label">
+        published
+        <input name="published" type="checkbox" />
+      </label>
+      <button type="button" class="remove-btn">remove</button>
+    </div>`
+  }
+
+  document.getElementById('add-learning')!.addEventListener('click', () => {
+    document.getElementById('learnings-list')!.insertAdjacentHTML('beforeend', learningsItemHTML())
+  })
+
+  document.getElementById('save-learnings')!.addEventListener('click', async () => {
+    const items = document.getElementById('learnings-list')!.querySelectorAll('.item')
+    const data = Array.from(items).map(item => ({
+      slug: (item.querySelector('[name="slug"]') as HTMLInputElement).value,
+      title: (item.querySelector('[name="title"]') as HTMLInputElement).value,
+      date: (item.querySelector('[name="date"]') as HTMLInputElement).value,
+      summary: (item.querySelector('[name="summary"]') as HTMLTextAreaElement).value,
+      content: (item.querySelector('[name="content"]') as HTMLTextAreaElement).value,
+      embed: (item.querySelector('[name="embed"]') as HTMLInputElement).value.trim() || undefined,
+      embedCaption: (item.querySelector('[name="embedCaption"]') as HTMLInputElement).value.trim() || undefined,
+      seoTitle: (item.querySelector('[name="seoTitle"]') as HTMLInputElement).value.trim() || undefined,
+      metaDescription: (item.querySelector('[name="metaDescription"]') as HTMLInputElement).value.trim() || undefined,
+      keywords: (item.querySelector('[name="keywords"]') as HTMLInputElement).value.trim() || undefined,
+      published: (item.querySelector('[name="published"]') as HTMLInputElement).checked,
+    }))
+    await save('learnings', data)
   })
 
   // --- Games ---

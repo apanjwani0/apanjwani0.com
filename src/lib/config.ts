@@ -8,7 +8,7 @@
  * Usage in any Astro page, layout, or component:
  *   const site = await getSite(Astro.locals)
  *
- * Keys: 'site' | 'projects' | 'experience' | 'blogs' | 'games' | 'tools'
+ * Keys: 'site' | 'projects' | 'experience' | 'blogs' | 'games' | 'tools' | 'learnings'
  */
 
 import { readFile } from 'node:fs/promises'
@@ -19,6 +19,7 @@ import { experience as staticExperience } from '../config/experience'
 import { posts as staticPosts } from '../config/blogs'
 import { games as staticGames } from '../config/games'
 import { tools as staticTools } from '../config/tools'
+import { learnings as staticLearnings } from '../config/learnings'
 import { validateConfigData } from './config-schema'
 
 import type { Company } from '../config/experience'
@@ -26,6 +27,7 @@ import type { Project } from '../config/projects'
 import type { Post } from '../config/blogs'
 import type { Game } from '../config/games'
 import type { Tool } from '../config/tools'
+import type { Learning } from '../config/learnings'
 
 type KVStore = { get(key: string, type: 'json'): Promise<unknown> }
 
@@ -86,9 +88,14 @@ export interface NavItem {
  * Nav's flatMap badly enough that the call sites fell back to `any`. Widen `nav`
  * once here, at the boundary where the override actually happens.
  */
-export type Site = Omit<typeof staticSite, 'nav' | 'theme'> & {
+export type Site = Omit<typeof staticSite, 'nav' | 'theme' | 'sections'> & {
   nav: NavItem[]
   theme: 'light' | 'dark'
+  // Widened for the same reason as `nav` above: `as const` makes each flag its
+  // own literal type, so `sections.blogs === true` reads as comparing `false`
+  // to `true` and TypeScript calls it unreachable — while at runtime KV can set
+  // it to either. A flag whose type says it can never change is not a flag.
+  sections: Record<string, boolean>
 }
 
 /**
@@ -102,8 +109,29 @@ export type Site = Omit<typeof staticSite, 'nav' | 'theme'> & {
  * both would still render successfully — so the mismatch would surface as a
  * header and footer listing different sections on the same page.
  */
+/**
+ * The one predicate that decides whether the blogs section is public.
+ *
+ * `sections.blogs` already existed and nothing read it. Now everything does:
+ * the nav and footer (through `navLinks` below), the sitemap, the hub's
+ * ItemList, and the `noindex` on both blog routes. Same rule as games, tools
+ * and reads — a section that is delisted in one signal and advertised in
+ * another is worse than either alone, because a crawler resolves the
+ * contradiction by trusting neither.
+ *
+ * Hidden, not deleted: the routes still resolve, so links that already exist in
+ * the wild keep working while the pages drop out of search. Flip the flag back
+ * to `true` to restore the section; make the two routes 404 to retire it for
+ * good.
+ */
+export function isBlogsPublic(site: Site): boolean {
+  return site.sections.blogs === true
+}
+
 export function navLinks(site: Site): NavItem[] {
-  return site.nav.flatMap(item => item.children ?? [item])
+  return site.nav
+    .flatMap(item => item.children ?? [item])
+    .filter(item => isBlogsPublic(site) || !/^\/blogs(\/|$)/.test(item.href))
 }
 
 export async function getSite(locals: unknown): Promise<Site> {
@@ -124,9 +152,13 @@ export async function getPosts(locals: unknown): Promise<Post[]> {
 
 export async function getGames(locals: unknown): Promise<Game[]> {
   return (await getConfig(locals, 'games', staticGames as Game[]))
-    .filter(game => game.slug !== 'poker' && game.slug !== 'wallpaper-forge')
+    .filter(game => game.slug !== 'wallpaper-forge')
 }
 
 export async function getTools(locals: unknown): Promise<Tool[]> {
   return getConfig(locals, 'tools', staticTools as Tool[])
+}
+
+export async function getLearnings(locals: unknown): Promise<Learning[]> {
+  return getConfig(locals, 'learnings', staticLearnings as Learning[])
 }

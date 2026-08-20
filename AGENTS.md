@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Personal portfolio site — an SSR Astro app that renders a home hero, plus
-projects / experience / blogs / games / tools sections. All personal content is
+projects / experience / blogs / learnings / games / tools sections. All personal content is
 **runtime-editable** through a dev-only `/admin` page that writes to Cloudflare
 KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 
@@ -31,6 +31,7 @@ KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 ```sh
 npm run dev            # astro dev server (local /admin is open, no IP gate)
 npm run build          # astro build — must stay green before any commit
+npm run check          # astro check — type/template errors the build does NOT catch
 npm run preview        # serve the production build locally
 npm run generate-types # wrangler types (regen Cloudflare/KV bindings)
 npm run graph          # graphify update . — refresh the local code-graph
@@ -40,7 +41,17 @@ npm run analytics:smoke
 npm run origin:check   # assert the DEPLOYED edge posture against production
 ```
 
-There is no unit-test suite; **`npm run build` is the green-bar gate**. For
+There is no unit-test suite; **`npm run build` is the green-bar gate**, but it
+is not the whole gate: `astro build` compiles `.astro` files with Astro's own
+tolerant parser and **`npm run check` does not**. A `{/* … */}` JSX comment
+placed between two attributes of a component tag built green for four commits
+while making `src/pages/learnings/[slug].astro` unparseable to `astro check`,
+which silently excluded every type error in that file from being reported.
+A second instance, so this is a class and not a one-off: `const f = (a) => ({…})`
+followed immediately by a bare `{` block builds green under esbuild and throws
+five phantom parse errors under `astro check`, because TypeScript reads the
+object literal as the next arrow's parameter list.
+Run both; `check` must stay at 0 errors. For
 UI/route changes, also run `/browser-debug` against the dev server.
 The production GitHub deploy builds a Docker image on `main`, restarts the OCI
 container from the self-hosted runner, then fetches `/` inside the container
@@ -261,6 +272,13 @@ volume, debounced like `src/lib/visits.ts` — never a write per request. Stored
 rows are re-validated on load, so a corrupt or hand-edited file degrades to an
 empty board instead of crashing the route.
 
+The Hue Hunt daily board (`HUE_*` in `src/lib/hue-hunt-leaderboard.ts`,
+`src/pages/api/games/hue-hunt/daily.ts`) is the same shape again, and the
+repetition is the point: bounds, separate read/write limiters, debounced flush to
+`data/hue-hunt-daily.json`, rows re-validated on load. It shares Type Trial's
+`sanitizeName` rather than growing a second name-hygiene rule — one board's idea
+of an acceptable display name must not drift from the other's.
+
 ### Validate a client-submitted value against one the server derives
 
 The server must re-derive the thing being scored and check the payload against
@@ -277,6 +295,51 @@ finishes only when the typed text equals the passage, which makes wpm a
 *function* of elapsed time — the gate has to pin the pair to each other, not
 bound one of them. Ask it of every new validator: what does an attacker set the
 *other* field to?
+
+Hue Hunt answers that question by **removing the other field**. Its submission
+carries the day, a name and the five raw guesses and *no score at all*; the route
+pins the claimed day to its own `hueDayNumber()`, re-derives the five colours
+from `src/lib/hue-hunt-daily.ts` (imported by the browser too, so the two cannot
+disagree about today's colours) and computes the total itself. There is no
+number in the payload to play off another, which is a stronger position than any
+bound on one. Note the honest ceiling, stated in that module's docblock rather
+than implied away: anyone who reads `dailyColors()` out of the JS bundle can post
+a perfect run. Capping the score would not help — a cheat just posts a lower one
+— and closing it properly needs a server-issued round protocol this game does not
+warrant.
+
+### A verifier's algorithm must not come from the thing it is verifying
+
+`src/lib/jwt.ts` takes the algorithm as a **parameter** and never reads it from
+the token's own header. That is the defence against algorithm confusion: a
+verifier that trusts `header.alg` lets whoever crafted the token also choose how
+it gets checked — re-sign an RS256 token as HS256 using the RSA *public* key as
+the HMAC secret, and such a verifier confirms it. Token Bench defaults the
+control to the header value because that is convenient while debugging, and warns
+whenever the two disagree.
+
+Webhook Inspector is the second worked example, and it is the same rule wearing
+different clothes: the hash is chosen by the header **name** the sender used, not
+by any label inside the header's own value — a payload that could name its own
+algorithm would be picking how it gets verified. Signature validity and replay
+freshness also stay separate answers there, for the reason `exp` is separate from
+signature validity below.
+
+Same shape as the Type Trial rule above: **the thing being checked must not
+supply the terms of its own check.** Ask it of any new verifier.
+
+Two more properties that are asserted rather than assumed, because both have
+been real vulnerabilities in shipped JWT libraries:
+
+- `alg: none` is reported UNSIGNED and never verified, whatever else the token
+  carries. A header is attacker-controlled, so it can remove trust, never add it.
+- Signature validity and `exp`/`nbf` are **separate answers**. A correctly signed
+  token that expired last week is a normal state and is not a forgery; collapsing
+  both into one "valid" boolean is how expired-token bugs ship.
+
+The verification core lives in `src/lib/jwt.ts` and not in the component, so
+`security:smoke` can run real Web Crypto against the RFC 7515 A.1 vector plus the
+tampered-payload, wrong-key and `alg:none` cases.
 
 ### Escaping
 
@@ -299,6 +362,7 @@ it server-side, not just in the UI that mints them.
 ```sh
 npm run security:smoke   # asserts these invariants
 npm run build            # must stay green
+npm run check            # must stay at 0 errors
 ```
 
 Add an assertion for each new invariant, in whichever of the two homes fits: a
@@ -308,16 +372,190 @@ rule, a header the edge rewrites, whether the origin answers) goes in
 `scripts/origin-check.sh`, because nothing in this repo can see it. If a fix has
 no assertion, it will be undone by a later refactor that looks harmless.
 
+Then **break the thing the assertion guards and watch it fail.** A mutation that
+survives means the *assertion* is wrong, not that the mutation was a poor choice
+— the temptation is to pick an easier mutation and record a pass. The poker fast
+path is the worked example: a mutation that turned a split pot into a loss
+survived, because the integration fixture used a spot that never chops. The fix
+was a second, mirrored fixture that does.
+
 ## Key Conventions
 
+- **Every tool renders `div[data-type="tool-page"]`** with a matching
+  `data-tool="<dir-name>"`. That one root is where the shared workbench width
+  (`--tool-width`), side gutter, keyboard focus ring and `<kbd>` styling come
+  from (`src/styles/shared.css` + `tools-common.css`). A tool that invents its
+  own root silently opts out of all four and no longer lines up with its
+  neighbours — which is what `token-bench` and `flowmap` did for weeks, while
+  `wallpaper-forge` pinned itself to `--max-width` (768px, the PROSE column) and
+  rendered at half the width of every other tool. **A tool styles its internals,
+  never its own container width.** `security:smoke` asserts both halves.
+- **A tool's claims live in a module, not in the component.** Where a tool
+  asserts something checkable about the world, that logic goes in a sibling
+  module the component imports — `webhook-inspector/signature.ts`,
+  `cron-whisperer/schedule.ts`, `cron-whisperer/crontab.ts`,
+  `token-bench/diagnose.ts`, and `src/lib/jwt.ts`
+  before them — so
+  `security:smoke` can run it against the real thing rather than against a
+  screenshot of it. A claim buried in a DOM handler cannot be tested and will
+  quietly stop being true.
+
+  **A diagnostic proves every cause it reports, and reports none it cannot
+  prove.** `token-bench/diagnose.ts` is the worked example, and it points the
+  rule at the *failure* path rather than the success path. `src/lib/jwt.ts`
+  answers "does this signature hold" with a boolean, and "no" is where the real
+  debugging starts — so the module takes each hypothesis (the token was
+  re-encoded in transit, the ECDSA signature is ASN.1 DER, the secret only works
+  base64-decoded, the algorithm is wrong, the JWKS lacks that `kid`), changes
+  **exactly that one input**, re-runs real Web Crypto, and only reports a cause
+  it watched start verifying. Findings carry `proof: 'verified' | 'structural'`;
+  the latter is a fact about the bytes that needs no key. When nothing holds it
+  says so — refusing to invent a reason is the feature, because a tool whose
+  product is being trustworthy about the word "verified" cannot start guessing
+  the moment it fails.
+
+  Two things the assertions had to learn the hard way. The load-bearing one is
+  **negative** — given a simply-wrong key, the diagnosis must return *zero*
+  proved causes — because every positive assertion still passes on a module that
+  guesses enthusiastically. And a `proof` label is only as good as the narrowest
+  path that can set it: `inspectTokenText` (the paste lint) holds no key and
+  makes no crypto call, so it can never legitimately emit `verified`, and that
+  was unasserted while the diagnosis half was covered. A mutation dressing a lint
+  finding as proved survived the first merge. Assert the label on **every**
+  producer, not just the one the rule was written for.
+
+  Cron Whisperer is the current worked example. **A crontab names a wall clock,
+  not an instant**, so twice a year a reading either does not exist or happens
+  twice, and the engine resolves each wall-clock tuple to 0, 1 or 2 real instants
+  instead of stepping a `Date` forward — the version that stepped a `Date` never
+  revisited the repeated hour and silently under-counted every fall-back day.
+  Which of those get made up is Vixie's rule from `man 8 cron`: a job counts as
+  running "at a particular time" only when **neither** the hour nor the minute
+  field contains a `*`, and only those are made up after a forward jump or held
+  to one run after a backward one. Asserted against the real tz database, not
+  assumed — getting it backwards leaves the tool rendering happily with wrong
+  numbers.
+
+  **The second lesson is subtler and cost four bugs at once: the engine walks
+  wall readings and returns instants, and across a fall-back those two orders
+  disagree.** Every termination decision taken in wall order is therefore wrong,
+  and the final `sort` by instant hides the hole rather than showing it. All four
+  had the same shape — the walk started at *now's* own reading (so wall 01:00's
+  second, still-future instant was never visited), aborted the whole scan when one
+  instant crossed the horizon, stopped once it had `count` runs in wall order, and
+  the DST panel passed `count: 400` to a query whose only real bound is its
+  12-hour window. Ask it of anything that iterates a schedule: *is this loop
+  deciding in the same order it returns?*
+
+  The assertions brute-force the answer by stepping real UTC minutes and reading
+  the wall clock through `Intl`, which shares nothing with the engine — but that
+  oracle is valid **only for non-fixed-time schedules**. A literal wall-clock scan
+  cannot express Vixie's rule, so it "proves" a fixed-time job runs twice across a
+  repeat. Restricting an oracle to its domain is part of writing it; run outside
+  that domain it reports correct code as broken.
+
+  Known and deliberately not changed: `restricted` is `token !== '*'`, so `*/2` in
+  the day-of-month field counts as restricted and gets the OR rule. That matches
+  `man 5 crontab` ("aren't `*`") but not Vixie's source, which sets its star flag
+  on the field's first character and so would AND. Settle it against real cronie
+  before changing it — the two readings disagree, and the man page is what the
+  tool currently documents.
+
+  `crontab.ts` is the file **grammar**; `schedule.ts` is the **semantics**. They
+  are separate modules so a file-format change cannot perturb the wall-clock walk
+  above. Two grammar claims that get silently re-derived otherwise: a `CRON_TZ=`
+  or `TZ=` assignment applies **downward only**, so the entry *above* one is not
+  in that zone — the panel renders plausibly either way, which is what makes the
+  mistake invisible — and a bare `TZ=` is **flagged, not resolved**, because
+  implementations disagree about whether it moves the schedule or only sets the
+  job's environment. Settle that against real cronie and Debian source (and
+  record the versions) before turning the flag into an answer; same shape as the
+  `restricted` reading above.
+
+- **A hot path replaced for speed keeps the slow one as an untouched reference,
+  and asserts the fast one equal to it.** Poker Trainer's `evaluateBest` is
+  byte-for-byte unchanged and still defines what a hand is worth; `scoreBest`
+  (bitmasks in, one packed integer out) is the 600x fast path the enumerator
+  actually calls, and `security:smoke` proves the two agree over **all** 2,598,960
+  five-card hands rather than against remembered values. That structure is the
+  whole reason a rewrite of code an on-site article quotes numbers from can land
+  unattended: the equivalence assertion is what stops the two copies drifting.
+  Deleting the slow one to "clean up" removes the only definition the fast one is
+  checked against. Note `types.ts` still warns that a `HandRank` supports no
+  numeric shortcut — that warning is about `tb` alone, and the escape is that
+  `tb`'s length is fixed by `cat`, so leading the packing with `cat` keeps every
+  comparison inside one category.
+
+  **One layer up, the same rule for a memo — and a memo fails differently from a
+  rewrite.** `poker-trainer/engine/equity-cache.ts` is a bounded memo whose only
+  permitted behaviour is to agree with `engine/equity.ts`, and a wrong memo does
+  not crash: it returns a confident percentage belonging to a *different spot*.
+  Two properties are rules, not facts about that file:
+
+  - **A memo key is derived from the arguments, never supplied alongside them.**
+    Same family as "a verifier's algorithm must not come from the thing it
+    verifies". `cachedEquityVsRange` keys on the combos it was handed, not on the
+    range text they were parsed from, because a caller can pass a text and a
+    filtered list that disagree.
+  - **A canonicalisation is a claim about the function underneath, and needs the
+    invariance asserted in BOTH directions** — that the uncached function really
+    is order-blind, *and* that the memo exploits it. Asserting only the second
+    lets a canonicalisation bug pass by being wrong consistently. Note what is
+    deliberately *not* canonicalised: cards are sorted within a hand and within
+    the board, but the two hands are never sorted against each other, since the
+    result is index-aligned and swapping them hands hero villain's equity while
+    looking entirely plausible.
+
+- **A cost ceiling is written in the unit that actually costs.** The trainer's
+  ceiling is `PT_MAX_RANK_WORK` (five-card reads, via `handsRanked()` in the
+  engine) and no longer `PT_MAX_RUNOUTS`, which counted **boards**. Boards are
+  not the cost: preflop Omaha is *fewer* boards than preflop Hold'em (1,086,008
+  against 1,712,304) and twenty times dearer, because every Omaha board is the
+  best of sixty five-card hands. So one ceiling was simultaneously refusing
+  "what is AA against KK" — answerable in about a quarter of a second, and
+  refused with the words "too many to count exactly in a browser" — and
+  admitting a query that takes seven. Same shape as the one-sided-bounds trap
+  documented for Type Trial: the number looked like a real bound and was
+  measuring the wrong quantity. `PT_MAX_RANGE_WORK` is **not** this — it is a
+  *lesson* setting that decides which street a drill is dealt on, so widening it
+  changes what the drill teaches and is the owner's call, not a perf one.
+
+- **Canvas export is shared**: `src/lib/canvas-export.ts` +
+  `src/styles/canvas-export.css`. Any component with a canvas calls
+  `attachCanvasExport(host, () => canvas, { name })` and gets PNG at a chosen
+  scale, an animated GIF recorded from the live canvas, and — the part that was
+  missing everywhere — **a preview of the file before it is written**. Do not
+  hand-roll `toDataURL` + `<a download>` again: seven near-identical copies of
+  exactly that is what this replaced, and none of them offered a GIF for engines
+  whose whole point is that they move. Sizes and the custom-resolution validator
+  (`parseCustomSize`, bounded on both edges *and* total pixels) live there too.
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
 - **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
-- **SEO support copy**: Tool and game detail pages may render `seoContent` markdown from config under the interactive app for how-to, FAQ, privacy, and strategy copy. Keep the app first; this block is for search context and users who scroll.
+- **SEO support copy is OFF by default.** Tool and game detail pages still render
+  `seoContent` markdown from config when it is set, but every entry ships with it
+  empty as of 2026-08-20. The owner read the generated version — "how to play X",
+  "what is different in this version", "simple X strategy", "faq" on all 19 pages —
+  and called it boring and not useful, which it was: it restated the collapsible
+  "How to play" control sitting directly above it, and the FAQ answered questions
+  nobody had. That cost ~7,500 words of indexable text, which is a real SEO
+  trade-off made deliberately. The mechanism is kept, not deleted, so genuinely
+  useful copy can go back without a rebuild — but generated how-to/FAQ filler is
+  what this field is now known to attract, so anything added here needs to earn
+  its place the way a learnings article does.
 - **Decorative StarField**: Keep the home/background star canvas off tool and game detail pages. Lighthouse showed it spending CPU before the game became useful; detail pages should prioritize the interactive app.
 - **Fonts on tools/games**: Tool and game detail pages pass `loadFonts={false}` to `Head`. This avoids mobile CLS and a render-blocking third-party font request on utility pages; fallback system fonts are acceptable there.
 - **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
+- **Heavy deps are lazy-loaded per route**: `cytoscape` (~400KB) is imported
+  *inside* `connectedCallback` in `src/components/tools/flowmap/Flowmap.ts` and
+  nowhere else, so no other page pays for it. Any dependency of that size gets
+  the same treatment — a static import at module scope would put it in a shared
+  chunk and tax every tool page. It earns its place: hand-rolling pan/zoom, force
+  layout and edge routing is far more code than the dependency costs.
+  `nodeDimensionsIncludeLabels: true` is **required** on every Cytoscape layout —
+  it defaults to off, and without it a graph of word-labelled nodes lays out
+  using the box and ignores the text, piling up overlapping in one corner.
 - **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
 - **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed.
 
@@ -327,6 +565,57 @@ no assertion, it will be undone by a later refactor that looks harmless.
 
 - **Never hardcode** a colour, font, or type size in `global.css`, `home.css`, `shared.css`, component CSS, or scoped `<style>` blocks — reference a token: `var(--color-*)`, `var(--font-*)`, `var(--text-*)`, `var(--space-*)`.
 - **Load order**: `theme.css` (tokens) → `shared.css` (base elements + header, shared by both layouts) → `global.css` (content pages) / `home.css` (home hero) / component CSS.
+- **A `data-type` idiom BOTH layouts render belongs in `shared.css`, not
+  `global.css`** — `ToolBase.astro` does not load `global.css`. This shipped:
+  `/tools/driftfield` is a hub rendered through `ToolBase` writing the same
+  `[data-type="card-grid"]` markup as `/tools`, `/games`, `/projects` and
+  `/blogs`, so with the rules unreachable its six live simulations rendered as a
+  plain bulleted `<ul>` next to four hubs showing bordered cards, and
+  `p[data-type="page-intro"]` was unstyled on all six mode pages. A
+  higher-specificity Base-only *refinement* (`div[data-type="project-header"] >
+  [data-type="card-title"]`) may stay in `global.css`; the **base** rule may not.
+  `security:smoke` derives this from the ToolBase pages themselves rather than
+  from a list, so the next shared idiom cannot repeat it — and it requires the
+  base selector specifically, because a sheet holding only
+  `[data-type="card-grid"] > *` styles the cards and leaves the grid container
+  unstyled. That partial split is the likelier future shape of the same bug and
+  it escaped the first version of the assertion.
+- **…and so does a bare ELEMENT rule.** `h1` is the page title, both shells render
+  exactly one, and its size lived in `global.css` — which `ToolBase` does not load.
+  The guard written for the `data-type` idiom above walks `data-type` names and
+  could not see an element selector, so the tools lane grew **three** dialects:
+  eleven tools took 1.75rem (a size that is not a rung of the type scale) from an
+  **unscoped** `div[data-type="tool-header"] h1` that existed as two byte-identical
+  copies in `audio-transcriber.css` and `draftboard.css` — per-tool sheets share one
+  page bundle, so either copy styled all eleven, and deleting either one, a change
+  that reads as tidying a single tool, would have restyled nine tools that never
+  mentioned it — while Flowmap, Token Bench, the Driftfield hub and its six mode
+  pages matched no rule at all and fell to the UA default 2em. The page title is now
+  the bare `h1` in `shared.css` at `--text-title`; the `tool-header` block has one
+  home in `tools-common.css`, which is a *tools-lane* idiom because the single game
+  that renders it (Type Trial) renders the whole tools workbench root, having once
+  been a tool. `security:smoke` derives both halves from the components — which
+  `data-type`s more than one tool renders, and which belong to exactly one — so a
+  per-tool sheet cannot declare a lane-wide idiom, every ToolBase route must reach a
+  definition of one, and **only a tool-private subtree may size an h1 at all**
+  (Draftboard's `md-preview`, a heading inside a rendered markdown document, is the
+  one legitimate case and it stays legitimate without being named in a list).
+- **One disabled treatment**: `--opacity-disabled` in `theme.css` is the single
+  "this control is dead" value. It is an opacity and not a colour on purpose —
+  theme-agnostic, and it dims the border and the label together. Both lane floors
+  (`src/components/tools/tools-common.css`, `src/components/games/games-common.css`)
+  neutralise their own `:hover` by **re-stating the hovered properties at equal
+  specificity, declared afterwards** — source order, *not* `:hover:not(:disabled)`.
+  The guarded form is tidier and is wrong here: it lifts the hover rule from
+  (0,2,2) to (0,3,2), which out-specifies the per-tool tab opt-outs in
+  `hash-smith` / `codec-forge` / `regex-lab` and repaints a border they
+  deliberately lack. `tools-common.css` promises its specificity is
+  byte-identical, and that promise is load-bearing. `security:smoke` asserts the
+  token, the source order, and that the disabled rule resets every property the
+  shared hover sets — the last one derived from the hover block, so a hover
+  property added later is caught automatically. Note a tool joining the shared
+  button chrome now adds its selector to **three** lists in `tools-common.css`
+  (toolbar, button, `button:disabled`), not two.
 - **Theming**: `theme.css` defines light at `:root` and overrides the palette under `[data-theme="dark"]` (the site runs dark). Add a theme by adding another `[data-theme="…"]` block — palette tokens only.
 
 ## Skills & Commands
@@ -353,11 +642,55 @@ Every content section displayed on the portfolio must be manageable via the `/ad
 4. Add `'{section}'` to `CONFIG_TYPES` in `src/lib/config-schema.ts` — the `isConfigType()` gate `src/pages/api/admin/save.ts` validates against
 5. Add a tab + form + JS save handler in `src/pages/admin.astro`
 6. For a new tool or game, run `npm run og` and commit the card (see Share cards)
-7. For a new **game**, register its custom-element tag in `GAME_TAGS`
-   (`src/lib/games.ts`) and add its import to `mountGame()` + its CSS import in
-   `src/pages/games/[slug].astro`. Config alone is not enough — see Indexing.
+7. For a new **game**, register its custom-element tag in `EMBED_TAGS`
+   (`src/lib/embeds.ts`), add its slug to `GAME_SLUGS` (`src/lib/games.ts`;
+   `GAME_TAGS` is derived from those two, so there is nothing to edit in it), add
+   its import to `mountGame()` (`src/lib/game-mount.ts`) and its stylesheet to
+   `src/styles/games-embed.css`. Config alone is not enough — see Indexing.
 
-Current config keys: `site`, `projects`, `experience`, `blogs`, `games`, `tools`
+Current config keys: `site`, `projects`, `experience`, `blogs`, `learnings`, `games`, `tools`
+
+### Hiding a section: `sections.blogs`
+
+Blogs ships hidden as of 2026-08-20 — the owner asked for it off the public site
+without retiring the URLs. `isBlogsPublic()` (`src/lib/config.ts`) is the one
+predicate, and it reads `site.sections.blogs`, a flag that already existed and
+which nothing read. Now the nav and footer (through `navLinks`), the sitemap, the
+hub's `ItemList` and the `noindex` on both blog routes all read it, for the same
+reason the Indexing section below gives: a section delisted in one signal and
+advertised in another is worse than either alone.
+
+Hidden, not deleted — both routes still answer 200, so links already in the wild
+keep working while the pages leave search. Flip the flag to restore it; make the
+routes 404 to retire it for good.
+
+Three things this cost, all worth knowing before hiding the next section:
+
+- **Gate the signal, never delete it.** The sitemap's `/blogs` hub entry was
+  *removed* by that commit rather than wrapped in the predicate, so the sentence
+  above ("the sitemap … all read it") was true only of the per-post URLs. Flipping
+  the flag back restored the nav link, the `ItemList` and both routes' `index,
+  follow` — and left the hub as the one section landing page of five the sitemap
+  could never list again, which is the same contradiction the Indexing rule below
+  forbids, pointing the other way. A one-way door is not a flag. The tell was
+  visible in the diff: `latestPostDate` was left computed and unused while its twin
+  `latestLearningDate` still fed `/learnings`. Note the guard that existed asserted
+  only the hidden direction (`!body.includes('/blogs')`), which a permanent deletion
+  satisfies perfectly — a reversible switch has to be asserted in **both** states,
+  and `security:smoke` now derives that from `navLinks()`: every internal hub the nav
+  advertises must have a `<loc>` in the sitemap for that flag state.
+
+- `Site['sections']` had to be **widened** to `Record<string, boolean>`. The
+  config object is `as const`, so each flag was its own literal type and
+  `sections.blogs === true` read as comparing `false` to `true` — `astro check`
+  correctly called it unreachable. A flag whose type says it can never change is
+  not a flag. Same false-precision fix `nav` and `theme` already carry there.
+- The sitemap's **XML-escaping assertion used blog posts as its test data**, so
+  gating blogs off left that guard asserting nothing while still passing. Its
+  fixture now turns the section back on explicitly, and asserts separately that
+  the shipped (hidden) flag emits no `/blogs` URL. Hiding a section must not
+  quietly retire the test that keeps the sitemap parseable — check what a
+  fixture depends on before you remove its data source.
 
 ### Indexing: one predicate decides whether a page is real
 
@@ -375,10 +708,56 @@ So each kind has exactly **one** predicate, and every consumer reads it:
 - **Tools** — `status === 'live'`. `wip` renders publicly but is not indexable,
   so it is noindex, out of the sitemap, and cardless. `external` and `disabled`
   404 outright.
+- **Learnings** — `isPublishedLearning()` in `src/lib/learnings.ts`: `published
+  && content.trim()`. The second condition is the one the flag cannot express —
+  an entry saved from /admin with the box ticked and the body still empty would
+  otherwise be sitemapped and carry a card while its page rendered nothing.
+- **Driftfield** — `isDriftfieldPublic()` in `src/lib/driftfield.ts`: the
+  `driftfield` entry in the tools config is `status === 'live'`. The hub, every
+  `/tools/driftfield/<mode>` route, the sitemap and `scripts/generate-og.mjs`
+  all read it. Before it there was no one predicate and the three consumers gave
+  two answers: the hub 404'd and the sitemap dropped the modes unless `live`,
+  but the mode route **read no config at all**, so a withdrawn Driftfield still
+  answered 200 with `index, follow`, a `summary_large_image` card and
+  WebApplication JSON-LD — above a breadcrumb pointing at a hub serving 404.
+  Deliberately stricter than `/tools/[slug]`, where `wip` renders publicly
+  behind a noindex; the Driftfield hub has always 404'd on anything but `live`.
 
-`GAME_TAGS` lives in `src/lib/games.ts` and **not** in `src/config/games.ts`
-because the `/admin` Vite middleware regenerates that config file wholesale from
-`generateGames()` — an export added there is deleted on the next admin save.
+A project entry is the one place an on-site URL is **hand-written** rather than
+derived from a slug, so `security:smoke` holds any `apanjwani0.com` link in
+`src/config/projects.ts` to an enumerated set of path shapes (`/`,
+`/tools/<slug>`, `/games/<slug>`) and checks the slug against that kind's
+predicate. Adding a shape is a deliberate edit to `projectPathShapes`, made once
+something asserts that page is indexable — not a fall-through.
+
+`EMBED_TAGS` (`src/lib/embeds.ts`) and `GAME_TAGS` (`src/lib/games.ts`) both
+live in `src/lib/` and **not** in `src/config/games.ts`, because the `/admin`
+Vite middleware regenerates that config file wholesale from `generateGames()` —
+an export added there is deleted on the next admin save.
+
+They are not the same list, and conflating them is the mistake to avoid.
+`EMBED_TAGS` is every component that can be mounted anywhere; `GAME_TAGS` is the
+subset that has a `/games/<slug>` page, derived from `GAME_SLUGS`. The two split
+when the six generative engines moved out of `/games` into Driftfield
+(`/tools/driftfield/<mode>`, `src/lib/driftfield.ts`) and the articles — those
+are still mounted, just not as games. Collapsing them back would either empty
+every article embed or resurrect six pages that no longer exist, and both
+failures are silent. `security:smoke` asserts the subset relation and that no
+Driftfield mode is still a game.
+
+A cross-link between two kinds is **derived, never stored twice**. Driftfield
+modes used to carry a `learning` slug naming the article about that engine, which
+is a second copy of a fact the article already states in its own `embed` — and
+every one of them 404'd the day those articles were deleted, on the hub and on
+six mode pages. `learningsAboutEmbed()` (`src/lib/learnings.ts`) reverses the
+lookup instead: an article that is gone has no entry to find, and an unpublished
+one fails the predicate in one place rather than in each caller. Game, tool and
+Driftfield pages all read it. `security:smoke` asserts the reverse lookup only
+ever yields published articles.
+
+Note `RelatedLinks` derives its heading `id` from the heading text — a product
+page renders it twice (siblings, plus the article), and two navs sharing one id
+is invalid HTML that also makes `aria-labelledby` ambiguous.
 
 Detail pages also cross-link their siblings via `src/components/RelatedLinks.astro`.
 Without it each product page is a crawl leaf reachable only through its hub, so
@@ -388,6 +767,92 @@ only indexable items, for the reason above.
 Note the admin page is **dev-only** — see Security. Config edited in dev is
 written to `src/config/*.ts` and must be committed to reach production; there is
 no runtime editing on the server.
+
+### Learnings: writing, not just rendering
+
+The owner read the first seven articles and called them "full of ai slop… no
+prioritisation, no highlighting, no emotions… all the learnings are very same
+format copy paste. all starts with the interactive element directly." All four
+were fair. `docs/plans/learnings-voice.md` is the response and is **binding on
+every new article** — its "Hard bans" list is a set of LLM tics, not stylistic
+preferences.
+
+Three mechanisms exist because of that feedback:
+
+- **`{{embed}}` places the figure.** The route used to pin the component between
+  the summary and the prose, which is the worst available position — the reader
+  meets a simulation before being told what it is, and the article then has to
+  open by pointing at "the thing above". That single constraint is most of why
+  all seven read identically. `splitOnEmbed()` (src/lib/markdown.ts) splits the
+  source on a `{{embed}}` line; no marker means the figure goes after the prose,
+  so a typo costs the position and never the simulation.
+- **Editorial marks**: `==highlight==`, `>> pull quote`, and
+  `:::note/:::key/:::aside/:::warn` callouts, all parsed in
+  `src/lib/markdown.ts`. They are markdown extensions and **not** raw HTML on
+  purpose: content comes from config and /admin, and the whole pipeline exists so
+  an author can never introduce markup. Each extension parses its own body back
+  through marked, which keeps `renderer.html`'s escaping in force inside it. The
+  callout `kind` is matched against a fixed list rather than interpolated —
+  otherwise `:::" onmouseover=` would put an attribute in the output.
+- **`>` stays a real blockquote** (someone said this); `>>` is the pull quote.
+  Two jobs, two marks — using blockquote for emphasis makes real quotations
+  unreadable as quotations.
+
+### Learnings: articles that mount a live component
+
+`/learnings` is the long-form section, and the one thing it can do that a
+newsletter cannot is run the simulation it is describing inside the page. A
+learning's optional `embed` field names an **`EMBED_TAGS` key** — the wider list
+in `src/lib/embeds.ts`, because most of what these articles embed is no longer a
+game — and the article route mounts that component through `mountEmbed()` in
+`src/lib/game-mount.ts`, which strips the component's own chrome and then runs
+the same `mountGame()` dispatch `/games/[slug]` uses. Adding an article about an
+existing component therefore costs no interactive code at all.
+
+Three things follow from sharing components between the two routes, and each has
+already broken once:
+
+- **`src/lib/game-mount.ts` is the only copy of the dispatch.** Two copies drift
+  the first time a component moves, and the failure is silent — a blank element
+  on whichever route was forgotten.
+- **`src/styles/games-embed.css` is the only list of component stylesheets**, for
+  the same reason. Both routes import that one file.
+- **Every component writes its own `<h1>` and blurb into itself**, because on
+  `/games/<slug>` it *is* the page. Inside an article those duplicate the header
+  above them and give the document two `<h1>`s, so the learnings route strips
+  them. It does that with a `MutationObserver`, **not** a sweep after mount:
+  the component's markup lands *before* `astro:page-load` when its module is
+  already in the session's module cache (every in-site navigation) and *after*
+  it on a cold load, so no single moment is safe to sweep at. A timing-based
+  version passed a hard reload and failed on every in-site click.
+
+Unknown or absent `embed` degrades to a prose article rather than throwing — a
+typo in /admin should cost the simulation, not the page. `security:smoke` asserts
+that every shipped article's `embed` is really in `EMBED_TAGS`, because nothing
+else catches that typo.
+
+**An article that quotes numbers is quoting the component, and the numbers need
+an assertion.** "192 mazes on a 3×3 grid, the recursive backtracker can build 14"
+is not a fact about mazes — it falls out of Maze Weaver's default column count,
+its `ASPECT`, its three-builder list and the cell its backtracker starts from.
+Change one of those and the prose is false while the page still renders, the
+maze still works and the build stays green. `security:smoke` recomputes both
+counts from the 3×3 grid graph (never from the article or the component, so
+neither can pass by agreeing with itself) and pins the rest — grid size, the
+shortest corner-to-corner route, the builder button labels, the status-line
+wording the caption points at, and that switching builder keeps the seed — to the
+constants they were read from. Do the same for the next article that measures
+something.
+
+**"Recompute it independently" is not enough on its own — recompute it from the
+definition.** The pot-odds article said the equity a call needs is `B / (P + B)`;
+with its own `P` (the pot before the bet) it is `B / (P + 2B)`, because your own
+call joins the pot you are winning a share of. The drill computed the same wrong
+number, and the smoke test "recomputed" it too — independently of the source, but
+from the same misremembered fraction, so all three agreed, all three were wrong,
+and the gate stayed green. The replacement derives the break-even by bisecting
+`EV(call) = 0`, which cannot inherit a formula someone half-remembered. When a
+claim is a piece of arithmetic, assert the thing it is arithmetic *about*.
 
 ## Code graph (graphify)
 
@@ -407,6 +872,60 @@ without it.
   their own lines: git does not support end-of-line comments.
 - **Scope:** `.graphifyignore` keeps the graph focused on `src/` by excluding deps, build
   output, generated artifacts, and media.
+
+## The 2-hourly autonomous pass
+
+`portfolio-2h-pass` (a scheduled task; its prompt lives outside this repo at
+`~/.claude/scheduled-tasks/portfolio-2h-pass/SKILL.md`) runs every two hours and
+works **3–4 roles in parallel**, with every fourth run an audit instead of a
+build. The roster and the deterministic selection rule are in
+`.claude/scheduled/portfolio-roles.md`; the ledger is
+`.claude/scheduled/portfolio-pass-log.md`.
+
+Three things about it are load-bearing:
+
+- **The rotation is deterministic, not "whatever seems urgent".** Roles are
+  picked from a PASS counter the ledger carries, so the roster is walked.
+  Judgement-based selection reliably starves `seo-reach` and `projects` — the
+  roles whose neglect is invisible in a screenshot. The counter replaced a
+  clock-slot derivation on 2026-08-19: this runs on a laptop that sleeps, and a
+  slot-derived rotation never makes up a missed run, so the roles mapped to the
+  small hours were starved by exactly the mechanism meant to prevent starving.
+- **The selection rule has exactly one copy**, in `portfolio-roles.md`. The
+  task's own prompt used to restate it, the roster was corrected, and the prompt
+  kept the superseded expression — so the correction never took effect. The
+  prompt now references the roster and is forbidden from restating the formula.
+- **The ledger is read top-200-lines only**, so a run entry is capped at 12
+  lines and deferrals live in one in-place `## Open deferrals` section instead of
+  being restated in every entry. The previous `portfolio-run-log.md` reached
+  334 KB and was read whole on every run, which spent most of a context window on
+  history nobody needed. It is kept for reference and is no longer the working
+  ledger.
+
+The pass commits to `develop` behind the full gate (`build` + `check` +
+`security:smoke` + `poker:check`) and never pushes or touches `main`. `check` is
+in that list because `build` alone does not catch what it catches — see Build /
+Test / Run. The older daily `daily-portfolio-improvement` cowork task targets the
+same working tree — run one or the other, not both.
+
+An unattended run **cannot** start the dev server, so it cannot do the in-site
+click-through that the `astro:page-load` mounting bug requires. It appends the
+route to a `## Verification queue` at the top of the ledger instead; drain that
+queue with `/browser-debug` in an owner-present session.
+
+## Coming-soon pages have a working ask
+
+A game that is enabled but not playable renders a "want this sooner" counter
+(`src/lib/interest.ts`, `src/pages/api/games/interest.ts`). A counter and not a
+form: a form needs moderation, storage bounds on free text and an escaping story,
+and answers no question the page is asking.
+
+The bound that matters is the **key** bound. The route validates the submitted
+slug against the set of enabled-but-not-playable games it reads from config, so
+the body cannot introduce a store key — the number of counters is at most the
+number of coming-soon games, whatever traffic arrives. Accepting the body's slug
+directly would be the same mistake as trusting a client IP. Counts only, no
+identity; the one-vote-per-browser flag is localStorage and is UX, not a control.
 
 ## Standing Rules
 

@@ -16,6 +16,10 @@ export const site = {
       "href": "/tools"
     },
     {
+      "label": "learnings",
+      "href": "/learnings"
+    },
+    {
       "label": "blogs",
       "href": "/blogs"
     },
@@ -30,7 +34,7 @@ export const site = {
   },
   "sections": {
     "projects": true,
-    "blogs": true,
+    "blogs": false,
     "experience": false
   }
 } as const

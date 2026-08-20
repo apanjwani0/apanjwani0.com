@@ -21,11 +21,17 @@ interface Props {
 }
 
 const { heading, items } = Astro.props
+
+// Derived from the heading, not a constant: a product page renders this twice
+// (siblings, plus the article about it) and two navs sharing one id is invalid
+// HTML that also makes aria-labelledby ambiguous — a screen reader resolves a
+// duplicate id to the first match, so both navs would announce the same name.
+const headingId = `related-${heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`
 ---
 
 {items.length > 0 && (
-  <nav data-type="related-links" aria-labelledby="related-links-h">
-    <h2 id="related-links-h">{heading}</h2>
+  <nav data-type="related-links" aria-labelledby={headingId}>
+    <h2 id={headingId}>{heading}</h2>
     <ul>
       {items.map(item => (
         <li><a href={item.href}>{item.title}</a></li>

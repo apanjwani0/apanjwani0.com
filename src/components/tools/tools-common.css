@@ -5,7 +5,7 @@
 
    Every tool renders a `div[data-type="tool-page"]` root, so these rules reach
    all of them (json-tidy / list-forge / epoch-wizard / chroma-lab /
-   codec-forge / hash-smith / wallpaper-forge / md-enhanced /
+   codec-forge / hash-smith / wallpaper-forge / draftboard /
    audio-transcriber). */
 
 [data-tool] {
@@ -38,11 +38,15 @@ div[data-type="tool-page"] kbd {
 /* Toolbar layout + the shared button chrome, hoisted here from the five tools
    that share this exact language (list-forge / epoch-wizard / chroma-lab /
    codec-forge / hash-smith) so it lives in one place instead of five identical
-   copies. A new tool opts in by adding its [data-tool] selector to these lists.
+   copies. A new tool opts in by adding its [data-tool] selector to these lists,
+   and a new tool SHOULD unless it has a real reason not to: flowmap and
+   token-bench shipped without opting in, so their buttons fell back to the
+   browser default while every neighbour rendered the mono outline — the tools
+   lane looked like three different products.
 
    Kept as an explicit selector list — NOT a blanket div[data-type="tool-page"]
    rule — so the tools with their own button language are untouched: json-tidy
-   scopes buttons to its toolbar, and wallpaper-forge / md-enhanced /
+   scopes buttons to its toolbar, and wallpaper-forge / draftboard /
    audio-transcriber style their own controls. Specificity is byte-identical to
    the per-tool rules this replaces, and this file loads BEFORE the per-tool
    stylesheets, so every higher-specificity or later per-tool override (the
@@ -56,7 +60,9 @@ div[data-tool="codec-forge"] [data-group="toolbar"],
 div[data-tool="hash-smith"] [data-group="toolbar"],
 div[data-tool="cron-whisperer"] [data-group="toolbar"],
 div[data-tool="regex-lab"] [data-group="toolbar"],
-div[data-tool="webhook-inspector"] [data-group="toolbar"] {
+div[data-tool="webhook-inspector"] [data-group="toolbar"],
+div[data-tool="flowmap"] [data-group="toolbar"],
+div[data-tool="token-bench"] [data-group="toolbar"] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -71,7 +77,9 @@ div[data-tool="codec-forge"] button,
 div[data-tool="hash-smith"] button,
 div[data-tool="cron-whisperer"] button,
 div[data-tool="regex-lab"] button,
-div[data-tool="webhook-inspector"] button {
+div[data-tool="webhook-inspector"] button,
+div[data-tool="flowmap"] button,
+div[data-tool="token-bench"] button {
   padding: 0.32rem 0.85rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -91,9 +99,51 @@ div[data-tool="codec-forge"] button:hover,
 div[data-tool="hash-smith"] button:hover,
 div[data-tool="cron-whisperer"] button:hover,
 div[data-tool="regex-lab"] button:hover,
-div[data-tool="webhook-inspector"] button:hover {
+div[data-tool="webhook-inspector"] button:hover,
+div[data-tool="flowmap"] button:hover,
+div[data-tool="token-bench"] button:hover {
   color: var(--color-text);
   border-color: var(--color-muted);
+}
+
+/* …and the dead state the chrome above was missing entirely. games-common.css
+   has carried this floor since the games lane was unified; the tools lane never
+   got it, so a disabled button in these ten tools rendered byte-identically to a
+   live one, kept `cursor: pointer`, and lit up under the mouse.
+
+   Flowmap is where that shows: its Undo and Redo ship `disabled` and are toggled
+   on every edit (Flowmap.ts), so the two controls a user reaches for most often
+   were the two that lied about whether they would do anything. Dimming is
+   `--opacity-disabled` — the single site-wide value — so this lane, the games
+   lane and the shared canvas export bar all say "dead" the same way.
+
+   This rule re-states colour and border-colour rather than the tidier-looking
+   `:hover:not(:disabled)` guard on the rule above, and the reason is specificity,
+   not taste. `button:hover` is (0,2,2); adding `:not(:disabled)` makes it (0,3,2),
+   which then TIES the class column of the tab opt-outs
+   (`div[data-tool="hash-smith"] [data-tab-btn]:hover`, (0,3,1)) and beats them on
+   the element column — so hovering a tab in hash-smith / codec-forge / regex-lab
+   would have started painting the grey border those tabs deliberately do not
+   have. `button:disabled` is (0,2,2), identical to the hover rule, and is
+   declared after it, so it wins on source order and changes nothing else. The
+   file header's "specificity is byte-identical" promise is load-bearing; keep it.
+
+   Consequence to respect: a new hover property added above must be neutralised
+   here too. */
+div[data-tool="list-forge"] button:disabled,
+div[data-tool="epoch-wizard"] button:disabled,
+div[data-tool="chroma-lab"] button:disabled,
+div[data-tool="codec-forge"] button:disabled,
+div[data-tool="hash-smith"] button:disabled,
+div[data-tool="cron-whisperer"] button:disabled,
+div[data-tool="regex-lab"] button:disabled,
+div[data-tool="webhook-inspector"] button:disabled,
+div[data-tool="flowmap"] button:disabled,
+div[data-tool="token-bench"] button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+  color: var(--color-muted);
+  border-color: var(--color-border);
 }
 
 /* Card container — the surfaced panel treatment shared byte-for-byte across the
@@ -131,4 +181,40 @@ section[data-type="wi-card"] h2 {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--color-text);
+}
+
+/* Tool header — the title block eleven of the fourteen tools render: the page's
+   <h1> plus the one-line lede under it (`div[data-type="tool-header"]`). It is
+   the tools lane's idiom, so it lives with the lane's other shared chrome (the
+   toolbar, the button language, the card container) rather than in shared.css:
+   the games lane writes its own per-game header instead, and the one game that
+   renders this markup — Type Trial — renders the whole tools workbench root
+   (`data-type="tool-page"`, `data-tool="type-trial"`) because it used to BE a
+   tool. That is a straggler to unpick in TypeTrial.ts, not a reason to push a
+   tools-lane rule into the sheet the whole site loads.
+
+   Hoisted from TWO byte-identical unscoped copies, in audio-transcriber.css and
+   draftboard.css. Per-tool sheets share one page bundle, so an unscoped rule in
+   either reached all eleven: nine tools were styled by files they have nothing
+   to do with, and deleting either copy — a change that reads as tidying one
+   tool — would have restyled the other nine. `security:smoke` now derives which
+   data-types more than one tool renders and fails any per-tool sheet that
+   declares one unscoped, so the next hoist is not left to whoever notices.
+
+   No font-size on the h1. That is the page title and shared.css owns it for
+   both shells; the copies pinned it at 1.75rem, which is not a rung of the type
+   scale and disagreed with every page outside the lane. The lede keeps the
+   copies' 0.95rem as --text-sm — the same pixels, no hardcoded size. */
+div[data-type="tool-header"] {
+  margin-bottom: 1.5rem;
+}
+
+div[data-type="tool-header"] h1 {
+  margin: 0 0 0.35rem;
+}
+
+div[data-type="tool-header"] p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
 }

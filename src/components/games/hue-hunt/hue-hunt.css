@@ -53,6 +53,14 @@ div[data-type="hue-controls"] [data-group] {
   gap: 0.5rem;
 }
 
+/* The rule above sets `display: flex` on every group, and an author declaration
+   beats the user-agent `[hidden] { display: none }` whatever its specificity —
+   so the difficulty group stayed on screen in Type mode even though the code had
+   hidden it. Any group the component hides needs this to actually disappear. */
+div[data-type="hue-controls"] [data-group][hidden] {
+  display: none;
+}
+
 div[data-type="hue-controls"] [data-group="actions"] {
   margin-left: auto;
 }
@@ -520,6 +528,307 @@ span[data-type="hue-chan-val"] {
   flex-shrink: 0;
 }
 
+/* ── daily run ── */
+p[data-type="hue-progress"] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  letter-spacing: 0.02em;
+}
+
+/* A finished daily replaces the swatch + panel pair with one full-width card,
+   so the two-column board track has to collapse or the card renders in the
+   300px swatch column. */
+div[data-type="hue-board"][data-layout="result"] {
+  grid-template-columns: 1fr;
+}
+
+div[data-type="hue-result"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+p[data-type="hue-result-title"] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+p[data-type="hue-result-total"] {
+  margin: 0;
+  font-family: var(--font-mono);
+  color: var(--color-muted);
+  font-size: var(--text-base);
+}
+
+p[data-type="hue-result-total"] strong {
+  font-size: var(--text-title);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+p[data-type="hue-result-grid"] {
+  margin: 0;
+  font-size: var(--text-lg);
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+}
+
+p[data-type="hue-result-caption"] {
+  margin: 0.25rem 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+div[data-type="hue-result-rows"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+div[data-type="hue-result-row"] {
+  display: grid;
+  grid-template-columns: 1.5rem auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+span[data-type="hue-result-num"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+span[data-type="hue-result-pair"] {
+  display: inline-flex;
+}
+
+span[data-type="hue-result-sw"] {
+  width: 2rem;
+  height: 1.6rem;
+  border: 1px solid var(--color-border);
+}
+
+span[data-type="hue-result-sw"][data-role="answer"] {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+span[data-type="hue-result-sw"][data-role="guess"] {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  border-left: none;
+}
+
+span[data-type="hue-result-hex"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+span[data-type="hue-result-hex"][data-role="guess"] {
+  color: var(--color-muted);
+}
+
+span[data-type="hue-result-pct"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  text-align: right;
+}
+
+div[data-type="hue-result-actions"] {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.85rem;
+  margin-top: 0.35rem;
+}
+
+button[data-type="hue-share"] {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius-md);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-family: var(--font-serif);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+button[data-type="hue-share"]:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+p[data-type="hue-share-msg"] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-success);
+}
+
+p[data-type="hue-share-msg"][data-error] {
+  color: var(--color-error);
+}
+
+p[data-type="hue-reset"] {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+/* ── daily leaderboard ─────────────────────────────────────────
+   Shown in daily mode only. Deliberately quieter than the result card above
+   it: the card is the player's own run and is the thing they came for, and a
+   scoreboard that shouts louder than it reads as the point of the game. */
+section[data-type="hue-daily"] {
+  margin-top: 1.5rem;
+  padding: 1rem 1.1rem 1.15rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+section[data-type="hue-daily"] h2 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+}
+
+p[data-type="hue-daily-meta"] {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+form[data-type="hue-daily-form"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-end;
+  margin: 0 0 0.75rem;
+}
+
+form[data-type="hue-daily-form"] label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+form[data-type="hue-daily-form"] input {
+  max-width: 16rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+form[data-type="hue-daily-form"] input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+form[data-type="hue-daily-form"] button {
+  padding: 0.42rem 0.9rem;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+form[data-type="hue-daily-form"] button:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+form[data-type="hue-daily-form"] button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+p[data-type="hue-daily-note"] {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+p[data-type="hue-daily-note"][data-error] {
+  color: var(--color-error);
+}
+
+ol[data-type="hue-daily-board"] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+ol[data-type="hue-daily-board"] li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.35rem 0.4rem;
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+ol[data-type="hue-daily-board"] li:first-child {
+  border-top: none;
+}
+
+ol[data-type="hue-daily-board"] li[data-you] {
+  color: var(--color-accent);
+}
+
+ol[data-type="hue-daily-board"] [data-type="hue-lb-rank"] {
+  min-width: 1.6rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+ol[data-type="hue-daily-board"] li[data-you] [data-type="hue-lb-rank"] {
+  color: var(--color-accent);
+}
+
+/* A display name is a string a stranger chose, so it must be allowed to break
+   anywhere rather than push the score column off a phone screen. */
+ol[data-type="hue-daily-board"] [data-type="hue-lb-name"] {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+ol[data-type="hue-daily-board"] [data-type="hue-lb-score"] {
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+ol[data-type="hue-daily-board"] li[data-you] [data-type="hue-lb-score"] {
+  color: var(--color-accent);
+}
+
 /* ── responsive ── */
 @media (max-width: 620px) {
   div[data-type="hue-board"] {
@@ -533,6 +842,14 @@ span[data-type="hue-chan-val"] {
   }
   div[data-type="hue-controls"] [data-group="actions"] {
     margin-left: 0;
+  }
+  /* Narrow: the two hex codes stop fitting beside the swatches, so the row wraps
+     to swatches + score on one line and the codes underneath. */
+  div[data-type="hue-result-row"] {
+    grid-template-columns: 1.5rem auto minmax(0, 1fr) auto;
+  }
+  span[data-type="hue-result-hex"][data-role="guess"] {
+    grid-column: 3 / -1;
   }
 }
 

@@ -1,0 +1,54 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import { getSite, getLearnings } from '../lib/config'
+import { itemListJsonLd } from '../lib/jsonld'
+import { isPublishedLearning } from '../lib/learnings'
+import { render } from '../lib/markdown'
+import { formatDisplayDate } from '../lib/date'
+
+const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
+const cspNonce = (Astro.locals as any).cspNonce
+
+// Published only, newest first. Sort a copy — the accessor's array is shared, and
+// mutating it would reorder every other consumer in the same request. String
+// compare is correct for YYYY-MM-DD and the sort is stable for same-day entries.
+// The visible list and the ItemList below read the same array, so they agree.
+const ordered = learnings
+  .filter(isPublishedLearning)
+  .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+
+const ldJson = itemListJsonLd(
+  'Learnings by Aman Panjwani',
+  ordered.map(l => ({ name: l.title, url: `${site.url}/learnings/${l.slug}` })),
+)
+---
+
+<Base
+  wide
+  title="learnings"
+  description="Long-form explainers with the simulation running in the page — the history and mechanics behind ideas most people have only seen the output of."
+  keywords="interactive explainers, cellular automata, generative systems, computer science history, learn by simulation"
+>
+  {ordered.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
+  <h1>learnings</h1>
+  <p data-type="page-intro">
+    Things I found worth understanding properly, written up with the simulation
+    running in the page. Read the story, then poke at the thing itself.
+  </p>
+  {ordered.length === 0 && <p>Nothing published yet — the first pieces are being written.</p>}
+  <ul data-type="card-grid">
+    {ordered.map(l => (
+      <li>
+        <div data-type="writing-row">
+          <time data-type="writing-date" datetime={l.date}>{formatDisplayDate(l.date)}</time>
+          <h2 data-type="card-title">
+            <a href={`/learnings/${l.slug}`}>{l.title}</a>
+          </h2>
+        </div>
+        <div data-type="writing-summary" set:html={render(l.summary)} />
+      </li>
+    ))}
+  </ul>
+</Base>

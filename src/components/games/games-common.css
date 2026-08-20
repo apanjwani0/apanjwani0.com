@@ -27,3 +27,51 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
+
+/* Shared button chrome for the games lane — the same move tools-common.css made
+   for tools. Nine games (2048, maze-weaver, and the six Driftfield engines that
+   still ship a games stylesheet) carry a byte-identical copy of this rule scoped
+   to their own root; the newest three did not, and each invented its own size or
+   face instead: type-trial went mono at 0.8rem, hue-hunt at 0.3rem, poker-trainer
+   at --text-base. That is what "the buttons are not consistent" looks like from
+   the outside.
+
+   Deliberately LOWER specificity ([data-game] button = 0,1,1) than the per-game
+   copies (div[data-type="tw-game"] button = 0,1,2), so adding this changes
+   nothing that renders today — it is the floor a NEW game lands on instead of
+   the browser default, and the copies above it can be deleted one at a time
+   without a flag day.
+
+   Role-specific buttons stay per-game and should: poker-trainer's tabs and card
+   picks, the segmented mode switches, a primary CTA. Consistency is about the
+   default, not about flattening every control to one size. Tokens only. */
+[data-game] button {
+  padding: 0.32rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-serif);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+[data-game] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+/* The lane's dead state. `--opacity-disabled` rather than a number so this,
+   tools-common.css and the shared canvas export bar cannot drift apart again —
+   before the token they said 0.45 / nothing / a colour change respectively.
+   Colour and border-colour are re-stated to neutralise the hover rule above:
+   same specificity (0,2,1), declared later, so it wins on source order without
+   the `:hover:not(:disabled)` guard that would have out-specified every
+   per-game copy. A dead control must not light up under the cursor. */
+[data-game] button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+  color: var(--color-muted);
+  border-color: var(--color-border);
+}

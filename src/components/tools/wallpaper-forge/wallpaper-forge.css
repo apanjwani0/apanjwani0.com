@@ -1,7 +1,9 @@
-div[data-tool="wallpaper-forge"] {
-  max-width: var(--max-width);
-  margin: 0 auto;
-}
+/* No width override here. This tool used to pin itself to --max-width (768px,
+   the PROSE column) while every other tool renders at --tool-width, so Driftfield
+   was roughly half the width of its neighbours and its canvas preview was the
+   thing that suffered most. Width belongs to the shared
+   `[data-type="tool-page"]` rule in shared.css — a tool styles its internals,
+   never its own container. */
 
 div[data-type="wf-titlebar"] {
   display: flex;
@@ -99,7 +101,7 @@ div[data-type="wf-controls"] [data-group="transport"] button:is([data-action="do
 
 div[data-type="wf-controls"] button:disabled {
   cursor: wait;
-  opacity: 0.65;
+  opacity: var(--opacity-disabled);
 }
 
 output[data-type="wf-export-status"] {

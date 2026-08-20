@@ -1,27 +1,26 @@
 import type { Game } from '../config/games'
+import { EMBED_TAGS } from './embeds'
 
 /**
- * One custom-element tag per playable game.
+ * The games that ship a playable component, as a subset of every mountable
+ * component (`EMBED_TAGS`, src/lib/embeds.ts).
  *
- * This lives here, not in src/config/games.ts, because the /admin Vite
- * middleware regenerates that file wholesale from `generateGames()` on every
- * save — an export added there would be silently deleted the next time anyone
- * edits the games config.
+ * These were one list until the generative engines — flow field, murmuration,
+ * reaction-diffusion, falling sand, L-system, starfield — moved out of /games
+ * into Driftfield and the learnings articles. They are still mounted, just not
+ * as games, so "wired to a component" and "is a game" are now different
+ * questions and need different lists. Collapsing them back would either empty
+ * every article embed or resurrect six pages that no longer exist.
+ *
+ * Both lists live in src/lib/ and not in src/config/ because the /admin Vite
+ * middleware regenerates the config files wholesale from `generateGames()` — an
+ * export added there is silently deleted on the next admin save.
  */
-export const GAME_TAGS: Record<string, string> = {
-  '2048': 'twenty48-game',
-  'quintle': 'quintle-game',
-  'game-of-life': 'game-of-life-game',
-  'flow-field': 'flow-field-game',
-  'maze-weaver': 'maze-weaver-game',
-  'type-trial': 'type-trial-game',
-  'hue-hunt': 'hue-hunt-game',
-  'starfield-toy': 'starfield-voyager-game',
-  'murmuration': 'murmuration-game',
-  'turing-bloom': 'turing-bloom-game',
-  'sand-loom': 'sand-loom-game',
-  'lsystem-tree': 'lsystem-tree-game',
-}
+const GAME_SLUGS = ['2048', 'quintle', 'maze-weaver', 'type-trial', 'hue-hunt', 'poker-trainer'] as const
+
+export const GAME_TAGS: Record<string, string> = Object.fromEntries(
+  GAME_SLUGS.map(slug => [slug, EMBED_TAGS[slug]]),
+)
 
 /** The only fields these predicates read — exported so src/lib/og.ts can state
  *  the same shape instead of hand-rolling a second, looser one. */

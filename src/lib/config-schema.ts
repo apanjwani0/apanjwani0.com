@@ -1,6 +1,6 @@
 import { safeExternalUrl, safeInternalPath } from './security'
 
-export const CONFIG_TYPES = ['site', 'projects', 'experience', 'blogs', 'games', 'tools'] as const
+export const CONFIG_TYPES = ['site', 'projects', 'experience', 'blogs', 'games', 'tools', 'learnings'] as const
 export type ConfigType = typeof CONFIG_TYPES[number]
 
 const TOOL_STATUSES = new Set(['live', 'wip', 'external', 'disabled'])
@@ -131,6 +131,26 @@ function validTools(value: unknown): boolean {
   )
 }
 
+function validLearnings(value: unknown): boolean {
+  return Array.isArray(value) && value.every(learning =>
+    isRecord(learning)
+    && safeSlug(learning.slug)
+    && isString(learning.title)
+    && isString(learning.summary)
+    && isString(learning.date)
+    && isString(learning.content)
+    && typeof learning.published === 'boolean'
+    // `embed` is only ever compared against GAME_TAGS keys, which are slugs, so
+    // constrain it to the same shape here rather than letting arbitrary strings
+    // reach learningEmbedTag() and rely on its Object.hasOwn guard alone.
+    && (learning.embed === undefined || safeSlug(learning.embed))
+    && optionalString(learning.embedCaption)
+    && optionalString(learning.seoTitle)
+    && optionalString(learning.metaDescription)
+    && optionalString(learning.keywords)
+  )
+}
+
 export function isConfigType(value: string): value is ConfigType {
   return CONFIG_TYPES.includes(value as ConfigType)
 }
@@ -143,6 +163,7 @@ export function validateConfigData(type: string, data: unknown): boolean {
     case 'blogs': return validBlogs(data)
     case 'games': return validGames(data)
     case 'tools': return validTools(data)
+    case 'learnings': return validLearnings(data)
     default: return false
   }
 }

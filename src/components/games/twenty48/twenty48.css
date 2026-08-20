@@ -161,9 +161,17 @@ div[data-type="tw-game"] button:hover {
   border-color: var(--color-muted);
 }
 
+/* Undo is disabled with an empty history, and this rule out-specifies the lane
+   floor in games-common.css — (0,2,2) against its (0,2,1) — so the floor's
+   colour reset never reached it and a dead Undo still lit up under the cursor.
+   Re-state the two properties the hover above sets, at the same specificity and
+   later in source, which is the form games-common.css documents; the guarded
+   `:hover:not(:disabled)` would out-specify the transport CTA rules below. */
 div[data-type="tw-game"] button:disabled {
-  opacity: 0.45;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
+  color: var(--color-muted);
+  border-color: var(--color-border);
 }
 
 div[data-type="tw-controls"] [data-group="transport"] button[data-action="new"],

@@ -1,0 +1,29 @@
+/* Styles for every mountable game component, in one place.
+ *
+ * Both the game route and the learnings route render these components — the
+ * learnings section embeds them inline inside an article — so both need the same
+ * stylesheets. Listing them twice would drift the first time a component is
+ * added or moved, and the failure is silent: an unstyled canvas on whichever
+ * route was forgotten.
+ *
+ * Vite inlines these @imports at build time, so this is one stylesheet in the
+ * output, not a request waterfall. Order matches the original import order in
+ * src/pages/games/[slug].astro — games-common first, components after. */
+
+@import '../components/games/games-common.css';
+@import '../components/games/twenty48/twenty48.css';
+@import '../components/games/game-of-life/game-of-life.css';
+@import '../components/games/flow-field/flow-field.css';
+@import '../components/games/maze-weaver/maze-weaver.css';
+@import '../components/games/type-trial/type-trial.css';
+@import '../components/games/hue-hunt/hue-hunt.css';
+@import '../components/games/starfield-toy/starfield.css';
+@import '../components/games/murmuration/murmuration.css';
+@import '../components/games/turing-bloom/turing-bloom.css';
+@import '../components/games/sand-loom/sand-loom.css';
+@import '../components/games/lsystem/lsystem.css';
+@import '../components/games/quintle/quintle.css';
+@import '../components/games/poker-trainer/poker-trainer.css';
+
+/* Export bar for every canvas engine — see src/lib/canvas-export.ts. */
+@import './canvas-export.css';

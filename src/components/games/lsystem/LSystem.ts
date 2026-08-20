@@ -31,6 +31,8 @@
  * would collide with the other games at `astro check` time.
  */
 
+import { attachCanvasExport } from '../../../lib/canvas-export'
+
 interface FgPalette {
   id: string
   name: string
@@ -234,7 +236,6 @@ class LSystemGame extends HTMLElement {
             <button data-action="grow" type="button" title="Regrow / pause the animation (space)">Replay</button>
             <button data-action="reseed" type="button" title="New random wobble seed (R)">Reroll</button>
             <button data-action="leaves" type="button" aria-pressed="${this.leaves}" title="Toggle leaf blossoms at the tips (L)">Leaves: ${this.leaves ? 'on' : 'off'}</button>
-            <button data-action="download" type="button" title="Save the current frame as a PNG (D)">Download PNG</button>
           </div>
           <div data-group="species" role="group" aria-label="Species">
             <span data-type="fg-group-label">Species</span>
@@ -287,6 +288,13 @@ class LSystemGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="fg-canvas"]') as HTMLCanvasElement
+    // The shared export bar, replacing this engine's own "Download PNG".
+    // Each engine had a one-line toDataURL download and nothing else: no GIF for
+    // something that is only interesting because it MOVES, no choice of
+    // resolution, and no sight of the file before it landed in the downloads
+    // folder. All six shared that gap, so the fix is shared too — see
+    // src/lib/canvas-export.ts. The D shortcut still calls the old download().
+    attachCanvasExport(this, () => this.canvas, { name: 'lsystem' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.readTheme()
     this.wire()

@@ -41,26 +41,10 @@ main[data-fluid] {
   padding: 0;
 }
 
-h1 {
-  font-size: var(--text-title);
-  letter-spacing: normal;
-  margin-top: 0;
-  /* Even out multi-line headings so the last line isn't a lone orphan word.
-     Progressive enhancement — ignored by engines that don't support it. */
-  text-wrap: balance;
-}
-
-/* One-line lede that sits under a page's h1 to give listing pages context
-   (for readers) and descriptive copy (for search engines). */
-p[data-type="page-intro"] {
-  margin: -0.25rem 0 var(--space-section);
-  max-width: 42rem;
-  color: var(--color-muted);
-  font-size: var(--text-base);
-  line-height: 1.5;
-  /* Avoid ragged single-word last lines in the lede. */
-  text-wrap: pretty;
-}
+/* The page title's `h1` used to be declared here. It is in shared.css now:
+   BOTH shells render exactly one h1 per page and ToolBase.astro does not load
+   this file, so a size declared here reached only half the site. Do not re-add
+   it — two homes for one size is how the tools lane ended up with three. */
 
 h2 {
   font-size: var(--text-lg);
@@ -102,47 +86,6 @@ section h2 {
   font-size: var(--text-base);
   font-weight: 600;
   margin-bottom: 1rem;
-}
-
-/* Listing cards — projects, games, blogs and tools all render as bordered cards
-   in a responsive grid, so a short listing fills the page instead of a stranded
-   single column. One token-driven idiom shared across all four hubs; the grid
-   collapses to a single column on narrow screens with no extra media query. */
-[data-type="card-grid"] {
-  list-style: none;
-  margin: var(--space-section) 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-  gap: 1.25rem;
-}
-
-[data-type="card-grid"] > * {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 1.25rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  transition: border-color 0.15s ease;
-}
-
-/* Card lights up on hover AND when a control inside it takes keyboard focus, so
-   the whole card responds to keyboard users the same way it does to the mouse. */
-[data-type="card-grid"] > *:hover,
-[data-type="card-grid"] > *:focus-within {
-  border-color: var(--color-muted);
-}
-
-/* Listing card titles are real headings (<h2>) so screen readers can jump
-   between cards by heading; the reset makes the heading visually identical to
-   the former bold link — it just inherits the card's type scale. */
-[data-type="card-title"] {
-  margin: 0;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
 }
 
 div[data-type="project-header"] {

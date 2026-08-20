@@ -21,6 +21,11 @@
  */
 
 import { isPlayableGame, type GameFlags } from './games'
+import { isPublishedLearning, type LearningFlags } from './learnings'
+
+/** The page kinds that get a generated card. Doubles as the `public/og/` filename
+ *  prefix and the URL segment the card is named after. */
+export type OgCardKind = 'tools' | 'games' | 'learnings'
 
 /** Dimensions of a generated card. */
 export const OG_CARD_WIDTH = 1200
@@ -44,11 +49,11 @@ export interface OgImage {
  * writes exactly these names from the same config, so a separate `image` key
  * would be a second source of truth that can only ever disagree.
  */
-export function ogCardFile(kind: 'tools' | 'games', slug: string): string {
+export function ogCardFile(kind: OgCardKind, slug: string): string {
   return `${kind}-${slug}.png`
 }
 
-export function ogCardPath(kind: 'tools' | 'games', slug: string): string {
+export function ogCardPath(kind: OgCardKind, slug: string): string {
   return `/og/${ogCardFile(kind, slug)}`
 }
 
@@ -66,6 +71,10 @@ export function toolHasOgCard(tool: { status: string }): boolean {
 
 export function gameHasOgCard(game: GameFlags): boolean {
   return isPlayableGame(game)
+}
+
+export function learningHasOgCard(learning: LearningFlags): boolean {
+  return isPublishedLearning(learning)
 }
 
 // Cards on disk, read once per process. Directories cover dev (public/) and the
@@ -105,7 +114,7 @@ async function readCardNames(): Promise<Set<string> | null> {
  * process lifetime; a card added in dev needs a server restart to be seen.
  */
 export async function existingOgCardPath(
-  kind: 'tools' | 'games',
+  kind: OgCardKind,
   slug: string,
 ): Promise<string | undefined> {
   const names = await (cardNames ??= readCardNames())

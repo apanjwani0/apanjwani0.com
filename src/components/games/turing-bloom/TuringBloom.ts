@@ -31,6 +31,9 @@
  * LS_*, mulberry32…) would collide with the sibling toys at `astro check` time.
  */
 
+import { attachCanvasExport } from '../../../lib/canvas-export'
+import { flashLabel } from '../../../lib/flash'
+
 interface TbPalette {
   id: string
   name: string
@@ -232,7 +235,6 @@ class TuringBloomGame extends HTMLElement {
             <button data-action="play" type="button" aria-pressed="false" title="Run / pause the simulation (space)">Pause</button>
             <button data-action="reseed" type="button" title="Scatter fresh specks from a new seed (R)">Reseed</button>
             <button data-action="clear" type="button" title="Wipe to an empty field so you can paint (C)">Clear</button>
-            <button data-action="download" type="button" title="Save the current frame as a PNG (D)">Download PNG</button>
           </div>
           <div data-group="presets" role="group" aria-label="Pattern presets">
             <span data-type="tb-group-label">Pattern</span>
@@ -286,6 +288,13 @@ class TuringBloomGame extends HTMLElement {
     `
 
     this.canvas = this.querySelector('[data-type="tb-canvas"]') as HTMLCanvasElement
+    // The shared export bar, replacing this engine's own "Download PNG".
+    // Each engine had a one-line toDataURL download and nothing else: no GIF for
+    // something that is only interesting because it MOVES, no choice of
+    // resolution, and no sight of the file before it landed in the downloads
+    // folder. All six shared that gap, so the fix is shared too — see
+    // src/lib/canvas-export.ts. The D shortcut still calls the old download().
+    attachCanvasExport(this, () => this.canvas, { name: 'turing-bloom' })
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.grid = document.createElement('canvas')
     this.gctx = this.grid.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
@@ -676,12 +685,7 @@ class TuringBloomGame extends HTMLElement {
   private copySeed() {
     const btn = this.querySelector('[data-action="copy-seed"]') as HTMLButtonElement | null
     const text = String(this.seed)
-    const flash = (label: string) => {
-      if (!btn) return
-      const previous = btn.textContent
-      btn.textContent = label
-      setTimeout(() => { if (this.isConnected) btn.textContent = previous || 'Copy' }, 1200)
-    }
+    const flash = (label: string) => flashLabel(btn, label)
     if (!navigator.clipboard?.writeText) {
       flash('Copy unavailable')
       return

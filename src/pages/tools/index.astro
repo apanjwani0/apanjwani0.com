@@ -27,18 +27,20 @@ const cards = tools.filter(t => t.status !== 'disabled').map(tool => ({
 <Base
   wide
   title="tools"
-  description="Free developer tools — a live webhook tester, JSON repair, list and timestamp converters, colour and contrast checks, Base64/URL encoding, hashes and UUIDs, a cron expression explainer, a live regex tester, a seeded wallpaper and looping GIF maker, and a live markdown editor. No sign-up."
-  keywords="developer tools, online dev tools, webhook tester, webhook inspector, request bin, test webhook, http request inspector, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, sha256 hash generator, hmac generator, checksum verifier, uuid generator, guid generator, cron expression explainer, crontab explainer, cron to english, cron next run, regex tester, regular expression tester, regex replace, regex online, wallpaper generator, gif generator, pattern generator, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
+  description="Free developer tools — a live webhook tester, a JWT verifier, a text-to-diagram maker, JSON repair, list and timestamp converters, colour and contrast checks, Base64/URL encoding, hashes and UUIDs, a cron expression explainer, a live regex tester, the Driftfield generative-art studio, and a live markdown editor. No sign-up."
+  keywords="developer tools, online dev tools, webhook tester, webhook inspector, request bin, test webhook, http request inspector, jwt verifier, verify jwt signature, jwt decoder, mind map maker, flowchart from text, mermaid editor, diagram maker, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, sha256 hash generator, hmac generator, checksum verifier, uuid generator, guid generator, cron expression explainer, crontab explainer, cron to english, cron next run, regex tester, regular expression tester, regex replace, regex online, wallpaper generator, gif generator, pattern generator, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
 >
   {listed.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>tools</h1>
   <p data-type="page-intro">
     Small, fast, single-purpose tools I built to scratch my own itches — a live
-    webhook tester that catches real requests, a JSON formatter, repairer, and
-    tree viewer, a list converter, a Unix timestamp converter, a colour
-    converter and contrast checker, a Base64 and URL encoder/decoder, a SHA/HMAC
-    hash and UUID generator, a cron expression explainer, a live regex tester, a
-    seeded wallpaper and looping GIF maker, and a markdown editor.
+    webhook tester that catches real requests, a JWT verifier that actually
+    checks the signature, a diagram maker that draws your outline for you, a
+    JSON formatter, repairer, and tree viewer, a list converter, a Unix
+    timestamp converter, a colour converter and contrast checker, a Base64 and
+    URL encoder/decoder, a SHA/HMAC hash and UUID generator, a cron expression
+    explainer, a live regex tester, Driftfield — a generative art studio for
+    seeded wallpapers and looping GIFs — and a markdown editor.
     Each one is copy-first and keyboard-friendly. Most run entirely in your
     browser; the webhook inspector uses a real server to catch incoming
     requests — either way, no sign-ups and no tracking.

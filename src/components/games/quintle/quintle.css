@@ -99,6 +99,18 @@ div[data-type="q-seg"] button:hover {
   color: var(--color-text);
 }
 
+/* Both segmented switches and the action row are disabled while a row animates,
+   and both hover rules out-specify the lane floor in games-common.css —
+   (0,2,2) and (0,3,2) against its (0,2,1) — so the floor's colour reset never
+   reached them and a dead control still lit up under the cursor. Same fix and
+   same reasoning as twenty48's Undo: re-state the properties the hover above
+   sets, at equal specificity and later in source. The guarded
+   `:hover:not(:disabled)` form would out-specify the [data-active] rules below
+   and repaint the selected chip. */
+div[data-type="q-seg"] button:disabled {
+  color: var(--color-muted);
+}
+
 div[data-type="q-seg"] button[data-active] {
   color: var(--color-bg);
   background: var(--color-text);
@@ -119,6 +131,11 @@ div[data-type="q-controls"] [data-group="actions"] button {
 div[data-type="q-controls"] [data-group="actions"] button:hover {
   color: var(--color-text);
   border-color: var(--color-muted);
+}
+
+div[data-type="q-controls"] [data-group="actions"] button:disabled {
+  color: var(--color-muted);
+  border-color: var(--color-border);
 }
 
 div[data-type="q-controls"] [data-group="actions"] button[data-active] {
