@@ -275,6 +275,38 @@ assert.equal(isValidBinId('0123456789abcdef0123456789abcdef'), true) // what the
 assert.equal(isValidBinId('a'.repeat(65)), false)
 assert.equal(isValidBinId('../../etc/passwd'), false)
 
+// Every public hook route is rate-limited — DERIVED from the directory, not a list,
+// so a route added later cannot skip it by not being named here. `requests.ts`
+// shipped with neither verb limited while both its siblings were; its ETag made an
+// unchanged poll cheap but did nothing for a caller that never sends if-none-match.
+{
+  const hookDir = new URL('../src/pages/api/hook/', import.meta.url)
+  const routes = []
+  const walk = async dir => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const at = new URL(entry.name + (entry.isDirectory() ? '/' : ''), dir)
+      if (entry.isDirectory()) await walk(at)
+      else if (entry.name.endsWith('.ts')) routes.push(at)
+    }
+  }
+  await walk(hookDir)
+  assert.ok(routes.length >= 3, `expected the hook routes to be found, got ${routes.length}`)
+  for (const route of routes) {
+    const src = await readFile(route, 'utf-8')
+    const name = route.pathname.split('/api/hook/')[1]
+    const verbs = [...src.matchAll(/export const (GET|POST|PUT|PATCH|DELETE|ALL):/g)].map(m => m[1])
+    assert.ok(verbs.length > 0, `${name} exports no handler`)
+    assert.ok(
+      /createRateLimiter\(/.test(src) && /rateLimitKey\(/.test(src),
+      `${name} is a public endpoint with no rate limiter — AGENTS.md requires createRateLimiter on every one`,
+    )
+    assert.ok(
+      /isValidBinId\(/.test(src),
+      `${name} must validate the bin id server-side — the 24-char floor is the whole access control`,
+    )
+  }
+}
+
 // Request ids (the share-permalink half of a lookup) are server-minted UUIDs,
 // not a secrecy control — the bin id in the same URL already grants the bin —
 // but the route must still reject arbitrary shapes before touching the store.
