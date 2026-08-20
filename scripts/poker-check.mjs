@@ -219,6 +219,39 @@ assert.deepEqual(ploMirror.equity, [0.5, 0.5], 'mirrored Omaha hands split exact
 assert.throws(() => exactEquity([hand('As Ks'), hand('Qd Qc')], [], 'plo'),
   /exactly four hole cards/, 'a two-card hand is rejected in PLO')
 
+// …but every assertion above is SCORING-INVARIANT: equities summing to 1, a runout
+// count, and a mirrored split all hold just as well if the enumerator forgets Omaha
+// entirely and ranks nine cards best-of-any. Swapping `scoreOmaha` for `scoreBest`
+// inside `exactEquity` left both gates green while making every PLO number wrong —
+// the exactly-two-of-four rule was asserted only against `evaluateOmaha` directly,
+// never against the enumerator that the trainer actually calls.
+//
+// Board quads separate the two readings by the entire range. Board `9h 9s 9d 9c`:
+// under exactly-two-of-four nobody can use all four nines, so hero plays A-K + three
+// nines (trips) and villain plays 2-2 + three nines (a full house) and wins outright;
+// under best-of-any both simply hold the board's quads and hero's ace kicker wins.
+const ploBoardQuads = exactEquity(
+  [hand('Ah Kd 3c 4s'), hand('2h 2d 5c 6s')],
+  hand('9h 9s 9d 9c'),
+  'plo',
+)
+assert.deepEqual(
+  ploBoardQuads.equity, [0, 1],
+  'board quads: exactly-two-of-four makes this 0/100 — best-of-any scores it 96/4',
+)
+
+// Second reading of the same rule, in the other direction: one hole heart plus three
+// board hearts is a flush to a best-of-any evaluator and nothing at all in Omaha.
+const ploLoneHeart = exactEquity(
+  [hand('Ah 2c 3d 4s'), hand('8s 8d 5c 6c')],
+  hand('Kh Qh 7h 2s'),
+  'plo',
+)
+assert.equal(
+  Math.round(ploLoneHeart.equity[0] * 1000) / 1000, 0.275,
+  'one hole heart cannot make a flush — best-of-any inflates this to 42.5%',
+)
+
 /* ──────────────────────  range notation  ────────────────────── */
 
 // The shorthand people actually type. A pair token climbs the pairs; a non-pair

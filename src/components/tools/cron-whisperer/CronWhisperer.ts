@@ -542,10 +542,36 @@ class CronWhispererTool extends HTMLElement {
    * it refuses does the line get read as a crontab — which is what lets a single
    * pasted line *with* a command work at all.
    */
-  private looksLikeCrontab(trimmed: string): boolean {
+  /**
+   * Is this input a crontab FILE rather than a single expression?
+   *
+   * Only the unambiguous shapes answer true: more than one line, a comment, or an
+   * environment assignment. Field count is deliberately NOT one of them — a 6-field
+   * expression (seconds-first, the Quartz/node-cron form this tool advertises
+   * supporting) has exactly six tokens, so counting them here routed `0 15 10 * * SUN`
+   * to the file reader, which re-fielded it as the 5-field schedule `0 15 10 * *` plus
+   * a command named `SUN` and previewed "At 15:00 on day-of-month 10" — a different
+   * schedule, silently, with no error to show for it. A single line is an expression
+   * until `cwParse` says otherwise; see evaluate().
+   */
+  private looksLikeCrontabFile(trimmed: string): boolean {
     if (/\n/.test(trimmed)) return true
     if (trimmed.startsWith('#')) return true
     if (cwParseEnvLine(trimmed)) return true
+    return false
+  }
+
+  /**
+   * One line that is a schedule PLUS a command — `0 5 * * * /usr/bin/backup.sh`, or a
+   * nickname form like `@daily /usr/bin/backup.sh`. Checked only after `cwParse` has
+   * already declined, so a real expression never reaches it.
+   *
+   * The nickname arm is not a token count: `@daily /usr/bin/backup.sh` is three tokens
+   * and would fail a `>= 6` test, which is how it briefly rendered "Unknown nickname
+   * \"@daily /usr/bin/backup.sh\"" instead of reading the command off it.
+   */
+  private looksLikeLoneEntry(trimmed: string): boolean {
+    if (trimmed.startsWith('@')) return /^@\S+[ \t]+\S/.test(trimmed)
     return trimmed.split(/\s+/).length >= 6
   }
 
@@ -564,11 +590,11 @@ class CronWhispererTool extends HTMLElement {
     }
 
     const trimmed = expr.trim()
-    const crontabby = this.looksLikeCrontab(trimmed)
+    const isFile = this.looksLikeCrontabFile(trimmed)
 
     let P: CwParsed | null = null
     let parseError = ''
-    if (!crontabby) {
+    if (!isFile) {
       try {
         P = cwParse(trimmed)
       } catch (err) {
@@ -577,7 +603,11 @@ class CronWhispererTool extends HTMLElement {
     }
 
     if (!P) {
-      if (!crontabby) {
+      // The expression parser had its say first and declined. A single line it cannot
+      // read but which still carries a schedule plus something after it is a lone
+      // crontab entry, so hand it to the file reader; anything else is a malformed
+      // expression and its own error is the more useful one to show.
+      if (!isFile && !this.looksLikeLoneEntry(trimmed)) {
         this.showError(parseError)
         return
       }

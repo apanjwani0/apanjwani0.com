@@ -210,7 +210,13 @@ function cwReadEntry(
   let remainder: string
 
   if (trimmed.startsWith('@')) {
-    const m = /^(@\S+)(?:[ \t]+(.*))?$/.exec(trimmed) as RegExpExecArray
+    // NOT a safe cast: `@` alone, or `@` followed only by whitespace, matches
+    // startsWith but not this pattern, and the `as RegExpExecArray` version threw a
+    // TypeError out of the input handler — which left every panel frozen on the
+    // previous state, and rendered the whole tool blank when the bad line arrived
+    // from localStorage or a shared `#e=` link on mount.
+    const m = /^(@\S+)(?:[ \t]+(.*))?$/.exec(trimmed)
+    if (!m) return cwEntryError(n, text, 'Expected a nickname like @daily after the @.')
     schedule = m[1]
     remainder = (m[2] ?? '').trim()
   } else {

@@ -2200,7 +2200,66 @@ console.log('poker fast path ok')
     cwShell.includes('data-type="tool-page"') && cwShell.includes('data-tool="cron-whisperer"'),
     'the shared workbench root must survive the rewrite of the input',
   )
+
+  // ── A single line is an EXPRESSION until cwParse declines ─────────────────
+  // Routing by field count first silently re-read every 6-field (seconds-first)
+  // expression as a 5-field schedule plus a command: `0 15 10 * * SUN` previewed
+  // "At 15:00 on day-of-month 10" — a different schedule, no error shown. The
+  // routing is reproduced here from the component's own two predicates, so this
+  // fails if either is deleted or has the field-count test put back into it.
+  assert.ok(
+    /looksLikeCrontabFile\(/.test(cwShell) && /looksLikeLoneEntry\(/.test(cwShell),
+    'evaluate() must route on the file/lone-entry predicates, not on a raw field count',
+  )
+  {
+    // Read the predicate's own body: a field count anywhere inside it is the bug.
+    const body = cwShell.slice(cwShell.indexOf('private looksLikeCrontabFile'))
+    const end = body.indexOf('\n  }')
+    assert.ok(end > 0, 'looksLikeCrontabFile must exist and be readable')
+    assert.ok(
+      !/length\s*>=\s*6/.test(body.slice(0, end)),
+      'looksLikeCrontabFile must not decide by field count — that is the seconds-first bug',
+    )
+  }
+  {
+    const isFile = t => /\n/.test(t) || t.startsWith('#') || Boolean(cwParseEnvLine(t))
+    const lone = t => (t.startsWith('@') ? /^@\S+[ \t]+\S/.test(t) : t.split(/\s+/).length >= 6)
+    const route = t => {
+      if (!isFile(t)) {
+        try { cwParse(t); return 'expression' } catch { return lone(t) ? 'file' : 'error' }
+      }
+      return 'file'
+    }
+    for (const [text, want] of [
+      ['0 15 10 * * SUN', 'expression'],
+      ['*/30 * * * * *', 'expression'],
+      ['0 30 9 * * MON-FRI', 'expression'],
+      ['0 5 * * *', 'expression'],
+      ['@daily', 'expression'],
+      ['0 5 * * * /usr/bin/backup.sh', 'file'],
+      ['@daily /usr/bin/backup.sh', 'file'],
+      ['# comment', 'file'],
+      ['CRON_TZ=Asia/Kolkata', 'file'],
+      ['99 * * * *', 'error'],
+    ]) {
+      assert.equal(route(text), want, `"${text}" must be read as a ${want}`)
+    }
+    // …and the seconds-first reading is the RIGHT one, not merely a different one.
+    assert.equal(cwParse('0 15 10 * * SUN').hasSeconds, true, '6 fields means a leading seconds field')
+  }
+
+  // ── A malformed nickname is an error, never a crash ───────────────────────
+  // `@` with nothing usable after it matched startsWith('@') but not the nickname
+  // pattern, and the result was cast `as RegExpExecArray` — so it threw a TypeError
+  // out of the input handler, freezing every panel, and rendered the tool blank when
+  // the line arrived from localStorage or a shared `#e=` link on mount.
+  for (const bad of ['@', '@   ', '@\t']) {
+    const doc = cwParseCrontab(`${bad}\n0 5 * * * /bin/true`)
+    assert.equal(doc.lines[0].kind, 'error', `"${bad}" must be reported as an error line`)
+    assert.equal(doc.lines.length, 2, 'and the rest of the file must still be read')
+  }
 }
+
 
 console.log('cron whisperer crontab ok')
 
