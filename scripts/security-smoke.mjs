@@ -317,6 +317,29 @@ assert.equal(isValidRequestId('../../etc/passwd'), false)
 assert.equal(isValidRequestId(123), false)
 assert.equal(isValidRequestId(crypto.randomUUID()), true, 'what the capture route mints')
 
+// A share link followed in a tab already showing the tool is a same-document
+// fragment navigation — connectedCallback does not re-run, so loadShared() must
+// also be reachable from a hashchange listener, and that listener must be torn
+// down with the others.
+{
+  const wi = await readFile(
+    new URL('../src/components/tools/webhook-inspector/WebhookInspector.ts', import.meta.url), 'utf-8',
+  )
+  assert.ok(
+    /addEventListener\('hashchange'/.test(wi),
+    'the inspector must listen for hashchange, or a share link is inert in an already-open tab',
+  )
+  assert.ok(
+    /removeEventListener\('hashchange'/.test(wi),
+    'and must remove that listener on disconnect, like every other listener here',
+  )
+  const onHash = wi.slice(wi.indexOf('private onHashChange'))
+  assert.ok(
+    /loadShared\(\)/.test(onHash.slice(0, 200)),
+    'the hashchange handler must actually re-run loadShared()',
+  )
+}
+
 // getRequest resolves exactly the recorded request and nothing else: an unknown
 // request id and an unknown bin are both null, indistinguishably, so the share
 // endpoint can 404 them identically without confirming which half was wrong.
@@ -3453,6 +3476,44 @@ console.log('token bench proves every cause it reports, and reports none it cann
     assert.equal(
       cachedEquityVsRange(ecHero, parsed.combos, ecBoard), memoised,
       'the same range query recomputed — the range memo is not memoising',
+    )
+  }
+
+  // Everything above varies ONLY the range text — one hero, one board, one dead
+  // set. That is not enough: the combos are parsed with `dead = [...hero,
+  // ...board]`, so varying the hero or the board ALSO varies the combo list, and
+  // a key derived from the combos alone still tells those spots apart. The first
+  // version of this block did exactly that and was vacuous — the mutation that
+  // drops `spotKey` from the key survived it.
+  //
+  // The discriminating case is one FIXED combo list handed to different spots,
+  // which is also the call the rule in AGENTS.md describes: the key is derived
+  // from the combos it was handed, and must still carry the hero and board.
+  // A wrong memo does not crash — it returns a confident percentage belonging to
+  // a different spot.
+  {
+    clearEquityCache()
+    const villain = [ecHand('Qh Qd')]                        // blocks none of the below
+    const spots = [
+      { hero: ecHand('As Ks'), board: ecHand('2c 7d Jh') },
+      { hero: ecHand('9h 9d'), board: ecHand('2c 7d Jh') },  // same board, other hero
+      { hero: ecHand('As Ks'), board: ecHand('3c 4d 5h') },  // same hero, other board
+    ]
+    const answers = spots.map(({ hero, board }) => {
+      const memoised = cachedEquityVsRange(hero, villain, board)
+      assert.deepEqual(
+        plain(memoised), plain(ecEquityVsRange(hero, villain, board)),
+        'the memo disagrees with equityVsRange once hero or board varies',
+      )
+      return memoised.equity
+    })
+    assert.notDeepEqual(
+      answers[0], answers[1],
+      'AKs and 99 against the same range on the same board returned the SAME equity — the memo key ignores the hero',
+    )
+    assert.notDeepEqual(
+      answers[0], answers[2],
+      'the same hand on two different boards returned the SAME equity — the memo key ignores the board',
     )
   }
 

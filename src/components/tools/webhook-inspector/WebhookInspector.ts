@@ -179,6 +179,17 @@ class WebhookInspectorTool extends HTMLElement {
 
   private onVisibility = () => { if (!document.hidden && !this.paused) this.poll() }
 
+  /**
+   * A share link opened in a tab that is ALREADY on this page is a same-document
+   * fragment navigation: no reload, no re-mount, so `connectedCallback` never
+   * runs again. Without this the card stayed hidden and empty and the feature
+   * looked broken — and that tab is the likely one, since the person you send a
+   * capture to is usually the person already debugging it with you. Dismiss
+   * strips the fragment with replaceState, so re-opening the same link is
+   * hash-only too and was inert for the same reason.
+   */
+  private onHashChange = () => { void this.loadShared() }
+
   connectedCallback() {
     this.binId = this.loadBinId()
     this.paused = this.readLS(WI_LS_PAUSED) === '1'
@@ -316,6 +327,7 @@ class WebhookInspectorTool extends HTMLElement {
     // onKeydown is what keeps that from hijacking keys meant for other controls.
     document.addEventListener('keydown', this.onKeydown)
     document.addEventListener('visibilitychange', this.onVisibility)
+    window.addEventListener('hashchange', this.onHashChange)
 
     this.render()
     this.startPolling()
@@ -335,6 +347,7 @@ class WebhookInspectorTool extends HTMLElement {
     this.verifyToken++
     document.removeEventListener('keydown', this.onKeydown)
     document.removeEventListener('visibilitychange', this.onVisibility)
+    window.removeEventListener('hashchange', this.onHashChange)
   }
 
   private q<T extends HTMLElement = HTMLElement>(sel: string): T {

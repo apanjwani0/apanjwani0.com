@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-08-20)
 
 ## Corpus Check
-- 146 files · ~244,301 words
+- 146 files · ~245,373 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2406 nodes · 5257 edges · 100 communities (84 shown, 16 thin omitted)
+- 2406 nodes · 5257 edges · 101 communities (85 shown, 16 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `fb4b0cb2`
+- Built from commit: `ea1dfb9f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -109,6 +109,7 @@
 - [[_COMMUNITY_Community 94|Community 94]]
 - [[_COMMUNITY_Community 95|Community 95]]
 - [[_COMMUNITY_Community 96|Community 96]]
+- [[_COMMUNITY_Community 97|Community 97]]
 - [[_COMMUNITY_Community 175|Community 175]]
 - [[_COMMUNITY_Community 176|Community 176]]
 - [[_COMMUNITY_Community 178|Community 178]]
@@ -126,14 +127,14 @@
 10. `SandLoomGame` - 37 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `main()` --calls--> `isDriftfieldPublic()`  [EXTRACTED]
+  scripts/generate-og.mjs → src/lib/driftfield.ts
 - `main()` --calls--> `ogCardFile()`  [EXTRACTED]
   scripts/generate-og.mjs → src/lib/og.ts
 - `cwRunsFor()` --calls--> `cwParse()`  [EXTRACTED]
   scripts/security-smoke.mjs → src/components/tools/cron-whisperer/schedule.ts
 - `esc()` --calls--> `escapeHtml()`  [EXTRACTED]
   scripts/generate-og.mjs → src/lib/escape.ts
-- `main()` --calls--> `isDriftfieldPublic()`  [EXTRACTED]
-  scripts/generate-og.mjs → src/lib/driftfield.ts
 - `size()` --calls--> `parseRange()`  [EXTRACTED]
   scripts/poker-check.mjs → src/components/games/poker-trainer/engine/ranges.ts
 
@@ -147,7 +148,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (100 total, 16 thin omitted)
+## Communities (101 total, 16 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.07
@@ -170,8 +171,8 @@ Cohesion: 0.09
 Nodes (15): mountEmbed(), mountGame(), stripEmbedChrome(), FG_PALETTES, FG_PRESETS, fgClamp(), fgExpand(), fgHash() (+7 more)
 
 ### Community 6 - "MdEnhanced Export Pipeline (PDF/Image)"
-Cohesion: 0.05
-Nodes (58): ../../../components/RelatedLinks.astro, breadcrumbLd, crumbs, ldJson, tool, breadcrumbLd, crumbs, EngineTag (+50 more)
+Cohesion: 0.07
+Nodes (40): breadcrumbLd, crumbs, game, gameIntroHtml, GameTag, ldJson, liveGame, relatedGames (+32 more)
 
 ### Community 7 - "Admin API Route Handlers (login/logout/save)"
 Cohesion: 0.20
@@ -350,8 +351,8 @@ Cohesion: 0.15
 Nodes (26): cardKey(), combinations(), FULL_DECK, handClass(), outsAgainst(), RANK_COST, rankHand(), remainingDeck() (+18 more)
 
 ### Community 60 - "Community 60"
-Cohesion: 0.08
-Nodes (33): Learning, learnings, Tool, Tool (interface), ToolStatus (type), tools, ToolStatus, getLearnings() (+25 more)
+Cohesion: 0.21
+Nodes (12): Learning, learnings, escapeHtml(), toolHasOgCard(), cardHtml(), esc(), main(), OUT_DIR (+4 more)
 
 ### Community 61 - "Community 61"
 Cohesion: 0.33
@@ -359,7 +360,7 @@ Nodes (5): Client wiring (not yet — comes with the rooms slice), Layout, Onlin
 
 ### Community 62 - "Community 62"
 Cohesion: 0.09
-Nodes (24): ExperienceItem Props, ../components/ProjectCard.astro, forksUrl, projectUrl, ProjectCard Props, stargazersUrl, GitHubStats, callout (+16 more)
+Nodes (21): ExperienceItem Props, ../components/ProjectCard.astro, forksUrl, projectUrl, ProjectCard Props, stargazersUrl, GitHubStats, callout (+13 more)
 
 ### Community 66 - "Community 66"
 Cohesion: 0.11
@@ -410,8 +411,8 @@ Cohesion: 0.18
 Nodes (13): callEv(), countRunouts(), equityVsRange(), exactEquity(), handsRanked(), holeCount(), rangeWork(), requiredEquity() (+5 more)
 
 ### Community 81 - "Community 81"
-Cohesion: 0.09
-Nodes (31): breadcrumbLd, crumbs, ldJson, post, ../../../components/Breadcrumbs.astro, ../components/Footer.astro, links, social (+23 more)
+Cohesion: 0.07
+Nodes (38): breadcrumbLd, crumbs, ldJson, post, ../../../components/Breadcrumbs.astro, ../components/Footer.astro, links, social (+30 more)
 
 ### Community 82 - "Community 82"
 Cohesion: 0.12
@@ -442,8 +443,8 @@ Cohesion: 0.40
 Nodes (5): Admin Config Management, Hiding a section: `sections.blogs`, Indexing: one predicate decides whether a page is real, Learnings: articles that mount a live component, Learnings: writing, not just rendering
 
 ### Community 91 - "Community 91"
-Cohesion: 0.52
-Nodes (6): initNav(), mountStarField(), onScroll(), pageSetup(), syncNavHeight(), syncNavScrolled()
+Cohesion: 0.15
+Nodes (14): ../components/Head.astro, ../components/Nav.astro, links, ../../../layouts/ToolBase.astro, ogImage, initNav(), mountStarField(), onScroll() (+6 more)
 
 ### Community 92 - "Community 92"
 Cohesion: 0.19
@@ -455,7 +456,7 @@ Nodes (11): Definition of done, Explicitly not in scope, Features, Flowmap — a
 
 ### Community 94 - "Community 94"
 Cohesion: 0.07
-Nodes (27): ../components/Head.astro, ../../../layouts/ToolBase.astro, ogImage, ogImageMeta(), breadcrumbLd, crumbs, ldJson, relatedTools (+19 more)
+Nodes (28): Tool, Tool (interface), ToolStatus (type), tools, ToolStatus, tools/index.astro tools listing, tools/[slug].astro dynamic tool page, breadcrumbLd (+20 more)
 
 ### Community 95 - "Community 95"
 Cohesion: 0.29
@@ -464,6 +465,10 @@ Nodes (8): buildResult(), CACHE_PATH, getProjectStats(), memCache, parseGithubUr
 ### Community 96 - "Community 96"
 Cohesion: 0.50
 Nodes (3): HelpEntry, HelpSection, helpSections
+
+### Community 97 - "Community 97"
+Cohesion: 0.10
+Nodes (26): ../../../components/RelatedLinks.astro, breadcrumbLd, crumbs, ldJson, tool, breadcrumbLd, crumbs, EngineTag (+18 more)
 
 ### Community 176 - "Community 176"
 Cohesion: 0.27
