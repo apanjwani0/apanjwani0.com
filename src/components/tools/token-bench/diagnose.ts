@@ -378,11 +378,30 @@ export async function diagnoseVerification(input: TbDiagnosisInput): Promise<TbF
   if (coordLen && parsed.signature.length !== coordLen * 2) {
     const raw = tbDerToRawEcdsa(parsed.signature, coordLen)
     if (raw) {
-      const ok = await (async () => {
+      // TRI-STATE, deliberately: true = the converted form verified, false = it was
+      // really tested and did not, null = it could NOT be tested (no usable key).
+      // A plain boolean collapsed the last two, and the detail line below then
+      // asserted "the converted form still does not verify against this key" for a
+      // PEM paste or a wrong-curve JWK where no key was ever imported and
+      // crypto.subtle.verify never ran — a negative claim with nothing behind it,
+      // in the one module whose whole contract is to prove what it reports.
+      const ok: boolean | null = await (async () => {
         try {
           const { importAlgo, verifyAlgo } = algParams(input.alg)
-          const jwk = Array.isArray(jsonKey?.keys) ? jsonKey.keys[0] : jsonKey
-          if (!jwk) return false
+          // Resolve by kid, exactly as src/lib/jwt.ts does. Taking keys[0] tested a
+          // DIFFERENT key from the one the token names, so after an ordinary key
+          // rotation this reported "the encoding is not the only problem" about a
+          // key that was never wrong — and varied two inputs at once, which is the
+          // one thing a single-hypothesis test may not do.
+          let jwk: any = jsonKey
+          if (Array.isArray(jsonKey?.keys)) {
+            const kid = parsed.header.kid
+            const byKid = typeof kid === 'string'
+              ? jsonKey.keys.find((k: any) => k?.kid === kid)
+              : undefined
+            jwk = byKid ?? (jsonKey.keys.length === 1 ? jsonKey.keys[0] : null)
+          }
+          if (!jwk) return null
           const { alg: _a, key_ops: _k, use: _u, ext: _e, ...rest } = jwk
           const key = await crypto.subtle.importKey('jwk', { ...rest, ext: true }, importAlgo, false, ['verify'])
           return await crypto.subtle.verify(
@@ -390,7 +409,7 @@ export async function diagnoseVerification(input: TbDiagnosisInput): Promise<TbF
             raw as unknown as BufferSource,
             tbEncode(parsed.signingInput) as unknown as BufferSource,
           )
-        } catch { return false }
+        } catch { return null }
       })()
       findings.push({
         id: ok ? 'proved-der-ecdsa-signature' : 'der-ecdsa-signature',
@@ -400,12 +419,14 @@ export async function diagnoseVerification(input: TbDiagnosisInput): Promise<TbF
           + `wants exactly ${coordLen * 2} bytes, r and s each left-padded to ${coordLen}. OpenSSL, Go's `
           + 'crypto/ecdsa and most Java signers emit DER by default, so a hand-rolled signer produces a '
           + 'token every JWT library rejects with nothing more useful than "invalid signature". '
-          + (ok
+          + (ok === true
             ? 'Converted to the required form it verifies against your key — so the key is right and the signer is wrong.'
-            : 'The converted form still does not verify against this key, so the encoding is not the only problem.'),
-        proof: ok ? 'verified' : 'structural',
+            : ok === false
+              ? 'The converted form still does not verify against this key, so the encoding is not the only problem.'
+              : 'Paste the matching public key as a JWK and this will say whether the encoding is the only problem.'),
+        proof: ok === true ? 'verified' : 'structural',
       })
-      if (ok) return findings
+      if (ok === true) return findings
     }
   }
 

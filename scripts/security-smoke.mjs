@@ -3208,6 +3208,50 @@ console.log('one page-title size site-wide, and no tools-lane idiom declared ins
   assert.deepEqual(tbIds(tbDerWrong), ['der-ecdsa-signature'])
   assert.equal(tbDerWrong[0].proof, 'structural', 'an unproved cause is never dressed as a proved one')
 
+  // The same token against a JWKS whose matching key is NOT first. The hypothesis
+  // used to take keys[0], so it tested a key the token never named: after an
+  // ordinary rotation it reported the encoding "is not the only problem" about a
+  // key that was never wrong, and varied two inputs at once. Every assertion above
+  // uses a bare JWK, where keys[0] and the kid-resolved key are the same object,
+  // so none of them could see it. Resolution matches src/lib/jwt.ts.
+  {
+    // Its own token, because the fixture above names no kid — and a kid is the
+    // whole point here: it is what tells the diagnosis WHICH key to test.
+    const tbKidSigned = await tbEcToken(tbEc, { kid: 'signing-key' })
+    const tbKidDerToken = `${tbKidSigned.signingInput}.${tbB64u(tbRawToDer(tbKidSigned.raw))}`
+    const tbDecoyJwk = await tbPublicJwk(await tbNewEc())
+    const tbRotated = JSON.stringify({
+      keys: [{ ...tbDecoyJwk, kid: 'retired-key' }, { ...tbEcJwk, kid: 'signing-key' }],
+    })
+    const tbFromJwks = await diagnoseVerification({
+      rawToken: tbKidDerToken, alg: 'ES256', keyText: tbRotated,
+    })
+    await tbAssertProof(tbFromJwks, 'proved-der-ecdsa-signature', tbKidDerToken, 'ES256', tbRotated)
+  }
+
+  // …and when NO key can be imported at all, the branch must not state a negative.
+  // `if (!jwk) return false` and `catch { return false }` collapsed "could not
+  // test" into "tested and failed", and the detail then claimed "the converted
+  // form still does not verify against this key" for a PEM paste — no key
+  // imported, crypto.subtle.verify never called. That is the one thing this
+  // module promises never to do.
+  for (const [what, keyText] of [
+    ['a PEM public key', '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----'],
+    ['a JWKS naming no matching kid', JSON.stringify({ keys: [
+      { ...(await tbPublicJwk(await tbNewEc())), kid: 'nope-1' },
+      { ...(await tbPublicJwk(await tbNewEc())), kid: 'nope-2' },
+    ] })],
+  ]) {
+    const untestable = await diagnoseVerification({ rawToken: tbDerToken, alg: 'ES256', keyText })
+    const der = untestable.find(f => f.id.includes('der-ecdsa-signature'))
+    assert.ok(der, `the encoding fact still holds with ${what} — it needs no key`)
+    assert.equal(der.proof, 'structural', `${what} proves nothing`)
+    assert.ok(
+      !/still does not verify/.test(der.detail),
+      `with ${what} nothing was verified, so the detail must not claim the converted form failed`,
+    )
+  }
+
   // ── 5. Algorithm confusion, the attack this tool exists to talk about: a
   // token that claims HMAC while you hold a PUBLIC key is a forgery anyone who
   // can read the JWKS could have written.
