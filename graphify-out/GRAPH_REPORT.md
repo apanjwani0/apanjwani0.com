@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-08-20)
 
 ## Corpus Check
-- 143 files · ~228,172 words
+- 143 files · ~230,813 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2347 nodes · 5095 edges · 102 communities (84 shown, 18 thin omitted)
+- 2347 nodes · 5095 edges · 99 communities (81 shown, 18 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6430a11e`
+- Built from commit: `b2e08b9b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -97,7 +97,6 @@
 - [[_COMMUNITY_Community 81|Community 81]]
 - [[_COMMUNITY_Community 82|Community 82]]
 - [[_COMMUNITY_Community 83|Community 83]]
-- [[_COMMUNITY_Community 84|Community 84]]
 - [[_COMMUNITY_Community 85|Community 85]]
 - [[_COMMUNITY_Community 87|Community 87]]
 - [[_COMMUNITY_Community 88|Community 88]]
@@ -108,8 +107,6 @@
 - [[_COMMUNITY_Community 93|Community 93]]
 - [[_COMMUNITY_Community 94|Community 94]]
 - [[_COMMUNITY_Community 95|Community 95]]
-- [[_COMMUNITY_Community 96|Community 96]]
-- [[_COMMUNITY_Community 97|Community 97]]
 - [[_COMMUNITY_Community 98|Community 98]]
 - [[_COMMUNITY_Community 175|Community 175]]
 - [[_COMMUNITY_Community 176|Community 176]]
@@ -149,11 +146,11 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (102 total, 18 thin omitted)
+## Communities (99 total, 18 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
-Cohesion: 0.07
-Nodes (27): adminSavePlugin, Post (interface), posts, Company, Company (interface), experience, Role, Role (interface) (+19 more)
+Cohesion: 0.06
+Nodes (42): adminSavePlugin, Post, Post (interface), posts, Company, Company (interface), experience, Role (+34 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.07
@@ -176,8 +173,8 @@ Cohesion: 0.29
 Nodes (8): buildResult(), CACHE_PATH, getProjectStats(), memCache, parseGithubUrl(), readCache(), StatsCache, writeCache()
 
 ### Community 7 - "Admin API Route Handlers (login/logout/save)"
-Cohesion: 0.08
-Nodes (38): Post, site, Tool, Tool (interface), ToolStatus (type), tools, ToolStatus, fromFile() (+30 more)
+Cohesion: 0.10
+Nodes (28): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout) (+20 more)
 
 ### Community 8 - "astro.config.mjs Plugin Generators"
 Cohesion: 0.13
@@ -256,8 +253,8 @@ Cohesion: 0.33
 Nodes (8): directEntryFor(), initAnalytics(), markSessionEntry(), observeInitialPageVitals(), parseToolGamePath(), recordPageView(), sessionGet(), sessionSet()
 
 ### Community 34 - "Community 34"
-Cohesion: 0.09
-Nodes (31): AVATAR_COLORS, avatarSvg(), BTN, ButtonKind, buttonSvg(), CHIP, CHIP_VALUES, chipLabel() (+23 more)
+Cohesion: 0.13
+Nodes (20): AVATAR_COLORS, avatarSvg(), BTN, ButtonKind, buttonSvg(), CHIP, CHIP_VALUES, chipLabel() (+12 more)
 
 ### Community 36 - "Community 36"
 Cohesion: 0.17
@@ -336,12 +333,12 @@ Cohesion: 0.07
 Nodes (31): WI_DISCOVERY_HASHES, wiDecodeSecret(), wiDetectScheme(), WiDigestEncoding, wiDiscoverSignature(), WiDiscovery, wiGithub(), WiHash (+23 more)
 
 ### Community 59 - "Community 59"
-Cohesion: 0.18
-Nodes (21): outsAgainst(), rankHand(), remainingDeck(), combinations(), compareRank(), countRanks(), evaluate5(), evaluateBest() (+13 more)
+Cohesion: 0.17
+Nodes (23): EquityResult, FULL_DECK, outsAgainst(), rankHand(), remainingDeck(), combinations(), compareRank(), countRanks() (+15 more)
 
 ### Community 60 - "Community 60"
-Cohesion: 0.07
-Nodes (44): Learning, learnings, breadcrumbLd, crumbs, ldJson, tool, breadcrumbLd, crumbs (+36 more)
+Cohesion: 0.06
+Nodes (59): breadcrumbLd, crumbs, ldJson, tool, breadcrumbLd, crumbs, EngineTag, ldJson (+51 more)
 
 ### Community 61 - "Community 61"
 Cohesion: 0.33
@@ -349,7 +346,7 @@ Nodes (5): Client wiring (not yet — comes with the rooms slice), Layout, Onlin
 
 ### Community 62 - "Community 62"
 Cohesion: 0.06
-Nodes (42): breadcrumbLd, crumbs, ldJson, post, ../../../components/Breadcrumbs.astro, ExperienceItem Props, ../../../components/RelatedLinks.astro, { before, after } (+34 more)
+Nodes (41): breadcrumbLd, crumbs, ldJson, post, ../../../components/Breadcrumbs.astro, ExperienceItem Props, ../../../components/RelatedLinks.astro, { before, after } (+33 more)
 
 ### Community 66 - "Community 66"
 Cohesion: 0.09
@@ -364,12 +361,12 @@ Cohesion: 0.12
 Nodes (14): ../../components/tools/regex-lab/RegexLab.ts, RegexLabTool, RL_EXAMPLES, RL_FLAG_SET, RL_FLAGS, RL_REFERENCE, rlAdvanceStringIndex(), rlBuildHighlight() (+6 more)
 
 ### Community 69 - "Community 69"
-Cohesion: 0.17
-Nodes (10): cryptoInt(), shuffle(), CATEGORY_NAME, HAND_CATEGORY, Rank, RANK_LABEL, Suit, SUIT_COLOR (+2 more)
+Cohesion: 0.10
+Nodes (20): cryptoInt(), shuffle(), CATEGORY_NAME, HAND_CATEGORY, HandRank, Rank, RANK_LABEL, Suit (+12 more)
 
 ### Community 70 - "Community 70"
-Cohesion: 0.21
-Nodes (7): callEv(), requiredEquity(), pct(), pct2(), PokerTrainerGame, ptCards(), ptTerm()
+Cohesion: 0.22
+Nodes (6): RangeEquityResult, Variant, Card, PokerTrainerGame, PtDrill, ptTerm()
 
 ### Community 71 - "Community 71"
 Cohesion: 0.24
@@ -397,11 +394,11 @@ Nodes (5): bad(), note(), ok(), warn(), origin-check.sh script
 
 ### Community 80 - "Community 80"
 Cohesion: 0.16
-Nodes (20): cardKey(), combinations(), countRunouts(), EquityResult, equityVsRange(), exactEquity(), FULL_DECK, handClass() (+12 more)
+Nodes (20): callEv(), cardKey(), combinations(), countRunouts(), equityVsRange(), exactEquity(), handClass(), holeCount() (+12 more)
 
 ### Community 81 - "Community 81"
-Cohesion: 0.15
-Nodes (16): ../components/Footer.astro, links, social, year, ../components/Head.astro, ../components/Nav.astro, links, ../../layouts/Base.astro (+8 more)
+Cohesion: 0.08
+Nodes (27): ../components/Footer.astro, links, social, year, ../components/Head.astro, ../components/Nav.astro, links, Tool (+19 more)
 
 ### Community 82 - "Community 82"
 Cohesion: 0.12
@@ -410,10 +407,6 @@ Nodes (19): ../components/Avatar.astro, blogPostingJsonLd(), BlogPostingSchema, 
 ### Community 83 - "Community 83"
 Cohesion: 0.29
 Nodes (6): Hard bans, Learnings — house voice, Requirements, The four failures, named, The marks available, What good looks like
-
-### Community 84 - "Community 84"
-Cohesion: 0.12
-Nodes (18): Game, breadcrumbLd, crumbs, game, gameIntroHtml, GameTag, ldJson, liveGame (+10 more)
 
 ### Community 85 - "Community 85"
 Cohesion: 0.17
@@ -451,14 +444,6 @@ Nodes (20): breadcrumbLd, crumbs, ldJson, relatedTools, stories, string, tool, .
 Cohesion: 0.18
 Nodes (12): ../components/ProjectCard.astro, forksUrl, projectUrl, ProjectCard Props, stargazersUrl, GitHubStats, renderInline(), appendPathToExternalUrl() (+4 more)
 
-### Community 96 - "Community 96"
-Cohesion: 0.29
-Nodes (7): POST /api/admin/login, POST /api/admin/logout, admin save allowed types whitelist, POST /api/admin/save, __admin_session HttpOnly cookie, admin auth gate / login form, admin client save() fetch helper
-
-### Community 97 - "Community 97"
-Cohesion: 0.48
-Nodes (5): ClientRouter (view transitions), Head Props (SEO meta), Base.astro (default layout), ToolBase.astro (tools layout), getSite()
-
 ### Community 98 - "Community 98"
 Cohesion: 0.52
 Nodes (6): initNav(), mountStarField(), onScroll(), pageSetup(), syncNavHeight(), syncNavScrolled()
@@ -492,7 +477,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **What connects `name`, `type`, `version` to the rest of the system?**
   _635 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Content Types + AdminSavePlugin Dispatch` be split into smaller, more focused modules?**
-  _Cohesion score 0.07142857142857142 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06377551020408163 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.07494824016563147 - nodes in this community are weakly interconnected._
 - **Should `Config KV-with-Fallback Chain` be split into smaller, more focused modules?**

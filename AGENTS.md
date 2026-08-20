@@ -521,6 +521,26 @@ was a second, mirrored fixture that does.
   `[data-type="card-grid"] > *` styles the cards and leaves the grid container
   unstyled. That partial split is the likelier future shape of the same bug and
   it escaped the first version of the assertion.
+- **…and so does a bare ELEMENT rule.** `h1` is the page title, both shells render
+  exactly one, and its size lived in `global.css` — which `ToolBase` does not load.
+  The guard written for the `data-type` idiom above walks `data-type` names and
+  could not see an element selector, so the tools lane grew **three** dialects:
+  eleven tools took 1.75rem (a size that is not a rung of the type scale) from an
+  **unscoped** `div[data-type="tool-header"] h1` that existed as two byte-identical
+  copies in `audio-transcriber.css` and `draftboard.css` — per-tool sheets share one
+  page bundle, so either copy styled all eleven, and deleting either one, a change
+  that reads as tidying a single tool, would have restyled nine tools that never
+  mentioned it — while Flowmap, Token Bench, the Driftfield hub and its six mode
+  pages matched no rule at all and fell to the UA default 2em. The page title is now
+  the bare `h1` in `shared.css` at `--text-title`; the `tool-header` block has one
+  home in `tools-common.css`, which is a *tools-lane* idiom because the single game
+  that renders it (Type Trial) renders the whole tools workbench root, having once
+  been a tool. `security:smoke` derives both halves from the components — which
+  `data-type`s more than one tool renders, and which belong to exactly one — so a
+  per-tool sheet cannot declare a lane-wide idiom, every ToolBase route must reach a
+  definition of one, and **only a tool-private subtree may size an h1 at all**
+  (Draftboard's `md-preview`, a heading inside a rendered markdown document, is the
+  one legitimate case and it stays legitimate without being named in a list).
 - **One disabled treatment**: `--opacity-disabled` in `theme.css` is the single
   "this control is dead" value. It is an opacity and not a colour on purpose —
   theme-agnostic, and it dims the border and the label together. Both lane floors
@@ -585,7 +605,21 @@ Hidden, not deleted — both routes still answer 200, so links already in the wi
 keep working while the pages leave search. Flip the flag to restore it; make the
 routes 404 to retire it for good.
 
-Two things this cost, both worth knowing before hiding the next section:
+Three things this cost, all worth knowing before hiding the next section:
+
+- **Gate the signal, never delete it.** The sitemap's `/blogs` hub entry was
+  *removed* by that commit rather than wrapped in the predicate, so the sentence
+  above ("the sitemap … all read it") was true only of the per-post URLs. Flipping
+  the flag back restored the nav link, the `ItemList` and both routes' `index,
+  follow` — and left the hub as the one section landing page of five the sitemap
+  could never list again, which is the same contradiction the Indexing rule below
+  forbids, pointing the other way. A one-way door is not a flag. The tell was
+  visible in the diff: `latestPostDate` was left computed and unused while its twin
+  `latestLearningDate` still fed `/learnings`. Note the guard that existed asserted
+  only the hidden direction (`!body.includes('/blogs')`), which a permanent deletion
+  satisfies perfectly — a reversible switch has to be asserted in **both** states,
+  and `security:smoke` now derives that from `navLinks()`: every internal hub the nav
+  advertises must have a `<loc>` in the sitemap for that flag state.
 
 - `Site['sections']` had to be **widened** to `Record<string, boolean>`. The
   config object is `as const`, so each flag was its own literal type and

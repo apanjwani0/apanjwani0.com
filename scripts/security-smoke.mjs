@@ -2499,3 +2499,315 @@ console.log('projects link only at pages this site serves')
     + 'now wins the (0,1,0) tie and squares off every listing card',
   )
 }
+
+/* ══════  role: audit (PASS 3) — hiding a section must be a two-way door  ══════
+
+   AGENTS.md, "Indexing: one predicate decides whether a page is real": a
+   consumer must READ the predicate, not delete its own signal. `isBlogsPublic`
+   is that predicate for the blogs section, and its own docblock promises "flip
+   the flag back to `true` to restore the section".
+
+   The sitemap broke that promise in the one direction nothing was watching.
+   Hiding the section deleted `{ loc: '/blogs', lastmod }` from staticPages
+   outright instead of gating it, so restoring the flag brought back every other
+   signal — the nav and footer entry, `index, follow` on both routes, the hub's
+   ItemList, and a <loc> for every post — while the hub's own URL stayed gone
+   for good. `/blogs` was the only one of the five section hubs the sitemap
+   could never list again. `latestPostDate` was left computed-and-unused by that
+   same edit, which is the tell that a gate was intended.
+
+   The existing sitemap block above cannot catch this: it only asserts the
+   HIDDEN case emits no `/blogs`, which a permanent deletion satisfies
+   perfectly. A gate is only a gate if BOTH sides are pinned, so this asserts
+   the shown case too — and derives the set from `navLinks()` rather than from a
+   list of paths, so the next section hidden this way cannot repeat it. */
+{
+  const { GET: sitemapGET } = await import('../src/pages/sitemap.xml.ts')
+
+  const sectionSite = on => ({ ...site, sections: { ...site.sections, blogs: on } })
+  const localsFor = s => ({
+    runtime: {
+      env: {
+        SITE_CONFIG: {
+          get: async key => (key === 'site' ? s : key === 'blogs' ? posts : null),
+        },
+      },
+    },
+  })
+  // A local post, so "the hub is listed" cannot pass by accident on a slug.
+  const posts = [{ title: 'Local', href: '/blogs/a-local-post', date: '2026-02-03', summary: 's' }]
+
+  const shownXml = await (await sitemapGET({ locals: localsFor(sectionSite(true)) })).text()
+  const hiddenXml = await (await sitemapGET({ locals: localsFor(sectionSite(false)) })).text()
+  const base = site.url.replace(/\/$/, '')
+  const locsOf = xml => new Set([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]))
+  const shown = locsOf(shownXml)
+  const hidden = locsOf(hiddenXml)
+
+  // The derived invariant. Whatever the nav advertises for a given flag state is
+  // a page this site claims is real, so the sitemap has to claim it too — the
+  // two signals are read by the same crawler and disagreeing is worse than
+  // either being absent. Reading navLinks() means a future section gated the
+  // same way is covered without editing this block.
+  let checkedHubs = 0
+  for (const on of [true, false]) {
+    const advertised = navLinks(sectionSite(on))
+      .map(l => l.href)
+      .filter(h => h.startsWith('/'))
+    const locs = on ? shown : hidden
+    for (const href of advertised) {
+      checkedHubs++
+      assert.ok(
+        locs.has(`${base}${href}`),
+        `the nav advertises ${href} with sections.blogs=${on}, but the sitemap does not list it — `
+        + 'a section hub delisted in one signal and advertised in another is worse than either alone',
+      )
+    }
+  }
+  assert.ok(
+    checkedHubs >= 9,
+    `expected both flag states to contribute nav hubs, checked ${checkedHubs} — `
+    + 'if navLinks stopped returning internal hrefs this guard asserts nothing',
+  )
+
+  // …and the flag really is a gate, not a constant, in both directions. Either
+  // half alone passes for a wrong reason: a hard-coded hub passes the first, a
+  // deleted hub passes the second.
+  assert.ok(
+    shown.has(`${base}/blogs`),
+    'sections.blogs=true must put the /blogs hub back in the sitemap — restoring a hidden '
+    + 'section has to restore every signal, or hiding it was a one-way door',
+  )
+  assert.ok(
+    !hidden.has(`${base}/blogs`),
+    'sections.blogs=false must drop the /blogs hub from the sitemap',
+  )
+  // The hub carries the newest post date, the same freshness signal /learnings
+  // gets — the orphaned `latestPostDate` is what that line was computed for.
+  assert.match(
+    shownXml,
+    new RegExp(`<loc>${base}/blogs</loc><lastmod>${posts[0].date}</lastmod>`),
+    'the restored /blogs hub must carry <lastmod> from the newest post, like /learnings does',
+  )
+  // Gating the hub must not have disturbed anything else in the document.
+  assert.ok(shown.has(`${base}/blogs/a-local-post`), 'gating the hub dropped the posts too')
+  for (const hub of ['/', '/projects', '/learnings', '/games', '/tools']) {
+    assert.ok(
+      hidden.has(hub === '/' ? `${base}/` : `${base}${hub}`),
+      `hiding blogs must not remove ${hub} from the sitemap`,
+    )
+  }
+}
+
+console.log('hiding a section is a two-way door: every nav hub is sitemapped in both flag states')
+
+/* ══════  role: consistency — PASS 3  ══════════════════════════════════════════
+   The page title has one size, and a tools-lane idiom has one home.
+
+   Two failures of the same shape, one level below the guard above. That guard
+   walks `data-type` idioms; a bare ELEMENT rule is invisible to it, and the
+   element that mattered was `h1`. `h1 { font-size: var(--text-title) }` lived in
+   global.css, which only Base.astro loads — so the tools lane, which every route
+   under ToolBase serves, had NO page-title size and grew three dialects instead:
+
+     · eleven tools took 1.75rem — a size that is not a rung of the type scale —
+       from `div[data-type="tool-header"] h1`, declared UNSCOPED as two
+       byte-identical copies in audio-transcriber.css and draftboard.css. Per-tool
+       sheets share one page bundle, so either copy styled all eleven: nine tools
+       were sized by files they have nothing to do with, and deleting either copy
+       (a change that reads as tidying one tool) would have restyled the nine.
+     · Flowmap, Token Bench, the Driftfield hub and its six mode pages matched no
+       rule at all and fell to the UA default 2em.
+     · every page outside the lane was --text-title.
+
+   Nothing is loud about either. The build is green, `astro check` is silent,
+   every page renders, and no two of the three are ever on screen together.
+
+   So both halves are derived, never listed. The shared idioms come from what the
+   tool components actually render; the tool-private ones fall out of the same
+   count, which is what lets draftboard's `[data-type="md-preview"] h1` — a
+   heading inside a rendered markdown document, not the page's title — stay
+   sized while the lane-wide one cannot be. */
+{
+  const toolsUrl = new URL('../src/components/tools/', import.meta.url)
+  const pagesUrl = new URL('../src/pages/', import.meta.url)
+
+  // Vite inlines @import at build time, so an imported sheet is as reachable as
+  // the sheet that pulls it in — ToolBase reaches theme.css through shared.css.
+  // Returns [url, css] pairs so a failure can name the file that broke it.
+  const readSheets = async (url, seen = new Set(), out = []) => {
+    if (seen.has(url.href)) return out
+    seen.add(url.href)
+    let css
+    try { css = await readFile(url, 'utf-8') } catch { return out }
+    out.push([url.href.split('/src/')[1] ?? url.href, css])
+    for (const m of css.matchAll(/@import\s+['"]([^'"]+)['"]/g)) {
+      await readSheets(new URL(m[1], url), seen, out)
+    }
+    return out
+  }
+  const astroStyles = src => [...src.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n')
+  const stripComments = css => css.replace(/\/\*[\s\S]*?\*\//g, '')
+  // Rule blocks as [selector, declarations]. `[^{}]` cannot cross a brace, so an
+  // `@media` prelude simply fails to match and the rules nested inside it are
+  // picked up on their own — which is what we want to inspect either way.
+  const rules = css => [...stripComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .flatMap(m => m[1].split(',').map(sel => [sel.trim(), m[2]]))
+    .filter(([sel]) => sel && !sel.startsWith('@'))
+
+  // ── What the tools lane renders, counted from the components ───────────────
+  const toolDirNames = (await readdir(toolsUrl, { withFileTypes: true }))
+    .filter(d => d.isDirectory()).map(d => d.name)
+  const renderedBy = new Map()   // data-type -> Set(tool dir)
+  const toolSheets = new Map()   // tool dir -> [[file, css]]
+  let toolsWithATitle = 0
+  for (const dir of toolDirNames) {
+    const files = await readdir(new URL(`${dir}/`, toolsUrl))
+    let titles = 0
+    for (const f of files.filter(x => x.endsWith('.ts'))) {
+      const src = await readFile(new URL(`${dir}/${f}`, toolsUrl), 'utf-8')
+      for (const m of src.matchAll(/data-type="([a-z0-9-]+)"/g)) {
+        if (!renderedBy.has(m[1])) renderedBy.set(m[1], new Set())
+        renderedBy.get(m[1]).add(dir)
+      }
+      titles += [...src.matchAll(/<h1[\s>]/g)].length
+    }
+    // The h1 rule is only load-bearing while the tools actually render one.
+    assert.equal(titles, 1, `${dir} must render exactly one <h1> — its page title`)
+    toolsWithATitle++
+    toolSheets.set(dir, await Promise.all(
+      files.filter(x => x.endsWith('.css'))
+        .map(async f => [`${dir}/${f}`, await readFile(new URL(`${dir}/${f}`, toolsUrl), 'utf-8')]),
+    ))
+  }
+  const sharedIdioms = [...renderedBy].filter(([, dirs]) => dirs.size >= 2).map(([id]) => id)
+  const privateIdioms = [...renderedBy].filter(([, dirs]) => dirs.size === 1).map(([id]) => id)
+  assert.ok(
+    toolsWithATitle >= 10 && sharedIdioms.length >= 2 && privateIdioms.length >= 10,
+    `derived ${toolsWithATitle} tools, ${sharedIdioms.length} shared and ${privateIdioms.length} private idioms — `
+    + 'too few to be checking anything; the markup scan above has stopped finding the tools',
+  )
+
+  // ── A shared idiom may not be declared inside one tool's sheet ─────────────
+  // This is the leak, stated generally: if two or more tools render it, it is
+  // the lane's, and a rule for it that is not scoped to the sheet's own tool
+  // reaches every neighbour in the bundle.
+  for (const [dir, sheets] of toolSheets) {
+    for (const [file, css] of sheets) {
+      for (const [sel] of rules(css)) {
+        for (const idiom of sharedIdioms) {
+          if (!sel.includes(`[data-type="${idiom}"]`)) continue
+          assert.ok(
+            sel.includes(`[data-tool="${dir}"]`),
+            `${file} declares \`${sel}\`, but [data-type="${idiom}"] is rendered by `
+            + `${renderedBy.get(idiom).size} tools. Per-tool sheets share one page bundle, so this `
+            + `rule silently styles all of them. Move it to tools-common.css, or scope it with `
+            + `div[data-tool="${dir}"].`,
+          )
+        }
+      }
+    }
+  }
+
+  // ── Every ToolBase route, and what CSS it can actually reach ───────────────
+  const layoutUrl = new URL('../src/layouts/ToolBase.astro', import.meta.url)
+  const layoutSrc = await readFile(layoutUrl, 'utf-8')
+  const layoutSheets = [
+    ['layouts/ToolBase.astro <style>', astroStyles(layoutSrc)],
+    ...(await Promise.all(
+      [...layoutSrc.matchAll(/^import\s+['"]([^'"]+\.css)['"]/gm)].map(m => readSheets(new URL(m[1], layoutUrl))),
+    )).flat(),
+  ]
+  const pageFiles = (await readdir(pagesUrl, { recursive: true })).filter(f => f.endsWith('.astro'))
+  const toolBaseRoutes = []
+  for (const rel of pageFiles) {
+    const url = new URL(rel, pagesUrl)
+    const src = await readFile(url, 'utf-8')
+    if (!src.includes('layouts/ToolBase.astro')) continue
+    toolBaseRoutes.push([rel, [
+      ...layoutSheets,
+      [`pages/${rel} <style>`, astroStyles(src)],
+      ...(await Promise.all(
+        [...src.matchAll(/^import\s+['"]([^'"]+\.css)['"]/gm)].map(m => readSheets(new URL(m[1], url))),
+      )).flat(),
+    ]])
+  }
+  assert.ok(
+    toolBaseRoutes.length >= 3,
+    `expected the ToolBase routes (tools/[slug] + both driftfield pages), found ${toolBaseRoutes.length}`,
+  )
+
+  // A shared idiom needs a home every ToolBase route reaches — shared.css or
+  // tools-common.css. Leaving it in one tool's sheet means the driftfield routes,
+  // which import neither, never see it.
+  const declares = (sheets, needle) => sheets.some(([, css]) =>
+    rules(css).some(([sel]) => sel === needle || sel.startsWith(`${needle} `) || sel.startsWith(`${needle}:`)))
+  for (const [rel, sheets] of toolBaseRoutes) {
+    for (const idiom of sharedIdioms) {
+      assert.ok(
+        declares(sheets, `div[data-type="${idiom}"]`) || declares(sheets, `[data-type="${idiom}"]`),
+        `src/pages/${rel} reaches no rule for [data-type="${idiom}"], which ${renderedBy.get(idiom).size} `
+        + 'tools render. A lane-wide idiom belongs in tools-common.css (every ToolBase route imports it) '
+        + 'or shared.css (the layout imports it) — not in one tool\'s sheet.',
+      )
+    }
+  }
+
+  // ── The page title: one declaration, reachable from BOTH shells ────────────
+  // A rule is allowed to size an h1 only if it IS the page title (bare `h1`), or
+  // if it is scoped somewhere that is definitively not the page title: one tool's
+  // own subtree. Both exemptions are derived, so neither can be widened by hand.
+  const titleH1 = ([sel]) => /^h1(?::[a-z-]+(?:\([^)]*\))?)*$/i.test(sel)
+  const toolPrivate = sel => privateIdioms.some(id => sel.includes(`[data-type="${id}"]`))
+    || toolDirNames.some(d => sel.includes(`[data-tool="${d}"]`))
+  const titleSizes = sheets => {
+    const found = []
+    for (const [file, css] of sheets) {
+      for (const rule of rules(css)) {
+        const [sel, decls] = rule
+        if (!/(^|[\s>+~])h1$/.test(sel.replace(/:[a-z-]+(\([^)]*\))?$/i, ''))) continue
+        const size = decls.match(/(?:^|;)\s*font-size\s*:([^;]+)/)
+        if (!size) continue
+        if (titleH1(rule)) { found.push([file, size[1].trim()]); continue }
+        assert.ok(
+          toolPrivate(sel),
+          `${file} sizes an h1 through \`${sel}\`, which is not scoped to a single tool. `
+          + 'That is the page title, and its size belongs to the bare `h1` rule in shared.css '
+          + 'so both shells agree. This is exactly how the tools lane grew a 1.75rem dialect.',
+        )
+      }
+    }
+    return found
+  }
+
+  const baseSheets = await readSheets(new URL('../src/styles/global.css', import.meta.url))
+  const baseTitle = titleSizes(baseSheets)
+  assert.equal(
+    baseTitle.length, 1,
+    `Base.astro reaches ${baseTitle.length} page-title sizes (${JSON.stringify(baseTitle)}); it must reach exactly one`,
+  )
+  assert.match(
+    baseTitle[0][1], /^var\(--text-[a-z-]+\)$/,
+    `the page title is sized "${baseTitle[0][1]}" — a literal, not a rung of the type scale in theme.css`,
+  )
+  assert.ok(
+    baseTitle[0][0].endsWith('styles/shared.css'),
+    `the page title is declared in ${baseTitle[0][0]}; it must be shared.css, the only sheet BOTH `
+    + 'shells load — global.css is invisible to every ToolBase route',
+  )
+  for (const [rel, sheets] of toolBaseRoutes) {
+    const routeTitle = titleSizes(sheets)
+    assert.equal(
+      routeTitle.length, 1,
+      `src/pages/${rel} reaches ${routeTitle.length} page-title sizes (${JSON.stringify(routeTitle)}), not one. `
+      + 'None means its <h1> falls to the UA default while every Base page is --text-title; '
+      + 'more than one means the lane has started disagreeing with itself again.',
+    )
+    assert.deepEqual(
+      routeTitle[0], baseTitle[0],
+      `src/pages/${rel} sizes the page title differently from Base.astro — one <h1>, one size, one declaration`,
+    )
+  }
+}
+
+console.log('one page-title size site-wide, and no tools-lane idiom declared inside a single tool')

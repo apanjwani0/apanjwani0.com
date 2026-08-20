@@ -43,7 +43,16 @@ export const GET: APIRoute = async ({ locals }) => {
   const staticPages: SitemapUrl[] = [
     { loc: '/' },
     { loc: '/projects' },
-
+    // The blogs hub is GATED on the flag, not deleted. `isBlogsPublic` is the one
+    // predicate and every consumer has to read it in BOTH directions, or hiding a
+    // section is a one-way door: dropping this line instead of gating it left
+    // `/blogs` the only section hub the sitemap could never list again. Flip the
+    // flag back and the nav advertises it, both routes render `index, follow`, the
+    // hub emits its ItemList and every post is sitemapped — while the hub's own URL
+    // stays permanently absent. That is the contradiction the Indexing rule exists
+    // to prevent, just pointing the other way. `latestPostDate` above was orphaned
+    // by the same edit, which is the tell that a gate was meant here.
+    ...(blogsPublic ? [{ loc: '/blogs', lastmod: latestPostDate || undefined }] : []),
     { loc: '/learnings', lastmod: latestLearningDate || undefined },
     { loc: '/games' },
     { loc: '/tools' },

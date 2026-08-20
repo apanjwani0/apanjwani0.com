@@ -182,3 +182,39 @@ section[data-type="wi-card"] h2 {
   text-transform: uppercase;
   color: var(--color-text);
 }
+
+/* Tool header — the title block eleven of the fourteen tools render: the page's
+   <h1> plus the one-line lede under it (`div[data-type="tool-header"]`). It is
+   the tools lane's idiom, so it lives with the lane's other shared chrome (the
+   toolbar, the button language, the card container) rather than in shared.css:
+   the games lane writes its own per-game header instead, and the one game that
+   renders this markup — Type Trial — renders the whole tools workbench root
+   (`data-type="tool-page"`, `data-tool="type-trial"`) because it used to BE a
+   tool. That is a straggler to unpick in TypeTrial.ts, not a reason to push a
+   tools-lane rule into the sheet the whole site loads.
+
+   Hoisted from TWO byte-identical unscoped copies, in audio-transcriber.css and
+   draftboard.css. Per-tool sheets share one page bundle, so an unscoped rule in
+   either reached all eleven: nine tools were styled by files they have nothing
+   to do with, and deleting either copy — a change that reads as tidying one
+   tool — would have restyled the other nine. `security:smoke` now derives which
+   data-types more than one tool renders and fails any per-tool sheet that
+   declares one unscoped, so the next hoist is not left to whoever notices.
+
+   No font-size on the h1. That is the page title and shared.css owns it for
+   both shells; the copies pinned it at 1.75rem, which is not a rung of the type
+   scale and disagreed with every page outside the lane. The lede keeps the
+   copies' 0.95rem as --text-sm — the same pixels, no hardcoded size. */
+div[data-type="tool-header"] {
+  margin-bottom: 1.5rem;
+}
+
+div[data-type="tool-header"] h1 {
+  margin: 0 0 0.35rem;
+}
+
+div[data-type="tool-header"] p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}

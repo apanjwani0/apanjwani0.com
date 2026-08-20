@@ -41,14 +41,10 @@ main[data-fluid] {
   padding: 0;
 }
 
-h1 {
-  font-size: var(--text-title);
-  letter-spacing: normal;
-  margin-top: 0;
-  /* Even out multi-line headings so the last line isn't a lone orphan word.
-     Progressive enhancement — ignored by engines that don't support it. */
-  text-wrap: balance;
-}
+/* The page title's `h1` used to be declared here. It is in shared.css now:
+   BOTH shells render exactly one h1 per page and ToolBase.astro does not load
+   this file, so a size declared here reached only half the site. Do not re-add
+   it — two homes for one size is how the tools lane ended up with three. */
 
 h2 {
   font-size: var(--text-lg);

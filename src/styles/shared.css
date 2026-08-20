@@ -228,6 +228,32 @@ main {
   box-sizing: border-box;
 }
 
+/* ── The page title ────────────────────────────────────────────────────────
+   Exactly one <h1> per page, and BOTH shells render one — so its size belongs
+   here and not in global.css, which only Base.astro loads. Same class of bug as
+   the listing idioms below, one level down the selector: a bare element rather
+   than a data-type, which is why the guard written for those did not see it.
+
+   It was in global.css, and the tools lane paid for it in three dialects at
+   once. Eleven tools took 1.75rem — not a rung of the type scale — from an
+   unscoped `div[data-type="tool-header"] h1` that existed as two byte-identical
+   copies in audio-transcriber.css and draftboard.css; the per-tool sheets share
+   one page bundle, so either copy styled all eleven and deleting either one
+   would have silently restyled nine tools that never mentioned it. Flowmap,
+   Token Bench, the Driftfield hub and its six mode pages matched no rule at all
+   and fell to the UA default 2em. Every page outside the lane was --text-title.
+
+   --text-title is the token theme.css names "page title (h1)". A tool styles
+   its own internals; the size of the page's title is not one of them. */
+h1 {
+  font-size: var(--text-title);
+  letter-spacing: normal;
+  margin-top: 0;
+  /* Even out multi-line headings so the last line isn't a lone orphan word.
+     Progressive enhancement — ignored by engines that don't support it. */
+  text-wrap: balance;
+}
+
 /* ── Shared listing idioms ─────────────────────────────────────────────────
    The card grid and the page lede are rendered by BOTH layouts, so they belong
    here and not in global.css, which only Base.astro loads.
