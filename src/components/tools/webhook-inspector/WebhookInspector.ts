@@ -126,6 +126,9 @@ class WebhookInspectorTool extends HTMLElement {
   private pollAgain = false
   private pollAgainManual = false
   private requests: WiRequest[] = []
+  /** A request opened via a #share= link — rendered read-only, never mixed into
+   *  the visitor's own feed or bin. */
+  private sharedReq: WiRequest | null = null
   /** null = never rendered — the first render must always run. */
   private lastSig: string | null = null
   private reqEtag = ''
@@ -154,6 +157,8 @@ class WebhookInspectorTool extends HTMLElement {
   private secretInput!: HTMLInputElement
   private secretEncSel!: HTMLSelectElement
   private secretNoteEl!: HTMLElement
+  private sharedCard!: HTMLElement
+  private sharedEl!: HTMLElement
 
   private onKeydown = (e: KeyboardEvent) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -183,8 +188,18 @@ class WebhookInspectorTool extends HTMLElement {
       <div data-type="tool-page" data-tool="webhook-inspector">
         <div data-type="tool-header">
           <h1>Webhook Inspector</h1>
-          <p>Get a unique URL, point any webhook or HTTP client at it, and watch the requests arrive here in real time — method, query string, headers and body, all captured server-side. Your URL is saved on this device so you can reuse and share it. Add <code>?status=500</code>, <code>?delay=2000</code>, or <code>?echo=1</code> to the URL to test how your client handles errors, slow responses, or round-tripped bodies. Paste your signing secret and each request is HMAC'd against the raw body it actually sent, so you can see whether the signature really holds. Press <kbd>R</kbd> to refresh, <kbd>C</kbd> to clear, <kbd>N</kbd> for a new URL, <kbd>P</kbd> to pause.</p>
+          <p>Get a unique URL, point any webhook or HTTP client at it, and watch the requests arrive here in real time — method, query string, headers and body, all captured server-side. Your URL is saved on this device so you can reuse and share it. Add <code>?status=500</code>, <code>?delay=2000</code>, or <code>?echo=1</code> to the URL to test how your client handles errors, slow responses, or round-tripped bodies. Paste your signing secret and each request is HMAC'd against the raw body it actually sent, so you can see whether the signature really holds. Any captured request can be sent to a colleague as a share link, and the whole log downloads as JSON. Press <kbd>R</kbd> to refresh, <kbd>C</kbd> to clear, <kbd>N</kbd> for a new URL, <kbd>P</kbd> to pause.</p>
         </div>
+
+        <section data-type="wi-card" data-card="shared" aria-labelledby="wi-shared-h" hidden>
+          <div data-group="wi-reqhead">
+            <h2 id="wi-shared-h">Shared request</h2>
+            <div data-group="toolbar">
+              <button data-action="dismiss-shared" type="button">Dismiss</button>
+            </div>
+          </div>
+          <div data-for="shared"></div>
+        </section>
 
         <section data-type="wi-card" data-card="url" aria-labelledby="wi-url-h">
           <h2 id="wi-url-h">Your webhook URL</h2>
@@ -223,6 +238,7 @@ class WebhookInspectorTool extends HTMLElement {
             <div data-group="toolbar">
               <button data-action="toggle-poll" type="button"></button>
               <button data-action="refresh" type="button">Refresh (R)</button>
+              <button data-action="download-json" type="button">Download JSON</button>
               <button data-action="clear" type="button">Clear (C)</button>
             </div>
           </div>
@@ -237,6 +253,7 @@ class WebhookInspectorTool extends HTMLElement {
           <p><strong>Signatures.</strong> A webhook is a public URL, so the signature header is the only thing separating a real delivery from anyone who guessed the URL. The near-universal bug when implementing that check is to parse the JSON and HMAC the re-serialised object: the sender signed the <em>bytes it sent</em>, and re-serialising changes key order, spacing and unicode escapes, so the digest never matches. Paste your secret above and this page HMACs the captured raw body for you, so you can see the expected digest next to the one that arrived.</p>
           <p>Two things it keeps separate on purpose. <strong>A valid signature and a fresh one are different answers</strong> — Stripe and Slack both fold a timestamp into the signed payload and reject deliveries outside a five-minute window, so a correctly signed request that arrived twenty minutes ago is a stale delivery, not a forgery. And <strong>the algorithm never comes from the message</strong>: the hash is chosen by which header the sender used, never by the <code>sha256=</code> label inside its value, because a verifier that reads its algorithm out of the thing it is verifying lets the sender pick how it gets checked. When the label disagrees, this page says so instead of obeying it.</p>
           <p>One thing this page does that your server must not copy: it compares digests with <code>===</code>. That is fine here — the secret is your own and the comparison runs in your own tab — but a server comparing an attacker-supplied digest has to use a constant-time compare, or the response time leaks the correct signature one byte at a time.</p>
+          <p><strong>Sharing and exporting.</strong> Every captured request has a <em>Copy share link</em> button; the link opens this page and shows that one request, read-only, to whoever you send it to. The request's address travels in the URL fragment, which browsers never transmit, so it stays out of server logs and Referer headers along the way. One caveat, stated because it is the auth model: the link contains your capture URL's id, so anyone holding it can also read the other requests captured there — share with a colleague, not publicly, and press <kbd>N</kbd> for a fresh URL when the debugging session ends. <em>Download JSON</em> saves everything captured so far as one file, for diffing two runs or attaching to a bug report.</p>
           <p>Requests are stored on the server only long enough to inspect them and are visible only to whoever holds the unguessable URL; there is no account and no public directory. Generate a fresh URL any time with <kbd>N</kbd>.</p>
         </details>
       </div>
@@ -252,6 +269,8 @@ class WebhookInspectorTool extends HTMLElement {
     this.secretInput = this.q('[data-input="secret"]')
     this.secretEncSel = this.q('[data-input="secret-encoding"]')
     this.secretNoteEl = this.q('[data-type="wi-secretnote"]')
+    this.sharedCard = this.q('[data-card="shared"]')
+    this.sharedEl = this.q('[data-for="shared"]')
 
     this.reflectUrl()
     this.reflectPollBtn()
@@ -271,10 +290,25 @@ class WebhookInspectorTool extends HTMLElement {
     // Per-row "Copy body" buttons are re-rendered on every poll — delegate one
     // listener on the list instead of re-binding each render.
     this.listEl.addEventListener('click', e => {
+      const t = e.target as HTMLElement
+      const b = t.closest('[data-copy-body]') as HTMLButtonElement | null
+      if (b) {
+        const req = this.requests.find(r => r.id === b.dataset.copyBody)
+        if (req) this.copyText(this.formatBody(req), b)
+        return
+      }
+      const l = t.closest('[data-copy-link]') as HTMLButtonElement | null
+      if (l && l.dataset.copyLink) {
+        void this.copyShareLink(l.dataset.copyLink, l)
+      }
+    })
+    // The shared card renders through the same renderDetail(), so its Copy-body
+    // button needs its own delegate — the one above only searches this.requests.
+    this.sharedEl.addEventListener('click', e => {
       const b = (e.target as HTMLElement).closest('[data-copy-body]') as HTMLButtonElement | null
-      if (!b) return
-      const req = this.requests.find(r => r.id === b.dataset.copyBody)
-      if (req) this.copyText(this.formatBody(req), b)
+      if (b && this.sharedReq && this.sharedReq.id === b.dataset.copyBody) {
+        this.copyText(this.formatBody(this.sharedReq), b)
+      }
     })
     // On document, not the element: the custom element is never focused in the
     // tool's default watch-the-feed state, so a listener on it would leave the
@@ -286,6 +320,7 @@ class WebhookInspectorTool extends HTMLElement {
     this.render()
     this.startPolling()
     this.poll()
+    void this.loadShared()
   }
 
   disconnectedCallback() {
@@ -614,7 +649,12 @@ class WebhookInspectorTool extends HTMLElement {
     return `<li><details data-req="${wiEsc(r.id)}"${open}>${summary}${this.renderDetail(r, abs)}</details></li>`
   }
 
-  private renderDetail(r: WiRequest, abs: string): string {
+  /**
+   * `withShareLink` is false for the shared-request card: the person looking at
+   * it already holds the link, and minting one there would wrongly point at the
+   * VIEWER's own bin (shareLink() derives from this.binId).
+   */
+  private renderDetail(r: WiRequest, abs: string, withShareLink = true): string {
     const parts: string[] = ['<div data-type="wi-detail">']
 
     parts.push(`<div data-type="wi-facts">
@@ -644,9 +684,13 @@ class WebhookInspectorTool extends HTMLElement {
     if (!r.bodyText) {
       parts.push('<p data-type="wi-nobody">(empty body)</p>')
     } else {
-      parts.push(`<pre data-type="wi-body">${wiEsc(this.formatBody(r))}</pre>
-        <div data-group="wi-bodybtns"><button data-copy-body="${wiEsc(r.id)}" type="button">Copy body</button></div>`)
+      parts.push(`<pre data-type="wi-body">${wiEsc(this.formatBody(r))}</pre>`)
     }
+    const btns = [
+      r.bodyText ? `<button data-copy-body="${wiEsc(r.id)}" type="button">Copy body</button>` : '',
+      withShareLink ? `<button data-copy-link="${wiEsc(r.id)}" type="button">Copy share link</button>` : '',
+    ].join('')
+    if (btns) parts.push(`<div data-group="wi-bodybtns">${btns}</div>`)
     parts.push('</div>')
 
     const html = parts.join('')
@@ -684,9 +728,99 @@ class WebhookInspectorTool extends HTMLElement {
       case 'new-url': this.newUrl(); break
       case 'toggle-poll': this.togglePoll(); break
       case 'refresh': this.poll(true); break
+      case 'download-json': this.downloadJson(btn); break
+      case 'dismiss-shared': this.dismissShared(); break
       case 'clear': this.clear(); break
       case 'forget-secret': this.forgetSecret(); break
     }
+  }
+
+  // ── share permalinks ───────────────────────────────────────────────────────
+  /** The request's address rides in the URL FRAGMENT on purpose: browsers never
+   *  send a fragment to any server, so the bin id — the only thing protecting
+   *  the bin — stays out of access logs and Referer headers along the way. */
+  private shareLink(reqId: string): string {
+    return `${location.origin}/tools/webhook-inspector#share=${this.binId}.${reqId}`
+  }
+
+  private async copyShareLink(reqId: string, btn: HTMLButtonElement) {
+    await this.copyText(this.shareLink(reqId), btn)
+    // The honest caveat, said at mint time: the link contains the bin id, and
+    // the bin id is the whole auth model.
+    this.setStatus('Share link copied. Anyone who has it can also open the rest of this URL’s captured requests — press N for a fresh URL when you’re done.')
+  }
+
+  private parseShareHash(): { bin: string; id: string } | null {
+    // Mirrors the server's two validators (BIN_ID_RE / REQUEST_ID_RE) so a
+    // mangled link fails here with a clear message instead of as a fetch 404.
+    const m = /^#share=([A-Za-z0-9_-]{24,64})\.([A-Za-z0-9-]{8,64})$/.exec(location.hash)
+    return m ? { bin: m[1], id: m[2] } : null
+  }
+
+  private async loadShared() {
+    if (!location.hash.startsWith('#share=')) return
+    const ref = this.parseShareHash()
+    this.sharedCard.hidden = false
+    if (!ref) {
+      this.sharedEl.innerHTML = '<p data-type="wi-empty">This share link is malformed — part of it may have been lost in transit. Ask for it to be copied again.</p>'
+      return
+    }
+    this.sharedEl.innerHTML = '<p data-type="wi-hint">Loading the shared request…</p>'
+    try {
+      const res = await fetch(`/api/hook/${ref.bin}/requests/${ref.id}`, {
+        headers: { accept: 'application/json' },
+      })
+      if (res.status === 404) {
+        this.sharedEl.innerHTML = '<p data-type="wi-empty">This shared request is gone. Captures are dropped after a few hours of inactivity, when their owner clears them, and when a busy URL overflows its 50-request cap.</p>'
+        return
+      }
+      if (!res.ok) throw new Error(String(res.status))
+      const data = await res.json() as { request?: WiRequest }
+      if (!data.request?.id) throw new Error('malformed')
+      this.sharedReq = data.request
+      const abs = new Date(data.request.receivedAt).toLocaleString()
+      this.sharedEl.innerHTML = `
+        <p data-type="wi-hint">Someone sent you this captured <code>${wiEsc(data.request.method.toUpperCase())}</code> request. It is shown read-only — your own capture URL below is separate and untouched.</p>
+        ${this.renderDetail(data.request, abs, false)}`
+    } catch {
+      this.sharedEl.innerHTML = '<p data-type="wi-empty">Could not load the shared request — it may have expired, or the server is unreachable. Reload to retry.</p>'
+    }
+  }
+
+  private dismissShared() {
+    this.sharedCard.hidden = true
+    this.sharedEl.innerHTML = ''
+    this.sharedReq = null
+    // Drop the fragment without a reload or a new history entry, so a later
+    // bookmark/refresh of this page does not resurrect the dismissed request.
+    history.replaceState(null, '', location.pathname + location.search)
+  }
+
+  // ── export ─────────────────────────────────────────────────────────────────
+  private downloadJson(btn: HTMLButtonElement) {
+    if (this.requests.length === 0) {
+      this.setStatus('Nothing to download yet — capture a request first.')
+      return
+    }
+    const payload = {
+      tool: 'webhook-inspector',
+      exportedAt: new Date().toISOString(),
+      captureUrl: this.captureUrl(),
+      count: this.requests.length,
+      requests: this.requests,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `webhook-inspector-${this.binId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Revoke on a tick: revoking synchronously races the click's navigation in
+    // some engines and yields an empty file.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    this.flash(btn, 'Saved!')
   }
 
   private curlSnippet(): string {

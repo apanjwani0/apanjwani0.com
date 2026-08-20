@@ -95,6 +95,18 @@ export function isValidBinId(id: unknown): id is string {
   return typeof id === 'string' && BIN_ID_RE.test(id)
 }
 
+/**
+ * Request ids are server-minted UUIDs, so unlike bin ids they are not a secrecy
+ * control — the bin id in the same lookup already grants access to everything
+ * the bin holds. Validation here is shape hygiene, not auth: it keeps arbitrary
+ * client strings out of store lookups and out of reflected JSON.
+ */
+const REQUEST_ID_RE = /^[A-Za-z0-9-]{8,64}$/
+
+export function isValidRequestId(id: unknown): id is string {
+  return typeof id === 'string' && REQUEST_ID_RE.test(id)
+}
+
 /** Drop expired bins and, if still over the cap, evict the least-recently-used. */
 function sweep(now: number): void {
   for (const [id, bin] of bins) {
@@ -143,6 +155,21 @@ export function recordRequest(binId: string, req: CapturedRequest): void {
 export function listRequests(binId: string): CapturedRequest[] {
   sweep(Date.now())
   return bins.get(binId)?.requests ?? []
+}
+
+/**
+ * Fetch one captured request by id — what a share permalink resolves. Returns
+ * null when the bin or the request is gone (expired, cleared, or trimmed at the
+ * per-bin cap). Deliberately does NOT bump lastActivity: reading a shared link
+ * must not keep a bin alive past the TTL its own traffic earned, or a link
+ * posted somewhere with steady clicks pins the bin (and its captured
+ * Authorization headers) in memory indefinitely.
+ */
+export function getRequest(binId: string, requestId: string): CapturedRequest | null {
+  sweep(Date.now())
+  const bin = bins.get(binId)
+  if (!bin) return null
+  return bin.requests.find(r => r.id === requestId) ?? null
 }
 
 /** Clear a bin's requests (keeps the bin alive). Returns true if it existed. */

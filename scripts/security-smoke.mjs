@@ -13,7 +13,7 @@ import {
   safeMarkdownUrl,
   timingSafeEqualText,
 } from '../src/lib/security.ts'
-import { isValidBinId } from '../src/lib/webhook-store.ts'
+import { getRequest, isValidBinId, isValidRequestId, recordRequest } from '../src/lib/webhook-store.ts'
 import {
   wiDecodeSecret,
   wiDetectScheme,
@@ -274,6 +274,55 @@ assert.equal(isValidBinId('a'.repeat(24)), true)
 assert.equal(isValidBinId('0123456789abcdef0123456789abcdef'), true) // what the UI mints
 assert.equal(isValidBinId('a'.repeat(65)), false)
 assert.equal(isValidBinId('../../etc/passwd'), false)
+
+// Request ids (the share-permalink half of a lookup) are server-minted UUIDs,
+// not a secrecy control — the bin id in the same URL already grants the bin —
+// but the route must still reject arbitrary shapes before touching the store.
+assert.equal(isValidRequestId('..'), false)
+assert.equal(isValidRequestId('abc'), false, 'under the 8-char floor')
+assert.equal(isValidRequestId('a'.repeat(65)), false)
+assert.equal(isValidRequestId('../../etc/passwd'), false)
+assert.equal(isValidRequestId(123), false)
+assert.equal(isValidRequestId(crypto.randomUUID()), true, 'what the capture route mints')
+
+// getRequest resolves exactly the recorded request and nothing else: an unknown
+// request id and an unknown bin are both null, indistinguishably, so the share
+// endpoint can 404 them identically without confirming which half was wrong.
+{
+  const smokeBin = 'smoke-share-bin-0123456789abcdef'
+  const smokeReq = {
+    id: crypto.randomUUID(),
+    method: 'POST',
+    query: '',
+    headers: [{ name: 'content-type', value: 'application/json' }],
+    contentType: 'application/json',
+    source: null,
+    bodyText: '{"hello":"smoke"}',
+    bodyTruncated: false,
+    size: 17,
+    receivedAt: Date.now(),
+  }
+  assert.equal(isValidBinId(smokeBin), true, 'fixture bin must pass the real validator')
+  recordRequest(smokeBin, smokeReq)
+  assert.deepEqual(getRequest(smokeBin, smokeReq.id), smokeReq)
+  assert.equal(getRequest(smokeBin, crypto.randomUUID()), null, 'unknown request id')
+  assert.equal(getRequest('smoke-share-bin-none-0123456789', smokeReq.id), null, 'unknown bin')
+}
+
+// The share route must validate BOTH path params before the store lookup and
+// must never let a captured payload into any cache.
+{
+  const shareRoute = await readFile(
+    new URL('../src/pages/api/hook/[bin]/requests/[id].ts', import.meta.url),
+    'utf-8',
+  )
+  assert.ok(shareRoute.includes('isValidBinId('), 'share route validates the bin id')
+  assert.ok(shareRoute.includes('isValidRequestId('), 'share route validates the request id')
+  assert.ok(shareRoute.includes("'Cache-Control': 'no-store'"), 'share route responses are no-store')
+  assert.ok(shareRoute.includes('createRateLimiter('), 'share route reads are rate-limited')
+}
+
+
 
 // Visit counting stores no personal data: referrers are reduced to a host, and
 // same-host referrals (internal navigation) are dropped entirely.

@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-08-20)
 
 ## Corpus Check
-- 146 files · ~243,334 words
+- 146 files · ~243,563 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2402 nodes · 5245 edges · 96 communities (82 shown, 14 thin omitted)
+- 2402 nodes · 5245 edges · 97 communities (83 shown, 14 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `35c2b643`
+- Built from commit: `0c60b2b6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -58,6 +58,7 @@
 - [[_COMMUNITY_Community 41|Community 41]]
 - [[_COMMUNITY_Community 42|Community 42]]
 - [[_COMMUNITY_Community 43|Community 43]]
+- [[_COMMUNITY_Community 44|Community 44]]
 - [[_COMMUNITY_Community 45|Community 45]]
 - [[_COMMUNITY_Community 46|Community 46]]
 - [[_COMMUNITY_Community 47|Community 47]]
@@ -143,7 +144,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (96 total, 14 thin omitted)
+## Communities (97 total, 14 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.07
@@ -289,6 +290,10 @@ Nodes (21): allowEvent, POST(), allowRead, allowVote, comingSoonSlug(), GET(), j
 Cohesion: 0.08
 Nodes (25): ../../components/tools/audio-transcriber/AudioTranscriber.ts, AudioTranscriberTool, LANGUAGES, ../../components/tools/epoch-wizard/EpochWizard.ts, EF_DEFAULTS, EF_UNIT_LABEL, EfBreakdown, efDetectUnit() (+17 more)
 
+### Community 44 - "Community 44"
+Cohesion: 0.20
+Nodes (6): attachCanvasExport(), SF_PALETTES, sfClamp(), SfPalette, SfStar, sfToRGB()
+
 ### Community 45 - "Community 45"
 Cohesion: 0.09
 Nodes (14): TW_SIZES, TW_VECTORS, twBestKey(), twClamp(), TwDir, twEaseOutCubic(), Twenty48Game, twLuminance() (+6 more)
@@ -358,8 +363,8 @@ Cohesion: 0.05
 Nodes (35): ../../components/tools/draftboard/Draftboard.ts, DraftboardTool, MD_MAP_LAYOUT, MdMapMode, HelpEntry, HelpSection, helpSections, ../../components/tools/flowmap/Flowmap.ts (+27 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.09
-Nodes (12): attachCanvasExport(), EXPORT_SIZES, ExportSize, GifOptions, LiveExportOptions, SizeError, SizeResult, SF_PALETTES (+4 more)
+Cohesion: 0.17
+Nodes (6): EXPORT_SIZES, ExportSize, GifOptions, LiveExportOptions, SizeError, SizeResult
 
 ### Community 68 - "Community 68"
 Cohesion: 0.12
@@ -469,7 +474,7 @@ Nodes (3): indentString(), repairJson(), sortDeep()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `mountGame()` connect `Community 19` to `Community 32`, `Community 1`, `Community 67`, `Community 70`, `Community 76`, `Community 45`, `Community 175`, `Community 47`, `Community 18`, `Community 56`, `Community 25`, `Community 30`?**
+- **Why does `mountGame()` connect `Community 19` to `Community 32`, `Community 1`, `Community 70`, `Community 44`, `Community 45`, `Community 76`, `Community 175`, `Community 47`, `Community 18`, `Community 56`, `Community 25`, `Community 30`?**
   _High betweenness centrality (0.130) - this node is a cross-community bridge._
 - **Why does `flashLabel()` connect `Community 43` to `Community 32`, `Community 66`, `Community 68`, `Community 37`, `Community 38`, `Community 39`, `Community 46`, `Community 50`, `Community 19`, `Community 178`, `Community 56`, `Community 57`, `Community 58`, `Community 28`, `Community 29`?**
   _High betweenness centrality (0.104) - this node is a cross-community bridge._
