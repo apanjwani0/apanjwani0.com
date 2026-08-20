@@ -980,16 +980,14 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   assert.equal(poker.countRunouts([hero, villain], board3), flop, 'engine agrees on the flop count')
   assert.equal(poker.countRunouts([hero, villain], [...board3, card(7, 'h')]), turn, 'engine agrees on the turn count')
 
-  // The claim "the trainer refuses pre-flop" is only true while the ceiling is
-  // under the pre-flop count. Read the ceiling out of source rather than
-  // assuming it.
-  const ceilingMatch = ptSrc.match(/const PT_MAX_RUNOUTS = ([\d_]+)/)
-  assert.ok(ceilingMatch, 'PokerTrainer.ts no longer declares PT_MAX_RUNOUTS — the check below is meaningless without it')
-  const ceiling = Number(ceilingMatch[1].replace(/_/g, ''))
-  assert.ok(
-    ceiling < preflop,
-    `PT_MAX_RUNOUTS (${ceiling}) must stay below the ${preflop} pre-flop boards, or the tool would try to enumerate them`,
-  )
+  // The board counts above are the ARTICLE's and stay here. The trainer's own
+  // ceiling used to be read at this point as `PT_MAX_RUNOUTS < preflop` ("the
+  // trainer refuses pre-flop"); it is no longer a count of boards at all, because
+  // counting boards reads Omaha as cheaper than Hold'em when it is twenty times
+  // dearer. What that assertion became — the ceiling in five-card reads, and the
+  // memo that makes paying it once per spot instead of once per keystroke
+  // possible — is the appended `Poker Trainer: the solve memo` block at the end
+  // of this file.
 
   // The four prices. `pot` and `sizes` are the drill's, pinned from source: the
   // article names 24.8/33.3/39.8/50.0 and those are functions of these two
@@ -2811,3 +2809,542 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
 }
 
 console.log('one page-title size site-wide, and no tools-lane idiom declared inside a single tool')
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROLE `tools` — Token Bench: why a signature did not verify.
+//
+// `src/lib/jwt.ts` is asserted above and answers one question with a boolean.
+// This block asserts the module that answers the NEXT one, and the property it
+// has to hold is the same shape as the rules the rest of this file protects:
+//
+//   **a diagnosis must not supply the terms of its own proof.**
+//
+// A diagnostician that guesses is worse than none, because it is read as an
+// answer. So `proof: 'verified'` is a claim that `diagnoseVerification` changed
+// exactly one input and watched real Web Crypto return true — and the assertion
+// that matters most here is the negative one: given a key that is simply wrong,
+// it must report NO proved cause at all rather than reaching for the nearest
+// plausible story. Every token below is signed here with node's Web Crypto, so
+// no assertion can pass by the module agreeing with itself.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const {
+    diagnoseVerification,
+    inspectTokenText,
+    tbDerToRawEcdsa,
+    tbEcdsaCoordLen,
+  } = await import('../src/components/tools/token-bench/diagnose.ts')
+  const { verifyJwt: tbVerify, parseJwt: tbParse } = await import('../src/lib/jwt.ts')
+
+  const tbB64u = bytes => Buffer.from(bytes).toString('base64url')
+  const tbSeg = value => tbB64u(JSON.stringify(value))
+  const tbIds = findings => findings.map(f => f.id)
+  const tbProved = findings => findings.filter(f => f.proof === 'verified')
+
+  const tbHmacToken = async (alg, hash, keyBytes, header = {}, payload = { sub: 'x' }) => {
+    const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash }, false, ['sign'])
+    const signingInput = `${tbSeg({ alg, ...header })}.${tbSeg(payload)}`
+    const sig = new Uint8Array(await crypto.subtle.sign({ name: 'HMAC' }, key, new TextEncoder().encode(signingInput)))
+    return { token: `${signingInput}.${tbB64u(sig)}`, signingInput, sig }
+  }
+  const tbEcToken = async (pair, header = {}, payload = { sub: 'z' }) => {
+    const signingInput = `${tbSeg({ alg: 'ES256', ...header })}.${tbSeg(payload)}`
+    const raw = new Uint8Array(await crypto.subtle.sign(
+      { name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, new TextEncoder().encode(signingInput),
+    ))
+    return { signingInput, raw, token: `${signingInput}.${tbB64u(raw)}` }
+  }
+  const tbPublicJwk = async pair => {
+    const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey)
+    delete jwk.key_ops
+    delete jwk.ext
+    return jwk
+  }
+  const tbNewEc = () => crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+
+  // ── THE NEGATIVE. A wrong key has no explanation, and inventing one would
+  // make every other line the tool prints worth less. This is the assertion the
+  // whole module is written around; if it ever goes green while a hypothesis
+  // has started guessing, the module has stopped being trustworthy.
+  const tbWrongKey = JSON.stringify({ kty: 'oct', k: tbB64u(crypto.getRandomValues(new Uint8Array(32))) })
+  const tbRfc = 'eyJ0eXAiOiJKV1QiLA0KICJhbGciOiJIUzI1NiJ9'
+    + '.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ'
+    + '.dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'
+  assert.deepEqual(
+    tbProved(await diagnoseVerification({ rawToken: tbRfc, alg: 'HS256', keyText: tbWrongKey })),
+    [],
+    'a simply-wrong key must yield NO proved cause — the diagnosis may not guess',
+  )
+
+  // …and every hypothesis it DOES prove must survive being applied. Re-verify
+  // each proved finding independently rather than believing the flag.
+  const tbAssertProof = async (findings, id, token, alg, keyText) => {
+    const hit = findings.find(f => f.id === id)
+    assert.ok(hit, `expected the diagnosis to include ${id}, got ${JSON.stringify(tbIds(findings))}`)
+    assert.equal(hit.proof, 'verified', `${id} claims to be proved`)
+    if (hit.fixedToken) {
+      assert.equal(
+        await tbVerify(tbParse(hit.fixedToken), alg, keyText), true,
+        `${id} hands back a "corrected" token that does not actually verify`,
+      )
+    }
+    return hit
+  }
+
+  // ── 1. Re-encoded in transit. `+`/`/` decode to the same BYTES, which is why
+  // this one fools people: the JSON reads back perfectly and the signature
+  // still fails, because it covers the exact CHARACTERS of `header.payload`.
+  const tbRfcKey = JSON.stringify({
+    kty: 'oct',
+    k: 'AyM1SysPpbyDfgZld3umj1qzKObwVMkoqQ-EstJQLr_T-1qS0gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow',
+  })
+  const tbMangled = `Bearer ${tbRfc.replace(/-/g, '+').replace(/_/g, '/').replace(/(.{40})/g, '$1\n')}`
+  const tbShape = inspectTokenText(tbMangled)
+  assert.deepEqual(
+    tbIds(tbShape.findings), ['bearer-prefix', 'embedded-whitespace', 'standard-base64-alphabet'],
+    'the paste lint names all three manglings, and does it with no key at all',
+  )
+  assert.equal(tbShape.normalized, tbRfc, 'and reconstructs the original token exactly')
+  await tbAssertProof(
+    await diagnoseVerification({ rawToken: tbMangled, alg: 'HS256', keyText: tbRfcKey }),
+    'proved-mangled-token', tbMangled, 'HS256', tbRfcKey,
+  )
+  // The lint is not the diagnosis: it must fire before anyone presses verify,
+  // because "Bearer eyJ…" splits into three parts and then reports the HEADER
+  // as invalid base64url, which explains nothing.
+  assert.deepEqual(tbIds(inspectTokenText('a.b.c.d.e').findings), ['jwe-not-jws'])
+  assert.deepEqual(tbIds(inspectTokenText('a.b').findings), ['missing-signature-segment'])
+  assert.deepEqual(inspectTokenText(tbRfc).findings, [], 'a clean token lints clean')
+
+  // …and the lint can never claim a PROOF. `inspectTokenText` takes one string,
+  // holds no key and makes no crypto call, so there is nothing it could have
+  // re-verified: every finding it can emit is a fact about the bytes. The ids
+  // above are pinned but the `proof` field was not, which let a lint finding be
+  // dressed as `verified` — the exact confusion the whole module exists to
+  // refuse, wearing the one hat that cannot possibly earn it. Derived by
+  // sweeping every lint branch rather than by listing them, so a lint added
+  // later is covered without editing this.
+  const tbLintSamples = [
+    tbMangled, 'a.b.c.d.e', 'a.b', tbRfc, '', '   ', 'not-a-token',
+    `Bearer   ${tbRfc}  `, `${tbRfc}.extra`, tbRfc.replace(/-/g, '+'),
+  ]
+  const tbLintFindings = tbLintSamples.flatMap(s => inspectTokenText(s).findings)
+  assert.ok(tbLintFindings.length >= 6, 'the lint sweep must actually reach some findings')
+  for (const f of tbLintFindings) {
+    assert.equal(
+      f.proof, 'structural',
+      `the paste lint reported "${f.id}" as proof:"${f.proof}". inspectTokenText never sees a key `
+      + 'and never runs a crypto check, so it cannot have PROVED anything — every lint finding is '
+      + 'structural. A `verified` here is the tool guessing under the one label it promises never to guess with.',
+    )
+  }
+
+  // ── 2. The secret is stored encoded. Two different keys, and which one your
+  // library uses is its decision — not something the token can tell you.
+  const tbSecretBytes = crypto.getRandomValues(new Uint8Array(32))
+  const tbEncoded = await tbHmacToken('HS256', 'SHA-256', tbSecretBytes)
+  for (const [id, keyText] of [
+    ['proved-secret-base64', Buffer.from(tbSecretBytes).toString('base64')],
+    ['proved-secret-hex', Buffer.from(tbSecretBytes).toString('hex')],
+  ]) {
+    assert.equal(
+      await tbVerify(tbParse(tbEncoded.token), 'HS256', keyText), false,
+      'the literal characters are genuinely not the key — otherwise the hypothesis is vacuous',
+    )
+    await tbAssertProof(
+      await diagnoseVerification({ rawToken: tbEncoded.token, alg: 'HS256', keyText }),
+      id, tbEncoded.token, 'HS256', keyText,
+    )
+  }
+
+  // ── 3. Right key, wrong algorithm.
+  const tbWrongAlg = await tbHmacToken('HS512', 'SHA-512', new TextEncoder().encode('shhh'))
+  await tbAssertProof(
+    await diagnoseVerification({ rawToken: tbWrongAlg.token, alg: 'HS256', keyText: 'shhh' }),
+    'proved-algorithm-mismatch', tbWrongAlg.token, 'HS256', 'shhh',
+  )
+
+  // ── 4. ECDSA signature encoding. RFC 7518 §3.4 wants r‖S left-padded to the
+  // coordinate width; OpenSSL, Go's crypto/ecdsa and most Java signers emit
+  // ASN.1 DER, and every JWT library then says "invalid signature" and stops.
+  assert.equal(tbEcdsaCoordLen('ES512'), 66, 'ES512 is P-521 — 66 bytes a side, not 64')
+  assert.equal(tbEcdsaCoordLen('ES256'), 32)
+  assert.equal(tbEcdsaCoordLen('HS256'), null)
+
+  const tbRawToDer = raw => {
+    const trim = value => {
+      let start = 0
+      while (start < value.length - 1 && value[start] === 0) start++
+      const out = value.subarray(start)
+      return out[0] & 0x80 ? Uint8Array.from([0, ...out]) : out
+    }
+    const r = trim(raw.subarray(0, raw.length / 2))
+    const s = trim(raw.subarray(raw.length / 2))
+    const body = [0x02, r.length, ...r, 0x02, s.length, ...s]
+    return Uint8Array.from(body.length > 127 ? [0x30, 0x81, body.length, ...body] : [0x30, body.length, ...body])
+  }
+
+  const tbEc = await tbNewEc()
+  const tbEcJwk = await tbPublicJwk(tbEc)
+  const tbEcSigned = await tbEcToken(tbEc)
+  const tbDer = tbRawToDer(tbEcSigned.raw)
+  assert.deepEqual(
+    Array.from(tbDerToRawEcdsa(tbDer, 32)), Array.from(tbEcSigned.raw),
+    'DER → r‖s round-trips to the exact signature Web Crypto produced',
+  )
+  // The DER reader must be strict, or a plain wrong-key failure gets narrated
+  // as an encoding bug. A trailing byte, a truncation, and 64 random bytes that
+  // merely start 0x30 are all rejected.
+  assert.equal(tbDerToRawEcdsa(Uint8Array.from([...tbDer, 0]), 32), null, 'trailing byte is not DER')
+  assert.equal(tbDerToRawEcdsa(tbDer.subarray(0, tbDer.length - 1), 32), null, 'truncated DER is not DER')
+  let tbFooled = 0
+  for (let i = 0; i < 2000; i++) {
+    const noise = crypto.getRandomValues(new Uint8Array(64))
+    noise[0] = 0x30
+    if (tbDerToRawEcdsa(noise, 32)) tbFooled++
+  }
+  assert.equal(tbFooled, 0, `${tbFooled}/2000 random 0x30-prefixed signatures were misread as DER`)
+
+  const tbDerToken = `${tbEcSigned.signingInput}.${tbB64u(tbDer)}`
+  const tbDerKey = JSON.stringify(tbEcJwk)
+  assert.equal(await tbVerify(tbParse(tbDerToken), 'ES256', tbDerKey), false, 'a DER-signed JWS does not verify, per spec')
+  await tbAssertProof(
+    await diagnoseVerification({ rawToken: tbDerToken, alg: 'ES256', keyText: tbDerKey }),
+    'proved-der-ecdsa-signature', tbDerToken, 'ES256', tbDerKey,
+  )
+  // DER *and* the wrong key: the encoding fact still holds — it needs no key —
+  // but it must drop to `structural`, because nothing was proved.
+  const tbOtherJwk = JSON.stringify(await tbPublicJwk(await tbNewEc()))
+  const tbDerWrong = await diagnoseVerification({ rawToken: tbDerToken, alg: 'ES256', keyText: tbOtherJwk })
+  assert.deepEqual(tbIds(tbDerWrong), ['der-ecdsa-signature'])
+  assert.equal(tbDerWrong[0].proof, 'structural', 'an unproved cause is never dressed as a proved one')
+
+  // ── 5. Algorithm confusion, the attack this tool exists to talk about: a
+  // token that claims HMAC while you hold a PUBLIC key is a forgery anyone who
+  // can read the JWKS could have written.
+  const tbRsa = await crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true, ['sign', 'verify'],
+  )
+  const tbRsaText = JSON.stringify(await tbPublicJwk(tbRsa))
+  const tbForged = await tbHmacToken('HS256', 'SHA-256', new TextEncoder().encode(tbRsaText), {}, { sub: 'admin' })
+  const tbConfusion = await diagnoseVerification({ rawToken: tbForged.token, alg: 'RS256', keyText: tbRsaText })
+  assert.ok(tbConfusion.some(f => f.id === 'proved-algorithm-confusion'), 'a forgery is named as one')
+  assert.match(
+    tbConfusion.find(f => f.id === 'proved-algorithm-confusion').title, /ALGORITHM CONFUSION/,
+    'and named in the verdict text, not only in a data attribute',
+  )
+  // The shape alone is reportable without proof: an HS token beside a public
+  // key is illegitimate whether or not THIS key was the secret used.
+  const tbShapeOnly = await diagnoseVerification({
+    rawToken: (await tbHmacToken('HS256', 'SHA-256', new TextEncoder().encode('unrelated'))).token,
+    alg: 'RS256',
+    keyText: tbRsaText,
+  })
+  const tbShapeHit = tbShapeOnly.find(f => f.id === 'algorithm-confusion-shape')
+  assert.ok(tbShapeHit, 'the confusion SHAPE is reported even when no forgery is proved')
+  assert.equal(tbShapeHit.proof, 'structural')
+
+  // ── 6. A JWKS that holds the key but not under the kid the header names.
+  // Resolving the key out of a set is this tool's stated speciality, and the
+  // reverse lookup — which kid DOES verify — is what a rotation looks like.
+  const tbRotated = await tbNewEc()
+  const tbRotatedJwk = await tbPublicJwk(tbRotated)
+  const tbKidToken = await tbEcToken(tbRotated, { kid: 'old-2023' }, { sub: 'k' })
+  const tbJwks = JSON.stringify({ keys: [{ ...tbEcJwk, kid: 'current' }, { ...tbRotatedJwk, kid: 'rotated-in' }] })
+  const tbKidFindings = await diagnoseVerification({ rawToken: tbKidToken.token, alg: 'ES256', keyText: tbJwks })
+  const tbKidHit = await tbAssertProof(tbKidFindings, 'proved-wrong-kid', tbKidToken.token, 'ES256', tbJwks)
+  assert.match(tbKidHit.title, /rotated-in/, 'it names the kid that actually verifies, not just the one that failed')
+
+  // A stale set that holds no working key reports the absence and stops. Note
+  // what it must NOT do: pick a key anyway. `importVerificationKey` refuses the
+  // same way, and this is the diagnosis half of that same refusal.
+  const tbStale = JSON.stringify({ keys: [{ ...tbEcJwk, kid: 'a' }, { ...(await tbPublicJwk(await tbNewEc())), kid: 'b' }] })
+  const tbStaleFindings = await diagnoseVerification({ rawToken: tbKidToken.token, alg: 'ES256', keyText: tbStale })
+  assert.deepEqual(tbIds(tbStaleFindings), ['kid-not-in-jwks'])
+  assert.deepEqual(tbProved(tbStaleFindings), [], 'a set with no working key proves nothing')
+
+  // ── 7. Every finding is plain text and stays plain text. The component
+  // renders these with textContent, and the strings interpolate `kid` and `alg`
+  // straight out of an attacker-controlled header — a JWT payload is hostile by
+  // definition, that is the whole reason someone is inspecting it.
+  const tbHostileKid = '</script><img src=x onerror=alert(1)>'
+  const tbHostile = await tbEcToken(tbRotated, { kid: tbHostileKid }, { sub: '"><b>' })
+  const tbHostileFindings = await diagnoseVerification({
+    rawToken: tbHostile.token, alg: 'ES256', keyText: JSON.stringify({ keys: [{ ...tbEcJwk, kid: 'x' }] }),
+  })
+  for (const finding of tbHostileFindings) {
+    assert.equal(typeof finding.title, 'string')
+    assert.equal(typeof finding.detail, 'string')
+    assert.equal(typeof finding.id, 'string')
+    assert.ok(['verified', 'structural'].includes(finding.proof), 'proof is one of exactly two values')
+  }
+  const tbBench = await readFile(new URL('../src/components/tools/token-bench/TokenBench.ts', import.meta.url), 'utf8')
+  assert.ok(
+    !/innerHTML\s*=\s*[^`]*finding/i.test(tbBench),
+    'findings must never reach innerHTML — they carry values copied out of a hostile token header',
+  )
+  assert.match(
+    tbBench, /textContent = finding\.title/,
+    'the finding title is rendered as text',
+  )
+  assert.match(
+    tbBench, /textContent = finding\.detail/,
+    'the finding detail is rendered as text',
+  )
+}
+
+console.log('token bench proves every cause it reports, and reports none it cannot prove')
+
+/* ────────  Poker Trainer: the solve memo, and a ceiling that counts work  ──────── */
+//
+// Appended by the `games` role. Two claims, and both are the same shape as the
+// one `scoreBest` already carries against `evaluateBest`: a fast path is only
+// ever allowed to agree with the slow one that defines the answer.
+//
+//   1. `engine/equity-cache.ts` returns exactly what `engine/equity.ts` returns.
+//      A wrong memo does not crash — it hands back a confident percentage
+//      belonging to a different spot — so nothing but an equality check finds it.
+//   2. `handsRanked()` is the ceiling's unit, because the old one counted boards
+//      and boards are not what takes the time. Pre-flop Omaha is FEWER boards
+//      than pre-flop Hold'em (1,086,008 against 1,712,304) and roughly twenty
+//      times the work, so a boards ceiling that admits one must refuse the other
+//      for a reason that is not true.
+{
+  const {
+    countRunouts: ecCountRunouts,
+    equityVsRange: ecEquityVsRange,
+    exactEquity: ecExactEquity,
+    handsRanked,
+  } = await import('../src/components/games/poker-trainer/engine/equity.ts')
+  const {
+    EQUITY_CACHE_LIMIT,
+    cachedEquityVsRange,
+    cachedExactEquity,
+    cachedRangeCombos,
+    clearEquityCache,
+    equityCacheSizes,
+    spotKey,
+  } = await import('../src/components/games/poker-trainer/engine/equity-cache.ts')
+  const { PRESET_RANGES: EC_PRESETS, parseRange: ecParseRange, rangeCombos: ecRangeCombos } =
+    await import('../src/components/games/poker-trainer/engine/ranges.ts')
+  const ecSrc = await readFile(
+    new URL('../src/components/games/poker-trainer/PokerTrainer.ts', import.meta.url),
+    'utf-8',
+  )
+
+  const EC_RANKS = '23456789TJQKA'
+  const ec = text => ({ r: EC_RANKS.indexOf(text[0].toUpperCase()) + 2, s: text[1].toLowerCase() })
+  const ecHand = text => text.split(' ').map(ec)
+  const plain = value => JSON.parse(JSON.stringify(value))
+
+  /* ── 1. the memo equals the reference, on every spot shape the UI reaches ── */
+
+  clearEquityCache()
+  const ecSpots = [
+    [[ecHand('As Ks'), ecHand('Qh Qd')], ecHand('2c 7d Jh'), 'holdem'],
+    [[ecHand('As Ks'), ecHand('Qh Qd')], ecHand('2c 7d Jh 9s'), 'holdem'],
+    [[ecHand('As Ks'), ecHand('Qh Qd')], ecHand('2c 7d Jh 9s 4d'), 'holdem'],
+    [[ecHand('As Ks Qh Jd'), ecHand('2c 3d 4h 5s')], ecHand('9c 8d Th'), 'plo'],
+    [[ecHand('As Ks Qh Jd'), ecHand('2c 3d 4h 5s')], ecHand('9c 8d Th 2h'), 'plo'],
+  ]
+  for (const [holes, board, variant] of ecSpots) {
+    const reference = ecExactEquity(holes, board, variant)
+    const memoised = cachedExactEquity(holes, board, variant)
+    assert.deepEqual(
+      plain(memoised), plain(reference),
+      `the memo disagrees with exactEquity on a ${variant} spot with ${board.length} board cards`,
+    )
+    assert.equal(
+      cachedExactEquity(holes, board, variant), memoised,
+      'asking for the same spot twice recomputed it — the memo is not memoising',
+    )
+
+    // Clicking A♠ then K♥ and clicking K♥ then A♠ are the same spot. The memo
+    // canonicalises to make the second one a hit, which is only sound because
+    // the engine is genuinely order-blind — `scoreBest` reads bitmasks,
+    // `scoreOmaha` walks every 2-of-4 and 3-of-5 whatever order they arrive in,
+    // and `remainingDeck` filters a fixed deck. Assert BOTH halves: that the
+    // reference really is invariant, and that the memo exploits it. Asserting
+    // only the second would let a canonicalisation bug pass by being wrong
+    // consistently.
+    const permuted = holes.map(hand => [...hand].reverse())
+    const permutedBoard = [...board].reverse()
+    assert.deepEqual(
+      plain(ecExactEquity(permuted, permutedBoard, variant)), plain(reference),
+      'exactEquity is not invariant to card order within a hand — the memo key must not sort',
+    )
+    assert.equal(
+      cachedExactEquity(permuted, permutedBoard, variant), memoised,
+      'the same spot picked in a different order missed the memo',
+    )
+  }
+
+  // Hands are canonicalised individually and NEVER against each other: the
+  // result is index-aligned, so a key that sorted the two hands together would
+  // hand hero villain's equity and look entirely plausible doing it.
+  assert.notEqual(
+    spotKey([ecHand('As Ks'), ecHand('Qh Qd')], [], 'holdem'),
+    spotKey([ecHand('Qh Qd'), ecHand('As Ks')], [], 'holdem'),
+    'the memo key treats hero-vs-villain and villain-vs-hero as one spot — the equities would swap',
+  )
+  assert.notEqual(
+    spotKey([ecHand('As Ks Qh Jd'), ecHand('2c 3d 4h 5s')], ecHand('9c 8d Th'), 'plo'),
+    spotKey([ecHand('As Ks Qh Jd'), ecHand('2c 3d 4h 5s')], ecHand('9c 8d Th'), 'holdem'),
+    'the memo key ignores the variant — the same four cards score differently under Omaha rules',
+  )
+
+  /* ── the range half, which is where the seconds actually were ── */
+
+  clearEquityCache()
+  const ecBoard = ecHand('2c 7d Jh')
+  const ecHero = ecHand('As Ks')
+  for (const preset of EC_PRESETS.filter(p => ['premium', 'three-bet'].includes(p.id))) {
+    const dead = [...ecHero, ...ecBoard]
+    const parsed = cachedRangeCombos(preset.text, dead)
+    assert.deepEqual(
+      plain(parsed.combos), plain(ecRangeCombos(ecParseRange(preset.text).classes, dead)),
+      `the range memo disagrees with parseRange + rangeCombos on "${preset.id}"`,
+    )
+    assert.equal(
+      cachedRangeCombos(preset.text, [...ecBoard, ...ecHero]), parsed,
+      'the same range with the dead cards listed in another order missed the memo',
+    )
+
+    const reference = ecEquityVsRange(ecHero, parsed.combos, ecBoard)
+    const memoised = cachedEquityVsRange(ecHero, parsed.combos, ecBoard)
+    assert.deepEqual(
+      plain(memoised), plain(reference),
+      `the memo disagrees with equityVsRange on "${preset.id}"`,
+    )
+    assert.equal(
+      cachedEquityVsRange(ecHero, parsed.combos, ecBoard), memoised,
+      'the same range query recomputed — the range memo is not memoising',
+    )
+  }
+
+  /* ── bounded, and still correct after eviction ── */
+
+  clearEquityCache()
+  const river = ecHand('2c 7d Jh 9s 4d')
+  const ecVillain = [ec('Qc'), ec('Qs')]
+  const ecDead = new Set([...river, ...ecVillain].map(c => `${c.r}${c.s}`))
+  const ecFree = []
+  for (const suit of ['c', 'd', 'h', 's']) {
+    for (let rank = 2; rank <= 14; rank++) {
+      if (!ecDead.has(`${rank}${suit}`)) ecFree.push({ r: rank, s: suit })
+    }
+  }
+  const evictable = []
+  // Overlapping pairs, so 45 free cards give 44 distinct hero hands rather than 22 —
+  // the fixture has to outnumber the limit or it proves nothing about eviction.
+  for (let i = 0; i + 1 < ecFree.length && evictable.length < EQUITY_CACHE_LIMIT + 8; i++) {
+    evictable.push([[ecFree[i], ecFree[i + 1]], ecVillain])
+  }
+  assert.ok(
+    evictable.length > EQUITY_CACHE_LIMIT,
+    `need more than ${EQUITY_CACHE_LIMIT} distinct spots to prove eviction, built ${evictable.length}`,
+  )
+  const firstIn = cachedExactEquity(evictable[0], river, 'holdem')
+  for (const holes of evictable) cachedExactEquity(holes, river, 'holdem')
+  assert.ok(
+    equityCacheSizes().hands <= EQUITY_CACHE_LIMIT,
+    `the memo grew to ${equityCacheSizes().hands} entries against a limit of ${EQUITY_CACHE_LIMIT} — `
+    + 'an unbounded map keyed on whatever the user typed is a leak, not a cache',
+  )
+  assert.deepEqual(
+    plain(cachedExactEquity(evictable[0], river, 'holdem')), plain(firstIn),
+    'an evicted spot came back different — eviction must cost time, never correctness',
+  )
+
+  // Callers get the same object on every hit, so an in-place mutation would
+  // corrupt every later reader of that spot. Strict mode makes it throw instead.
+  // Both halves: the arrays a caller might sort or push to, and the object whose
+  // fields it might replace. Asserting only the first left removing the outer
+  // freeze survivable, which makes the assertion wrong rather than the mutation
+  // uninteresting.
+  assert.throws(
+    () => { firstIn.win[0] = 0 },
+    'an array handed out by the memo is writable — one caller sorting it in place poisons the rest',
+  )
+  assert.throws(
+    () => { firstIn.runouts = 0 },
+    'a result handed out by the memo is writable — one caller reassigning a field poisons the rest',
+  )
+
+  /* ── 2. the ceiling counts work, not boards ── */
+
+  const ecPreflopHoldem = [ecHand('As Ks'), ecHand('Qh Qd')]
+  const ecPreflopPlo = [ecHand('As Ks Qh Jd'), ecHand('2c 3d 4h 5s')]
+  assert.ok(
+    ecCountRunouts(ecPreflopPlo, []) < ecCountRunouts(ecPreflopHoldem, []),
+    'pre-flop Omaha must be FEWER boards than pre-flop Hold\'em — eight known cards, not four',
+  )
+  assert.ok(
+    handsRanked(ecPreflopPlo, [], 'plo') > handsRanked(ecPreflopHoldem, [], 'holdem'),
+    'handsRanked() ranks pre-flop Omaha as cheaper than pre-flop Hold\'em, which is exactly the '
+    + 'inversion a boards ceiling made: every Omaha board is the best of sixty five-card hands',
+  )
+  for (const variant of ['holdem', 'plo']) {
+    const holes = variant === 'plo' ? ecPreflopPlo : ecPreflopHoldem
+    const streets = [[], ecBoard, [...ecBoard, ec('9s')], [...ecBoard, ec('9s'), ec('4d')]]
+    for (let i = 1; i < streets.length; i++) {
+      assert.ok(
+        handsRanked(holes, streets[i], variant) < handsRanked(holes, streets[i - 1], variant),
+        `handsRanked() must fall as the ${variant} board fills — it is a cost, and each card removes runouts`,
+      )
+    }
+  }
+
+  // Read the shipped ceiling out of the component rather than restating it, so
+  // this asserts what the tool actually does. It has exactly one interesting
+  // value: the spot it admits and the spot it refuses.
+  const rankCeilingMatch = ecSrc.match(/const PT_MAX_RANK_WORK = ([\d_]+)/)
+  assert.ok(
+    rankCeilingMatch,
+    'PokerTrainer.ts no longer declares PT_MAX_RANK_WORK — the checks below assert nothing without it',
+  )
+  const rankCeiling = Number(rankCeilingMatch[1].replace(/_/g, ''))
+  assert.ok(
+    handsRanked(ecPreflopHoldem, [], 'holdem') <= rankCeiling,
+    `PT_MAX_RANK_WORK (${rankCeiling}) refuses pre-flop Hold'em hand-vs-hand at `
+    + `${handsRanked(ecPreflopHoldem, [], 'holdem')} reads. That is "what is AA against KK", the most `
+    + 'asked question in poker, and the tool can answer it in about a quarter of a second',
+  )
+  assert.ok(
+    handsRanked(ecPreflopPlo, [], 'plo') > rankCeiling,
+    `PT_MAX_RANK_WORK (${rankCeiling}) admits pre-flop Omaha at ${handsRanked(ecPreflopPlo, [], 'plo')} `
+    + 'reads — about seven seconds of a frozen tab. Refusing is the honest answer; sampling is not',
+  )
+  for (const [holes, board, variant] of ecSpots) {
+    assert.ok(
+      handsRanked(holes, board, variant) <= rankCeiling,
+      `PT_MAX_RANK_WORK refuses a ${variant} spot on ${board.length} board cards — every spot from the `
+      + 'flop on must stay computable in both games',
+    )
+  }
+
+  /* ── and the component actually goes through all of it ── */
+
+  const equityImport = ecSrc.match(/import \{([\s\S]*?)\} from '\.\/engine\/equity'/)
+  assert.ok(equityImport, "PokerTrainer.ts no longer imports from './engine/equity'")
+  for (const name of ['exactEquity', 'equityVsRange']) {
+    assert.ok(
+      !new RegExp(`\\b${name}\\b`).test(equityImport[1]),
+      `PokerTrainer.ts imports ${name} directly. Every equity call in the component must go through `
+      + 'engine/equity-cache.ts, or the panel goes back to computing hero equity twice per render and '
+      + 'again on every keystroke in the pot and bet boxes',
+    )
+  }
+  assert.ok(
+    !/countRunouts\([^)]*\)\s*>/.test(ecSrc),
+    'a gate in PokerTrainer.ts is still written in boards. Boards are not the cost — use handsRanked()',
+  )
+  assert.ok(
+    (ecSrc.match(/handsRanked\(/g) ?? []).length >= 2,
+    'the result panel and the pot-odds panel must gate on the same predicate, or the odds panel '
+    + 'computes a spot the result panel just refused',
+  )
+}
+
+console.log("the poker memo returns exactly what it memoises, and the trainer's ceiling counts work")

@@ -27,7 +27,7 @@
  *
  * Everything is still enumerated exactly, never sampled. Where a query is too
  * large to enumerate, the tool refuses and says so instead of quietly becoming
- * approximate — see PT_MAX_RUNOUTS and PT_MAX_RANGE_WORK.
+ * approximate — see PT_MAX_RANK_WORK and PT_MAX_RANGE_WORK.
  *
  * All module-level names are pt-/PT_-prefixed: game component files share one
  * global script scope.
@@ -36,9 +36,8 @@
 import {
   callEv,
   countRunouts,
-  equityVsRange,
-  exactEquity,
   handClass,
+  handsRanked,
   holeCount,
   outsAgainst,
   rangeWork,
@@ -46,31 +45,49 @@ import {
   requiredEquity,
   type Variant,
 } from './engine/equity'
+import {
+  cachedEquityVsRange,
+  cachedExactEquity,
+  cachedRangeCombos,
+  type ParsedCombos,
+} from './engine/equity-cache'
 import { PRESET_RANGES, parseRange, rangeCombos } from './engine/ranges'
 import { cardSvg } from './ui/cards-svg'
 import { RANK_LABEL, SUITS, SUIT_SYMBOL, type Card, type Suit } from './engine/types'
 
 /**
- * Above this many runouts a single hand-vs-hand query stops feeling interactive.
+ * Work a single hand-vs-hand query may cost, in five-card reads.
  *
  * Rather than silently switching to Monte Carlo to stay responsive, the UI
  * refuses and says why: the whole promise is that every number shown is exact,
  * and a sampled number wearing the same styling would quietly break it.
  *
- * The ceiling used to be about raw speed — a preflop Hold'em spot is
- * C(48,5) = 1,712,304 boards, which the old enumerator needed the better part of
- * a minute for. It no longer is: the bitmask scorer takes 312ms over the same
- * boards. ==What holds the ceiling here now is that `renderSolve` recomputes the
- * equity from scratch on every input event==, including each keystroke in the pot
- * and bet boxes, which cannot change it. 312ms per keypress is its own kind of
- * broken. Memoise the result per spot and this number can rise to let preflop in.
+ * ==This used to be a count of boards, and counting boards was measuring the
+ * wrong thing.== At 300,000 boards it refused preflop Hold'em hand-vs-hand — the
+ * single most-asked question in poker, "what is AA against KK" — with the words
+ * "too many to count exactly in a browser", which stopped being true the moment
+ * the bitmask scorer landed and left the tool declining a query it can answer in
+ * about half a second. Meanwhile it read Omaha as *cheaper* than Hold'em,
+ * because a preflop PLO spot is fewer boards (1,086,008 against 1,712,304) and
+ * takes roughly twenty times as long: every Omaha board is the best of sixty
+ * five-card hands. One number cannot describe both games; `handsRanked()` is
+ * the unit that can, and it lives in the engine so `security:smoke` can drive it.
  *
- * Note the ceiling is in runouts, so it reads Hold'em and Omaha as equally
- * expensive and they are not — an Omaha hand is the best of 60 five-card hands
- * against Hold'em's one bitmask read, and preflop PLO still takes 7.1s. Any
- * raise has to count hands ranked, not boards dealt.
+ * 8,000,000 reads measured about a quarter of a second warm on the machine this
+ * was written on, and roughly double that on the first query of a session before
+ * the scorer is JIT-hot. Exactly one reachable spot sits near it: preflop
+ * hand-vs-hand Hold'em, at 6,849,216 reads. Every Hold'em spot with a board is
+ * under 4,000 and every Omaha spot from the flop on is under 120,000 — so this
+ * admits the one query worth waiting for and still refuses preflop Omaha at
+ * 130,320,960 reads, which measured about seven seconds.
+ *
+ * ==That quarter-second is paid once per spot, not once per render.== That is what
+ * `engine/equity-cache.ts` is for and it is a precondition of this number, not a
+ * bonus beside it: before the memo, `renderSolve` re-ran the whole enumeration on
+ * every input event including each keystroke in the pot and bet boxes, so a
+ * ceiling admitting a 0.6s query would have meant 0.6s per keypress.
  */
-const PT_MAX_RUNOUTS = 300_000
+const PT_MAX_RANK_WORK = 8_000_000
 
 /**
  * The same ceiling for range queries, where cost is combos x runouts.
@@ -316,8 +333,10 @@ class PokerTrainerGame extends HTMLElement {
       return
     }
 
-    // Answered — reveal the arithmetic.
-    const result = equityVsRange(d.hero, d.combos, d.board)
+    // Answered — reveal the arithmetic. Memoised: this render runs again on
+    // every tab switch, and re-counting half a million boards to redraw text
+    // that cannot have changed is the same bug the Solve tab had.
+    const result = cachedEquityVsRange(d.hero, d.combos, d.board)
     // d.pot is the pot BEFORE they bet; both helpers take the pot before the
     // CALL, which already contains that bet. Passing d.pot alone computed
     // bet/(pot+bet) — the frequency a bluff must work, not the price of a call —
@@ -674,9 +693,17 @@ class PokerTrainerGame extends HTMLElement {
     this.renderOdds(host)
   }
 
-  private currentRange(): { combos: Card[][]; dropped: string[] } {
-    const { classes, dropped } = parseRange(this.rangeText)
-    return { combos: rangeCombos(classes, [...this.hero, ...this.board]), dropped }
+  /**
+   * The villain range for the current text and dead cards.
+   *
+   * Memoised, because three separate readers ask for it on every single render —
+   * the "N possible hands" line, the result table and the pot-odds panel — and
+   * re-parsing a wide range three times per keystroke is the same waste as
+   * re-enumerating, one order of magnitude down. It also gives the combo list a
+   * stable identity, which is what lets the equity memo behind it hit at all.
+   */
+  private currentRange(): ParsedCombos {
+    return cachedRangeCombos(this.rangeText, [...this.hero, ...this.board])
   }
 
   private renderRangeInfo(host: HTMLElement) {
@@ -712,14 +739,23 @@ class PokerTrainerGame extends HTMLElement {
       return
     }
 
-    const runouts = countRunouts([this.hero, this.villain], this.board)
-    if (runouts > PT_MAX_RUNOUTS) {
+    const cost = handsRanked([this.hero, this.villain], this.board, this.variant)
+    if (cost > PT_MAX_RANK_WORK) {
+      const boards = countRunouts([this.hero, this.villain], this.board)
+      // Any three cards stand in for a flop here: both helpers read the board's
+      // LENGTH, never its contents, so a stand-in that collides with a card in
+      // play still gives the right count.
+      const flop: Card[] = [{ r: 2, s: 'c' }, { r: 3, s: 'c' }, { r: 4, s: 'c' }]
+      const onFlop = handsRanked([this.hero, this.villain], flop, this.variant)
+      const scale = this.variant === 'plo'
+        ? `${boards.toLocaleString()} boards, and in Omaha every board is the best of 60 five-card hands — ${cost.toLocaleString()} hands to rank`
+        : `${boards.toLocaleString()} boards, which is ${cost.toLocaleString()} five-card hands to rank`
       out.dataset.state = 'warn'
-      out.textContent = `That spot is ${runouts.toLocaleString()} possible runouts — too many to count exactly in a browser. Deal a flop and it drops to ${countRunouts([this.hero, this.villain], [{ r: 2, s: 'c' }, { r: 3, s: 'c' }, { r: 4, s: 'c' }]).toLocaleString()}. Nothing here is ever sampled, so it refuses rather than estimating.`
+      out.textContent = `That spot is ${scale}, which no browser will get through without freezing. Deal a flop and it drops to ${onFlop.toLocaleString()}. Nothing here is ever sampled, so it refuses rather than estimating.`
       return
     }
 
-    const result = exactEquity([this.hero, this.villain], this.board, this.variant)
+    const result = cachedExactEquity([this.hero, this.villain], this.board, this.variant)
     out.dataset.state = 'ok'
 
     const lines: Array<[string, string]> = []
@@ -777,7 +813,7 @@ class PokerTrainerGame extends HTMLElement {
       return
     }
 
-    const result = equityVsRange(this.hero, combos, this.board)
+    const result = cachedEquityVsRange(this.hero, combos, this.board)
     out.dataset.state = 'ok'
     out.append(this.table([
       ['Your equity against the whole range', pct2(result.equity)],
@@ -820,12 +856,12 @@ class PokerTrainerGame extends HTMLElement {
       const { combos } = this.currentRange()
       if (!combos.length) return null
       if (rangeWork(combos.length, this.board) > PT_MAX_RANGE_WORK * 4) return null
-      return equityVsRange(this.hero, combos, this.board).equity
+      return cachedEquityVsRange(this.hero, combos, this.board).equity
     }
 
     if (this.villain.length !== need) return null
-    if (countRunouts([this.hero, this.villain], this.board) > PT_MAX_RUNOUTS) return null
-    return exactEquity([this.hero, this.villain], this.board, this.variant).equity[0]
+    if (handsRanked([this.hero, this.villain], this.board, this.variant) > PT_MAX_RANK_WORK) return null
+    return cachedExactEquity([this.hero, this.villain], this.board, this.variant).equity[0]
   }
 
   private renderOdds(host: HTMLElement) {

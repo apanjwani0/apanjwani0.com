@@ -393,11 +393,36 @@ was a second, mirrored fixture that does.
 - **A tool's claims live in a module, not in the component.** Where a tool
   asserts something checkable about the world, that logic goes in a sibling
   module the component imports — `webhook-inspector/signature.ts`,
-  `cron-whisperer/schedule.ts`, `cron-whisperer/crontab.ts`, and `src/lib/jwt.ts`
+  `cron-whisperer/schedule.ts`, `cron-whisperer/crontab.ts`,
+  `token-bench/diagnose.ts`, and `src/lib/jwt.ts`
   before them — so
   `security:smoke` can run it against the real thing rather than against a
   screenshot of it. A claim buried in a DOM handler cannot be tested and will
   quietly stop being true.
+
+  **A diagnostic proves every cause it reports, and reports none it cannot
+  prove.** `token-bench/diagnose.ts` is the worked example, and it points the
+  rule at the *failure* path rather than the success path. `src/lib/jwt.ts`
+  answers "does this signature hold" with a boolean, and "no" is where the real
+  debugging starts — so the module takes each hypothesis (the token was
+  re-encoded in transit, the ECDSA signature is ASN.1 DER, the secret only works
+  base64-decoded, the algorithm is wrong, the JWKS lacks that `kid`), changes
+  **exactly that one input**, re-runs real Web Crypto, and only reports a cause
+  it watched start verifying. Findings carry `proof: 'verified' | 'structural'`;
+  the latter is a fact about the bytes that needs no key. When nothing holds it
+  says so — refusing to invent a reason is the feature, because a tool whose
+  product is being trustworthy about the word "verified" cannot start guessing
+  the moment it fails.
+
+  Two things the assertions had to learn the hard way. The load-bearing one is
+  **negative** — given a simply-wrong key, the diagnosis must return *zero*
+  proved causes — because every positive assertion still passes on a module that
+  guesses enthusiastically. And a `proof` label is only as good as the narrowest
+  path that can set it: `inspectTokenText` (the paste lint) holds no key and
+  makes no crypto call, so it can never legitimately emit `verified`, and that
+  was unasserted while the diagnosis half was covered. A mutation dressing a lint
+  finding as proved survived the first merge. Assert the label on **every**
+  producer, not just the one the rule was written for.
 
   Cron Whisperer is the current worked example. **A crontab names a wall clock,
   not an instant**, so twice a year a reading either does not exist or happens
@@ -460,6 +485,40 @@ was a second, mirrored fixture that does.
   numeric shortcut — that warning is about `tb` alone, and the escape is that
   `tb`'s length is fixed by `cat`, so leading the packing with `cat` keeps every
   comparison inside one category.
+
+  **One layer up, the same rule for a memo — and a memo fails differently from a
+  rewrite.** `poker-trainer/engine/equity-cache.ts` is a bounded memo whose only
+  permitted behaviour is to agree with `engine/equity.ts`, and a wrong memo does
+  not crash: it returns a confident percentage belonging to a *different spot*.
+  Two properties are rules, not facts about that file:
+
+  - **A memo key is derived from the arguments, never supplied alongside them.**
+    Same family as "a verifier's algorithm must not come from the thing it
+    verifies". `cachedEquityVsRange` keys on the combos it was handed, not on the
+    range text they were parsed from, because a caller can pass a text and a
+    filtered list that disagree.
+  - **A canonicalisation is a claim about the function underneath, and needs the
+    invariance asserted in BOTH directions** — that the uncached function really
+    is order-blind, *and* that the memo exploits it. Asserting only the second
+    lets a canonicalisation bug pass by being wrong consistently. Note what is
+    deliberately *not* canonicalised: cards are sorted within a hand and within
+    the board, but the two hands are never sorted against each other, since the
+    result is index-aligned and swapping them hands hero villain's equity while
+    looking entirely plausible.
+
+- **A cost ceiling is written in the unit that actually costs.** The trainer's
+  ceiling is `PT_MAX_RANK_WORK` (five-card reads, via `handsRanked()` in the
+  engine) and no longer `PT_MAX_RUNOUTS`, which counted **boards**. Boards are
+  not the cost: preflop Omaha is *fewer* boards than preflop Hold'em (1,086,008
+  against 1,712,304) and twenty times dearer, because every Omaha board is the
+  best of sixty five-card hands. So one ceiling was simultaneously refusing
+  "what is AA against KK" — answerable in about a quarter of a second, and
+  refused with the words "too many to count exactly in a browser" — and
+  admitting a query that takes seven. Same shape as the one-sided-bounds trap
+  documented for Type Trial: the number looked like a real bound and was
+  measuring the wrong quantity. `PT_MAX_RANGE_WORK` is **not** this — it is a
+  *lesson* setting that decides which street a drill is dealt on, so widening it
+  changes what the drill teaches and is the owner's call, not a perf one.
 
 - **Canvas export is shared**: `src/lib/canvas-export.ts` +
   `src/styles/canvas-export.css`. Any component with a canvas calls

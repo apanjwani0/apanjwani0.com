@@ -24,6 +24,11 @@
  * second, and that query takes 35ms. ==Not one number changed==, and that is
  * asserted rather than hoped — see the note over the fast path in
  * `evaluator.ts`.
+ *
+ * The "twice per render" half of that sentence is history too: `equity-cache.ts`
+ * now sits between this module and both panels, so a spot is enumerated once and
+ * every later reader of it — the result table, the pot-odds panel, the next
+ * keystroke in a box that cannot change the answer — reads the same object back.
  */
 
 import { compareRank, evaluateBest, evaluateOmaha, scoreBest, scoreOmaha } from './evaluator'
@@ -95,6 +100,45 @@ export function countRunouts(holeCards: Card[][], board: Card[]): number {
   const known = [...holeCards.flat(), ...board]
   const remaining = 52 - known.length
   return combinations(remaining, 5 - board.length)
+}
+
+/**
+ * Five-card reads a query would cost, which is the thing that actually takes the
+ * time — boards dealt is not.
+ *
+ * `countRunouts` answers "how many boards", and a ceiling written in boards reads
+ * Hold'em and Omaha as equally expensive. They are nowhere near it. A Hold'em
+ * showdown is one pass of `scoreBest` over seven cards; an Omaha showdown is
+ * `scoreOmaha`, which is 6 two-card holdings against 10 three-card boards — sixty
+ * calls into `score5` — because the exactly-two-of-four rule cannot be collapsed
+ * into a best-of-any read. So a preflop Omaha spot is *fewer* boards than a
+ * preflop Hold'em one (1,086,008 against 1,712,304) and takes roughly twenty
+ * times as long, and a boards ceiling admitting one has to refuse the other for
+ * the wrong reason.
+ *
+ * The unit is a `score5`-equivalent. Omaha's 60 is structural — it is exactly how
+ * many five-card hands `scoreOmaha` ranks per board, not a fitted constant — and
+ * Hold'em is weighted 2 because a seven-card `scoreBest` measures about twice a
+ * five-card one: the same mask arithmetic over two more cards, with four flush
+ * reads either way.
+ *
+ * ==The residual is stated rather than tuned away.== Warm, Hold'em runs ~25M of
+ * these units a second and Omaha ~16-20M, because sixty `score5` calls rebuild
+ * their masks sixty times where one `scoreBest` builds them once. So the model
+ * is optimistic about Omaha by up to a third. Pushing Omaha's weight to 75 would
+ * close that and would also turn a number that means something into a fudge
+ * factor, and the ceiling this feeds separates a quarter-second query from a
+ * seven-second one — a third is noise at that distance, where counting boards
+ * was wrong by a factor of twenty and in the wrong direction.
+ */
+const RANK_COST: Record<Variant, number> = { holdem: 2, plo: 60 }
+
+export function handsRanked(
+  holeCards: Card[][],
+  board: Card[],
+  variant: Variant = 'holdem',
+): number {
+  return countRunouts(holeCards, board) * holeCards.length * RANK_COST[variant]
 }
 
 /**

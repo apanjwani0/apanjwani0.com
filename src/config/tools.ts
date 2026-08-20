@@ -39,12 +39,12 @@ export const tools: Tool[] = [
   {
     slug: 'token-bench',
     title: 'Token Bench',
-    description: 'Decode a JWT and actually verify its signature against a JWK, JWKS or HMAC secret.',
+    description: 'Verify a JWT signature against a JWK, JWKS or HMAC secret — and when it fails, find out why.',
     status: 'live',
-    seoTitle: 'JWT Verifier — Decode and Verify a JWT Signature Online',
-    metaDescription: 'Most JWT tools only decode. Token Bench verifies the signature against a key you paste — HS, RS, PS and ES algorithms — entirely in your browser.',
-    keywords: 'jwt verifier, verify jwt signature, jwt decoder, jwk, jwks, hs256, rs256, es256, jwt signature validation, alg none attack, algorithm confusion',
-    intro: 'Paste a JWT to read its header, payload and claims. Paste a key — an HMAC secret, a JWK, or a whole JWKS — to find out whether the signature actually holds. HS, RS, PS and ES algorithms, checked with the browser\'s own Web Crypto. Nothing is uploaded.',
+    seoTitle: 'JWT Verifier — Verify a JWT Signature and Diagnose Why It Failed',
+    metaDescription: 'Most JWT tools only decode. Token Bench verifies the signature against a key you paste, then proves why a failure failed — wrong algorithm, stale kid, a DER-encoded ECDSA signature, an encoded secret, or a forgery.',
+    keywords: 'jwt verifier, verify jwt signature, jwt decoder, jwk, jwks, hs256, rs256, es256, invalid signature, jwt signature validation, alg none attack, algorithm confusion, ecdsa der signature, kid rotation',
+    intro: 'Paste a JWT to read its header, payload and claims. Paste a key — an HMAC secret, a JWK, or a whole JWKS — to find out whether the signature actually holds. HS, RS, PS and ES algorithms, checked with the browser\'s own Web Crypto, and the right key resolved out of a JWKS by the token\'s kid. Then the part every other JWT tool leaves to you: when the signature does not verify, it says why. Not by guessing — it takes each hypothesis, changes that one thing, re-runs the check, and only reports a cause it watched start verifying. It will tell you that the token was re-encoded in transit and the signature covers the exact characters it no longer has; that your secret works base64- or hex-decoded, which is a different key from the literal string and a decision your library makes rather than the token; that the token is signed HS512 while you are checking HS256; that the ECDSA signature is ASN.1 DER, the form OpenSSL, Go and most Java signers emit and RFC 7518 forbids, when it wants a fixed-width r and s; or that the signature is perfectly good and the JWKS simply was not searched to the key that made it, which is what a key rotation looks like from the outside. It also names algorithm confusion out loud: a token claiming HMAC while you hold a public key is a forgery anyone who can read your JWKS could have written, and if HMAC-ing with that key reproduces the signature it says so. When no hypothesis holds it says that too, because refusing to invent a reason is the whole point. Nothing is uploaded.',
   },
   {
     slug: 'json-tidy',

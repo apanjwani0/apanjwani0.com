@@ -40,6 +40,7 @@ import {
   type JwtAlg,
   type ParsedJwt,
 } from '../../../lib/jwt'
+import { diagnoseVerification, inspectTokenText, type TbFinding } from './diagnose'
 
 const TB_STORE = 'token-bench:v1'
 
@@ -70,6 +71,10 @@ class TokenBenchTool extends HTMLElement {
   private algFollowsHeader = true
   private parsed: ParsedJwt | null = null
   private parseError = ''
+  /** Findings from the last failed verification. Null until one fails, and
+   *  cleared whenever an input changes — a diagnosis belongs to one attempt. */
+  private diagnosis: TbFinding[] | null = null
+  private diagnosing = false
 
   connectedCallback() {
     this.restore()
@@ -89,6 +94,8 @@ class TokenBenchTool extends HTMLElement {
             <textarea data-field="token" rows="6" spellcheck="false"
               placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature"></textarea>
           </label>
+
+          <ul data-type="tb-findings" data-where="shape" hidden></ul>
 
           <div data-type="tb-controls">
             <label data-type="tb-field">
@@ -114,6 +121,12 @@ class TokenBenchTool extends HTMLElement {
         </div>
 
         <output data-type="tb-verdict" role="status" aria-live="polite"></output>
+
+        <section data-type="tb-why" hidden>
+          <h2>Why it did not verify</h2>
+          <p data-type="tb-why-lede"></p>
+          <ul data-type="tb-findings" data-where="why"></ul>
+        </section>
 
         <div data-type="tb-panes">
           <section data-type="tb-pane">
@@ -169,10 +182,15 @@ class TokenBenchTool extends HTMLElement {
       this.reparse()
       this.render()
     })
-    keyBox.addEventListener('input', () => { this.keyText = keyBox.value })
+    keyBox.addEventListener('input', () => {
+      this.keyText = keyBox.value
+      this.diagnosis = null
+      this.renderFindings()
+    })
     algBox.addEventListener('change', () => {
       this.alg = algBox.value as JwtAlg
       this.algFollowsHeader = false
+      this.diagnosis = null
       this.persist()
       this.render()
     })
@@ -183,6 +201,7 @@ class TokenBenchTool extends HTMLElement {
       this.keyText = ''
       this.parsed = null
       this.parseError = ''
+      this.diagnosis = null
       tokenBox.value = ''
       keyBox.value = ''
       this.setVerdict('', '')
@@ -210,6 +229,7 @@ class TokenBenchTool extends HTMLElement {
   private reparse() {
     this.parseError = ''
     this.parsed = null
+    this.diagnosis = null
     if (!this.token.trim()) return
     try {
       this.parsed = parseJwt(this.token)
@@ -233,18 +253,23 @@ class TokenBenchTool extends HTMLElement {
   }
 
   private async runVerify() {
+    this.diagnosis = null
     if (!this.parsed) {
+      // The shape strip is already on screen saying what is wrong with the
+      // paste, which is more use than repeating the parser's terse message.
       this.setVerdict('error', this.parseError || 'Paste a token first.')
+      this.renderFindings()
       return
     }
     if (isUnsigned(this.parsed)) {
       this.setVerdict('bad', 'UNSIGNED — this token declares alg "none" and carries no signature. It proves nothing about who issued it.')
+      this.renderFindings()
       return
     }
     try {
       const ok = await verifyJwt(this.parsed, this.alg, this.keyText)
       if (!ok) {
-        this.setVerdict('bad', `Signature does NOT verify as ${this.alg} against this key.`)
+        await this.explainFailure(`Signature does NOT verify as ${this.alg} against this key.`)
         return
       }
       // Signature and expiry are reported separately and both are shown,
@@ -254,9 +279,118 @@ class TokenBenchTool extends HTMLElement {
       const suffix = time.notes.length ? ` — but: ${time.notes.join(' ')}` : ''
       this.setVerdict(time.expired || time.notYetValid ? 'warn' : 'good',
         `Signature verifies as ${this.alg}.${suffix}`)
+      this.renderFindings()
     } catch (error) {
-      this.setVerdict('error', error instanceof Error ? error.message : String(error))
+      // A throw is a failure too, and it is the MOST interesting one: importing
+      // an RSA public JWK as an HMAC secret throws, and that is precisely the
+      // algorithm-confusion shape the diagnosis knows how to name.
+      await this.explainFailure(error instanceof Error ? error.message : String(error), 'error')
     }
+  }
+
+  /**
+   * Say why. Only runs with a key present — with none, "does not verify" has an
+   * obvious cause and a panel repeating the paste lint would be noise.
+   */
+  private async explainFailure(verdict: string, state = 'bad') {
+    this.setVerdict(state, verdict)
+    if (!this.keyText.trim()) {
+      this.renderFindings()
+      return
+    }
+    this.diagnosing = true
+    this.renderFindings()
+    try {
+      this.diagnosis = await diagnoseVerification({
+        rawToken: this.token,
+        alg: this.alg,
+        keyText: this.keyText,
+      })
+    } catch {
+      // The diagnosis is a convenience on top of the verdict. If it fails, the
+      // verdict above is still the answer and still correct.
+      this.diagnosis = []
+    }
+    this.diagnosing = false
+    this.renderFindings()
+  }
+
+  /** Replace the token in place, from a finding that carries a corrected one. */
+  private applyFix(token: string) {
+    this.token = token
+    ;(this.querySelector('[data-field="token"]') as HTMLTextAreaElement).value = token
+    this.reparse()
+    this.render()
+  }
+
+  /**
+   * Render the paste lint and the diagnosis. Built as DOM nodes with
+   * textContent throughout: every string here is derived from a token or a key
+   * someone pasted — kids and algorithm names are copied straight out of an
+   * attacker-controlled header — so none of it may ever become markup.
+   */
+  private renderFindings() {
+    const strip = this.querySelector('[data-type="tb-findings"][data-where="shape"]') as HTMLElement
+    const why = this.querySelector('[data-type="tb-why"]') as HTMLElement
+    const list = this.querySelector('[data-type="tb-findings"][data-where="why"]') as HTMLElement
+    const lede = this.querySelector('[data-type="tb-why-lede"]') as HTMLElement
+
+    const item = (finding: TbFinding) => {
+      const li = document.createElement('li')
+      li.dataset.proof = finding.proof
+      const title = document.createElement('p')
+      title.dataset.type = 'tb-finding-title'
+      title.textContent = finding.title
+      const detail = document.createElement('p')
+      detail.dataset.type = 'tb-finding-detail'
+      detail.textContent = finding.detail
+      li.append(title, detail)
+      if (finding.fixedToken) {
+        const fix = document.createElement('button')
+        fix.type = 'button'
+        fix.dataset.action = 'apply-fix'
+        fix.textContent = 'Use the corrected token'
+        const corrected = finding.fixedToken
+        fix.addEventListener('click', () => this.applyFix(corrected))
+        li.append(fix)
+      }
+      return li
+    }
+
+    if (this.diagnosing) {
+      why.hidden = false
+      lede.textContent = 'Working through the causes…'
+      list.replaceChildren()
+      strip.hidden = true
+      return
+    }
+
+    if (this.diagnosis) {
+      why.hidden = false
+      const proved = this.diagnosis.filter(f => f.proof === 'verified')
+      lede.textContent = proved.length
+        // Every proved cause was established by changing one thing and watching
+        // the signature start verifying, so it can be stated flatly.
+        ? 'Each cause below was confirmed by re-running the check with that one thing changed.'
+        : this.diagnosis.length
+          ? 'Nothing here made the signature verify. These are facts about the token worth knowing anyway.'
+          // Refusing to guess is the feature. A tool whose job is to be honest
+          // about the word "verified" cannot invent a reason it failed.
+          : 'No cause found. The signature is simply not one this key produced — which usually means the key '
+            + 'belongs to a different issuer, a different environment, or a different tenant.'
+      list.replaceChildren(...this.diagnosis.map(item))
+      strip.hidden = true
+      return
+    }
+
+    why.hidden = true
+    list.replaceChildren()
+    // Before any verification, the paste lint stands on its own: "Bearer eyJ…"
+    // parses into three segments and then reports invalid base64url, which
+    // tells nobody anything.
+    const shape = this.token.trim() ? inspectTokenText(this.token).findings : []
+    strip.hidden = shape.length === 0
+    strip.replaceChildren(...shape.map(item))
   }
 
   private render() {
@@ -269,6 +403,7 @@ class TokenBenchTool extends HTMLElement {
 
     algBox.value = this.alg
     keyLabel.textContent = this.alg.startsWith('HS') ? 'Key — HMAC secret, or an oct JWK' : 'Key — public key as JWK or JWKS'
+    this.renderFindings()
 
     if (this.parseError) {
       headerOut.textContent = this.parseError
