@@ -1113,15 +1113,24 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
 
 {
   const poker = await import('../src/components/games/poker-trainer/engine/equity.ts')
-  const article = learnings.find(l => l.slug === 'the-test-that-shared-the-bug')
-  assert.ok(article, 'the pot-odds article is shipped')
-  assert.equal(article.embed, 'poker-trainer', 'the article argues about the component it embeds')
 
+  /* These assertions began life pinned to the pot-odds article, which quoted
+     the four break-even prices in its prose. That article was retired on
+     2026-09-25 and the prose half of the block went with it — but the ENGINE
+     half is what actually earned its place, so it stays and is now asserted
+     against the drill alone.
+
+     The lesson the article recorded is kept here rather than in the prose,
+     because it is the reason the bisection below exists: the drill, the
+     article and the first version of this test all computed `B / (P + B)` and
+     agreed with each other, and all three were wrong. The equity a call needs
+     is `B / (P + 2B)` — your own call joins the pot you are winning a share
+     of. Recomputing a remembered fraction "independently" reproduces the
+     mistake, so the break-even is derived from `EV(call) = 0` instead. */
   const ptSrc = await readFile(
     new URL('../src/components/games/poker-trainer/PokerTrainer.ts', import.meta.url),
     'utf-8',
   )
-  const text = `${article.title}\n${article.summary}\n${article.content}`
 
   // An independent C(n,k) — multiplicative, integer-exact at these sizes, and
   // deliberately not the engine's `combinations()`, which it is about to check.
@@ -1158,17 +1167,16 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   // possible — is the appended `Poker Trainer: the solve memo` block at the end
   // of this file.
 
-  // The four prices. `pot` and `sizes` are the drill's, pinned from source: the
-  // article names 24.8/33.3/39.8/50.0 and those are functions of these two
-  // literals and nothing else.
+  // The four prices. `pot` and `sizes` are the drill's, pinned from source —
+  // every price below is a function of these two literals and nothing else.
   const potMatch = ptSrc.match(/const pot = (\d+)\n/)
   const sizesMatch = ptSrc.match(/const sizes = \[([\d, ]+)\]/)
   assert.ok(potMatch, 'the drill no longer declares `const pot = …`')
   assert.ok(sizesMatch, 'the drill no longer declares `const sizes = [...]`')
   const drillPot = Number(potMatch[1])
   const drillSizes = sizesMatch[1].split(',').map(n => Number(n.trim()))
-  assert.deepEqual(drillSizes, [33, 50, 66, 100], 'the article quotes one price per drill bet size')
-  assert.equal(drillPot, 100, 'the article says the drill builds a pot of 100')
+  assert.deepEqual(drillSizes, [33, 50, 66, 100], 'the drill offers one price per bet size')
+  assert.equal(drillPot, 100, 'the drill builds a pot of 100')
 
   // Derived from EV = 0 by bisection — NOT from a written-down fraction.
   //
@@ -1209,8 +1217,8 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     'the drill must add the villain bet before pricing the call — d.pot alone prices a bluff, not a call',
   )
 
-  // The two fractions the article now deliberately separates. If they ever collapse
-  // back into one number the article is wrong again, so pin both.
+  // The two fractions must stay separate numbers. Collapsing them back into one
+  // is the original bug, so the relation between them is pinned directly.
   for (const bet of drillSizes) {
     const foldShare = bet / (drillPot + bet)
     assert.ok(
@@ -1218,20 +1226,8 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
       'the share you may fold must stay strictly above the equity a call needs',
     )
   }
-  assert.ok(
-    text.includes('**B / (P + 2B)**') && text.includes('**B / (P + B)**'),
-    'the article must keep both fractions distinct — the wrong one it shipped and the right one',
-  )
-  assert.ok(
-    text.includes('33, 50, 66 and 100 into a pot of 100'),
-    'the article must still name the drill bet sizes',
-  )
-  assert.ok(
-    prices.every(price => text.includes(price)),
-    `the article must still quote every derived price (${prices.join(', ')}) — asserted individually so prose punctuation is free to change but the numbers are not`,
-  )
-  // One decimal place, because that is how the article and the caption write
-  // them; a formatter change would make both wrong.
+  // One decimal place, because that is how the drill prints them; a formatter
+  // change would silently restate every price.
   assert.match(ptSrc, /const pct = \(n: number\) => `\$\{\(n \* 100\)\.toFixed\(1\)\}%`/, 'the drill still prints one decimal')
 
   // Combination counts, enumerated here from four suits rather than trusted.
@@ -1252,20 +1248,15 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     .filter(combo => !combo.some(c => c.r === 14 && c.s === 's'))
   assert.equal(blockedAces.length, choose(3, 2), 'one ace in your hand leaves C(3,2) = 3 of theirs')
   assert.equal(blockedAces.length, 3)
-  // The caption is an instruction, so every control and readout it names has to
-  // exist character for character. This is the half that rots silently: a
-  // reworded table heading leaves the caption pointing at nothing.
+  // The drill's own controls and readouts. Kept after the article that pointed
+  // at them was retired: the pricing assertions above are only meaningful while
+  // a reader can still reach the row that displays the number.
   for (const label of [
     'Play a spot',
     'Equity you needed to call',
   ]) {
-    assert.ok(ptSrc.includes(label), `PokerTrainer.ts must still render "${label}" — the caption points at it`)
-    assert.ok(article.embedCaption.includes(label), `the caption must still name "${label}"`)
+    assert.ok(ptSrc.includes(label), `PokerTrainer.ts must still render "${label}"`)
   }
-  assert.ok(
-    article.embedCaption.includes('19.9, 25.0, 28.4 or 33.3'),
-    'the caption tells the reader which four numbers to watch; keep it in step with the prices above',
-  )
 }
 
 /* ─────────────  the sitemap is well-formed and lists only our pages  ───────────── */

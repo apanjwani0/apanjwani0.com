@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-09-25)
 
 ## Corpus Check
-- 169 files · ~325,347 words
+- 169 files · ~325,143 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2814 nodes · 6295 edges · 117 communities (99 shown, 18 thin omitted)
+- 2814 nodes · 6295 edges · 117 communities (100 shown, 17 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 26 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8fdb4774`
+- Built from commit: `19078f87`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -164,7 +164,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (117 total, 18 thin omitted)
+## Communities (117 total, 17 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.06
@@ -188,7 +188,7 @@ Nodes (12): FG_PALETTES, FG_PRESETS, fgClamp(), fgExpand(), fgHash(), fgMulberry
 
 ### Community 6 - "MdEnhanced Export Pipeline (PDF/Image)"
 Cohesion: 0.08
-Nodes (39): Learning, learnings, breadcrumbLd, crumbs, game, gameIntroHtml, GameTag, ldJson (+31 more)
+Nodes (40): Learning, learnings, breadcrumbLd, crumbs, game, gameIntroHtml, GameTag, ldJson (+32 more)
 
 ### Community 7 - "Admin API Route Handlers (login/logout/save)"
 Cohesion: 0.06
@@ -291,8 +291,8 @@ Cohesion: 0.12
 Nodes (21): ../../components/tools/chroma-lab/ChromaLab.ts, ChromaLabTool, clClamp(), clContrast(), clEsc(), clFmt(), clHex2(), ClHSL (+13 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.09
-Nodes (27): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), childPath(), cleanMessage(), ErrorLoc, Indent, isPrimitive(), jtDeepEqual() (+19 more)
+Cohesion: 0.08
+Nodes (28): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), childPath(), cleanMessage(), countKeys(), ErrorLoc, Indent, isPrimitive() (+20 more)
 
 ### Community 40 - "Community 40"
 Cohesion: 0.14
@@ -363,8 +363,8 @@ Cohesion: 0.07
 Nodes (32): WI_DISCOVERY_HASHES, wiDecodeSecret(), wiDetectScheme(), WiDigestEncoding, wiDiscoverSignature(), WiDiscovery, wiGithub(), WiHash (+24 more)
 
 ### Community 59 - "Community 59"
-Cohesion: 0.15
-Nodes (26): cardKey(), combinations(), FULL_DECK, handClass(), outsAgainst(), RANK_COST, rankHand(), remainingDeck() (+18 more)
+Cohesion: 0.19
+Nodes (20): outsAgainst(), rankHand(), combinations(), compareRank(), countRanks(), evaluate5(), evaluateBest(), evaluateOmaha() (+12 more)
 
 ### Community 60 - "Community 60"
 Cohesion: 0.19
@@ -427,8 +427,8 @@ Cohesion: 0.60
 Nodes (5): bad(), note(), ok(), warn(), origin-check.sh script
 
 ### Community 80 - "Community 80"
-Cohesion: 0.18
-Nodes (13): callEv(), countRunouts(), equityVsRange(), exactEquity(), handsRanked(), holeCount(), rangeWork(), requiredEquity() (+5 more)
+Cohesion: 0.20
+Nodes (9): callEv(), countRunouts(), handsRanked(), requiredEquity(), pct(), pct2(), PokerTrainerGame, ptCards() (+1 more)
 
 ### Community 81 - "Community 81"
 Cohesion: 0.06
@@ -488,7 +488,7 @@ Nodes (19): dsClamp(), dsClampView(), dsCoordDigits(), dsEncodeView(), dsEncodeZ
 
 ### Community 97 - "Community 97"
 Cohesion: 0.11
-Nodes (27): ../../../components/RelatedLinks.astro, breadcrumbLd, crumbs, ldJson, tool, breadcrumbLd, crumbs, EngineTag (+19 more)
+Nodes (26): ../../../components/RelatedLinks.astro, breadcrumbLd, crumbs, ldJson, tool, breadcrumbLd, crumbs, EngineTag (+18 more)
 
 ### Community 98 - "Community 98"
 Cohesion: 0.12
@@ -530,6 +530,10 @@ Nodes (11): DS_DEFAULT_VIEW, DS_LOG_BAILOUT, DS_PALETTE_IDS, DS_ZOOM_CODE_MAX, D
 Cohesion: 0.36
 Nodes (7): fade(), hash2(), lerp(), Palette, PALETTES, Particle, valueNoise()
 
+### Community 109 - "Community 109"
+Cohesion: 0.32
+Nodes (10): cardKey(), combinations(), equityVsRange(), exactEquity(), FULL_DECK, handClass(), holeCount(), rangeWork() (+2 more)
+
 ### Community 110 - "Community 110"
 Cohesion: 0.29
 Nodes (8): sgCaaVerdict, SgCnameReport, SgDiff, SgDmarcReport, SgMxTarget, SgSpfReport, SgInspection, SgType
@@ -553,7 +557,7 @@ Nodes (3): indentString(), repairJson(), sortDeep()
 ## Knowledge Gaps
 - **711 isolated node(s):** `name`, `type`, `version`, `node`, `dev` (+706 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -562,7 +566,7 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.155) - this node is a cross-community bridge._
 - **Why does `mountGame()` connect `Community 44` to `Community 32`, `Community 1`, `Community 67`, `Community 4`, `Community 101`, `Community 70`, `Community 108`, `Community 45`, `Community 76`, `Community 47`, `Community 18`, `Community 19`, `Community 25`?**
   _High betweenness centrality (0.150) - this node is a cross-community bridge._
-- **Why does `../../components/tools/json-tidy/JsonTidy.ts` connect `Community 39` to `MdEnhanced Tool (markdown render)`, `Community 43`, `Community 109`, `Community 176`, `Community 178`, `Community 53`, `Community 27`, `Community 94`?**
+- **Why does `../../components/tools/json-tidy/JsonTidy.ts` connect `Community 39` to `MdEnhanced Tool (markdown render)`, `Community 43`, `Community 176`, `Community 178`, `Community 53`, `Community 27`, `Community 94`?**
   _High betweenness centrality (0.055) - this node is a cross-community bridge._
 - **What connects `name`, `type`, `version` to the rest of the system?**
   _711 weakly-connected nodes found - possible documentation gaps or missing edges._
