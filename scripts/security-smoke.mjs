@@ -2487,7 +2487,35 @@ console.log('cron whisperer crontab ok')
       `project "${p.title}" links to ${projectUrl.pathname} on this site, which is not a shape /projects is allowed to advertise — add it to projectPathShapes deliberately, once something asserts that page is indexable`,
     )
   }
-  assert.ok(projectsOnSite >= 4, `expected the on-site project entries to be checked, matched ${projectsOnSite}`)
+  /* The floor was 4 until 2026-09-25, when /projects stopped re-listing this
+     site's own tools and games — the owner's note was that they already have
+     two hubs of their own — and became a shelf of GitHub work plus the site
+     itself. One on-site entry is now the expected steady state, so the floor is
+     1: enough to prove the loop above ran, which is all it was ever for. */
+  assert.ok(projectsOnSite >= 1, `expected the on-site project entries to be checked, matched ${projectsOnSite}`)
+
+  /* With only the root link left in the config, `projectPathShapes` itself is
+     barely exercised by real data — the tools and games branches would now be
+     dead regexes that could be broken without anything going red. So the list
+     is held to synthetic paths as well: the shapes it must accept, and the
+     near-misses it must refuse. This is the half that survives the corpus
+     shrinking, and it is why the floor above can safely be 1. */
+  const shapeAccepts = path => projectPathShapes.some(re => re.test(path))
+  for (const ok of ['/', '/tools/chainsaw', '/tools/chainsaw/', '/games/deep-shore', '/games/2048']) {
+    assert.ok(shapeAccepts(ok), `projectPathShapes must still accept ${ok}`)
+  }
+  for (const bad of [
+    '/blogs/anything',          // a gated section — the failure this guard exists for
+    '/learnings/some-article',  // indexable, but nothing asserts a project may advertise it
+    '/tools',                   // the hub, not a product page
+    '/games',
+    '/tools/driftfield/sand-loom', // a mode page; deliberately not in the list
+    '/admin',
+    '/tools/Chainsaw',          // slug casing that would 404
+    '//evil.example.com',
+  ]) {
+    assert.equal(shapeAccepts(bad), false, `projectPathShapes must refuse ${bad} until someone adds it deliberately`)
+  }
 }
 
 console.log('projects link only at pages this site serves')
