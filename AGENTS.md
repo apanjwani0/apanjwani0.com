@@ -741,6 +741,22 @@ was a second, mirrored fixture that does.
   frame in a dive is the last thing a "pause at the destination" should cost. A
   render whose frames cost that much must also be **stoppable** — a second click
   on the button is a stop, not a second render.
+- **The "server" badge on `/tools` is derived, and its number is asserted
+  against the prose.** `SERVER_TOOLS` (`src/lib/tools.ts`) names the tools that
+  need the origin to work at all — the quality bar this file sets for a new tool
+  — and the hub badges them in accent. Without it, sixteen cards gave Chainsaw
+  and a Base64 encoder identical visual weight while the intro claimed "four
+  need a real server" and marked none of them. It lives in `src/lib/` and **not**
+  in `src/config/tools.ts` for the same reason as `EMBED_TAGS` and `GAME_TAGS`:
+  the `/admin` Vite middleware regenerates that config wholesale, so an export
+  added there is deleted on the next save. It is not an admin-editable field
+  either, because it is a fact about *code* — does a route exist that this tool
+  calls. `security:smoke` asserts each slug is a `live` tool **and** that
+  something in its component actually calls an `/api/` route, so a badge cannot
+  outlive its server; and it reads the number word out of the intro copy and
+  compares it to the set's size, so a fifth server tool cannot ship while the
+  prose still says "four". Same family as the learnings rule that an article
+  quoting numbers is quoting a component.
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
 - **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
@@ -755,7 +771,14 @@ was a second, mirrored fixture that does.
   useful copy can go back without a rebuild — but generated how-to/FAQ filler is
   what this field is now known to attract, so anything added here needs to earn
   its place the way a learnings article does.
-- **Decorative StarField**: Keep the home/background star canvas off tool and game detail pages. Lighthouse showed it spending CPU before the game became useful; detail pages should prioritize the interactive app.
+- **Decorative StarField**: Keep the home/background star canvas off tool and
+  game detail pages. Lighthouse showed it spending CPU before the game became
+  useful; detail pages should prioritize the interactive app. As of 2026-09-24
+  it is also off the four card hubs (`/tools`, `/games`, `/projects`,
+  `/learnings`) — there the cost is legibility rather than CPU: the dots land
+  mid-sentence in card copy. `Base.astro` still defaults `starfield={true}`, so
+  **the home hero keeps it** and that is the one place it is load-bearing for
+  the site's identity; a new listing page should pass `starfield={false}`.
 - **Fonts on tools/games**: Tool and game detail pages pass `loadFonts={false}` to `Head`. This avoids mobile CLS and a render-blocking third-party font request on utility pages; fallback system fonts are acceptable there.
 - **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
@@ -812,6 +835,45 @@ was a second, mirrored fixture that does.
   definition of one, and **only a tool-private subtree may size an h1 at all**
   (Draftboard's `md-preview`, a heading inside a rendered markdown document, is the
   one legitimate case and it stays legitimate without being named in a list).
+- **…and the same rule one level down, for the CARD title.** A design audit on
+  2026-09-24 measured `[data-type="card-title"]` on all five hubs that render a
+  card grid and found **four** treatments: `/tools` at 20.8px/600 from its own
+  `tools.css` override, `/games` and `/projects` at 16px/700 from a `global.css`
+  refinement, and `/learnings` and `/tools/driftfield` at 16px/**400** —
+  matching no weight rule at all, so on two of five hubs the card title was
+  identical in size *and* weight to the description beneath it and the card had
+  no internal hierarchy whatsoever. Same cause as the `h1` case above: the
+  shared base in `shared.css` declared **less** than every consumer needed
+  (`font-weight: inherit`), so each consumer patched locally and the patches
+  disagreed. The base now sets the weight and **nothing else may** —
+  `security:smoke` derives that by parsing every stylesheet under `src/` for a
+  rule whose selector mentions `card-title` and which sets `font-size` or
+  `font-weight`, so a sheet added later cannot reintroduce a dialect. A hub that
+  wants a different *shape* uses a documented variant instead: `/learnings`
+  passes `data-variant="list"` for one column at a 42rem measure, because a
+  reading list with dates and prose summaries is not a product shelf and a 3-up
+  grid left two empty tracks beside a handful of articles.
+- **The whole card is its link, and that rests on two rules.** The card frame
+  lights up on `:hover` and `:focus-within`, which promised an affordance only
+  the ~29px title link actually had — **11%** of a 326×156 card. A stretched
+  `::after` on the title link fixes it and keeps one link and one accessible
+  name per card (a wrapping `<a>` would bury the heading inside a link). Two
+  things about it fail silently and are asserted: the card must stay
+  `position: relative`, or the absolutely-positioned `::after` escapes to the
+  nearest positioned ancestor and **covers the page**, making one card's link
+  swallow every click on the document; and a card's *secondary* links — 5 of
+  the 11 `/projects` cards carry repo/stars/forks — must be raised with
+  `position: relative`, or they stop being clickable while still looking like
+  links, which no screenshot reveals. Cards with no link grow no `::after`, so
+  a coming-soon Driftfield mode needs nothing special.
+- **The spacing scale must have a rung for what the code actually does.** It
+  stopped at `2xs`/`xs`/`page-x`/`section`, which left nothing for ordinary
+  in-component spacing — so `card-grid` hardcoded `1.25rem` and `0.4rem`,
+  `tools.css` `0.6rem`, and `global.css` `1rem`/`0.75rem`/`0.5rem`/`0.25rem`,
+  while this file told authors to "reference `var(--space-*)`" for a scale that
+  did not exist. `--space-sm`/`md`/`lg`/`xl`/`card` were added at exactly the
+  values already in use, so the change was visually a no-op; the point is that
+  the next edit can find the spacing by name instead of inventing a sixth value.
 - **One disabled treatment**: `--opacity-disabled` in `theme.css` is the single
   "this control is dead" value. It is an opacity and not a colour on purpose —
   theme-agnostic, and it dims the border and the label together. Both lane floors
@@ -841,12 +903,24 @@ was a second, mirrored fixture that does.
   Two things to know before touching the palette. There is **less headroom than
   it looks**: the tightest pairings are `--color-muted` on `--color-surface` at
   4.76:1 (dark) and `--color-success` on `--color-surface` at 4.74:1 (light), so
-  a "slightly softer grey" is roughly one step from failing. And
-  `--color-border` is **deliberately not in the list** — it is a hairline, never
-  a text colour, and holding a divider to a text ratio would force a palette
-  change to satisfy an assertion nobody could read. Its 1.25:1 against
-  `--color-bg` is a known WCAG 1.4.11 (non-text contrast) gap on the borders
-  that bound interactive surfaces, left alone rather than guessed at.
+  a "slightly softer grey" is roughly one step from failing.
+
+  `--color-border` stays out of the **text** pairing list — it is a hairline,
+  never ink — but "not a text colour" had been read as "unmeasured", and it sat
+  at 1.25:1 (dark) / 1.23:1 (light). Every listing card on the site is bounded
+  by it, so all five card hubs read as floating text rather than as cards; the
+  owner's word for the result was "ugly", and this was most of it. It is now
+  `#394255` / `#b7b7b7` — **2.0:1** — with its own floor asserted in both
+  themes beside the text sweep.
+
+  The floor is 2:1 and **not** the 3:1 WCAG 1.4.11 asks for non-text UI
+  boundaries, which is a deliberate partial and the reason it is written down:
+  3:1 needs `#515d71` / `#949494`, which stops being a hairline and boxes every
+  card on the site. 1.4.11 governs a boundary *required* to identify a control,
+  and here the card's own content identifies it — the border is reinforcement.
+  What the assertion prevents is the regression that actually happened: a
+  border quietly tuned back down to invisible. The **hover** border is
+  `--color-muted`, which clears 3:1 and is already covered by the text sweep.
 - **A programmatic focus target still needs a visible ring.** `main` carries
   `tabindex="-1"` because the skip link jumps to it, and a blanket
   `main:focus { outline: none }` sat below the `:focus-visible` rule that is the

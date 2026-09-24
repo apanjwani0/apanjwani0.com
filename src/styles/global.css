@@ -92,16 +92,12 @@ div[data-type="project-header"] {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 1rem;
-}
-
-div[data-type="project-header"] > [data-type="card-title"] {
-  font-weight: bold;
+  gap: var(--space-xl);
 }
 
 span[data-type="project-stats"] {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-lg);
   font-size: var(--text-xs);
   color: var(--color-muted);
   flex-shrink: 0;
@@ -119,7 +115,7 @@ span[data-type="project-stats"] a:hover {
 
 div[data-type="project-description"] {
   color: var(--color-muted);
-  margin: 0.5rem 0;
+  margin: 0;
 }
 
 div[data-type="project-description"] p,
@@ -197,9 +193,34 @@ article[data-type="experience"] > ul {
   font-size: var(--text-sm);
 }
 
+/* A reading list, not a product shelf. /learnings entries carry a date and a
+   prose summary, so they want one column at a readable measure — the 3-up
+   product grid gave each article a 326px box and, with only a few published,
+   left two empty tracks beside them reading as a half-built page. Everything
+   else about the card (frame, hover, focus-within, the stretched title link)
+   is inherited unchanged; only the track count and measure differ, which is
+   why this is a variant of the shared idiom rather than a second idiom.
+   42rem matches p[data-type="page-intro"] so the intro and the list share an
+   edge instead of missing it by a few pixels. */
+[data-type="card-grid"][data-variant="list"] {
+  grid-template-columns: 1fr;
+  max-width: 42rem;
+}
+
+/* Date above the title, not beside it. Side by side, a title that wraps sits
+   indented past the date while the summary underneath returns to the card's
+   left edge — three elements, two different left edges, which the eye catches
+   before it can name why. This is the treatment the <=560px breakpoint below
+   already chose; the list variant is wide but still one column, so it wants
+   the same thing at every width. */
+[data-type="card-grid"][data-variant="list"] div[data-type="writing-row"] {
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
 div[data-type="writing-row"] {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-xl);
   align-items: baseline;
 }
 
@@ -216,49 +237,6 @@ div[data-type="writing-summary"] {
   color: var(--color-muted);
   font-size: var(--text-sm);
   margin: 0.5rem 0 0 0;
-}
-
-/* ── Hub filter (/tools, /games) ──────────────────────────────────────────
-   A live search box between the intro and the card grid, mounted by
-   src/lib/hub-filter.ts. The form ships `hidden` (progressive enhancement —
-   no JS means no dead control) and is revealed only when the grid is long
-   enough to need narrowing. Base-only idiom: no ToolBase page renders it,
-   which is why it may live here rather than shared.css. */
-form[data-type="hub-filter"] {
-  margin: 0;
-  max-width: 24rem;
-}
-
-form[data-type="hub-filter"] input[type="search"] {
-  width: 100%;
-}
-
-form[data-type="hub-filter"] p[data-type="hub-filter-status"] {
-  margin: 0.5rem 0 0;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-}
-
-/* Status facet chips — built client-side by hub-filter.ts from the cards'
-   data-status attributes, so like the form itself they simply don't exist for
-   a no-JS visitor. aria-pressed doubles as the styling hook: the pressed state
-   is the accessible state, so the two can never disagree. */
-form[data-type="hub-filter"] div[data-type="hub-filter-facets"] {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs);
-  margin-top: var(--space-2xs);
-}
-
-form[data-type="hub-filter"] div[data-type="hub-filter-facets"] button {
-  font-size: var(--text-xs);
-  padding: var(--space-2xs) var(--space-xs);
-  color: var(--color-muted);
-}
-
-form[data-type="hub-filter"] div[data-type="hub-filter-facets"] button[aria-pressed="true"] {
-  color: var(--color-accent);
-  border-color: var(--color-accent);
 }
 
 /* Status pill on each /games card. Lives here rather than in a scoped <style>
@@ -294,16 +272,6 @@ form[data-type="hub-filter"] div[data-type="hub-filter-facets"] button[aria-pres
 /* Two pills on one card (streak + play) need breathing room between them. */
 [data-type="game-badge"] + [data-type="game-badge"] {
   margin-left: var(--space-2xs);
-}
-
-/* The filter hides non-matching cards with the `hidden` attribute. The shared
-   card rule (`[data-type="card-grid"] > *`, shared.css) sets `display: flex`,
-   and any author rule beats the UA's `[hidden] { display: none }` — so without
-   this refinement a "hidden" card would keep rendering. A higher-specificity
-   Base-only refinement of a shared idiom, which is the one shape allowed to
-   live here (see the load-order note in shared.css). */
-[data-type="card-grid"] > [hidden] {
-  display: none;
 }
 
 @media (max-width: 560px) {

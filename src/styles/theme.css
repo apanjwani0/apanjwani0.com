@@ -22,7 +22,7 @@
   --color-surface: #f6f6f6;  /* raised surface (menus, cards)   */
   --color-text: #111111;     /* primary text                    */
   --color-muted: #666666;    /* secondary text                  */
-  --color-border: #e8e8e8;   /* hairlines / dividers            */
+  --color-border: #b7b7b7;   /* hairlines / dividers            */
   --color-bg-blur: rgba(255, 255, 255, 0.82); /* translucent bg for the sticky header */
   --color-accent: #6a5bd0;   /* violet — links, markers, trail  */
   --color-error: #c0392b;    /* errors, incorrect input         */
@@ -57,9 +57,21 @@
   --text-label: clamp(0.72rem, 2vw, 0.8rem);  /* mono nav + small links */
   --text-wordmark: clamp(1.05rem, 1rem + 0.6vw, 1.2rem);  /* header wordmark — fluid 1.05→1.2 */
 
-  /* ── Spacing ─────────────────────────────────────────────── */
+  /* ── Spacing ───────────────────────────────────────────────
+     The scale used to stop at 2xs/xs/page-x/section, which left no rung for
+     ordinary in-component spacing — so `card-grid` hardcoded 1.25rem and
+     0.4rem, tools.css 0.6rem, and global.css 1rem/0.75rem/0.5rem/0.25rem,
+     while AGENTS.md told authors to "reference var(--space-*)" for a scale
+     that did not exist. Each rung below is the value the code was already
+     using, so adding them changed nothing visually — it just gave the
+     existing spacing a name that a later edit can find. */
   --space-2xs: 0.15rem;     /* inline padding (badge y)          */
   --space-xs: 0.45rem;      /* inline padding (badge x)          */
+  --space-sm: 0.4rem;       /* gap inside a card (title/body)    */
+  --space-md: 0.6rem;       /* gap in a card's head row          */
+  --space-lg: 0.75rem;      /* gap between inline meta items     */
+  --space-xl: 1rem;         /* gap across a card header          */
+  --space-card: 1.25rem;    /* card padding AND card-grid gap    */
   --space-page-x: 1.25rem;  /* page side gutter                 */
   --space-section: 2.5rem;  /* vertical rhythm between blocks    */
   --space-header-offset: 4.75rem; /* height of the sticky header — scroll-padding for anchors */
@@ -95,7 +107,7 @@
   --color-surface: #0b0f18;
   --color-text: #dde6f2;
   --color-muted: #73808f;
-  --color-border: #1a2132;
+  --color-border: #394255;
   --color-bg-blur: rgba(5, 7, 12, 0.82);
   --color-accent: #9b8cff;
   --color-error: #ff6b6b;

@@ -25,6 +25,7 @@ import {
 import { GAME_TAGS, gameTag, isPlayableGame } from '../src/lib/games.ts'
 import { games } from '../src/config/games.ts'
 import { tools } from '../src/config/tools.ts'
+import { SERVER_TOOLS, isServerTool } from '../src/lib/tools.ts'
 import { site } from '../src/config/site.ts'
 import { isBlogsPublic, navLinks } from '../src/lib/config.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
@@ -3091,6 +3092,155 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
 
 console.log('one page-title size site-wide, and no tools-lane idiom declared inside a single tool')
 
+/* ══════  role: audit — one card title, and the card IS the link  ══════
+
+   The design audit of 2026-09-24 measured the card title on all five hubs
+   that render [data-type="card-grid"] and found FOUR different treatments:
+   /tools at 20.8px/600 from its own tools.css override, /games and /projects
+   at 16px/700 from a global.css refinement, and /learnings and
+   /tools/driftfield at 16px/400 — matching no weight rule at all, which left
+   their card titles identical in size AND weight to the description beneath
+   them. Two of five hubs had no hierarchy inside the card whatsoever.
+
+   That is the `h1` three-dialects bug from AGENTS.md recurring one level
+   down, and for the same reason: the shared base declared LESS than every
+   consumer needed (font-weight: inherit), so each consumer patched it
+   locally and the patches disagreed. The base now sets the weight, and the
+   rule is that nothing else may.
+
+   Derived from the stylesheets rather than from a list of hubs, so a sheet
+   added later cannot reintroduce a dialect without failing here. */
+{
+  const cssFiles = []
+  const walkCss = async (dir) => {
+    for (const e of await readdir(new URL(dir, import.meta.url), { withFileTypes: true })) {
+      if (e.isDirectory()) await walkCss(`${dir}${e.name}/`)
+      else if (e.name.endsWith('.css')) cssFiles.push(`${dir}${e.name}`)
+    }
+  }
+  await walkCss('../src/')
+  assert.ok(cssFiles.length > 5, `expected to find the stylesheets, found ${cssFiles.length}`)
+
+  // Rule blocks as [selector, declarations]; `[^{}]` cannot cross a brace, so
+  // an at-rule's own braces end a match rather than swallowing the file.
+  // Comments are stripped FIRST: they contain no braces, so the selector
+  // capture would otherwise absorb every comment block above a rule and no
+  // selector would ever compare equal to its own text.
+  const rules = (css) => [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(m => [m[1].trim(), m[2]])
+
+  const sharedPath = '../src/styles/shared.css'
+  const sharedCss = await readFile(new URL(sharedPath, import.meta.url), 'utf-8')
+
+  // ── the base declares the weight, in exactly one place ──
+  const baseTitle = rules(sharedCss).filter(([sel]) => sel === '[data-type="card-title"]')
+  assert.equal(baseTitle.length, 1, 'shared.css declares the base [data-type="card-title"] rule exactly once')
+  assert.ok(/font-weight\s*:/.test(baseTitle[0][1]),
+    'the base card-title rule must set font-weight — leaving it `inherit` is what let five hubs disagree')
+
+  // ── and nothing else sizes or weights a card title ──
+  const dialects = []
+  for (const file of cssFiles) {
+    if (file === sharedPath) continue
+    const css = await readFile(new URL(file, import.meta.url), 'utf-8')
+    for (const [sel, decl] of rules(css)) {
+      if (!/card-title|tool-name/.test(sel)) continue
+      for (const prop of ['font-size', 'font-weight']) {
+        if (new RegExp(`(^|[;\\s])${prop}\\s*:`).test(decl)) dialects.push(`${file}: ${sel} sets ${prop}`)
+      }
+    }
+  }
+  assert.deepEqual(dialects, [],
+    'only shared.css may size or weight a card title — these sheets declare their own dialect:\n  '
+    + dialects.join('\n  '))
+
+  /* ── The whole card is the click target, and that rests on two rules ──
+     The card frame lights up on :hover and :focus-within, which promised an
+     affordance only the ~29px title link actually had — 11% of a 326x156
+     card. A stretched ::after on the title fixes it, but it is load-bearing
+     in a way that fails SILENTLY and catastrophically: without
+     `position: relative` on the card, the absolutely-positioned ::after
+     escapes to the nearest positioned ancestor and covers the PAGE, making
+     one tool's link swallow every click on the document. */
+  const cardBlocks = rules(sharedCss).filter(([sel]) => sel === '[data-type="card-grid"] > *')
+  assert.equal(cardBlocks.length, 1, 'shared.css declares the card block exactly once')
+  assert.ok(/position\s*:\s*relative/.test(cardBlocks[0][1]),
+    'the card must stay `position: relative` — it is the containing block for the stretched title link, '
+    + 'and without it that ::after covers the whole page')
+
+  const stretch = rules(sharedCss).find(([sel]) => /card-title"\]\s+a::after/.test(sel))
+  assert.ok(stretch, 'shared.css must stretch the card title link across the card with an ::after')
+  assert.ok(/position\s*:\s*absolute/.test(stretch[1]) && /inset\s*:\s*0/.test(stretch[1]),
+    'the stretched link is `position: absolute; inset: 0` — anything else does not cover the card')
+
+  /* A card may carry links AFTER its title — 5 of the 11 /projects cards do
+     (repo, stars, forks). They come later in the DOM than the title, so
+     `position: relative` is enough to lift them above the stretched ::after.
+     Drop this rule and those links stop being clickable while still looking
+     like links, which is invisible in a screenshot. */
+  const raise = rules(sharedCss).find(([sel]) => /card-grid"\]\s*>\s*\*\s+a:not\(/.test(sel))
+  assert.ok(raise && /position\s*:\s*relative/.test(raise[1]),
+    "a card's secondary links must be raised above the stretched title link, or they stop being clickable")
+}
+
+/* ══════  role: audit — the "server" badge cannot outlive its server  ══════
+
+   /tools is a grid of sixteen cards in which Chainsaw and a Base64 encoder
+   carried identical visual weight, while the page intro claimed "four need a
+   real server" and marked none of them. SERVER_TOOLS (src/lib/tools.ts) is
+   that claim made checkable.
+
+   Two ways it goes stale, both asserted: a tool keeps the badge after losing
+   the route that justified it, and — the sneakier one — a fifth server tool
+   ships while the intro still says "four". The number in the prose is read
+   out of the prose, so the copy and the code cannot drift apart silently.
+   Same rule as the learnings articles that quote numbers from a component. */
+{
+  const bySlug = new Map(tools.map(t => [t.slug, t]))
+  assert.ok(SERVER_TOOLS.size > 0, 'SERVER_TOOLS is not empty — an empty set would assert nothing below')
+
+  for (const slug of SERVER_TOOLS) {
+    const tool = bySlug.get(slug)
+    assert.ok(tool, `SERVER_TOOLS names "${slug}", which is not a tool in the config`)
+    assert.equal(tool.status, 'live',
+      `SERVER_TOOLS names "${slug}", whose status is "${tool.status}" — only a live tool can carry the badge`)
+
+    // The badge claims a server round-trip, so the component has to make one.
+    const dir = `../src/components/tools/${slug}/`
+    const files = await readdir(new URL(dir, import.meta.url))
+    let callsApi = false
+    for (const f of files.filter(f => f.endsWith('.ts'))) {
+      if (/['"`]\/api\//.test(await readFile(new URL(dir + f, import.meta.url), 'utf-8'))) callsApi = true
+    }
+    assert.ok(callsApi,
+      `SERVER_TOOLS names "${slug}" but nothing in its component calls an /api/ route — `
+      + 'the badge would be claiming a server this tool does not use')
+  }
+
+  assert.equal(isServerTool('json-tidy'), false, 'a browser-only tool is not a server tool')
+
+  // ── the intro's number is the set's size, read from the prose ──
+  const hubSrc = await readFile(new URL('../src/pages/tools/index.astro', import.meta.url), 'utf-8')
+  const intro = hubSrc.slice(hubSrc.indexOf('data-type="page-intro"'), hubSrc.indexOf('</p>'))
+  const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
+  // Pinned to the CLAIM, not to "the first number word in the intro" — that
+  // version matched "three DNS resolvers" further down the same sentence and
+  // compared it against the set size, which is the exact shape of bug these
+  // assertions exist to catch.
+  const claim = intro.match(/\b([a-z]+)\s+need\s+a\s+real\s+server\b/i)
+  assert.ok(claim, 'the /tools intro still states, in words, how many tools "need a real server"')
+  const claimed = WORDS[claim[1].toLowerCase()]
+  assert.ok(claimed, `the intro says "${claim[1]} need a real server" — expected a number word`)
+  assert.equal(claimed, SERVER_TOOLS.size,
+    `the /tools intro says "${claim[1]}" need a real server but SERVER_TOOLS has ${SERVER_TOOLS.size} — `
+    + 'update the copy and the set together')
+
+  // …and the hub only badges a live server tool, never a wip or external one.
+  assert.ok(/tool\.status === 'live' && isServerTool\(tool\.slug\)/.test(hubSrc),
+    'the hub gates the server badge on BOTH live status and SERVER_TOOLS membership')
+}
+console.log('one card title site-wide, the whole card is its link (secondary links survive), and the server badge matches both its routes and the intro\'s number')
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ROLE `tools` — Token Bench: why a signature did not verify.
 //
@@ -4675,156 +4825,6 @@ console.log('deep shore: the fast renderer equals its reference, zoom keeps its 
 }
 console.log('deep shore dive recorder: the pan is weighted by the zoom (and the naive version fails that check), the dive arrives exactly, #tour= is bounded at mint and decode, and the frame count is measured rather than assumed')
 
-/* ─────  Hub filter highlighting: user input never reaches a regex raw  ─────
-
-   The /tools + /games filter paints matches with <mark data-hub-mark>. Three of
-   its promises are cheap to break in a refactor and invisible when broken (the
-   filter still filters), so they are pinned at source level:
-   - the highlight pattern is built from REGEX-ESCAPED terms — the input is a
-     search box, so "c++" or "(a" must be text, not a SyntaxError that kills
-     every subsequent keystroke's handler;
-   - stale marks are unwrapped before new ones are painted, and the unwrap is
-     scoped to mark[data-hub-mark] so an author's ==highlight== mark inside a
-     card description is never stripped;
-   - the module still mounts inside astro:page-load (the ClientRouter blank-page
-     rule in AGENTS.md). */
-{
-  const hfSrc = await readFile(new URL('../src/lib/hub-filter.ts', import.meta.url), 'utf8')
-  assert.ok(/\.map\(escapeRegExp\)/.test(hfSrc), 'highlight terms must be regex-escaped before joining the pattern')
-  assert.ok(/escapeRegExp\(s: string\)|function escapeRegExp/.test(hfSrc), 'the escape helper itself must exist')
-  assert.ok(hfSrc.includes("querySelectorAll('mark[data-hub-mark]')"), 'the unwrap must target only this module\'s own marks — never an author mark')
-  const clearAt = hfSrc.indexOf('clearMarks(card)')
-  const paintAt = hfSrc.indexOf('highlightTerms(card')
-  assert.ok(clearAt !== -1 && paintAt !== -1 && clearAt < paintAt, 'stale marks must come off before fresh ones go on, or marks nest per keystroke')
-  assert.ok(/hit && terms\.length > 0/.test(hfSrc.slice(paintAt - 40, paintAt + 40)) || /if \(hit && terms\.length > 0\) highlightTerms/.test(hfSrc), 'highlights are painted only on cards the filter kept')
-  assert.ok(/b\.length - a\.length/.test(hfSrc), 'terms sort longest-first so the alternation prefers the fuller match')
-  assert.ok(hfSrc.includes("astro:page-load"), 'the hub filter must keep mounting inside astro:page-load')
-
-  /* ── The paint must agree with the match (2026-09-23) ──
-
-     A card survives the filter on its `textContent` — every text node in the
-     subtree joined — but the highlighter used to run the pattern against each
-     text node ON ITS OWN. Any occurrence straddling an element boundary
-     (`<h2>Web</h2><span>hook</span>`, a title carrying an inline <code>, a
-     description broken by an <em>) therefore kept the card and marked nothing,
-     which reads to a visitor as a false positive: the filter claims this
-     matched and the card cannot show where.
-
-     `hubMarkRanges` is pure and DOM-free so the real property can be asserted
-     instead of one markup shape: **re-splitting the same text into different
-     nodes marks the same characters.** Every per-shape example below is an
-     instance of that one invariant — including the straddle case that was the
-     bug. Both directions matter: a term that is absent must still mark
-     nothing, or an implementation that marks everything passes. */
-  {
-    const { hubMarkRanges } = await import('../src/lib/hub-filter.ts')
-    /** The characters this implementation would wrap, in document order. */
-    const marked = (chunks, terms) =>
-      hubMarkRanges(chunks, terms)
-        .map((ranges, i) => ranges.map(([a, b]) => chunks[i].slice(a, b)).join(''))
-        .join('')
-    /** Per-node view, for the cases where WHICH node owns a slice is the point. */
-    const perNode = (chunks, terms) =>
-      hubMarkRanges(chunks, terms).map((ranges, i) => ranges.map(([a, b]) => chunks[i].slice(a, b)))
-
-    // The bug itself: one logical hit, two nodes, a slice painted in each.
-    assert.deepEqual(perNode(['Web', 'hook Inspector'], ['webhook']), [['Web'], ['hook']],
-      'a term straddling two text nodes must be marked in both — the card matched on the joined text')
-    assert.deepEqual(perNode(['Webhook Inspector'], ['webhook']), [['Webhook']],
-      'the same text in one node marks the same characters')
-    assert.deepEqual(perNode(['Deep', '', 'Shore'], ['deepshore']), [['Deep'], [], ['Shore']],
-      'an empty text node inside a match owns no slice — an empty <mark> is invisible and unaccountable')
-
-    // The invariant the above is an instance of, asserted over every cut.
-    const text = 'Cron Whisperer — a crontab explainer'
-    const terms = ['cron', 'explain']
-    const whole = marked([text], terms)
-    assert.equal(whole, 'Croncronexplain',
-      'baseline: both terms, longest-first, case-insensitive, original casing preserved')
-    for (let cut = 1; cut < text.length; cut++) {
-      assert.equal(marked([text.slice(0, cut), text.slice(cut)], terms), whole,
-        `splitting the card text at ${cut} changed what gets highlighted`)
-    }
-    // Three-way splits too — the boundary walk must not assume two chunks.
-    assert.equal(marked(['Cron Whi', 'sperer — a cront', 'ab explainer'], terms), whole)
-    // Empty nodes between real ones (a comment or an empty <span> leaves them).
-    assert.equal(marked(['Cron', '', ' Whisperer — a crontab explainer'], terms), whole)
-
-    // Case-insensitive, and the ORIGINAL casing is what gets wrapped.
-    assert.equal(marked(['WEBHOOK'], ['webhook']), 'WEBHOOK')
-    // Longest-first: "web|webhook" must not shadow the fuller match.
-    assert.deepEqual(hubMarkRanges(['webhook'], ['web', 'webhook']), [[[0, 7]]])
-    // User input is a search term, never regex syntax.
-    assert.equal(marked(['c++ and c# notes'], ['c++']), 'c++')
-    for (const hostile of ['(', '[a-z]', '*', '\\', '.*', '$^']) {
-      assert.doesNotThrow(() => hubMarkRanges(['plain text'], [hostile]),
-        `"${hostile}" must be treated as text, not compiled as a pattern`)
-    }
-
-    // The negative half — without it, "mark everything" passes every line above.
-    assert.equal(marked(['Webhook Inspector'], ['flowmap']), '')
-    assert.equal(marked(['Webhook Inspector'], []), '')
-    assert.equal(marked([], ['webhook']), '')
-    assert.equal(marked(['Webhook Inspector'], ['']), '',
-      'an empty term must mark nothing — it matches everywhere and would wrap the whole card')
-
-    // Ranges must be usable: in bounds, ascending and non-overlapping per node,
-    // since highlightTerms walks them once and slices between them.
-    const fixture = ['Hash Smith', ' — SHA-256, ', 'SHA-1 and MD5 hashes']
-    for (const [i, ranges] of hubMarkRanges(fixture, ['sha', 'hash']).entries()) {
-      let prevEnd = 0
-      for (const [a, b] of ranges) {
-        assert.ok(a >= prevEnd && b > a && b <= fixture[i].length,
-          `range [${a},${b}) in node ${i} is out of order or out of bounds`)
-        prevEnd = b
-      }
-    }
-
-    // Matcher/highlighter agreement, stated the way the filter states it: if
-    // every term is in the joined lowercased text, the card is KEPT, so the
-    // paint owes the visitor at least one mark.
-    for (const chunks of [
-      ['Link', ' Peek'], ['DNS', 'Sightline'], ['Chain', 'saw'],
-      ['Deep', '', 'Shore'], ['Token Bench'], ['Type', ' ', 'Trial'],
-    ]) {
-      const joined = chunks.join('').toLowerCase()
-      for (const term of ['link', 'sightline', 'chainsaw', 'deepshore', 'bench', 'type']) {
-        if (!joined.includes(term)) continue
-        assert.notEqual(marked(chunks, [term]), '',
-          `"${term}" keeps ${JSON.stringify(chunks)} but highlights nothing — a match the card cannot show`)
-      }
-    }
-  }
-
-  /* ── Status facet chips (2026-08-25) ──
-     The chips are DERIVED from the cards' data-status attributes, and a
-     ?status= arriving in a deep link is untrusted until checked against that
-     derived set — a URL parameter that picked its own facet could hide every
-     card on the page from anyone who follows the link. */
-  assert.ok(/btn\.type = 'button'/.test(hfSrc),
-    'facet chips must set type=button — a form button defaults to type=submit')
-  assert.ok(/statusCounts\.has\(st\)/.test(hfSrc),
-    'a deep-linked ?status must be validated against the statuses the grid really contains before it is trusted')
-  assert.ok(/card\.dataset\.status/.test(hfSrc) && /dataset\.status === facet/.test(hfSrc),
-    'chips and matching must both read the same card data-status attribute')
-  assert.ok(/statusCounts\.size >= 2/.test(hfSrc),
-    'chips render only when the grid has 2+ distinct statuses — one status can never narrow anything')
-  // The URL mirror: debounced (Safari rate-limits replaceState and throws past
-  // the limit) and pinned to the pathname it was scheduled on (a write firing
-  // after an in-site navigation would graffiti the NEXT page URL).
-  assert.ok(/setTimeout\(\(\) => \{ if \(location\.pathname === path\) syncUrl\(\) \}/.test(hfSrc),
-    'the debounced URL sync must be pinned to the pathname it was scheduled on')
-  assert.ok(/try \{ history\.replaceState/.test(hfSrc),
-    'replaceState must be wrapped — Safari throws when its rate limit is exceeded')
-  // Both hubs stamp the attribute the chips are derived from.
-  const toolsHub = await readFile(new URL('../src/pages/tools/index.astro', import.meta.url), 'utf8')
-  const gamesHub = await readFile(new URL('../src/pages/games.astro', import.meta.url), 'utf8')
-  assert.ok(/data-status=\{tool\.status\}/.test(toolsHub), '/tools cards must carry data-status for the facet chips')
-  assert.ok(/data-status=\{isPlayableGame\(g\) \? 'playable' : 'soon'\}/.test(gamesHub),
-    '/games cards must carry data-status for the facet chips')
-}
-console.log('hub filter highlighting escapes its input, facet chips validate ?status against the grid, and the URL mirror is debounced + path-pinned')
-
 /* ─────  404 suggested links read the section predicate  ─────
    The 404 page's link list is one more consumer of "which sections exist".
    Hand-written, it advertised /blogs for days after the section was gated
@@ -5095,7 +5095,6 @@ console.log('link peek refuses every private address (each redirect hop re-check
   assert.ok(/badge\?\.remove\(\)/.test(stripSrc), 'a lapsed streak repaints away instead of lingering')
   const gamesSrc = await readFile(new URL('../src/pages/games.astro', import.meta.url), 'utf8')
   assert.ok(gamesSrc.includes('registerDailyStreaks()'), 'the /games hub registers the strip')
-  assert.ok(gamesSrc.indexOf('registerHubFilter()') < gamesSrc.indexOf('registerDailyStreaks()'), 'the filter registers first so streak badges never join its precomputed search haystacks')
 
   // ── the slug allowlist is exactly the games the site ships as dailies ──
   assert.deepEqual([...DAILY_SLUGS], ['quintle', 'type-trial', 'hue-hunt'], 'DAILY_SLUGS is the fixed store-key allowlist')
@@ -5758,6 +5757,33 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
   const cxSrc = await readFile(new URL('../src/styles/canvas-export.css', import.meta.url), 'utf-8')
   assert.ok(/background:\s*var\(--color-accent\);\s*\n\s*color:\s*var\(--color-bg\);/.test(cxSrc),
     'the accent-filled button still pairs --color-accent with --color-bg, which is the pairing asserted above')
+
+  /* ── The card hairline has a floor of its own (2026-09-24) ───────────────
+     --color-border is excluded from the text sweep above for a good reason
+     (it is never ink), but "not a text colour" had been read as "unmeasured",
+     and it sat at 1.25:1 dark / 1.23:1 light — invisible. Every listing card
+     on the site is bounded by it, so the grids read as floating text rather
+     than as cards.
+
+     The floor here is 2:1, NOT the 3:1 that WCAG 1.4.11 asks for non-text UI
+     boundaries. That gap is deliberate and this is the honest place to say
+     so: 3:1 needs #515d71 dark / #949494 light, which stops being a hairline
+     and boxes every card on the site. 1.4.11 applies to a boundary REQUIRED
+     to identify a control, and here the card's own content identifies it —
+     the border is reinforcement. What the floor prevents is the regression
+     that actually happened: a border quietly tuned back down to invisible.
+
+     Note the hover border is --color-muted, which clears 3:1 comfortably and
+     is already covered by the text sweep above. */
+  const NON_TEXT_FLOOR = 2
+  for (const [name, palette] of [['light', light], ['dark', dark]]) {
+    const r = ratio(palette.border, palette.bg)
+    assert.ok(
+      r >= NON_TEXT_FLOOR,
+      `${name}: --color-border (${palette.border}) on --color-bg (${palette.bg}) is ${r.toFixed(2)}:1 — `
+      + `under the ${NON_TEXT_FLOOR}:1 floor that keeps a listing card readable as a card`,
+    )
+  }
 
   // ── The skip link must produce a PERCEIVABLE result (WCAG 2.4.7). A blanket
   //    `main:focus { outline: none }` silently undid the only rule that draws

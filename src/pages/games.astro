@@ -35,6 +35,7 @@ const metaDescription =
 
 <Base
   wide
+  starfield={false}
   title="games"
   seoTitle="Free Browser Games — Daily Word Puzzle, Typing Race & More"
   description={metaDescription}
@@ -43,38 +44,17 @@ const metaDescription =
   {games.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>games</h1>
   <p data-type="page-intro">
-    Browser games and playable experiments — a daily five-letter word puzzle, a game of 2048, a maze that weaves
-    itself and then solves itself, a daily typing race where everyone on Earth gets the same passage — and a finished
-    run mints a ghost link a friend can race, keystroke for keystroke — a colour-guessing
-    game that scores your eye out of 500 each day, a poker trainer that counts every runout instead of estimating,
-    and a fractal explorer that dives into the edge of the Mandelbrot set until 64-bit arithmetic runs out of room —
-    and hands you a link to the exact spot you found.
-    Come back to any of the three dailies and its card below starts counting the streak — a number your browser
-    keeps to itself and sends nowhere. Everything marked play runs right here, no downloads and no sign-up; the rest are on the way. The generative
-    pieces that used to live here — the flow field, the flock, the falling sand and friends — moved into
-    <a href="/tools/driftfield">Driftfield</a>, where each one still runs live.
+    Browser games and playable experiments — no downloads, no sign-up. Three
+    have a daily everyone gets the same copy of, and your streak stays in your
+    browser. The generative pieces moved to{' '}
+    <a href="/tools/driftfield">Driftfield</a>.
   </p>
-  <form data-type="hub-filter" data-noun="games" role="search" hidden>
-    <input
-      type="search"
-      name="q"
-      aria-label="Filter games"
-      aria-keyshortcuts="/"
-      placeholder="type to filter — or press /"
-      autocomplete="off"
-      spellcheck="false"
-    />
-    <p data-type="hub-filter-status" role="status" hidden></p>
-  </form>
   {games.length === 0 ? (
     <p>Coming soon.</p>
   ) : (
     <div data-type="card-grid">
-      {/* data-status feeds the hub filter's status facet chips — hub-filter.ts
-          derives the chips and their counts from these attributes, same idiom
-          as the /tools cards' data-status, with this hub's own two states. */}
       {games.map(g => (
-        <article data-type="project" data-status={isPlayableGame(g) ? 'playable' : 'soon'}>
+        <article data-type="project">
           <div data-type="project-header">
             <h2 data-type="card-title"><a href={`/games/${g.slug}`}>{g.title}</a></h2>
             <span data-type="project-stats">
@@ -85,7 +65,14 @@ const metaDescription =
               )}
             </span>
           </div>
-          <div data-type="project-description" set:html={render(g.description)} />
+          {/* First paragraph only. The full description is the product copy
+              for /games/<slug> and runs to three paragraphs (Deep Shore is
+              1,074 characters), which on a card made one column three times
+              the height of its neighbours and buried the eight titles this
+              page exists to let you scan. `intro` is not the answer — only 2
+              of 8 games have one — but every description's first paragraph is
+              already written as its summary. */}
+          <div data-type="project-description" set:html={render(g.description.split(/\n\s*\n/)[0])} />
         </article>
       ))}
     </div>
@@ -95,16 +82,9 @@ const metaDescription =
 {/* Badge CSS lives in global.css (not a scoped <style> here) because the
     daily-streak strip inserts a third badge state at runtime, and a
     JS-created element never carries Astro's scoping attribute — a scoped
-    rule cannot style it. Same reason the hub-filter facet chips are there. */}
+    rule cannot style it. */}
 
 <script>
-  // Live card filter, shared with /tools — see src/lib/hub-filter.ts for the
-  // astro:page-load mounting rules and the ?q= deep-link behaviour.
-  // ORDER MATTERS: the filter registers first so its card-text haystacks are
-  // precomputed before the streak strip paints — "3-day streak" is a personal
-  // annotation, not searchable card copy.
-  import { registerHubFilter } from '../lib/hub-filter'
   import { registerDailyStreaks } from '../lib/daily-streak-strip'
-  registerHubFilter()
   registerDailyStreaks()
 </script>
