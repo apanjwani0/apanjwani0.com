@@ -931,6 +931,21 @@ was a second, mirrored fixture that does.
   `:focus-visible` on a programmatic focus the outcome is the old behaviour, so
   it cannot regress. `security:smoke` asserts the blanket form is gone and that
   both shells still wire the link to a focusable `#main-content`.
+- **An `<svg>` at `width: 100%` scales its own TEXT, so it needs a legibility
+  floor rather than a breakpoint.** A viewBox scales as one object: the Diagram
+  Atlas is 680 user units wide, so at a 375px viewport it fitted perfectly and
+  rendered every label at about **5px**. Nothing overflowed, `scrollWidth`
+  equalled the viewport, and a screenshot taken at desktop width looked correct —
+  the defect existed only on the device, which is why it was found by measuring
+  the rendered size (computed font-size × the SVG's own scale factor) and not by
+  looking. A diagram is also not a paragraph: there is no arrangement of four
+  lifelines that is still a sequence diagram at 300px. So the label size is what
+  gets held — `min-width` on the SVG plus `overflow-x: auto` on its container —
+  and the reader swipes, which is the trade `learnings/[slug].astro` already
+  makes for a wide table. A scrollable container also takes `tabindex="0"`, or
+  the content past the edge is unreachable without a pointer. `security:smoke`
+  parses the floor out of the stylesheet, because a lone `min-width` reads like a
+  stray constraint to the next person tidying the file.
 - **Theming**: `theme.css` defines light at `:root` and overrides the palette under `[data-theme="dark"]` (the site runs dark). Add a theme by adding another `[data-theme="…"]` block — palette tokens only.
 
 ## Skills & Commands
@@ -1058,7 +1073,15 @@ when the six generative engines moved out of `/games` into Driftfield
 are still mounted, just not as games. Collapsing them back would either empty
 every article embed or resurrect six pages that no longer exist, and both
 failures are silent. `security:smoke` asserts the subset relation and that no
-Driftfield mode is still a game.
+Driftfield mode is still a game. It also requires every `EMBED_TAGS` entry to
+reach a `mountGame()` dispatch branch **and** a stylesheet in
+`games-embed.css`. That loop read `GAME_TAGS` until 2026-09-25, which is the
+narrow list — so the six Driftfield engines and every article-only figure were
+reaching the guard and being skipped by it, while its own comment claimed to
+cover "any learnings article that embeds it". Both halves fail silently (no
+dispatch renders a blank element, a missing stylesheet an unstyled one), and an
+embed-only component is the worst case, because an article is the ONLY route
+that mounts it.
 
 A cross-link between two kinds is **derived, never stored twice**. Driftfield
 modes used to carry a `learning` slug naming the article about that engine, which
@@ -1158,6 +1181,48 @@ shortest corner-to-corner route, the builder button labels, the status-line
 wording the caption points at, and that switching builder keeps the seed — to the
 constants they were read from. Do the same for the next article that measures
 something.
+
+**…and the number is in more fields than the body.** The Diagram Atlas article
+says the system is "drawn seven ways" in its `content`, in its `summary` (which
+is the hub card AND the share card) and in its `metaDescription` (the search
+snippet). The first version of that assertion read `content` alone, and a
+mutation of the body alone is what revealed the other two were unguarded — an
+eighth notation could have shipped with the page correct and the card and the
+search result both saying seven. The field list is now derived from the entry
+rather than written down, so a count repeated into a new field is covered
+without anybody remembering this paragraph. Same shape as the blogs flag: a fact
+corrected in one signal and stale in another is worse than either alone.
+
+**A figure may also be the article's whole argument, in which case it needs a
+component of its own.** `/learnings/how-to-think-on-paper` argues Larkin &
+Simon's point — a picture is cheap only for the question its layout groups for —
+and that is unprovable in prose, because the reader has to watch one unchanged
+scenario become seven pictures and find each one blind to what the last one
+showed. So `diagram-atlas` (`src/components/games/diagram-atlas/`) is the first
+embed that is neither a game nor a Driftfield mode: an article figure, and the
+reason `EMBED_TAGS` is the wider list. It is also the first that is **not** a
+canvas toy — seven notations drawn as inline SVG, because the labels have to be
+selectable and reachable by a screen reader.
+
+Three of its properties are rules rather than details of that file:
+
+- **The claims live in `atlas.ts`, not in the component.** Each view states what
+  a node is, what its arrow means *as a verb*, and which question the picture
+  cannot answer — the article's whole teaching payload. `security:smoke` holds
+  every view to a full legend, with the field list derived by comparing view
+  shapes, so a view added later cannot ship a blank panel row.
+- **A structural diagram must not animate.** The class and ER views carry zero
+  beats deliberately: a schema is true at every instant, so walking a token
+  along one would be a lie about the notation dressed as a feature — and it is
+  precisely the misreading of UML the article names. The component hides its
+  transport instead. Asserted in **both** directions, because a behavioural view
+  that silently stopped moving is the mirror failure.
+- **Every beat must light an element that exists.** A mistyped id renders a
+  flawless diagram in which one beat highlights nothing, and no screenshot of
+  any single frame shows it. Token positions are held inside the viewBox for the
+  same reason, and a second token is allowed only in the activity view, since
+  two tokens are a claim of concurrency that the other six notations cannot
+  make.
 
 **"Recompute it independently" is not enough on its own — recompute it from the
 definition.** The pot-odds article said the equity a call needs is `B / (P + B)`;

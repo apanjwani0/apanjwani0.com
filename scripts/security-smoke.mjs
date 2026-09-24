@@ -4377,7 +4377,14 @@ console.log('type trial ghost tokens are bounded, fingerprint-pinned, and decode
      learnings article that embeds it. */
   const mountSrc = await readFile(new URL('../src/lib/game-mount.ts', import.meta.url), 'utf-8')
   const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
-  for (const slug of Object.keys(GAME_TAGS)) {
+  // EMBED_TAGS and not GAME_TAGS, which is what this loop read until 2026-09-25.
+  // The comment above always claimed "on any learnings article that embeds it",
+  // but GAME_TAGS is the narrow list: it excludes the six Driftfield engines and
+  // every article-only figure, so seven of the wired components were reaching
+  // this guard and being skipped by it. The blank-element failure it exists to
+  // catch is exactly the one an embed-only component has, because an article is
+  // the ONLY route that mounts it.
+  for (const slug of Object.keys(EMBED_TAGS)) {
     const marker = `slug === '${slug}') return import('`
     const at = mountSrc.indexOf(marker)
     assert.notEqual(at, -1, `${slug} has no mountGame dispatch branch — its page would render an empty element`)
@@ -6666,3 +6673,202 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   assert.equal(canonicalIp('not-an-ip'), null)
 }
 console.log('dns sightline: the resolver diff ignores TTL and order, the SPF walk matches an independent oracle and terminates on a hostile zone, CAA issuewild replaces issue, every finding cites its record, and the only hosts reachable are the three allowlisted resolvers')
+
+/* ─────  The Diagram Atlas: seven notations, and what each one cannot say  ─────
+
+   Shipped 2026-09-25 as the figure for /learnings/how-to-think-on-paper. The
+   article's argument is Larkin & Simon's — a picture is cheap only for the
+   question its layout groups for — and the figure proves it by drawing ONE
+   unchanged scenario seven ways, each view naming the question it has gone blind
+   to. Every failure mode here renders a correct-looking diagram:
+
+     · a step naming an id that is not in the SVG lights nothing, and the
+       diagram still draws perfectly — nobody watching a seven-beat animation
+       notices that beat four highlighted nothing at all;
+     · a token placed outside the viewBox is simply not on screen;
+     · a view shipped without its legend leaves the panel half empty, which
+       reads as a layout bug rather than as a missing claim;
+     · and an eighth notation added later leaves the prose saying "seven".
+
+   Same family as the SERVER_TOOLS badge (a number word in copy, checked against
+   the set it describes) and the Maze Weaver article's recomputed counts: an
+   article that quotes the component is quoting code, so the number is asserted
+   rather than proof-read. */
+{
+  const { ATLAS_VIEWS, atlasView } = await import('../src/components/games/diagram-atlas/atlas.ts')
+  const article = learnings.find(l => l.embed === 'diagram-atlas')
+  assert.ok(article, 'the diagram atlas has no article to be the figure for')
+
+  /* ── 1. The prose's number word matches the number of views. ──
+     Pinned to the exact phrase and NOT by iterating a map of number words: the
+     SERVER_TOOLS assertion did the latter and matched "three DNS resolvers"
+     several paragraphs from the sentence it meant to check. */
+  const WORDS = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
+
+  // Checked in EVERY field that states it, and the field list is derived from
+  // the entry rather than written down. The body is the obvious one; the count
+  // is also in `summary` (the hub card and the share card) and in
+  // `metaDescription` (the search snippet), and a mutation of the body alone
+  // proved those two were unguarded. Same shape as the blogs flag: a fact
+  // corrected in one signal and stale in another is worse than either alone,
+  // because whoever reads the wrong one has no way to know.
+  const claims = Object.entries(article)
+    .filter(([, v]) => typeof v === 'string')
+    .flatMap(([field, v]) =>
+      [...v.matchAll(/\bdrawn ([a-z]+) ways\b/gi)].map(m => ({ field, word: m[1] })))
+  assert.ok(
+    claims.length >= 2,
+    'the figure\'s view count must be stated in the body AND in the copy that leaves the page',
+  )
+  assert.ok(
+    claims.some(c => c.field === 'content'),
+    'the article body must introduce the figure with "drawn <number> ways"',
+  )
+  for (const { field, word } of claims) {
+    assert.equal(
+      WORDS[word.toLowerCase()], ATLAS_VIEWS.length,
+      `${field} says the system is drawn "${word}" ways but the atlas has ${ATLAS_VIEWS.length} views`,
+    )
+  }
+
+  // …and the article's table carries one row per view, for the same reason. A
+  // notation in the figure and absent from the table is the contradiction the
+  // reader resolves by trusting neither.
+  const rows = article.content
+    .split('\n')
+    .filter(l => l.startsWith('|') && !/^\|[\s|:-]+\|$/.test(l))
+  assert.equal(
+    rows.length - 1, ATLAS_VIEWS.length,
+    `the article's table has ${rows.length - 1} notations and the atlas has ${ATLAS_VIEWS.length}`,
+  )
+
+  /* ── 2. Every view carries a full legend. ──
+     The key set is compared across views rather than spot-checked, so a field
+     added to AtlasView later has to be populated everywhere — the Token Bench
+     lesson, where a `proof` label was asserted on one producer and a second
+     producer shipped able to lie. */
+  const shape = Object.keys(ATLAS_VIEWS[0]).sort().join(',')
+  for (const v of ATLAS_VIEWS) {
+    assert.equal(Object.keys(v).sort().join(','), shape, `view "${v.id}" has a different shape to the others`)
+    for (const field of ['id', 'question', 'notation', 'node', 'arrow', 'blind', 'svg']) {
+      assert.ok(
+        typeof v[field] === 'string' && v[field].trim().length > 0,
+        `view "${v.id}" ships an empty ${field} — the panel would render a blank row`,
+      )
+    }
+    // The question is the button label and has to read as a question.
+    assert.ok(v.question.endsWith('?'), `view "${v.id}"'s label must be a question, not a notation name`)
+    // `blind` is the teaching payload, so a one-word filler must not pass for it.
+    assert.ok(v.blind.length > 40, `view "${v.id}"'s "cannot tell you" line is too short to be a real claim`)
+  }
+  assert.equal(new Set(ATLAS_VIEWS.map(v => v.id)).size, ATLAS_VIEWS.length, 'two views share an id')
+  assert.equal(
+    new Set(ATLAS_VIEWS.map(v => v.arrow)).size, ATLAS_VIEWS.length,
+    'two notations claim the same verb for their arrow — that claim is the whole figure',
+  )
+
+  /* ── 3. A structural diagram has no time axis, and must not animate. ──
+     A class diagram or a schema is true at every instant. Walking a token along
+     one would be a lie about the notation dressed as a feature, and it is the
+     mistake the article names as the standard misreading of UML — so the two
+     structural views carry zero steps deliberately, and the component hides its
+     transport rather than offering a button. Asserted in BOTH directions: a
+     behavioural view with no steps is a figure that silently does not move. */
+  const STRUCTURAL = new Set(['class', 'er'])
+  for (const v of ATLAS_VIEWS) {
+    if (STRUCTURAL.has(v.id)) {
+      assert.equal(v.steps.length, 0, `"${v.id}" is structural and must not animate`)
+    } else {
+      assert.ok(v.steps.length >= 3, `"${v.id}" is behavioural and needs beats to walk through`)
+    }
+  }
+  assert.ok(STRUCTURAL.size < ATLAS_VIEWS.length, 'if every view is structural, nothing in the figure moves')
+
+  /* ── 4. Every beat lights something that is really in the SVG. ──
+     THE silent one. A mistyped id renders a flawless diagram in which one beat
+     highlights nothing, and no screenshot of any single frame shows it. */
+  for (const v of ATLAS_VIEWS) {
+    const ids = new Set([...v.svg.matchAll(/id="([^"]+)"/g)].map(m => m[1]))
+    assert.equal(ids.size, (v.svg.match(/id="/g) ?? []).length, `view "${v.id}" reuses an id — querySelector takes the first`)
+    v.steps.forEach((step, i) => {
+      assert.ok(step.on.length > 0, `view "${v.id}" beat ${i} lights nothing`)
+      for (const id of step.on) {
+        assert.ok(ids.has(id), `view "${v.id}" beat ${i} lights "#${id}", which is not in its SVG`)
+      }
+      assert.ok(step.say && step.say.trim().length > 0, `view "${v.id}" beat ${i} has no caption`)
+      // A token outside the viewBox is off screen, which looks like no token.
+      for (const [which, at] of [['token', step.token], ['token2', step.token2]]) {
+        if (!at) continue
+        assert.ok(
+          at[0] >= 0 && at[0] <= 680 && at[1] >= 0 && at[1] <= 364,
+          `view "${v.id}" beat ${i} puts ${which} at ${at} — outside the viewBox, so it is invisible`,
+        )
+      }
+    })
+    // A second token is a claim of concurrency, so it may only appear in a view
+    // whose notation can express it — and the activity diagram is the only one.
+    if (v.steps.some(s => s.token2)) {
+      assert.equal(v.id, 'activity', `"${v.id}" draws two tokens but its notation has one thread of control`)
+    }
+  }
+  assert.ok(
+    ATLAS_VIEWS.find(v => v.id === 'activity').steps.some(s => s.token2),
+    'the activity view must actually show two tokens at once — it is the one thing a flowchart cannot draw',
+  )
+
+  /* ── 5. Selection cannot land on nothing, including on a prototype key. ── */
+  assert.equal(atlasView('flow').id, 'flow')
+  assert.equal(atlasView('not-a-view').id, ATLAS_VIEWS[0].id, 'an unknown id falls back to the first view')
+  assert.equal(atlasView(null).id, ATLAS_VIEWS[0].id)
+  assert.equal(atlasView('constructor').id, ATLAS_VIEWS[0].id, 'prototype keys are not views')
+
+  /* ── 6. The component is wired the way the module assumes. ── */
+  const atSrc = await readFile(new URL('../src/components/games/diagram-atlas/DiagramAtlas.ts', import.meta.url), 'utf-8')
+  assert.ok(
+    /customElements\.define\('diagram-atlas-figure'/.test(atSrc),
+    'the element registers under the tag EMBED_TAGS names',
+  )
+  assert.equal(EMBED_TAGS['diagram-atlas'], 'diagram-atlas-figure')
+  // The claims live in atlas.ts so this file can test them. A second copy in the
+  // component is how the panel and the assertions start disagreeing.
+  for (const v of ATLAS_VIEWS) {
+    assert.ok(!atSrc.includes(v.blind), `view "${v.id}"'s claim is duplicated in the component`)
+  }
+  assert.ok(
+    /prefers-reduced-motion/.test(atSrc),
+    'a figure that animates on its own must not autoplay for a reader who asked it not to',
+  )
+  assert.ok(/disconnectedCallback/.test(atSrc) && /clearInterval/.test(atSrc),
+    'the beat clock is torn down on unmount — ClientRouter keeps the document, so it would otherwise tick forever')
+
+  /* ── 7. The figure scrolls on a phone instead of shrinking its own labels. ──
+
+     An <svg> at width:100% scales its viewBox as ONE object, text included, so
+     the figure stayed inside the viewport at 375px by rendering every label at
+     about 5px. Nothing overflowed, no assertion of "does it fit" would have
+     complained, and a screenshot taken at desktop width looks perfect — the
+     defect only exists on the device. A diagram also does not reflow: there is
+     no arrangement of four lifelines that is still a sequence diagram at 300px.
+     So the label size is the thing held and the stage scrolls, which is the
+     trade the article route already makes for a wide table.
+
+     Asserted because the min-width reads like a stray constraint to anyone
+     tidying this file, and removing it restores the unreadable version silently. */
+  const atCss = await readFile(new URL('../src/components/games/diagram-atlas/diagram-atlas.css', import.meta.url), 'utf-8')
+  const stageRule = /\[data-type="at-stage"\] \{([^}]*)\}/.exec(atCss.replace(/\/\*[\s\S]*?\*\//g, ''))
+  assert.ok(stageRule, 'the stage has a rule')
+  assert.ok(/overflow-x:\s*auto/.test(stageRule[1]), 'the stage must scroll rather than clip the diagram')
+  const svgRule = /\[data-type="at-stage"\] svg \{([^}]*)\}/.exec(atCss.replace(/\/\*[\s\S]*?\*\//g, ''))
+  assert.ok(svgRule, 'the stage svg has a rule')
+  const floor = /min-width:\s*([0-9.]+)rem/.exec(svgRule[1])
+  assert.ok(floor, 'the svg needs a min-width, or it scales its own text down with the geometry')
+  assert.ok(
+    Number(floor[1]) >= 34,
+    `the legibility floor is ${floor[1]}rem — below ~34rem the 680-unit viewBox renders labels under 8px`,
+  )
+  assert.ok(
+    /data-type="at-stage" tabindex="0"/.test(atSrc),
+    'a horizontally scrollable region must be reachable without a pointer',
+  )
+}
+console.log('diagram atlas: seven views, every beat lights an element that exists, the structural notations refuse to animate, and the prose still says seven')

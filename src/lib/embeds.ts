@@ -35,6 +35,9 @@ export const EMBED_TAGS: Record<string, string> = {
   'turing-bloom': 'turing-bloom-game',
   'sand-loom': 'sand-loom-game',
   'lsystem-tree': 'lsystem-tree-game',
+  // Figures — neither a game nor a Driftfield mode. These exist only to be
+  // embedded in an article, which is why EMBED_TAGS is the wider list.
+  'diagram-atlas': 'diagram-atlas-figure',
 }
 
 /**

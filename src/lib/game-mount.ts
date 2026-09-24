@@ -35,6 +35,7 @@ export function mountGame(): Promise<unknown> {
   else if (slug === 'lsystem-tree') return import('../components/games/lsystem/LSystem.ts')
   else if (slug === 'poker-trainer') return import('../components/games/poker-trainer/PokerTrainer.ts')
   else if (slug === 'deep-shore') return import('../components/games/deep-shore/DeepShore.ts')
+  else if (slug === 'diagram-atlas') return import('../components/games/diagram-atlas/DiagramAtlas.ts')
   return Promise.resolve()
 }
 

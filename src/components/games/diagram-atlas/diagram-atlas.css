@@ -1,0 +1,275 @@
+/* Diagram Atlas — the figure for /learnings/how-to-think-on-paper.
+ *
+ * Tokens only (theme.css). The one exception is font-size inside the <svg>: a
+ * viewBox scales its whole coordinate system, so `px` there is a USER UNIT and
+ * not a typographic size — a `--text-*` token would render at whatever the
+ * figure's current scale happens to be, which is the opposite of a type scale.
+ * Those numbers pair with the coordinates in atlas.ts and belong with them.
+ *
+ * Lit state is a single `data-on` attribute the component moves across all seven
+ * views (see DiagramAtlas.ts), so every notation gets the same "this is where
+ * you are" treatment without seven bespoke animations. */
+
+[data-type="at-figure"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+/* ── The questions. Plain-English buttons, because the whole figure argues that
+      the question picks the notation — so the reader must choose a question and
+      not a diagram name. ── */
+
+[data-type="at-ask"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+[data-type="at-ask"] button {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: var(--space-xs) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+[data-type="at-ask"] button:hover {
+  border-color: var(--color-muted);
+  color: var(--color-text);
+}
+
+[data-type="at-ask"] button[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── The stage ── */
+
+[data-type="at-stage"] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: var(--space-md);
+  /* The stage SCROLLS rather than shrinking, and that is the whole mobile
+     story for this figure. An SVG set to width:100% scales its viewBox as one
+     object, so at a 375px viewport the 680-unit diagram rendered every label at
+     about 5px — legible in a screenshot taken at desktop width and unreadable on
+     the device. A diagram does not reflow the way a paragraph does: there is no
+     arrangement of a sequence diagram's four lifelines that is still a sequence
+     diagram at 300px. So the label size is held and the reader swipes, which is
+     the same trade the article route already makes for a wide table. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+[data-type="at-stage"] svg {
+  display: block;
+  width: 100%;
+  /* The floor that keeps the labels readable. Below this the SVG would scale
+     its own text down with the geometry; above it, nothing scrolls. */
+  min-width: 40rem;
+  height: auto;
+  font-family: var(--font-mono);
+}
+
+/* A scrollable region has to be reachable without a pointer. The SVG inside
+   carries the accessible name (role="img"), so this is focus for scrolling
+   only — the site-wide :focus-visible ring in shared.css draws it. */
+[data-type="at-stage"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* Nodes: a hairline box with its label. `data-on` lifts one out of the page. */
+[data-node] rect,
+[data-node] polygon,
+[data-node] circle {
+  fill: var(--color-bg);
+  stroke: var(--color-border);
+  stroke-width: 1.5;
+}
+
+[data-node="lane"] rect {
+  fill: transparent;
+  stroke-dasharray: 3 5;
+}
+
+[data-node="machine"] rect {
+  fill: transparent;
+  stroke-dasharray: 5 4;
+}
+
+[data-node="bar"] rect,
+[data-node="initial"] circle,
+[data-node="aggregate"] polygon {
+  fill: var(--color-text);
+  stroke: none;
+}
+
+[data-node="lifeline"] path,
+[data-node="divider"] {
+  stroke: var(--color-border);
+  stroke-width: 1;
+  fill: none;
+}
+
+[data-node="lifeline"] path {
+  stroke-dasharray: 4 5;
+}
+
+[data-node] text {
+  fill: var(--color-text);
+  font-size: 13px;
+  dominant-baseline: middle;
+}
+
+[data-text="typename"] {
+  font-weight: 600;
+}
+
+[data-text="field"],
+[data-text="lane"],
+[data-text="machine"],
+[data-text="axis"] {
+  fill: var(--color-muted);
+  font-size: 11.5px;
+}
+
+/* Edges: the arrow. Every view redefines what it MEANS, never how it looks —
+   that is the article's point, so a lit arrow must read identically in all
+   seven. */
+[data-edge] path {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 1.5;
+  marker-end: url(#at-head);
+}
+
+[data-edge][data-dash="1"] path {
+  stroke-dasharray: 5 4;
+}
+
+[data-edge][data-plain="1"] path {
+  marker-end: none;
+}
+
+[data-text="edge-label"] {
+  fill: var(--color-muted);
+  font-size: 11px;
+}
+
+[data-head="off"] {
+  fill: var(--color-border);
+}
+
+[data-head="on"] {
+  fill: var(--color-accent);
+}
+
+/* ── The lit beat ── */
+
+[data-node][data-on] rect,
+[data-node][data-on] polygon {
+  stroke: var(--color-accent);
+  stroke-width: 2.5;
+}
+
+[data-node][data-on] text {
+  fill: var(--color-accent);
+}
+
+[data-edge][data-on] path {
+  stroke: var(--color-accent);
+  stroke-width: 2.5;
+  marker-end: url(#at-head-on);
+}
+
+[data-edge][data-on][data-plain="1"] path {
+  marker-end: none;
+}
+
+[data-edge][data-on] [data-text="edge-label"] {
+  fill: var(--color-accent);
+}
+
+/* The control token. A flowchart's "you are here", and in the activity view
+   there are two of them at once — which is the only thing that view says that a
+   flowchart cannot. */
+[data-token] circle {
+  fill: var(--color-accent);
+  stroke: var(--color-bg);
+  stroke-width: 2.5;
+}
+
+[data-token] {
+  transition: transform 0.45s ease, opacity 0.3s linear;
+}
+
+/* ── Caption + transport + legend ── */
+
+[data-type="at-caption"] {
+  margin: 0;
+  min-height: 2.6em;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+[data-type="at-transport"] {
+  display: flex;
+  gap: var(--space-md);
+}
+
+[data-type="at-panel"] {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-sm) var(--space-xl);
+  margin: 0;
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+
+[data-type="at-panel"] dt {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  text-transform: lowercase;
+}
+
+[data-type="at-panel"] dd {
+  margin: 0;
+  color: var(--color-text);
+}
+
+/* The arrow's verb is the one line a reader should carry away from each view. */
+[data-type="at-panel"] dd[data-field="arrow"] {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+}
+
+[data-type="at-panel"] dd[data-field="blind"] {
+  color: var(--color-muted);
+}
+
+@media (max-width: 34rem) {
+  [data-type="at-panel"] {
+    grid-template-columns: 1fr;
+    gap: var(--space-2xs);
+  }
+
+  [data-type="at-panel"] dd {
+    margin-bottom: var(--space-md);
+  }
+}
+
+/* A figure that animates on its own has to stop when asked. The component also
+   declines to autoplay under this query — see DiagramAtlas.ts. */
+@media (prefers-reduced-motion: reduce) {
+  [data-token] {
+    transition: none;
+  }
+}
