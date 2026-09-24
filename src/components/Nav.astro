@@ -22,7 +22,11 @@ const links = navLinks(site)
 ---
 
 <nav data-type="hero-nav" aria-label="Site sections">
-  <a href="/" data-type="hero-wordmark" aria-label={`${site.handle} — ${site.name} home`}>{site.handle}</a>
+  {/* The label reads "Aman Panjwani — home", not the handle-plus-name pileup
+      ("apanjwani0 — Aman Panjwani home") a screen reader got before: the handle
+      is the VISIBLE wordmark, so the accessible name only needs the person and
+      the destination. Keep in sync with the footer wordmark's label. */}
+  <a href="/" data-type="hero-wordmark" aria-label={`${site.name} — home`}>{site.handle}</a>
   <span data-type="hero-links">
     {links.map((link) => (
       <a

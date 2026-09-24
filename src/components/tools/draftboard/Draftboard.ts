@@ -84,7 +84,7 @@ class DraftboardTool extends HTMLElement {
           <div data-type="md-help" hidden>
             <div data-type="help-header">
               <h3>Syntax Reference</h3>
-              <button data-action="close-help" title="Close">&times;</button>
+              <button data-action="close-help" type="button" aria-label="Close syntax reference" title="Close">&times;</button>
             </div>
             <div data-type="help-grid">${helpHtml}</div>
           </div>

@@ -178,7 +178,10 @@ Product pages do **not** put the site owner's name in `<title>`: `seoTitle` is u
 verbatim by both shells, because a trailing `· Name` only consumes the pixels
 Google allows before truncating and pushes the real keywords out. Section pages
 (`/projects`, `/blogs`) keep the suffix — there the name is what identifies them.
-Authorship still lives in the JSON-LD `author` and the footer.
+The two product **hubs** (`/tools`, `/games`) side with the product pages as of
+2026-08-25: they pass a keyword-front-loaded `seoTitle` ("Free Online Developer
+Tools — …"), because a stranger finds them by searching for what they list, not
+for the name. Authorship still lives in the JSON-LD `author` and the footer.
 
 ## Security
 
@@ -279,6 +282,32 @@ repetition is the point: bounds, separate read/write limiters, debounced flush t
 `sanitizeName` rather than growing a second name-hygiene rule — one board's idea
 of an acceptable display name must not drift from the other's.
 
+Chainsaw (`src/lib/tls-inspect.ts`, `src/pages/api/tools/chainsaw.ts`) is the
+third, and it bounds a dimension the other two do not have: **which port may be
+dialled at all**. Link Peek's rule — default ports only — is unusable for a cert
+inspector, since 8443 and 993 are exactly the cases people debug, and an
+*arbitrary* port would turn the origin into a port scanner. `CS_ALLOWED_PORTS`
+is the middle: a fixed list of ports that speak TLS the instant the socket
+opens. STARTTLS ports are deliberately absent, because half-implementing that
+conversation would report "no TLS" for servers that have it. It reuses Link
+Peek's address classifier rather than growing a second copy, resolves first and
+then **pins the connection to the checked address** with the name carried only
+as SNI — which closes, for this tool, the DNS-rebinding window Link Peek
+documents as its own ceiling. Limits are half Link Peek's per client (6/min,
+24/min global) because each request costs two outbound handshakes, and the
+target is validated *before* a rate-limit token is spent, so a typo does not
+cost a visitor one of six chances a minute.
+
+**Validate before you spend the token** is the rule, not a Chainsaw detail, and
+Link Peek follows it as of 2026-09-20. The budget exists to bound real outbound
+fetching; a URL with no scheme was never going to fetch anything, and charging
+it against both the visitor's allowance and the instance's global bucket spends
+the defence on the one request that cannot cause the harm. The gate has to be
+the cheap syntactic half only (scheme, credentials, port, host presence — no
+DNS, no socket), and the fetch path stays authoritative, since it is the one
+that re-checks every redirect hop. `security:smoke` derives the ordering from
+both routes.
+
 ### Validate a client-submitted value against one the server derives
 
 The server must re-derive the thing being scored and check the payload against
@@ -341,6 +370,118 @@ The verification core lives in `src/lib/jwt.ts` and not in the component, so
 `security:smoke` can run real Web Crypto against the RFC 7515 A.1 vector plus the
 tampered-payload, wrong-key and `alg:none` cases.
 
+### An observation must not be taken through a lens that alters it
+
+Chainsaw (`src/lib/tls-inspect.ts`) exists to answer "what certificates did this
+server send", and the obvious way to ask — `socket.getPeerCertificate(true)` —
+**does not answer it**. When verification succeeds that call reports the chain
+OpenSSL *built*, including the root it supplied out of the local trust store.
+Measured against a fixture server, not assumed: a server sending leaf +
+intermediate reports **three** certificates when the root is trusted and **two**
+when it is not. A tool whose headline finding is "your chain is incomplete"
+cannot read the chain through a lens that completes it, and "the server also
+sends its root" — a real finding — would otherwise be reported for every
+correctly configured host on earth.
+
+So the inspection makes **two** handshakes to the same pinned address: one with
+the real store, which answers *is this trusted*, and one with `ca: []`, which
+trusts nothing and therefore can only report what crossed the wire. The second
+one is required to fail: if it comes back `authorized`, the empty store did not
+take effect, the observation is discarded rather than believed, and the UI says
+so. `CsDialOptions.trustAnchors` exists solely so `security:smoke` can reproduce
+the store-completion effect offline and watch a mutation that drops `ca: []`
+fail; `csInspect` never sets it, and that is asserted.
+
+Two further honesty notes, stated rather than implied away. The walk follows
+`issuerCertificate` links, so it sees the certificates that *link* from the
+leaf, not the wire order, and a certificate the server sent that links to
+nothing is dropped entirely — the tool therefore claims **nothing** about chain
+order or unrelated extra certificates, both of which are real SSL-Labs findings
+and neither of which is observable here. And `socket.authorizationError` is an
+Error on some Node versions and a bare code **string** on others (Node 22 hands
+back the string), so reading `.code ?? .message` off it yielded the literal text
+`"undefined"` and silently disabled the anchor-included finding. `csAuthCode`
+handles both shapes.
+
+Ask it of any new probe: **is the instrument part of what I am measuring?**
+
+### A comparison must exclude what legitimately differs
+
+DNS Sightline's product is "these three resolvers disagree", which makes the
+*normalisation* — not the fetching — the load-bearing part. `sgCanonicalRecord`
+(`dns-sightline/analyze.ts`) throws away two things on purpose:
+
+- **TTL.** Every recursive resolver counts its own copy down from whenever it
+  happened to fetch the record, so two resolvers holding the same record report
+  different numbers. A fingerprint including the TTL disagrees always.
+- **Record order.** Round-robin address sets are rotated deliberately, by the
+  authoritative server and again by the recursor.
+
+Include either and the tool reports that every load-balanced domain on the
+internet is inconsistent. Nothing throws; the page renders; the one signal the
+tool exists for becomes noise. IPv6 goes through the shared `canonicalIp`
+(`src/lib/ip.ts`, hoisted out of Chainsaw for this) for the same reason — two
+spellings of one address are one address. What is deliberately *kept*: TXT case
+(this function cannot tell an SPF record from a DKIM key) and the MX preference
+number.
+
+The mirror-image rule is that a difference must still read as one, so
+`security:smoke` asserts **both** directions, and asserts separately that one
+silent resolver among answering ones is reported as **filtering** rather than as
+propagation — a policy decision at one operator, with a different fix.
+
+Ask it of any new comparison: **what differs here for reasons that are not the
+thing I am looking for?**
+
+### A traversal's loop guard is per-PATH, not global
+
+SPF's ten-lookup budget (RFC 7208 §4.6.4) counts every `include`, `a`, `mx`,
+`ptr`, `exists` and `redirect` term across the *whole recursive evaluation*, not
+the terms written in the record you are looking at — which is why a tidy
+three-mechanism record that includes three providers routinely costs fourteen,
+and why every checker that counts the top level says it is fine.
+
+`sgAnalyzeSpf` walks the tree to count it, and needs a cycle guard to terminate.
+**A single visited set shared across the walk is the wrong guard**: a domain
+reached twice by two different routes is a *diamond*, not a loop, and a receiver
+evaluates it — and charges for it — both times. Suppressing the second visit
+under-counts exactly the diamond-shaped zones that are near the limit. A cycle
+is a name appearing in its own **ancestry**; that is what `sgSpfDescend` refuses.
+
+This was found by the assertion, not by reading: the smoke test holds the walker
+to an **independent oracle** written in `security-smoke.mjs` — a dumb recursive
+string scan, unbounded, unmemoised, sharing no code — over a set of fixture
+zones. Same structure as `evaluateBest`/`scoreBest` and `dsEscapeReference`, and
+the same reason: the output is a number nobody can eyeball. The oracle is valid
+only on acyclic zones and throws otherwise, which is part of writing it.
+
+Two bounds, not one, and each needs its own assertion: **depth** and
+**breadth**. A depth ceiling alone leaves a fan-shaped include tree unbounded,
+and the fixtures for both make the *resolver* refuse to answer past the ceiling
+— so an unbounded walk fails with a named error instead of hanging the suite. A
+test that hangs is a test whose timeout gets raised.
+
+### A finding cites the record it rests on
+
+`SgFinding.evidence` carries the literal record text a finding was derived from,
+and `basis: 'absence'` marks the findings that are *about* a record not
+existing — the only ones allowed to cite nothing. Same family as Token Bench's
+`proof` label, and it learned Token Bench's lesson at the same cost: the rule is
+only as good as its coverage. A mutation dressing a finding as record-based
+while citing nothing **survived the first version of the assertion**, because
+the one producer branch that emitted it had no fixture. So the producer list is
+derived from the function *signatures* (returns `SgFinding[]`, does not take
+one), and the id list is derived from the source, so a finding added later
+either gets a fixture or fails the gate.
+
+Note also what DNS Sightline refuses to claim. "Dangling" means **NXDOMAIN** at
+the CNAME target, never "no address record" — a name that exists carrying only
+a TXT record is an odd zone, not an unclaimed hostname, and telling somebody
+their subdomain can be stolen when it cannot is the most damaging sentence this
+tool could print. DMARC for a subdomain says the organizational-domain fallback
+is *not computed* rather than guessing without a Public Suffix List, and the CAA
+walk stops at two labels for the same reason.
+
 ### Escaping
 
 - Anything interpolated into HTML gets escaped including `'` — attribute quoting
@@ -394,7 +535,9 @@ was a second, mirrored fixture that does.
   asserts something checkable about the world, that logic goes in a sibling
   module the component imports — `webhook-inspector/signature.ts`,
   `cron-whisperer/schedule.ts`, `cron-whisperer/crontab.ts`,
-  `token-bench/diagnose.ts`, and `src/lib/jwt.ts`
+  `token-bench/diagnose.ts`, `chainsaw/analyze.ts`, `deep-shore/escape.ts`,
+  `dns-sightline/analyze.ts`,
+  and `src/lib/jwt.ts`
   before them — so
   `security:smoke` can run it against the real thing rather than against a
   screenshot of it. A claim buried in a DOM handler cannot be tested and will
@@ -506,6 +649,58 @@ was a second, mirrored fixture that does.
     result is index-aligned and swapping them hands hero villain's equity while
     looking entirely plausible.
 
+  **Deep Shore is the third instance, and it shows the rule is about
+  *unverifiable output*, not about speed.** A fractal renderer fails silently by
+  construction: a wrong interior test paints outside points solid, a swapped
+  `c`/`z₀` pair renders a Mandelbrot set inside Julia mode, and a drifting zoom
+  anchor merely stops landing where you pointed — every one of those produces a
+  perfectly attractive picture that is not the thing the page claims. So
+  `deep-shore/escape.ts` keeps `dsEscapeReference` (the bare iteration, no
+  shortcuts) beside `dsEscape` (the fast path, with the closed-form cardioid and
+  period-2 bulb early-out) and `security:smoke` proves them equal over a
+  34,000-point grid. Two choices follow from the same reasoning and should
+  survive a refactor: orbit **periodicity detection is deliberately absent**,
+  because no epsilon can be shown never to mark an outside point inside and the
+  picture is the whole product; and zoom-at-the-cursor is asserted as a **fixed
+  point** (the complex number under the pixel is the same number afterwards, to
+  within ulps of the largest intermediate) rather than eyeballed one frame at a
+  time.
+
+  **A share link's precision is part of its correctness.** `#view=` carries the
+  centre with a digit count *derived from the zoom* (`dsCoordDigits`), not a
+  fixed six places — past a zoom of about 10⁵ six decimals is coarser than the
+  entire viewport, so the naive version of "send someone this spot" lands them
+  somewhere else while both parties believe otherwise. The assertion is
+  geometric, not a chosen constant: the round-trip error must stay inside half a
+  pixel of a 3840px canvas. Past 10¹² the token is lossless and the **double** is
+  the floor, which is what `DS_MAX_ZOOM` states and what the readout warns about
+  — the honest version of "how deep does this go". Ask it of any new permalink
+  that carries a continuous coordinate: *is the encoding finer than the thing it
+  is addressing?*
+
+  **An animation between two zoom levels moves at a constant APPARENT speed**,
+  and that is the fourth Deep Shore property in the same family — invisible when
+  wrong, pretty either way. `deep-shore/tour.ts` interpolates `log(zoom)`
+  linearly (each frame magnifies by the same factor) but must not interpolate the
+  centre linearly with it: the centre's speed *across the screen* then grows with
+  the zoom, so the entire pan lands in the last few frames and the destination
+  whips past the viewport at the exact moment it was supposed to arrive.
+  `dsPanWeight` asks for `dc/du ∝ 1/zoom(u)` instead, which integrates to
+  `(1 − r^−u)/(1 − r^−1)` and front-loads the pan into the cheap, zoomed-out part
+  of the dive. `security:smoke` asserts equal screen-space steps **and requires
+  the naive linear version to FAIL the same check** — a property every
+  implementation passes is not a test. Two more things that survived a mutation
+  round and are worth not re-learning: a dive's first and last frames must be its
+  first and last stops *exactly*, so the interpolator needs literal end-point
+  branches (`a + (b − a)·1` is routinely a hair off `b`) — but only the `t ≥ 1`
+  one, since `a + (b − a)·0` **is** exactly `a`, which makes disabling the start
+  branch a mutation that correctly survives; and `dsTourViewAt`'s own `u = 1`
+  shortcut hides the segment helper's end-point branch from any test that only
+  asks for the last frame, which is why `dsSegmentViewAt` is exported and asked
+  directly. A stop-count ceiling likewise has to be tested with a
+  field-count-consistent token, or the field-count check refuses the fixture and
+  the ceiling's own mutation survives.
+
 - **A cost ceiling is written in the unit that actually costs.** The trainer's
   ceiling is `PT_MAX_RANK_WORK` (five-card reads, via `handsRanked()` in the
   engine) and no longer `PT_MAX_RUNOUTS`, which counted **boards**. Boards are
@@ -529,6 +724,23 @@ was a second, mirrored fixture that does.
   exactly that is what this replaced, and none of them offered a GIF for engines
   whose whole point is that they move. Sizes and the custom-resolution validator
   (`parseCustomSize`, bounded on both edges *and* total pixels) live there too.
+
+  There are now **three** ways in, and the third exists because live capture is
+  the wrong instrument for some engines rather than a worse one. `AnimationSource`
+  takes frames an engine rendered ON PURPOSE. Filming a canvas assumes it is
+  already moving on its own clock; Deep Shore only redraws when you touch it and
+  each of its frames can cost a second of arithmetic, so filming it wrote "a still
+  frame at a video's file size" — a defect the page had to print a caveat about,
+  next to the button. An engine that knows what its own animation *is* renders it
+  through `options.animation` and gets the same encode/preview/save flow, and
+  `liveGif: false` retires the button whose own help text would have to warn you
+  off it. Two properties of that path: the frame count comes from a **measured**
+  frame (`dsTourFrameCount`), because a count fixed in advance is eight seconds on
+  a laptop and four minutes on a phone; and held end frames **re-use** the last
+  ImageData rather than re-rendering it, since re-rendering the most expensive
+  frame in a dive is the last thing a "pause at the destination" should cost. A
+  render whose frames cost that much must also be **stoppable** — a second click
+  on the button is a stop, not a second render.
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
 - **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
@@ -557,7 +769,7 @@ was a second, mirrored fixture that does.
   it defaults to off, and without it a graph of word-labelled nodes lays out
   using the box and ignores the text, piling up overlapping in one corner.
 - **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
-- **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed.
+- **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed. Two modules are Node-only and say so in their own docblocks: `src/lib/link-peek-fetch.ts` (`node:dns`, `node:net`) and `src/lib/tls-inspect.ts` (`node:tls`, `node:crypto`). Both are reached only from their API routes, never from the browser bundle — asserted by the build carrying no `node:` import into any client chunk. A Workers deploy has no raw-socket TLS, so Chainsaw is the one surface that would need a different transport behind the same JSON shape.
 
 ## Design System
 
@@ -616,6 +828,35 @@ was a second, mirrored fixture that does.
   property added later is caught automatically. Note a tool joining the shared
   button chrome now adds its selector to **three** lists in `tools-common.css`
   (toolbar, button, `button:disabled`), not two.
+- **Contrast is asserted, not remembered.** It used to be a number somebody
+  measured once in a session nobody can rerun, and every palette edit since was
+  a bet that the measurement still held. `security:smoke` now parses **both**
+  palettes out of `theme.css` and holds every real text pairing to the WCAG AA
+  floor (4.5:1), so a token nudge that drops body text under it fails the gate
+  instead of shipping. The pairing list is written down (it is a claim about how
+  the tokens are *used*, which CSS cannot tell you) but the values are derived,
+  and the one pairing that is a fact about code — `--color-bg` as ink on an
+  accent-filled button — is read back out of `canvas-export.css`.
+
+  Two things to know before touching the palette. There is **less headroom than
+  it looks**: the tightest pairings are `--color-muted` on `--color-surface` at
+  4.76:1 (dark) and `--color-success` on `--color-surface` at 4.74:1 (light), so
+  a "slightly softer grey" is roughly one step from failing. And
+  `--color-border` is **deliberately not in the list** — it is a hairline, never
+  a text colour, and holding a divider to a text ratio would force a palette
+  change to satisfy an assertion nobody could read. Its 1.25:1 against
+  `--color-bg` is a known WCAG 1.4.11 (non-text contrast) gap on the borders
+  that bound interactive surfaces, left alone rather than guessed at.
+- **A programmatic focus target still needs a visible ring.** `main` carries
+  `tabindex="-1"` because the skip link jumps to it, and a blanket
+  `main:focus { outline: none }` sat below the `:focus-visible` rule that is the
+  **only** thing drawing a ring anywhere on the site — so activating the skip
+  link moved focus with no perceivable result and the link was decorative
+  (WCAG 2.4.7). The narrow form, `main:focus:not(:focus-visible)`, silences the
+  mouse case and lets the keyboard case through; if an engine declines to match
+  `:focus-visible` on a programmatic focus the outcome is the old behaviour, so
+  it cannot regress. `security:smoke` asserts the blanket form is gone and that
+  both shells still wire the link to a focusable `#main-content`.
 - **Theming**: `theme.css` defines light at `:root` and overrides the palette under `[data-theme="dark"]` (the site runs dark). Add a theme by adding another `[data-theme="…"]` block — palette tokens only.
 
 ## Skills & Commands

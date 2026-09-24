@@ -1,4 +1,6 @@
 ---
+export const prerender = false
+
 import Base from '../../layouts/Base.astro'
 import { getSite, getTools } from '../../lib/config'
 import { itemListJsonLd } from '../../lib/jsonld'
@@ -22,29 +24,60 @@ const cards = tools.filter(t => t.status !== 'disabled').map(tool => ({
   tool,
   href: tool.status === 'external' ? safeExternalUrl(tool.href) : `/tools/${tool.slug}`,
 }))
+
+// Kept under ~155 characters deliberately. A search snippet is truncated past
+// roughly that, so everything after it is text no searcher ever reads while
+// every crawler still downloads it — the previous version ran to 390. Nothing
+// was lost: the full shelf is enumerated in the page intro (where on-page
+// relevance actually comes from) and the long-tail terms live in `keywords`.
+// It lives here rather than inline because a JSX comment between two component
+// attributes is unparseable to `astro check` while building green (see AGENTS.md).
+const metaDescription =
+  'Free developer tools, no sign-up: a live webhook tester, an SSL chain checker, ' +
+  'a multi-resolver DNS checker, a JWT verifier, regex, JSON and cron tools.'
 ---
 
 <Base
   wide
   title="tools"
-  description="Free developer tools — a live webhook tester, a JWT verifier, a text-to-diagram maker, JSON repair, list and timestamp converters, colour and contrast checks, Base64/URL encoding, hashes and UUIDs, a cron expression explainer, a live regex tester, the Driftfield generative-art studio, and a live markdown editor. No sign-up."
-  keywords="developer tools, online dev tools, webhook tester, webhook inspector, request bin, test webhook, http request inspector, jwt verifier, verify jwt signature, jwt decoder, mind map maker, flowchart from text, mermaid editor, diagram maker, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, sha256 hash generator, hmac generator, checksum verifier, uuid generator, guid generator, cron expression explainer, crontab explainer, cron to english, cron next run, regex tester, regular expression tester, regex replace, regex online, wallpaper generator, gif generator, pattern generator, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
+  seoTitle="Free Online Dev Tools — Webhook Tester & SSL Chain Checker"
+  description={metaDescription}
+  keywords="developer tools, online dev tools, webhook tester, webhook inspector, request bin, test webhook, http request inspector, link preview checker, open graph checker, twitter card validator, og tag tester, unfurl preview, ssl certificate checker, tls certificate checker, certificate chain checker, incomplete chain, missing intermediate certificate, check certificate expiry, jwt verifier, verify jwt signature, jwt decoder, mind map maker, flowchart from text, mermaid editor, diagram maker, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, sha256 hash generator, hmac generator, checksum verifier, uuid generator, guid generator, cron expression explainer, crontab explainer, cron to english, cron next run, regex tester, regular expression tester, regex replace, regex online, wallpaper generator, gif generator, pattern generator, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
 >
   {listed.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>tools</h1>
   <p data-type="page-intro">
-    Small, fast, single-purpose tools I built to scratch my own itches — a live
-    webhook tester that catches real requests, a JWT verifier that actually
-    checks the signature, a diagram maker that draws your outline for you, a
-    JSON formatter, repairer, and tree viewer, a list converter, a Unix
-    timestamp converter, a colour converter and contrast checker, a Base64 and
-    URL encoder/decoder, a SHA/HMAC hash and UUID generator, a cron expression
-    explainer, a live regex tester, Driftfield — a generative art studio for
-    seeded wallpapers and looping GIFs — and a markdown editor.
-    Each one is copy-first and keyboard-friendly. Most run entirely in your
-    browser; the webhook inspector uses a real server to catch incoming
-    requests — either way, no sign-ups and no tracking.
+    Small, fast, single-purpose tools I built to scratch my own itches — each
+    one copy-first, keyboard-friendly, and free of sign-ups and tracking.
+    The shelf so far: a live webhook tester that catches real requests, a
+    link preview checker that shows how a URL unfurls in Slack, X and
+    iMessage, a TLS certificate checker that catches the missing intermediate
+    your browser hides, a DNS checker that asks three resolvers at once and
+    shows you the one they disagree about, a JWT
+    verifier that actually checks the signature, a diagram maker that draws
+    your outline for you, a JSON formatter, repairer, and tree viewer, a list
+    converter, a Unix timestamp converter, a colour converter and contrast
+    checker, a Base64 and URL encoder/decoder, a SHA/HMAC hash and UUID
+    generator, a cron expression explainer, a live regex tester, Driftfield —
+    a generative art studio for seeded wallpapers and looping GIFs — and a
+    markdown editor. Most run entirely in your browser; four use a real
+    server, because they have to — one to catch incoming requests, one to
+    fetch pages the way the platforms' own bots do, one to open a raw TLS
+    connection, and one to ask three DNS resolvers the same question at once.
+    None of those is something a page is allowed to do.
   </p>
+  <form data-type="hub-filter" data-noun="tools" role="search" hidden>
+    <input
+      type="search"
+      name="q"
+      aria-label="Filter tools"
+      aria-keyshortcuts="/"
+      placeholder="type to filter — or press /"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <p data-type="hub-filter-status" role="status" hidden></p>
+  </form>
   <ul data-type="card-grid">
     {cards.map(({ tool, href }) => (
       <li data-status={tool.status}>
@@ -59,10 +92,20 @@ const cards = tools.filter(t => t.status !== 'disabled').map(tool => ({
             }
           </h2>
           {tool.status === 'wip' && <span data-type="tool-wip">coming soon</span>}
-          {tool.status === 'external' && <span data-type="tool-wip">external ↗</span>}
+          {/* The arrow is decorative — without aria-hidden a screen reader
+              announces "external north east arrow", same class of noise the
+              games badge already hides on its › glyph. */}
+          {tool.status === 'external' && <span data-type="tool-wip">external <span aria-hidden="true">↗</span></span>}
         </div>
         <span data-type="tool-description">{tool.description}</span>
       </li>
     ))}
   </ul>
 </Base>
+
+<script>
+  // Live card filter, shared with /games — see src/lib/hub-filter.ts for the
+  // astro:page-load mounting rules and the ?q= deep-link behaviour.
+  import { registerHubFilter } from '../../lib/hub-filter'
+  registerHubFilter()
+</script>

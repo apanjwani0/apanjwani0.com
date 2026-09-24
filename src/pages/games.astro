@@ -21,30 +21,60 @@ const ldJson = itemListJsonLd(
   'Games by Aman Panjwani',
   games.filter(isPlayableGame).map(g => ({ name: g.title, url: `${site.url}/games/${g.slug}` })),
 )
+
+// Kept under ~155 characters deliberately — same reasoning as /tools: a snippet
+// is truncated past roughly that, so the tail is downloaded by every crawler and
+// read by no one (the previous version ran to 279). The full shelf is in the page
+// intro below and the long-tail terms are in `keywords`. Declared here, not as an
+// inline JSX comment between attributes — that form builds green while breaking
+// `astro check` (see AGENTS.md).
+const metaDescription =
+  'Free browser games, no sign-up: a daily word puzzle, a typing race with ghost ' +
+  'replays, a hex-colour game, a fractal deep-zoom, 2048 and a poker trainer.'
 ---
 
 <Base
   wide
   title="games"
-  description="Free browser games — Quintle (a daily five-letter word puzzle), 2048, a seeded maze generator that solves itself, a daily typing race with a shared leaderboard, Hue Hunt (a daily hex-colour guessing game), and a poker trainer with exact equity and pot odds. No downloads, no sign-up."
-  keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, typing race, daily typing challenge, typing leaderboard, hex color game, color guessing game, guess the hex, daily color game, poker trainer, poker equity calculator, pot odds trainer, poker practice, daily games, daily puzzle, no-download games, playable experiments"
+  seoTitle="Free Browser Games — Daily Word Puzzle, Typing Race & More"
+  description={metaDescription}
+  keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, typing race, daily typing challenge, typing leaderboard, hex color game, color guessing game, guess the hex, daily color game, poker trainer, poker equity calculator, pot odds trainer, poker practice, mandelbrot set explorer, julia set generator, fractal zoom, fractal explorer online, daily games, daily puzzle, no-download games, playable experiments"
 >
   {games.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>games</h1>
   <p data-type="page-intro">
     Browser games and playable experiments — a daily five-letter word puzzle, a game of 2048, a maze that weaves
-    itself and then solves itself, a daily typing race where everyone on Earth gets the same passage, a colour-guessing
-    game that scores your eye out of 500 each day, and a poker trainer that counts every runout instead of estimating.
-    Everything marked play runs right here, no downloads and no sign-up; the rest are on the way. The generative
+    itself and then solves itself, a daily typing race where everyone on Earth gets the same passage — and a finished
+    run mints a ghost link a friend can race, keystroke for keystroke — a colour-guessing
+    game that scores your eye out of 500 each day, a poker trainer that counts every runout instead of estimating,
+    and a fractal explorer that dives into the edge of the Mandelbrot set until 64-bit arithmetic runs out of room —
+    and hands you a link to the exact spot you found.
+    Come back to any of the three dailies and its card below starts counting the streak — a number your browser
+    keeps to itself and sends nowhere. Everything marked play runs right here, no downloads and no sign-up; the rest are on the way. The generative
     pieces that used to live here — the flow field, the flock, the falling sand and friends — moved into
     <a href="/tools/driftfield">Driftfield</a>, where each one still runs live.
   </p>
+  <form data-type="hub-filter" data-noun="games" role="search" hidden>
+    <input
+      type="search"
+      name="q"
+      aria-label="Filter games"
+      aria-keyshortcuts="/"
+      placeholder="type to filter — or press /"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <p data-type="hub-filter-status" role="status" hidden></p>
+  </form>
   {games.length === 0 ? (
     <p>Coming soon.</p>
   ) : (
     <div data-type="card-grid">
+      {/* data-status feeds the hub filter's status facet chips — hub-filter.ts
+          derives the chips and their counts from these attributes, same idiom
+          as the /tools cards' data-status, with this hub's own two states. */}
       {games.map(g => (
-        <article data-type="project">
+        <article data-type="project" data-status={isPlayableGame(g) ? 'playable' : 'soon'}>
           <div data-type="project-header">
             <h2 data-type="card-title"><a href={`/games/${g.slug}`}>{g.title}</a></h2>
             <span data-type="project-stats">
@@ -62,25 +92,19 @@ const ldJson = itemListJsonLd(
   )}
 </Base>
 
-<style>
-  /* Status pill on each game card — replaces the previous duplicated inline
-     styles; live vs coming-soon differ only by colour. Tokens only. */
-  [data-type="game-badge"] {
-    font-size: var(--text-xs);
-    border: 1px solid var(--color-border);
-    padding: var(--space-2xs) var(--space-xs);
-    border-radius: var(--radius);
-    white-space: nowrap;
-  }
+{/* Badge CSS lives in global.css (not a scoped <style> here) because the
+    daily-streak strip inserts a third badge state at runtime, and a
+    JS-created element never carries Astro's scoping attribute — a scoped
+    rule cannot style it. Same reason the hub-filter facet chips are there. */}
 
-  [data-type="game-badge"][data-live] {
-    color: var(--color-success);
-    border-color: var(--color-success);
-  }
-
-  /* Coming-soon reads as secondary: a muted label, distinct from the green live
-     state and from primary body text, so the two badge states are ranked. */
-  [data-type="game-badge"]:not([data-live]) {
-    color: var(--color-muted);
-  }
-</style>
+<script>
+  // Live card filter, shared with /tools — see src/lib/hub-filter.ts for the
+  // astro:page-load mounting rules and the ?q= deep-link behaviour.
+  // ORDER MATTERS: the filter registers first so its card-text haystacks are
+  // precomputed before the streak strip paints — "3-day streak" is a personal
+  // annotation, not searchable card copy.
+  import { registerHubFilter } from '../lib/hub-filter'
+  import { registerDailyStreaks } from '../lib/daily-streak-strip'
+  registerHubFilter()
+  registerDailyStreaks()
+</script>

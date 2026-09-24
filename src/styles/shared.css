@@ -47,9 +47,17 @@ a[data-type="skip-link"]:focus {
   top: 0.5rem;
 }
 
-/* main is a programmatic focus target for the skip link — don't draw a ring
-   around the whole content column when it receives focus. */
-main:focus {
+/* main is a programmatic focus target for the skip link, so it must not draw a
+   ring on an ordinary mouse click — but it MUST draw one when a keyboard user
+   activates the skip link, or the skip has no perceivable result and the link
+   is decorative (WCAG 2.4.7). The earlier blanket `main:focus { outline: none }`
+   killed the ring in both cases, because the `:focus-visible` rule above is the
+   *only* thing that draws it and `main:focus` out-specifies nothing — it simply
+   applied to the same element afterwards. `:not(:focus-visible)` keeps the
+   mouse case silent and lets the keyboard case through. If an engine declines
+   to match `:focus-visible` on a programmatic focus, the outcome is the old
+   behaviour, so this cannot regress. */
+main:focus:not(:focus-visible) {
   outline: none;
 }
 

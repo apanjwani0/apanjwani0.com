@@ -14,6 +14,17 @@ export interface Game {
 
 export const games: Game[] = [
   {
+    "slug": "deep-shore",
+    "title": "Deep Shore",
+    "description": "A Mandelbrot and Julia set explorer that keeps going. Scroll or click to dive into the boundary, drag to travel along it, and watch the detail keep arriving — the edge of the set never smooths out, at any magnification.\n\nArm Julia peek and the inset draws the Julia set belonging to whatever point is under your cursor, live; click and you are inside it. Six guided stops take you straight to the famous neighbourhoods. Every view encodes into the address bar with as many digits as the zoom actually needs, so the link you send lands on the same rock — and the status line tells you honestly when 64-bit arithmetic has run out of room, instead of letting the picture quietly turn to mush.\n\nMark the places you stop and it will record the descent between them as an animated GIF: the zoom climbs geometrically and the pan is weighted so it happens while the screen is still cheap, which is what makes the destination arrive rather than whip past. Preview it on the canvas first, then save it — or share the dive itself as a link and let someone else fall down the same hole.",
+    "enabled": true,
+    "interactive": true,
+    "seoTitle": "Mandelbrot & Julia Set Explorer — Deep Zoom In Your Browser",
+    "metaDescription": "Zoom into the Mandelbrot set until double precision runs out, preview the Julia set under your cursor, and share the exact spot you found as a link.",
+    "keywords": "mandelbrot set explorer,julia set generator,fractal zoom,mandelbrot zoom,fractal explorer online,mandelbrot generator,julia set online,fractal viewer,escape time fractal,deep zoom fractal,mandelbrot zoom animation,fractal zoom gif maker",
+    "intro": "Scroll to dive into the Mandelbrot set, drag to travel along its coastline, and arm Julia peek to see the Julia set for the point under your cursor. Mark the places you stop and record the whole descent as an animated GIF. Any view you find encodes into the URL, so you can send someone the exact spot — or the whole dive.",
+  },
+  {
     "slug": "poker-trainer",
     "title": "Poker Trainer",
     "description": "Set any Hold'em spot and get the real numbers: exact equity by full enumeration, the actual outs, and the pot-odds arithmetic laid out so you can check it yourself. Nothing is sampled and nothing is estimated \u2014 every runout is counted.",

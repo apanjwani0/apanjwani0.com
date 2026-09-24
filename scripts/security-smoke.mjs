@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
+import { isIP } from 'node:net'
 import { readFile, readdir } from 'node:fs/promises'
 import { INTEREST_MAX_COUNT, sanitizeStore } from '../src/lib/interest.ts'
 import { render, renderInline, splitOnEmbed } from '../src/lib/markdown.ts'
@@ -88,6 +89,27 @@ import {
   parseMarkdownOutline,
   toMermaid,
 } from '../src/lib/graph-text.ts'
+import {
+  CS_ALLOWED_PORTS,
+  CS_ANCHOR_CODES,
+  csAuthCode,
+  csDescribeCert,
+  csDial,
+  csNameTrustAnchor,
+  csResolvePinned,
+  csSignatureAlgorithm,
+  csValidateTarget,
+} from '../src/lib/tls-inspect.ts'
+import {
+  csCanonicalIp,
+  csChainPem,
+  csChainState,
+  csEffectiveExpiry,
+  csFindings,
+  csMatchHost,
+  csNameMatches,
+  csServeChainPem,
+} from '../src/components/tools/chainsaw/analyze.ts'
 
 const unsafeMarkdown = render('[x](javascript:alert(1)) <img src=x onerror=alert(1)>')
 assert.equal(unsafeMarkdown.includes('javascript:'), false)
@@ -2561,6 +2583,53 @@ console.log('projects link only at pages this site serves')
   )
 }
 
+/* ─────  Share cards: a NOTICE, deliberately not a gate  ─────
+
+   Every indexable product page is supposed to ship a committed 1200×630 card,
+   and `npm run og` mints them — but nothing tells anyone it is owed. Three
+   tools and a game shipped without one before this was noticed by reading a
+   directory listing; each of those pages unfurls on Slack/X/LinkedIn as the
+   portrait avatar, which is precisely the degradation the cards exist to end.
+
+   This block does NOT fail. A missing card is degraded, not broken —
+   `existingOgCardPath()` falls back to the avatar (asserted elsewhere), and the
+   generator shells out to a macOS Chrome path, so a hard assertion would turn a
+   cosmetic debt into a red gate on every Linux/CI run, which is the one place
+   it can never be paid. So: derive the catalogue from the SAME predicates the
+   generator uses (never a second hand-written list), diff it against what is on
+   disk, and print what is owed. The single assertion guards the derivation
+   itself — a notice that silently computes an empty list is worse than none. */
+{
+  const { toolHasOgCard, gameHasOgCard, ogCardFile } = await import('../src/lib/og.ts')
+  const { isDriftfieldPublic: ogDfPublic, DRIFTFIELD_MODES: ogDfModes, DRIFTFIELD_SLUG: ogDfSlug } =
+    await import('../src/lib/driftfield.ts')
+
+  const expected = [
+    ...tools.filter(toolHasOgCard).map(t => ['tools', t.slug]),
+    ...games.filter(gameHasOgCard).map(g => ['games', g.slug]),
+    ...learnings.filter(learningHasOgCard).map(l => ['learnings', l.slug]),
+    ...(ogDfPublic(tools) ? ogDfModes : []).map(m => ['tools', `${ogDfSlug}-${m.slug}`]),
+  ].map(([kind, slug]) => ogCardFile(kind, slug))
+  assert.ok(expected.length > 0,
+    'the share-card catalogue derived nothing — the og predicates or the config moved under this check')
+
+  let present
+  try {
+    present = new Set(await readdir(new URL('../public/og/', import.meta.url)))
+  } catch {
+    present = null
+  }
+  const missing = present === null ? [] : expected.filter(f => !present.has(f))
+  if (present === null) {
+    console.log('note: public/og is unreadable — every product page will share as the portrait avatar')
+  } else if (missing.length > 0) {
+    console.log(
+      `note: ${missing.length} of ${expected.length} share cards are not committed yet — run \`npm run og\` ` +
+      `(needs macOS Chrome) and commit: ${missing.join(', ')}`,
+    )
+  }
+}
+
 /* ══════  design-ux: a shared idiom must live where BOTH layouts can see it  ══════
 
    The site has two shells. `Base.astro` loads `src/styles/global.css`;
@@ -3642,3 +3711,2913 @@ console.log('token bench proves every cause it reports, and reports none it cann
 }
 
 console.log("the poker memo returns exactly what it memoises, and the trainer's ceiling counts work")
+
+/* ─────  Type Trial ghost replays: a permalink bounded in every dimension  ─────
+   The token is client-minted and client-consumed, but it is still untrusted
+   input crossing a boundary (anyone can hand-build a fragment), so the decoder
+   is held to the same standard as an API route: size, count, per-delta and
+   total-duration bounds, and never a throw. The fingerprint is what stops an
+   index into an edited passage pool from racing the WRONG text. */
+
+{
+  const {
+    GHOST_MAX_DELTA_MS,
+    GHOST_MAX_MARKS,
+    GHOST_MAX_TOKEN_CHARS,
+    GHOST_MAX_TOTAL_MS,
+    decodeGhostToken,
+    encodeGhostToken,
+    ghostDurationMs,
+    ghostProgressAt,
+    ghostWpm,
+    passageFingerprint,
+    verifyGhostPassage,
+  } = await import('../src/components/games/type-trial/ghost.ts')
+  const { DAILY_TEXTS } = await import('../src/lib/type-trial-daily.ts')
+
+  // Every passage either pool could serve must fit under the mark cap, or a
+  // legitimate finished run cannot mint its own link.
+  const longestDaily = Math.max(...DAILY_TEXTS.map(t => t.length))
+  assert.ok(longestDaily <= GHOST_MAX_MARKS, 'GHOST_MAX_MARKS is smaller than a daily passage — legit runs cannot mint')
+
+  // Round trip: a plausible run comes back quantised but otherwise intact.
+  const passage = dailyPassage('2026-08-22')
+  const marks = Array.from({ length: passage.length }, (_, i) => (i + 1) * 217)
+  const token = encodeGhostToken({ kind: 'daily', day: '2026-08-22', index: 0, passage, acc: 97, marks })
+  assert.ok(token, 'a normal finished run must mint a token')
+  assert.ok(token.length < 600, `the token must stay a compact fragment (${token.length} chars for ${passage.length} marks)`)
+  const g = decodeGhostToken(token)
+  assert.ok(g, 'the minted token must decode')
+  assert.equal(g.kind, 'daily')
+  assert.equal(g.day, '2026-08-22')
+  assert.equal(g.acc, 97)
+  assert.equal(g.marks.length, passage.length, 'one mark per character — the replay covers the whole passage')
+  for (let i = 1; i < g.marks.length; i++) {
+    assert.ok(g.marks[i] >= g.marks[i - 1], 'the decoded timeline must be monotonic')
+  }
+  assert.ok(
+    Math.abs(ghostDurationMs(g.marks) - marks[marks.length - 1]) <= 5 * marks.length,
+    'decode must reproduce the duration within quantisation drift',
+  )
+  assert.ok(verifyGhostPassage(g, passage), 'the fingerprint must verify against the passage it was minted from')
+  assert.ok(!verifyGhostPassage(g, passage + '!'), 'any change to the passage must fail verification')
+
+  // Practice kinds resolve by index but are still pinned by fingerprint —
+  // an edited pool fails closed instead of racing whatever now sits at #3.
+  const pMarks = [50, 100, 150, 200, 250, 300, 350]
+  const pTok = encodeGhostToken({ kind: 'quotes', day: null, index: 3, passage: 'abc def', acc: 100, marks: pMarks })
+  const pg = decodeGhostToken(pTok)
+  assert.equal(pg.kind, 'quotes')
+  assert.equal(pg.index, 3)
+  assert.ok(verifyGhostPassage(pg, 'abc def'))
+  assert.ok(!verifyGhostPassage(pg, 'abc deX'), 'a same-length different text must fail the fingerprint')
+
+  // Bounds at mint.
+  assert.equal(encodeGhostToken({ kind: 'daily', day: '2026-08-22', index: 0, passage: '', acc: 50, marks: [] }), null)
+  assert.equal(encodeGhostToken({ kind: 'daily', day: 'nope', index: 0, passage: 'ab', acc: 50, marks: [1, 2] }), null)
+  assert.equal(encodeGhostToken({ kind: 'quotes', day: null, index: -1, passage: 'ab', acc: 50, marks: [1, 2] }), null)
+  assert.equal(encodeGhostToken({ kind: 'quotes', day: null, index: 0, passage: 'ab', acc: 101, marks: [1, 2] }), null)
+  assert.equal(
+    encodeGhostToken({ kind: 'quotes', day: null, index: 0, passage: 'ab', acc: 50, marks: [2, 1] }),
+    null,
+    'non-monotonic marks are not a timeline',
+  )
+  assert.equal(
+    encodeGhostToken({ kind: 'quotes', day: null, index: 0, passage: 'ab', acc: 50, marks: [1, Number.NaN] }),
+    null,
+    'a non-finite mark is rejected, not serialised',
+  )
+  const overLong = Array.from({ length: 61 }, (_, i) => i * (GHOST_MAX_TOTAL_MS / 59))
+  assert.equal(
+    encodeGhostToken({ kind: 'quotes', day: null, index: 0, passage: 'x'.repeat(61), acc: 50, marks: overLong }),
+    null,
+    'a run past the total-duration cap must not mint',
+  )
+  const stared = decodeGhostToken(
+    encodeGhostToken({ kind: 'quotes', day: null, index: 0, passage: 'ab', acc: 50, marks: [100, 100 + GHOST_MAX_DELTA_MS * 2] }),
+  )
+  assert.equal(
+    stared.marks[1] - stared.marks[0],
+    GHOST_MAX_DELTA_MS,
+    'a mid-run stare is clamped at mint — it costs the stare, not the link',
+  )
+
+  // Bounds at decode: since minting clamps, an over-cap delta can only be a
+  // hand-built token, and the decoder rejects rather than repairs it.
+  const fp = passageFingerprint('ab')
+  const craft = (deltasQ) => {
+    const bytes = []
+    for (let q of deltasQ) {
+      while (q >= 0x80) { bytes.push((q & 0x7f) | 0x80); q >>>= 7 }
+      bytes.push(q)
+    }
+    return `1.q0.${fp}.50.${Buffer.from(bytes).toString('base64url')}`
+  }
+  assert.ok(decodeGhostToken(craft([10, 20])), 'the craft helper builds valid tokens — the rejections below are real')
+  assert.equal(decodeGhostToken(craft([10, GHOST_MAX_DELTA_MS / 10 + 1])), null, 'an over-cap delta is rejected')
+  assert.equal(decodeGhostToken(craft(Array(31).fill(GHOST_MAX_DELTA_MS / 10))), null, 'a crafted total past the cap is rejected')
+  assert.equal(decodeGhostToken('x'.repeat(GHOST_MAX_TOKEN_CHARS + 1)), null, 'token size is checked before any parsing')
+  assert.equal(decodeGhostToken(`2.q0.${fp}.50.AA`), null, 'an unknown version is rejected, never guessed at')
+  assert.equal(decodeGhostToken(`1.q0.${fp}.101.AA`), null, 'accuracy past 100 is rejected')
+  assert.equal(decodeGhostToken(`1.z0.${fp}.50.AA`), null, 'an unknown kind letter is rejected')
+  assert.equal(decodeGhostToken(`1.q0.zzzzzzzz.50.AA`), null, 'a malformed fingerprint is rejected')
+  assert.equal(decodeGhostToken(`1.q0.${fp}.50.`), null, 'an empty timeline is rejected')
+  assert.equal(decodeGhostToken(`1.q0.${fp}.50.!!`), null, 'non-base64url data is rejected without throwing')
+  assert.equal(decodeGhostToken(null), null)
+  assert.equal(decodeGhostToken('.....'), null)
+
+  // Playback math.
+  const pm = [100, 200, 300]
+  assert.equal(ghostProgressAt(pm, 0), 0)
+  assert.equal(ghostProgressAt(pm, 150), 1)
+  assert.equal(ghostProgressAt(pm, 300), 3)
+  assert.equal(ghostProgressAt(pm, 1e9), 3)
+  assert.equal(ghostWpm(80, 60_000), 16, 'net wpm: 80 chars in a minute is 16 wpm')
+  assert.equal(ghostWpm(80, 0), 0, 'a zero-duration replay must not divide by zero')
+
+  // The component's side of the contract, asserted at source level: the link
+  // rides the fragment, the hashchange listener exists AND is removed (the
+  // element is created/destroyed across in-site navigations, so an unremoved
+  // window listener is a leak per visit), and marks are reset per run.
+  const ttSrc = await readFile(new URL('../src/components/games/type-trial/TypeTrial.ts', import.meta.url), 'utf8')
+  assert.ok(ttSrc.includes('#ghost='), 'the ghost link must ride the URL fragment, never a query string')
+  assert.ok(/window\.addEventListener\('hashchange'/.test(ttSrc), 'a ghost link opened in a mounted tab must load without a reload')
+  assert.ok(/window\.removeEventListener\('hashchange'/.test(ttSrc), 'the hashchange listener must be removed on disconnect — one leak per in-site visit otherwise')
+  assert.ok(/this\.marks = \[\]/.test(ttSrc), 'restart must reset the recorded timeline')
+}
+
+console.log('type trial ghost tokens are bounded, fingerprint-pinned, and decode never throws')
+
+/* ─────  Deep Shore: the picture IS the product  ─────
+   A fractal explorer fails silently by construction — a wrong interior test, a
+   swapped c/z pair or a drifting zoom anchor all render a perfectly pleasant
+   image that is simply not the thing it claims to be. So three properties are
+   asserted rather than eyeballed:
+
+     • the fast renderer agrees with an untouched reference implementation over a
+       dense grid (the poker `evaluateBest` / `scoreBest` structure, same reason);
+     • zooming about a pixel is a FIXED POINT — the complex number under the
+       cursor is the same number afterwards, to within a few ulps;
+     • the `#view=` permalink is bounded at mint and at decode, never throws, and
+       carries ENOUGH DIGITS — a centre rounded to six places is a different
+       place entirely past a zoom of 10^6, so the naive version of this feature
+       sends the recipient somewhere else while both parties believe otherwise. */
+
+{
+  const {
+    DS_BASE_SPAN,
+    DS_DEFAULT_VIEW,
+    DS_ITER_MAX,
+    DS_ITER_MIN,
+    DS_MAX_TOKEN_CHARS,
+    DS_MAX_ZOOM,
+    DS_MIN_ZOOM,
+    DS_PALETTE_IDS,
+    dsAutoIter,
+    dsClampView,
+    dsCoordDigits,
+    dsDecodeView,
+    dsEffectiveIter,
+    dsEncodeView,
+    dsEscape,
+    dsEscapeReference,
+    dsInInterior,
+    dsPixelScale,
+    dsRampPosition,
+    dsScreenToComplex,
+    dsTokenFromHash,
+    dsZoomAt,
+  } = await import('../src/components/games/deep-shore/escape.ts')
+
+  /* ── 1. The fast path is the reference, reached sooner. ──
+     `dsEscape` skips the iteration entirely for points the closed-form cardioid
+     and period-2 bulb tests place inside. If either test is wrong — a sign, a
+     radius, the q formula — outside points get painted solid and NOTHING about
+     the output looks broken. So the two are compared over a grid covering the
+     whole set and its surroundings, including both components' boundaries. */
+  const ITER = 150
+  let compared = 0
+  let earlyOuts = 0
+  for (let re = -2.2; re <= 0.75; re += 0.01) {
+    for (let im = 0; im <= 1.2; im += 0.01) {
+      const fast = dsEscape('mandelbrot', re, im, 0, 0, ITER)
+      const slow = dsEscapeReference(re, im, 0, 0, ITER)
+      assert.equal(fast.n, slow.n, `fast path disagrees with the reference at ${re},${im}`)
+      assert.ok(
+        (Number.isNaN(fast.smooth) && Number.isNaN(slow.smooth)) || fast.smooth === slow.smooth,
+        `smooth value disagrees at ${re},${im}`,
+      )
+      if (dsInInterior(re, im)) earlyOuts += 1
+      compared += 1
+    }
+  }
+  assert.ok(compared > 30000, 'the equivalence grid must actually be dense')
+  assert.ok(earlyOuts > 1000, 'the interior early-out must actually fire, or the comparison proves nothing')
+
+  // The early-out is a claim about two specific components, not about the set.
+  assert.ok(dsInInterior(0, 0), 'the origin is in the main cardioid')
+  assert.ok(dsInInterior(-1, 0), 'c = -1 is the centre of the period-2 bulb')
+  assert.ok(dsInInterior(0.24, 0), 'just inside the cusp')
+  assert.ok(!dsInInterior(0.3, 0), 'just outside the cusp is not claimed')
+  assert.ok(!dsInInterior(-0.125, 0.744), 'the period-3 bulb is NOT claimed — the test is an early-out, not a membership oracle')
+  assert.ok(!dsInInterior(1, 1), 'a point far outside is never claimed')
+
+  /* ── 2. Facts about the set that do not depend on this implementation. ── */
+  assert.equal(dsEscapeReference(0, 0, 0, 0, ITER).n, ITER, 'c = 0 never escapes')
+  assert.equal(dsEscapeReference(-1, 0, 0, 0, ITER).n, ITER, 'c = -1 never escapes')
+  assert.ok(dsEscapeReference(1, 0, 0, 0, ITER).n < ITER, 'c = 1 escapes')
+  assert.ok(dsEscapeReference(-2.1, 0, 0, 0, ITER).n < ITER, 'c = -2.1 escapes (the set ends at -2)')
+  assert.ok(dsEscapeReference(0.3, 0.6, 0, 0, ITER).n < ITER, 'c = 0.3 + 0.6i escapes')
+
+  // Symmetry about the real axis. Negating the imaginary part negates y at every
+  // step exactly, so this is a STRICT equality — any asymmetry is an index bug.
+  for (const [re, im] of [[-0.5, 0.3], [0.28, 0.6], [-1.3, 0.12], [-0.743, 0.132]]) {
+    const up = dsEscape('mandelbrot', re, im, 0, 0, ITER)
+    const down = dsEscape('mandelbrot', re, -im, 0, 0, ITER)
+    assert.equal(up.n, down.n, 'the Mandelbrot set is symmetric about the real axis')
+    assert.ok((Number.isNaN(up.smooth) && Number.isNaN(down.smooth)) || up.smooth === down.smooth)
+  }
+
+  /* ── 3. Julia mode must not be Mandelbrot mode wearing a hat. ──
+     `mandelbrot` decides which of c and z0 is the pixel. Swap them and Julia
+     mode renders a Mandelbrot set, which looks like a rendering bug and is not
+     one. The Julia set for c = 0 has a closed form — the unit disk — so it pins
+     the wiring to a fact rather than to a screenshot. */
+  for (const r of [0.2, 0.7, 0.95, 0.999]) {
+    assert.equal(dsEscape('julia', r, 0, 0, 0, ITER).n, ITER, `|z| = ${r} < 1 stays bounded under z -> z^2`)
+    assert.equal(dsEscape('julia', 0, r, 0, 0, ITER).n, ITER, 'and on the imaginary axis too')
+  }
+  for (const r of [1.01, 1.5, 3]) {
+    assert.ok(dsEscape('julia', r, 0, 0, 0, ITER).n < ITER, `|z| = ${r} > 1 escapes under z -> z^2`)
+  }
+  // The discriminator, chosen so both answers are certain rather than measured:
+  // the Mandelbrot set meets the real axis in exactly [-2, 0.25], so c = 0.5
+  // escapes — while 0.5 sits well inside the unit disk, which IS the filled
+  // Julia set for c = 0. Swap the roles of c and z0 and this pair collapses.
+  assert.ok(dsEscape('mandelbrot', 0.5, 0, 0, 0, ITER).n < ITER, 'c = 0.5 is outside the Mandelbrot set')
+  assert.equal(dsEscape('julia', 0.5, 0, 0, 0, ITER).n, ITER, 'z0 = 0.5 is inside the filled Julia set for c = 0')
+
+  /* ── 4. The smooth value's defining invariant. ──
+     n <= nu < n + 1 for an escape at iteration n. A flipped sign or the wrong
+     log base still produces a picture — this is what refuses it. */
+  let smoothChecked = 0
+  for (let re = -2.2; re <= 0.75; re += 0.02) {
+    for (let im = 0; im <= 1.2; im += 0.02) {
+      const e = dsEscapeReference(re, im, 0, 0, ITER)
+      if (e.n >= ITER) continue
+      assert.ok(Number.isFinite(e.smooth), `smooth must be finite for an escape at ${re},${im}`)
+      assert.ok(e.smooth >= e.n - 1e-9 && e.smooth < e.n + 1 + 1e-9,
+        `smooth ${e.smooth} outside [${e.n}, ${e.n + 1}) at ${re},${im}`)
+      smoothChecked += 1
+    }
+  }
+  assert.ok(smoothChecked > 4000, 'the smooth-value sweep must cover real escapes')
+  // The ramp position is a fraction, always, including for a degenerate input.
+  for (const s of [0, 0.5, 3.25, 91.7, 4000]) {
+    const t = dsRampPosition(s, 55)
+    assert.ok(t >= 0 && t < 1, `ramp position ${t} must stay in [0, 1)`)
+  }
+
+  /* ── 5. Zoom-at-the-cursor is a fixed point. ──
+     Nothing throws when this is wrong; the view merely drifts away from what you
+     aimed at, a little more per notch. The error budget is a few ulps of the
+     anchor, because the arithmetic is (a - b) + b and not a promise of exactness. */
+  const W = 1280
+  const H = 794
+  let anchored = 0
+  for (const zoom of [DS_MIN_ZOOM, 1, 97, 5e4, 1e8, 1e12, DS_MAX_ZOOM]) {
+    for (const [px, py] of [[0, 0], [W, H], [17, 613], [W / 2, H / 2], [W - 3, 8]]) {
+      for (const factor of [2, 0.5, 1.35, 1 / 1.35, 64, 1 / 64]) {
+        const view = { ...DS_DEFAULT_VIEW, re: -0.7436438870371587, im: 0.1318259042053119, zoom }
+        const before = dsScreenToComplex(view, px, py, W, H)
+        const zoomed = dsZoomAt(view, px, py, factor, W, H)
+        const after = dsScreenToComplex(zoomed, px, py, W, H)
+        // The arithmetic is (a − b) + b, so the budget is ulps of the largest
+        // intermediate — the anchor itself or the half-span subtracted from it,
+        // whichever is bigger. Zooming a long way OUT is the case that matters:
+        // there the offset dwarfs the anchor and the cancellation is real.
+        const magnitude = Math.max(1, Math.abs(before.re), Math.abs(before.im), DS_BASE_SPAN / zoomed.zoom)
+        const tol = 16 * Number.EPSILON * magnitude
+        assert.ok(Math.abs(after.re - before.re) <= tol,
+          `zoom moved the anchor's real part at zoom ${zoom} factor ${factor}`)
+        assert.ok(Math.abs(after.im - before.im) <= tol,
+          `zoom moved the anchor's imaginary part at zoom ${zoom} factor ${factor}`)
+        anchored += 1
+      }
+    }
+  }
+  assert.ok(anchored >= 200, 'the anchoring sweep must cover both zoom ceilings and both directions')
+  // Including when the zoom clamps: a wheel notch at the ceiling changes nothing,
+  // and "nothing" must not include a quiet lateral slide.
+  const atCeiling = { ...DS_DEFAULT_VIEW, zoom: DS_MAX_ZOOM }
+  const clamped = dsZoomAt(atCeiling, 40, 40, 8, W, H)
+  assert.equal(clamped.zoom, DS_MAX_ZOOM, 'zoom is clamped at the double-precision ceiling')
+  assert.equal(clamped.re, atCeiling.re, 'a refused zoom must not move the centre')
+  assert.equal(clamped.im, atCeiling.im)
+
+  // Pixels are square: one scale, derived from the width, used for both axes.
+  const wide = dsScreenToComplex({ re: 0, im: 0, zoom: 1 }, W, H / 2, W, H)
+  const tall = dsScreenToComplex({ re: 0, im: 0, zoom: 1 }, W / 2, H, W, H)
+  assert.ok(Math.abs(wide.re - DS_BASE_SPAN / 2) < 1e-12, 'the viewport is DS_BASE_SPAN wide at zoom 1')
+  assert.ok(Math.abs(tall.im + (DS_BASE_SPAN / 2) * (H / W)) < 1e-12, 'the vertical span follows the aspect, not a second scale')
+
+  /* ── 6. Clamping is separate from anchoring, and is the identity in range. ──
+     If dsClampView touched an in-range view, the fixed-point property above
+     would hold in the module and fail in the component that calls both. */
+  for (const view of [
+    DS_DEFAULT_VIEW,
+    { ...DS_DEFAULT_VIEW, re: 1.9, im: -1.4, zoom: 4e6, iter: 900, density: 120 },
+    { ...DS_DEFAULT_VIEW, zoom: DS_MAX_ZOOM, iter: DS_ITER_MAX },
+  ]) {
+    assert.deepEqual(dsClampView(view), view, 'clamping must be the identity on a valid view')
+  }
+  assert.equal(dsClampView({ ...DS_DEFAULT_VIEW, zoom: 1e99 }).zoom, DS_MAX_ZOOM)
+  assert.equal(dsClampView({ ...DS_DEFAULT_VIEW, re: -99 }).re, -8)
+  assert.equal(dsClampView({ ...DS_DEFAULT_VIEW, iter: 0 }).iter, 0, '0 is "auto" and must survive the clamp')
+  assert.equal(dsClampView({ ...DS_DEFAULT_VIEW, iter: 7 }).iter, DS_ITER_MIN, 'a pinned budget below the floor is raised, not zeroed')
+
+  /* ── 7. The iteration budget is bounded, and grows with depth. ── */
+  let prevIter = 0
+  for (let z = DS_MIN_ZOOM; z < DS_MAX_ZOOM; z *= 4) {
+    const it = dsAutoIter(z)
+    assert.ok(it >= DS_ITER_MIN && it <= DS_ITER_MAX, `auto iterations ${it} out of bounds at zoom ${z}`)
+    assert.ok(it >= prevIter, 'detail must not fall away as you zoom in')
+    prevIter = it
+  }
+  assert.ok(dsAutoIter(DS_MAX_ZOOM) <= DS_ITER_MAX, 'the deepest zoom still cannot ask for unbounded work')
+  assert.ok(dsAutoIter(1e9) > dsAutoIter(10), 'a deep zoom gets a bigger budget than a shallow one')
+  assert.equal(dsEffectiveIter({ iter: 0, zoom: 1e6 }), dsAutoIter(1e6), '0 means auto')
+  assert.equal(dsEffectiveIter({ iter: 900, zoom: 1e6 }), 900, 'a pinned budget wins over auto')
+  assert.equal(dsEffectiveIter({ iter: 99999, zoom: 1 }), DS_ITER_MAX, 'and is still bounded')
+
+  /* ── 8. The permalink carries enough digits to mean anything. ──
+     THE load-bearing assertion of this tool. A fixed six decimal places is
+     coarser than the entire viewport past a zoom of ~10^5, so the "share this
+     spot" feature would land the recipient somewhere else while both of them
+     believed they were looking at the same thing. The digit count follows the
+     zoom, and the round-trip error must stay inside HALF A PIXEL of a 4K
+     canvas — a tolerance derived from the geometry, not a number chosen to
+     pass. */
+  const RETINA_W = 3840
+  const deepRe = -0.7436438870371587
+  const deepIm = 0.1318259042053119
+  for (let zoom = 1; zoom <= 1e12; zoom *= 10) {
+    const digits = dsCoordDigits(zoom)
+    const halfPixel = dsPixelScale(zoom, RETINA_W) / 2
+    for (const value of [deepRe, deepIm, -1.9999999999999, 0]) {
+      const roundTripped = Number(Number(value).toFixed(digits))
+      assert.ok(Math.abs(roundTripped - value) < halfPixel,
+        `at zoom ${zoom}, ${digits} digits loses ${Math.abs(roundTripped - value)} — more than half a pixel (${halfPixel})`)
+    }
+  }
+  // And at the ceiling the TOKEN is not the limit — the double is. Stated here
+  // because it is the honest version of "how deep does this go": the encoding is
+  // lossless by then, and DS_MAX_ZOOM is a fact about 64-bit floats.
+  for (const value of [deepRe, deepIm, 1.4142135623730951, -0.12345678901234567]) {
+    assert.equal(Number(value.toFixed(dsCoordDigits(DS_MAX_ZOOM))), value,
+      'at the deepest zoom the token round-trips the exact double — the format is not what runs out')
+  }
+
+  /* ── 9. The token is bounded at mint AND at decode, and never throws. ── */
+  const roundTrip = (view) => dsDecodeView(dsEncodeView(view))
+  const mandel = { ...DS_DEFAULT_VIEW, re: deepRe, im: deepIm, zoom: 5e7, iter: 0, palette: 'ice', density: 90 }
+  const backM = roundTrip(mandel)
+  assert.ok(backM, 'a normal view must mint a decodable token')
+  assert.equal(backM.mode, 'mandelbrot')
+  assert.equal(backM.palette, 'ice')
+  assert.equal(backM.density, 90)
+  assert.equal(backM.iter, 0)
+  assert.ok(Math.abs(backM.re - mandel.re) < dsPixelScale(mandel.zoom, RETINA_W) / 2, 'the centre survives the round trip')
+  assert.ok(Math.abs(backM.im - mandel.im) < dsPixelScale(mandel.zoom, RETINA_W) / 2)
+  assert.ok(Math.abs(backM.zoom / mandel.zoom - 1) < 1e-3, 'the zoom survives to well under a visible step')
+
+  const julia = { ...DS_DEFAULT_VIEW, mode: 'julia', seedRe: -0.123, seedIm: 0.745, zoom: 12, iter: 700 }
+  const backJ = roundTrip(julia)
+  assert.ok(backJ, 'a julia view must mint a decodable token')
+  assert.equal(backJ.mode, 'julia')
+  assert.equal(backJ.iter, 700)
+  assert.ok(Math.abs(backJ.seedRe - julia.seedRe) < 1e-7 && Math.abs(backJ.seedIm - julia.seedIm) < 1e-7)
+
+  // A mandelbrot token carries no seed and a julia token must — so a truncated
+  // link cannot be read as the other shape with a default seed quietly supplied.
+  assert.equal(dsEncodeView(mandel).split(',').length, 8)
+  assert.equal(dsEncodeView(julia).split(',').length, 10)
+  assert.equal(dsDecodeView(dsEncodeView(julia).split(',').slice(0, 8).join(',')), null,
+    'a julia token stripped of its seed is refused, not defaulted')
+
+  // Minting clamps, so an out-of-range field on decode is proof of a hand-built
+  // token rather than something this code could have produced.
+  const minted = dsEncodeView({ ...DS_DEFAULT_VIEW, re: 1e6, im: -1e6, zoom: 1e99, iter: 1e9, density: -50, palette: 'nope' })
+  const mintedBack = dsDecodeView(minted)
+  assert.ok(mintedBack, 'minting clamps rather than producing something it will then refuse')
+  assert.ok(Math.abs(mintedBack.re) <= 8 && Math.abs(mintedBack.im) <= 8)
+  // Zoom rides as 1000·log2(zoom), so one code step is 0.07% — far under a
+  // visible change, and the reason the ceiling comes back a hair below itself
+  // rather than exactly on it. What matters is that it can never come back ABOVE
+  // the ceiling, because that is the bound protecting the arithmetic.
+  assert.ok(mintedBack.zoom <= DS_MAX_ZOOM, 'a decoded zoom can never exceed the double-precision ceiling')
+  assert.ok(Math.abs(mintedBack.zoom / DS_MAX_ZOOM - 1) < 1e-3, 'and lands within one code step of it')
+  assert.equal(mintedBack.iter, DS_ITER_MAX)
+  assert.ok(DS_PALETTE_IDS.includes(mintedBack.palette), 'an unknown palette falls back to a known one at mint')
+
+  const rejected = [
+    '',
+    'x',
+    'nope,nope',
+    '2,m,-0.6,0,0,0,ember,55',                       // version is checked, never guessed at
+    '1,q,-0.6,0,0,0,ember,55',                       // unknown mode
+    '1,m,-0.6,0,0,0,ember',                          // short
+    '1,m,-0.6,0,0,0,ember,55,1,1',                   // a seed on a mandelbrot token
+    '1,j,-0.6,0,0,0,ember,55',                       // a julia token with no seed
+    '1,m,9,0,0,0,ember,55',                          // coordinate out of range
+    '1,m,-0.6,-99,0,0,ember,55',
+    '1,m,abc,0,0,0,ember,55',                        // not a number
+    '1,m,1e5,0,0,0,ember,55',                        // exponent notation is not the format
+    '1,m,Infinity,0,0,0,ember,55',
+    '1,m,-0.6,0,999999,0,ember,55',                  // zoom code past the ceiling
+    '1,m,-0.6,0,-999999,0,ember,55',
+    '1,m,-0.6,0,0,7,ember,55',                       // a pinned budget below the floor
+    '1,m,-0.6,0,0,99999,ember,55',
+    '1,m,-0.6,0,0,0,__proto__,55',                   // palette is an allowlist, not a lookup
+    '1,m,-0.6,0,0,0,constructor,55',
+    '1,m,-0.6,0,0,0,rainbow,55',
+    '1,m,-0.6,0,0,0,ember,9',                        // density out of range
+    '1,m,-0.6,0,0,0,ember,9999',
+    `1,m,-0.${'1'.repeat(40)},0,0,0,ember,55`,       // a coordinate longer than any mint produces
+    `1,m,-0.6,0,0,0,ember,55,${'x'.repeat(DS_MAX_TOKEN_CHARS)}`,
+    null,
+    undefined,
+    42,
+  ]
+  for (const bad of rejected) {
+    let out
+    assert.doesNotThrow(() => { out = dsDecodeView(bad) }, `decoding must never throw (${String(bad).slice(0, 40)})`)
+    assert.equal(out, null, `token must be refused: ${String(bad).slice(0, 60)}`)
+  }
+  assert.ok(dsEncodeView({ ...DS_DEFAULT_VIEW, zoom: DS_MAX_ZOOM, re: deepRe, im: deepIm }).length <= DS_MAX_TOKEN_CHARS,
+    'the deepest mintable view still fits inside the token ceiling')
+
+  // Re-encoding a decoded token must reproduce it byte for byte. Without this
+  // the address bar would drift on its own as replaceState re-minted a view it
+  // had just read back, and no two copies of "the same" link would match.
+  for (const view of [mandel, julia, DS_DEFAULT_VIEW, { ...DS_DEFAULT_VIEW, zoom: DS_MAX_ZOOM }]) {
+    const once = dsEncodeView(view)
+    assert.equal(dsEncodeView(dsDecodeView(once)), once, 'encode ∘ decode ∘ encode must be encode')
+  }
+
+  assert.equal(dsTokenFromHash('#view=1,m,-0.6,0,0,0,ember,55'), '1,m,-0.6,0,0,0,ember,55')
+  assert.equal(dsTokenFromHash('#other=1&view=abc'), 'abc', 'the fragment may carry other keys later')
+  assert.equal(dsTokenFromHash('#nothing'), null)
+  assert.equal(dsTokenFromHash(''), null)
+
+  /* ── 10. The component is wired the way the module assumes. ── */
+  const dsSrc = await readFile(new URL('../src/components/games/deep-shore/DeepShore.ts', import.meta.url), 'utf-8')
+  assert.ok(/customElements\.define\('deep-shore-game'/.test(dsSrc), 'the element registers under the tag EMBED_TAGS names')
+  assert.ok(dsSrc.includes('#view='), 'the share link rides the URL FRAGMENT — a query string reaches server logs and Referer headers')
+  assert.ok(!/\?view=/.test(dsSrc), 'and never a query string')
+  assert.ok(/history\.replaceState/.test(dsSrc), 'the address bar is kept current with replaceState')
+  assert.ok(!/location\.hash\s*=/.test(dsSrc),
+    'assigning location.hash pushes a history entry per view — a minute of exploring would bury the back button')
+  assert.ok(/dsWriteStored\(DS_LS_VIEW, token\)/.test(dsSrc) && /const token = dsEncodeView/.test(dsSrc),
+    'storage holds the same serialisation as the link, so the two formats cannot drift')
+  assert.ok((dsSrc.match(/dsDecodeView\(/g) ?? []).length >= 3,
+    'the stored value is validated by the same decoder as the fragment — a hand-edited localStorage entry is no more trusted')
+  assert.ok(!dsSrc.includes('DS_BAILOUT'),
+    'the iteration lives in escape.ts where it can be tested, not in a DOM handler')
+  assert.ok(/window\.addEventListener\('hashchange'/.test(dsSrc),
+    'a shared link opened in an already-mounted tab must load without a reload')
+
+  // The refinement ladder must END at one sample per pixel. A ladder that stops
+  // at 2 would look finished — the progress chip would clear, the export would
+  // write — while every pixel was a 2×2 block of its neighbour's colour, which is
+  // the one rendering failure this tool could ship without anyone noticing.
+  const ladder = /const DS_PASSES = \[([0-9, ]+)\]/.exec(dsSrc)
+  assert.ok(ladder, 'the refinement ladder is a readable literal')
+  const steps = ladder[1].split(',').map(n => Number(n.trim()))
+  assert.ok(steps.length >= 2, 'a ladder of one step is not a progressive renderer')
+  assert.equal(steps[steps.length - 1], 1, 'the final pass must sample every pixel')
+  for (let i = 1; i < steps.length; i += 1) {
+    assert.ok(steps[i] < steps[i - 1], 'each pass must be finer than the one before it')
+  }
+
+  /* ── 11. Every wired game reaches its module AND its stylesheet. ──
+     Derived from mountGame's own dispatch rather than from a list, so a game
+     added later is covered without anybody remembering this exists. Both halves
+     fail silently: no dispatch branch renders a blank element, and a missing
+     stylesheet import renders an unstyled one — on the /games route AND on any
+     learnings article that embeds it. */
+  const mountSrc = await readFile(new URL('../src/lib/game-mount.ts', import.meta.url), 'utf-8')
+  const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
+  for (const slug of Object.keys(GAME_TAGS)) {
+    const marker = `slug === '${slug}') return import('`
+    const at = mountSrc.indexOf(marker)
+    assert.notEqual(at, -1, `${slug} has no mountGame dispatch branch — its page would render an empty element`)
+    const rest = mountSrc.slice(at + marker.length)
+    const importPath = rest.slice(0, rest.indexOf("'"))
+    // Derived from the import, not from the slug: '2048' lives in twenty48/.
+    const dir = importPath.replace(/\/[^/]+$/, '').replace('../components/games/', '')
+    assert.ok(dir && dir !== importPath, `${slug}'s dispatch must import from src/components/games/`)
+    assert.ok(embedCss.includes(`games/${dir}/`), `${slug}'s stylesheet is not imported by games-embed.css`)
+  }
+}
+console.log('deep shore: the fast renderer equals its reference, zoom keeps its anchor, and the permalink carries enough digits to mean something')
+
+/* ─────  Deep Shore's dive recorder: the path, its pace, and its permalink  ─────
+
+   Shipped 2026-09-24. The explorer's export used to write a still frame; a dive
+   is now a list of stops plus one question — what does the view look like a
+   fraction `u` of the way along? Every one of this feature's failure modes still
+   renders a perfectly pretty animation, which is why the module is pure and
+   these are properties rather than screenshots:
+
+   • **The pace.** Zoom is multiplicative, so log(zoom) is what moves linearly.
+     The PAN is the part that is easy to get wrong and impossible to see one
+     frame at a time: move the centre linearly in `u` and its speed ACROSS THE
+     SCREEN grows with the zoom, so the whole pan lands in the last few frames
+     and the destination whips past the viewport at the moment it was supposed
+     to arrive. `dsPanWeight` asks instead for constant apparent speed. That is
+     asserted as equal screen-space steps — and the naive linear version is held
+     up beside it and REQUIRED TO FAIL the same check, because a property test
+     that every implementation passes is not a test.
+   • **Arrival.** The first and last frames must be the first and last stops
+     EXACTLY (`a + (b − a) · 1` is not `b` in floating point), and `u` outside
+     [0,1] must clamp rather than extrapolate past the destination.
+   • **The `#tour=` permalink**, bounded at mint and at decode, never throwing,
+     inheriting `#view=`'s digit rule by reusing its encoder for the first stop
+     and its field parsers for the rest. It shares the fragment with `#view=`,
+     which is what `dsTokenFromHash`'s tolerance of `&`-joined keys was for.
+   • **The cost ceiling in the unit that actually costs.** Frames are not the
+     cost; pixels × iterations are, and the rate is a fact about the visitor's
+     machine. `dsTourFrameCount` therefore spends a TIME budget against a
+     MEASURED per-frame cost — a count fixed at thirty is eight seconds on a
+     laptop and four minutes on a phone at the deepest stop. */
+
+{
+  const {
+    DS_DEFAULT_VIEW,
+    DS_MAX_COORD,
+    DS_MAX_ZOOM,
+    DS_MIN_ZOOM,
+    dsClampView,
+    dsDecodeView,
+    dsEncodeView,
+    dsPixelScale,
+    dsTokenFromHash,
+  } = await import('../src/components/games/deep-shore/escape.ts')
+  const {
+    DS_TOUR_DELAY_MAX,
+    DS_TOUR_DELAY_MIN,
+    DS_TOUR_MAX_FRAMES,
+    DS_TOUR_MAX_STOPS,
+    DS_TOUR_MAX_TOKEN_CHARS,
+    DS_TOUR_MIN_FRAMES,
+    DS_TOUR_MIN_STOPS,
+    dsDecodeTour,
+    dsEncodeTour,
+    dsNormalizeStops,
+    dsPanWeight,
+    dsSegmentScreenSpan,
+    dsSegmentViewAt,
+    dsSegmentWeight,
+    dsTourDecades,
+    dsTourDelay,
+    dsTourFrameCount,
+    dsTourTokenFromHash,
+    dsTourViewAt,
+  } = await import('../src/components/games/deep-shore/tour.ts')
+
+  const base = { ...DS_DEFAULT_VIEW }
+  /* The deepest tour stop, dived to from the whole set: 7.7 decades of zoom and
+     a real pan, which is the case every naive interpolation gets wrong. */
+  const dive = [
+    { re: -0.6, im: 0, zoom: 1 },
+    { re: -0.7436438870371587, im: 0.1318259042053119, zoom: 5e7 },
+  ]
+  const threeLeg = [...dive, { re: 0.2925, im: 0.0195, zoom: 70 }]
+
+  /* ── 1. A dive arrives, exactly, and never overshoots. ──
+     The endpoints are branches in the source precisely because the arithmetic
+     does not land on them: with a = 0.1 and b = 0.3, `a + (b − a) * 1` is
+     0.29999999999999993. A last frame that disagrees with the stop it was minted
+     from is a dive whose GIF and whose permalink show different places. */
+  for (const stops of [dive, threeLeg]) {
+    const first = dsTourViewAt(base, stops, 0)
+    const last = dsTourViewAt(base, stops, 1)
+    assert.equal(first.re, stops[0].re, 'frame one must be stop one, exactly')
+    assert.equal(first.im, stops[0].im, 'frame one must be stop one, exactly')
+    assert.equal(first.zoom, stops[0].zoom, 'frame one must be stop one, exactly')
+    const end = stops[stops.length - 1]
+    assert.equal(last.re, end.re, 'the last frame must be the destination, exactly')
+    assert.equal(last.im, end.im, 'the last frame must be the destination, exactly')
+    assert.equal(last.zoom, end.zoom, 'the last frame must be the destination, exactly')
+    // A frame index that runs past the end (an off-by-one in a render loop) must
+    // clamp. Extrapolation would fly THROUGH the destination and out the far
+    // side, which reads as a rendering glitch rather than as the bug it is.
+    for (const u of [1.0001, 2, 50, Number.POSITIVE_INFINITY]) {
+      assert.deepEqual(dsTourViewAt(base, stops, u), last, `u = ${u} must clamp to the destination`)
+    }
+    for (const u of [-0.0001, -3, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      assert.deepEqual(dsTourViewAt(base, stops, u), first, `u = ${u} must clamp to the start`)
+    }
+  }
+
+  /* A leg whose end-point the arithmetic CANNOT reach on its own: with a = −0.1
+     and b = 0.45, `a + (b − a) * 1` is 0.45000000000000007. The dive-level checks
+     above are blind to this — `dsTourViewAt` short-circuits u = 1 before the
+     segment helper is ever asked — and a mutation that deleted the segment's own
+     end-point branch SURVIVED the first version of this section because of it.
+     So the helper is exported and asked directly, at both ends. */
+  const legs = [
+    { re: -0.1, im: 0.1, zoom: 3 },
+    { re: 0.45, im: -0.2, zoom: 300 },
+    { re: 0.1, im: 0.7, zoom: 9000 },
+  ]
+  for (let i = 1; i < legs.length; i += 1) {
+    const misses = (a, b) => a + (b - a) * 1 !== b
+    assert.ok(
+      misses(legs[i - 1].re, legs[i].re) || misses(legs[i - 1].im, legs[i].im),
+      `leg ${i} must be one the arithmetic misses, or it proves nothing`,
+    )
+  }
+  for (let i = 1; i < legs.length; i += 1) {
+    const ended = dsSegmentViewAt(base, legs[i - 1], legs[i], 1)
+    const began = dsSegmentViewAt(base, legs[i - 1], legs[i], 0)
+    assert.equal(ended.re, legs[i].re, 'a leg must END on its stop, exactly')
+    assert.equal(ended.im, legs[i].im, 'a leg must END on its stop, exactly')
+    assert.equal(ended.zoom, legs[i].zoom, 'a leg must END on its stop, exactly')
+    assert.equal(began.re, legs[i - 1].re, 'and BEGIN on the one before it, exactly')
+    assert.equal(began.im, legs[i - 1].im, 'and BEGIN on the one before it, exactly')
+    assert.equal(began.zoom, legs[i - 1].zoom, 'and BEGIN on the one before it, exactly')
+  }
+  // The two ends are not symmetric, and the asymmetry is a fact about floating
+  // point: `a + (b − a)·0` is exactly `a`, so the start branch is a guard, while
+  // `a + (b − a)·1` is routinely a hair off `b`, so the end branch is the one
+  // carrying the arrival. Disabling the start branch is therefore a mutation
+  // that SHOULD survive — it is provably inert — and that is recorded here so
+  // the next reader does not mistake it for a hole.
+  // The join between two legs is a place, not a seam: crossing it must not jump.
+  const w0 = dsSegmentWeight(legs[0], legs[1])
+  const w1 = dsSegmentWeight(legs[1], legs[2])
+  const uJoin = w0 / (w0 + w1)
+  const before = dsTourViewAt(base, legs, uJoin - 1e-9)
+  const after = dsTourViewAt(base, legs, uJoin + 1e-9)
+  assert.ok(Math.hypot(after.re - before.re, after.im - before.im) < dsPixelScale(legs[1].zoom, 800),
+    'the view must not jump by a pixel as the dive crosses a stop')
+
+  /* ── 2. Constant apparent speed — with the naive version required to fail. ──
+     Screen-space distance per equal step of `u`, measured at each step's
+     geometric-mean zoom (the exact scale for a geometric ramp). The correct
+     weighting makes these equal; lerping the centre makes them span the whole
+     zoom range, which is the same bug in every hand-rolled fractal zoom video. */
+  const screenSteps = (viewAt, stops, samples = 48, width = 800) => {
+    const out = []
+    let prev = viewAt(stops, 0)
+    for (let i = 1; i <= samples; i += 1) {
+      const cur = viewAt(stops, i / samples)
+      const scale = dsPixelScale(Math.sqrt(prev.zoom * cur.zoom), width)
+      out.push(Math.hypot(cur.re - prev.re, cur.im - prev.im) / scale)
+      prev = cur
+    }
+    return out
+  }
+  const spread = (xs) => Math.max(...xs) / Math.max(1e-12, Math.min(...xs))
+
+  const realSteps = screenSteps((stops, u) => dsTourViewAt(base, stops, u), dive)
+  assert.ok(
+    spread(realSteps) < 1.02,
+    `the centre must cross the screen at a constant rate; spread was ${spread(realSteps).toFixed(3)}`,
+  )
+  assert.ok(realSteps[0] > 0.5, 'and it must actually move — a spread of 1 over zero motion proves nothing')
+
+  // The tempting version: lerp the centre, lerp log(zoom). Renders beautifully,
+  // and is wrong. If this ever passes the check above, the check is broken.
+  const naiveViewAt = (stops, u) => {
+    const a = stops[0]
+    const b = stops[stops.length - 1]
+    return {
+      ...base,
+      re: a.re + (b.re - a.re) * u,
+      im: a.im + (b.im - a.im) * u,
+      zoom: a.zoom * Math.pow(b.zoom / a.zoom, u),
+    }
+  }
+  const naiveSteps = screenSteps(naiveViewAt, dive)
+  assert.ok(
+    spread(naiveSteps) > 1000,
+    'the linear-pan oracle must FAIL the uniform-speed check, or the check has no teeth',
+  )
+
+  // The weight's own shape: 0 and 1 at the ends, monotone in between, and
+  // front-loaded diving in / back-loaded pulling out — in both cases travelling
+  // while the screen is cheap.
+  assert.equal(dsPanWeight(1, 1e6, 0), 0)
+  assert.equal(dsPanWeight(1, 1e6, 1), 1)
+  assert.ok(dsPanWeight(1, 1e6, 0.25) > 0.9, 'diving in, the pan happens early')
+  assert.ok(dsPanWeight(1e6, 1, 0.75) < 0.1, 'pulling out, the pan happens late')
+  assert.ok(Math.abs(dsPanWeight(100, 100, 0.5) - 0.5) < 1e-12, 'constant zoom has no weighting to apply')
+  let prevW = -1
+  for (let i = 0; i <= 100; i += 1) {
+    const w = dsPanWeight(1, 1e9, i / 100)
+    assert.ok(w >= prevW, 'the pan must never reverse')
+    prevW = w
+  }
+
+  /* ── 3. Geometric zoom, and every frame inside the bounds. ──
+     Equal steps of `u` inside one segment must magnify by the same FACTOR. And
+     no interpolated view may need clamping: a clamp taking effect mid-dive would
+     silently bend the path away from the stops it was told to visit. */
+  let prevZoom = 0
+  let ratio = 0
+  for (let i = 0; i <= 200; i += 1) {
+    const v = dsTourViewAt(base, dive, i / 200)
+    assert.ok(v.zoom >= DS_MIN_ZOOM && v.zoom <= DS_MAX_ZOOM, 'a frame outside the zoom bounds')
+    assert.ok(Math.abs(v.re) <= DS_MAX_COORD && Math.abs(v.im) <= DS_MAX_COORD, 'a frame outside the plane')
+    assert.deepEqual(dsClampView(v), v, 'an interpolated view must already be in range — clamping mid-dive bends the path')
+    if (i > 0) {
+      assert.ok(v.zoom > prevZoom, 'a dive that only goes in must never back up')
+      const step = v.zoom / prevZoom
+      if (i === 1) ratio = step
+      else assert.ok(Math.abs(step / ratio - 1) < 1e-9, 'equal steps of u must magnify by an equal FACTOR, not an equal amount')
+    }
+    prevZoom = v.zoom
+  }
+
+  /* ── 4. A pure pan still takes time. ──
+     Weighting a dive by zoom decades alone gives a sideways drift along the
+     coastline ZERO duration and skips it entirely — the frames all go to the
+     zooming leg and the pan happens between two of them. */
+  const panThenDive = [
+    { re: -0.745, im: 0.113, zoom: 120 },
+    { re: -0.7, im: 0.28, zoom: 120 },
+    { re: -0.7, im: 0.28, zoom: 4e5 },
+  ]
+  assert.ok(dsSegmentScreenSpan(panThenDive[0], panThenDive[1]) > 1, 'a pan of many viewport widths must have real length')
+  assert.equal(dsSegmentScreenSpan(panThenDive[1], panThenDive[2]), 0, 'a segment that only zooms has no screen travel')
+  const earlyPan = dsTourViewAt(base, panThenDive, 0.2)
+  assert.ok(Math.abs(earlyPan.zoom - 120) < 1e-6, 'a fifth of the way in, the dive is still on its panning leg')
+  assert.ok(earlyPan.im > 0.113 && earlyPan.im < 0.28, 'and that leg is being travelled, not held')
+
+  /* ── 5. Degenerate dives are answers, not NaN. ── */
+  const still = [{ re: -0.6, im: 0, zoom: 4 }, { re: -0.6, im: 0, zoom: 4 }]
+  for (const u of [0, 0.5, 1]) {
+    const v = dsTourViewAt(base, still, u)
+    assert.equal(v.zoom, 4, 'a dive between two identical stops is a still, not a divide-by-zero')
+    assert.ok(Number.isFinite(v.re) && Number.isFinite(v.im))
+  }
+  assert.equal(dsTourViewAt(base, [], 0.5).zoom, dsClampView(base).zoom, 'no stops is the live view')
+  assert.equal(dsTourViewAt(base, [{ re: 1, im: 0, zoom: 9 }], 0.5).zoom, 9, 'one stop is a destination, not a dive')
+
+  /* ── 6. Stops are normalised at mint, which is what makes an out-of-range stop
+     on decode proof of a hand-built token. ── */
+  const hostileStops = [
+    { re: 1e9, im: -1e9, zoom: 1e99 },
+    { re: -0.6, im: 0, zoom: 1e-9 },
+    ...Array.from({ length: 20 }, (_, i) => ({ re: 0, im: 0, zoom: 2 + i })),
+  ]
+  const normalised = dsNormalizeStops(hostileStops)
+  assert.equal(normalised.length, DS_TOUR_MAX_STOPS, 'the stop count is capped at mint')
+  for (const s of normalised) {
+    assert.ok(Math.abs(s.re) <= DS_MAX_COORD && Math.abs(s.im) <= DS_MAX_COORD, 'coordinates clamped at mint')
+    assert.ok(s.zoom >= DS_MIN_ZOOM && s.zoom <= DS_MAX_ZOOM, 'zoom clamped at mint')
+  }
+  assert.deepEqual(dsNormalizeStops([{ re: Number.NaN, im: 0, zoom: 1 }]), [], 'a stop that is not a number is not a stop')
+  assert.deepEqual(dsNormalizeStops(undefined), [], 'no stops at all must not throw')
+
+  /* ── 7. The permalink: enough digits, byte-stable, and exactly as bounded as
+     `#view=` — because it IS `#view=` for its first stop. ── */
+  assert.equal(dsEncodeTour(base, [dive[0]]), '', 'one stop is not a dive and mints no token')
+  assert.equal(dsEncodeTour(base, []), '', 'nor is none')
+
+  for (const stops of [dive, threeLeg, panThenDive]) {
+    const token = dsEncodeTour(base, stops)
+    assert.ok(token.length <= DS_TOUR_MAX_TOKEN_CHARS, "a minted token must fit inside the decoder's own character bound")
+    const decoded = dsDecodeTour(token)
+    assert.ok(decoded, 'a minted token must decode')
+    assert.equal(decoded.stops.length, stops.length, 'every stop must survive the round trip')
+    // Re-minting must be byte-identical, or the address bar drifts on its own as
+    // replaceState re-encodes a dive it just read back.
+    assert.equal(dsEncodeTour(decoded.view, decoded.stops), token, 'encode ∘ decode ∘ encode must be encode')
+    // The precision rule, per stop: the round trip must land inside half a pixel
+    // of a 3840px canvas at that stop's OWN zoom. Six fixed decimals fails this
+    // past a zoom of about 10^5, which is the whole reason dsCoordDigits exists.
+    for (let i = 0; i < stops.length; i += 1) {
+      const half = dsPixelScale(stops[i].zoom, 3840) / 2
+      assert.ok(
+        Math.abs(decoded.stops[i].re - stops[i].re) <= half,
+        `stop ${i + 1} lost more than half a pixel of precision`,
+      )
+      assert.ok(Math.abs(decoded.stops[i].im - stops[i].im) <= half, `stop ${i + 1} lost more than half a pixel`)
+    }
+  }
+
+  // The character cap must EXCEED the widest token this encoder can mint, or it
+  // silently refuses a legitimate eight-stop dive — a bound that rejects real
+  // links is worse than no bound, because nothing looks broken until someone's
+  // dive will not open. Derived from the bounds, not eyeballed.
+  const widest = dsEncodeTour(
+    { ...base, mode: 'julia', seedRe: -1.2345678, seedIm: 0.8765432, iter: 5000, density: 200 },
+    Array.from({ length: DS_TOUR_MAX_STOPS }, (_, i) => ({
+      re: -7.123456789012345 + i * 1e-15,
+      im: 7.987654321098765 - i * 1e-15,
+      zoom: DS_MAX_ZOOM / (i + 1),
+    })),
+  )
+  assert.equal(widest.split(',').length, 12 + (DS_TOUR_MAX_STOPS - 1) * 3, 'the widest dive is a julia head plus seven geometry-only stops')
+  assert.ok(
+    widest.length <= DS_TOUR_MAX_TOKEN_CHARS,
+    `the token cap (${DS_TOUR_MAX_TOKEN_CHARS}) must exceed the widest mintable dive (${widest.length})`,
+  )
+  assert.ok(dsDecodeTour(widest), 'and the widest mintable dive must decode')
+
+  // Everything that is not a token this encoder could have minted.
+  const good = dsEncodeTour(base, threeLeg)
+  const goodParts = good.split(',')
+  const refusals = [
+    ['', 'empty'],
+    ['t1', 'nothing but a version'],
+    ['t2,' + goodParts.slice(1).join(','), 'an unknown version tag'],
+    [good.replace('t1,3', 't1,1'), 'fewer stops than a dive has'],
+    [good.replace('t1,3', `t1,${DS_TOUR_MAX_STOPS + 1}`), 'more stops than the cap'],
+    // Field-count-consistent, so ONLY the ceiling can refuse it. The version of
+    // this fixture that just edited the count field was refused by the field
+    // count instead, and a mutation dropping the ceiling survived it.
+    [
+      ['t1', String(DS_TOUR_MAX_STOPS + 1), dsEncodeView(base),
+        ...Array.from({ length: DS_TOUR_MAX_STOPS }, (_, i) => `0.${i}1,0.0${i}1,1000`)].join(','),
+      'a well-formed dive with one stop too many',
+    ],
+    [goodParts.slice(0, goodParts.length - 1).join(','), 'a truncated tail — NOT silently a shorter dive'],
+    [good + ',0', 'a field too many'],
+    [good.replace('ember', 'chartreuse'), 'a palette outside the allowlist'],
+    [good.replace(',m,', ',q,'), 'a mode that is neither'],
+    [good.replace('-0.6', '99'), 'a stop outside the plane'],
+    [good.replace('-0.6', '0x1'), 'a coordinate that is not a decimal number'],
+    [good.replace(/,\d+$/, ',999999'), 'a zoom code past the ceiling'],
+    ['t1,3,' + 'x'.repeat(DS_TOUR_MAX_TOKEN_CHARS), 'a token past the character cap'],
+    [null, 'not a string'],
+    [{}, 'not a string at all'],
+  ]
+  for (const [bad, why] of refusals) {
+    assert.equal(dsDecodeTour(bad), null, `a tour token must be refused: ${why}`)
+  }
+
+  // The two formats must not be confusable for one another.
+  assert.equal(dsDecodeTour(dsEncodeView(base)), null, 'a view token is not a dive')
+  assert.equal(dsDecodeView(good), null, 'a dive token is not a view')
+
+  // Fuzz: a hand-mangled link costs the dive, never the explorer. Deterministic
+  // LCG so a failure is reproducible.
+  let seed = 20260924
+  const rand = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    return seed / 2147483648
+  }
+  for (let i = 0; i < 4000; i += 1) {
+    const chars = [...good]
+    const cuts = 1 + Math.floor(rand() * 3)
+    for (let c = 0; c < cuts; c += 1) {
+      const at = Math.floor(rand() * chars.length)
+      const how = Math.floor(rand() * 3)
+      if (how === 0) chars.splice(at, 1)
+      else if (how === 1) chars[at] = ',-.0123456789emj'[Math.floor(rand() * 16)]
+      else chars.splice(at, 0, chars[at] ?? ',')
+    }
+    const token = chars.join('')
+    let out
+    assert.doesNotThrow(() => { out = dsDecodeTour(token) }, `decoding must not throw on ${token}`)
+    if (out) {
+      assert.ok(out.stops.length >= DS_TOUR_MIN_STOPS && out.stops.length <= DS_TOUR_MAX_STOPS)
+      for (const s of out.stops) {
+        assert.ok(Math.abs(s.re) <= DS_MAX_COORD && Math.abs(s.im) <= DS_MAX_COORD, 'a decoded stop outside the plane')
+        assert.ok(s.zoom >= DS_MIN_ZOOM && s.zoom <= DS_MAX_ZOOM, 'a decoded stop outside the zoom bounds')
+      }
+    }
+  }
+
+  /* ── 8. The two fragment keys coexist. ──
+     `dsTokenFromHash` was written to tolerate `&`-joined keys so the fragment
+     could grow one later. This is that later, so both directions are pinned:
+     neither reader may swallow the other's value, in either order. */
+  const viewToken = dsEncodeView(base)
+  for (const hash of [`#view=${viewToken}&tour=${good}`, `#tour=${good}&view=${viewToken}`]) {
+    assert.equal(dsTokenFromHash(hash), viewToken, 'the view key must survive a tour key beside it')
+    assert.equal(dsTourTokenFromHash(hash), good, 'and the tour key must survive the view key')
+  }
+  assert.equal(dsTourTokenFromHash(`#view=${viewToken}`), null, 'no tour key is no dive')
+  assert.equal(dsTourTokenFromHash(''), null)
+  assert.ok(dsDecodeTour(dsTourTokenFromHash(`#view=${viewToken}&tour=${good}`)), 'and the extracted token still decodes')
+
+  /* ── 9. The cost ceiling spends a time budget against a measurement. ── */
+  assert.equal(dsTourFrameCount(1), DS_TOUR_MAX_FRAMES, 'a machine this fast gets the maximum, not more')
+  assert.equal(dsTourFrameCount(1e9), DS_TOUR_MIN_FRAMES, 'and one this slow gets the minimum, not zero')
+  assert.equal(dsTourFrameCount(0), DS_TOUR_MAX_FRAMES, 'an unmeasurable frame must not divide by zero')
+  assert.equal(dsTourFrameCount(Number.NaN), DS_TOUR_MAX_FRAMES, 'nor NaN its way to a NaN frame count')
+  assert.equal(dsTourFrameCount(-5), DS_TOUR_MAX_FRAMES, 'nor a negative measurement to a negative count')
+  let prevCount = Number.POSITIVE_INFINITY
+  for (const ms of [10, 50, 100, 200, 400, 800, 1600]) {
+    const n = dsTourFrameCount(ms)
+    assert.ok(Number.isInteger(n), 'a frame count is a whole number of frames')
+    assert.ok(n >= DS_TOUR_MIN_FRAMES && n <= DS_TOUR_MAX_FRAMES, 'bounded at both ends')
+    assert.ok(n <= prevCount, 'a slower frame must never buy MORE frames')
+    prevCount = n
+  }
+  // A smaller budget must buy fewer frames, or the budget is decorative.
+  assert.ok(dsTourFrameCount(100, 2000) < dsTourFrameCount(100, 9000), 'the budget argument must matter')
+
+  for (const n of [1, DS_TOUR_MIN_FRAMES, 24, DS_TOUR_MAX_FRAMES, 1000]) {
+    const delay = dsTourDelay(n)
+    assert.ok(delay >= DS_TOUR_DELAY_MIN && delay <= DS_TOUR_DELAY_MAX, 'the frame delay is bounded')
+    assert.equal(delay % 10, 0, "GIF's clock counts centiseconds, so a delay must be a multiple of 10ms")
+  }
+  assert.ok(dsTourDelay(DS_TOUR_MAX_FRAMES) < dsTourDelay(DS_TOUR_MIN_FRAMES), 'more frames must play faster per frame')
+
+  assert.ok(Math.abs(dsTourDecades(dive) - Math.log10(5e7)) < 1e-9, 'the quoted depth is the zoom range it covers')
+  assert.ok(dsTourDecades(threeLeg) > dsTourDecades(dive), 'a leg that climbs back out still costs decades of travel')
+
+  /* ── 10. The component and the shared export bar are wired the way the module
+     assumes, and the module stays DOM-free so all of the above can run here. ── */
+  const tourSrc = await readFile(new URL('../src/components/games/deep-shore/tour.ts', import.meta.url), 'utf-8')
+  // Comments stripped first: the prose in this module discusses the canvas and
+  // the document it is not allowed to touch, and an assertion that cannot tell
+  // the two apart is one somebody deletes rather than satisfies.
+  const tourCode = tourSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+  for (const forbidden of ['document', 'window', 'localStorage', 'HTMLCanvasElement', 'ImageData', 'requestAnimationFrame']) {
+    assert.ok(!new RegExp(`\\b${forbidden}\\b`).test(tourCode),
+      `tour.ts must stay DOM-free (found "${forbidden}") — it is asserted in Node, and a claim buried in a DOM handler cannot be`)
+  }
+  assert.ok(!/DS_BAILOUT|Math\.log2\(Math\.log\(/.test(tourSrc), 'the iteration belongs to escape.ts; the path belongs here')
+
+  const dsSrc2 = await readFile(new URL('../src/components/games/deep-shore/DeepShore.ts', import.meta.url), 'utf-8')
+  assert.ok(/from '\.\/tour'/.test(dsSrc2), 'the component imports the path maths rather than carrying its own copy')
+  assert.ok(/dsTourViewAt\(/.test(dsSrc2), 'and asks it for each frame')
+  assert.ok(!/Math\.pow\([^)]*zoom/.test(dsSrc2), 'no second zoom interpolation in the component')
+  assert.ok(/#view=\$\{token\}&tour=\$\{tour\}/.test(dsSrc2), 'the dive rides the FRAGMENT, in its own key beside the view')
+  assert.ok(!/\?tour=/.test(dsSrc2), 'and never a query string — a fragment reaches no server log or Referer header')
+  assert.ok(/dsDecodeTour\(/.test(dsSrc2), 'a restored dive is validated by the same decoder as a shared one')
+  assert.ok(/liveGif: false/.test(dsSrc2),
+    'live capture must stay OFF here: this canvas only redraws when touched, so filming it records a still frame')
+  assert.ok(/dsTourFrameCount\(Math\.max\(1, first\.ms, last\.ms\)\)/.test(dsSrc2),
+    'the frame count comes from a MEASUREMENT of both ends, not from a constant')
+  assert.ok(/if \(cancelled\(\)\)/.test(dsSrc2), 'a render whose frames cost a second each must be stoppable')
+  assert.ok(/await this\.yieldTurn\(\)[\s\S]{0,200}renderTourFrameData/.test(dsSrc2),
+    'and must yield BEFORE each frame, or the progress line never repaints and the stop button is never seen')
+  assert.ok(/this\.diveBusy = false/.test(dsSrc2.slice(dsSrc2.indexOf('disconnectedCallback()'), dsSrc2.indexOf('disconnectedCallback()') + 600)),
+    'leaving the page must end a preview — a loop painting into a detached canvas runs forever')
+
+  const cxSrc = await readFile(new URL('../src/lib/canvas-export.ts', import.meta.url), 'utf-8')
+  assert.ok(/plan\.frames\[Math\.min\(frame, plan\.frames\.length - 1\)\]/.test(cxSrc),
+    'held end frames must REUSE the last frame — re-rendering the most expensive frame in the dive is the last thing this should cost')
+  assert.ok(/escapeAttr\(animation\.title\)/.test(cxSrc) && /escapeText\(animation\.label\)/.test(cxSrc),
+    'a label interpolated into HTML is escaped, whatever the call site passes today')
+  assert.ok(/bar\.querySelector\('\[data-cx="gif"\]'\)\?\./.test(cxSrc),
+    'the live-GIF handler must be optional-chained, or a bar built without that button throws on mount')
+  assert.ok(/if \(running\) \{/.test(cxSrc), 'a second click on a running render is a stop, not a second render')
+}
+console.log('deep shore dive recorder: the pan is weighted by the zoom (and the naive version fails that check), the dive arrives exactly, #tour= is bounded at mint and decode, and the frame count is measured rather than assumed')
+
+/* ─────  Hub filter highlighting: user input never reaches a regex raw  ─────
+
+   The /tools + /games filter paints matches with <mark data-hub-mark>. Three of
+   its promises are cheap to break in a refactor and invisible when broken (the
+   filter still filters), so they are pinned at source level:
+   - the highlight pattern is built from REGEX-ESCAPED terms — the input is a
+     search box, so "c++" or "(a" must be text, not a SyntaxError that kills
+     every subsequent keystroke's handler;
+   - stale marks are unwrapped before new ones are painted, and the unwrap is
+     scoped to mark[data-hub-mark] so an author's ==highlight== mark inside a
+     card description is never stripped;
+   - the module still mounts inside astro:page-load (the ClientRouter blank-page
+     rule in AGENTS.md). */
+{
+  const hfSrc = await readFile(new URL('../src/lib/hub-filter.ts', import.meta.url), 'utf8')
+  assert.ok(/\.map\(escapeRegExp\)/.test(hfSrc), 'highlight terms must be regex-escaped before joining the pattern')
+  assert.ok(/escapeRegExp\(s: string\)|function escapeRegExp/.test(hfSrc), 'the escape helper itself must exist')
+  assert.ok(hfSrc.includes("querySelectorAll('mark[data-hub-mark]')"), 'the unwrap must target only this module\'s own marks — never an author mark')
+  const clearAt = hfSrc.indexOf('clearMarks(card)')
+  const paintAt = hfSrc.indexOf('highlightTerms(card')
+  assert.ok(clearAt !== -1 && paintAt !== -1 && clearAt < paintAt, 'stale marks must come off before fresh ones go on, or marks nest per keystroke')
+  assert.ok(/hit && terms\.length > 0/.test(hfSrc.slice(paintAt - 40, paintAt + 40)) || /if \(hit && terms\.length > 0\) highlightTerms/.test(hfSrc), 'highlights are painted only on cards the filter kept')
+  assert.ok(/b\.length - a\.length/.test(hfSrc), 'terms sort longest-first so the alternation prefers the fuller match')
+  assert.ok(hfSrc.includes("astro:page-load"), 'the hub filter must keep mounting inside astro:page-load')
+
+  /* ── The paint must agree with the match (2026-09-23) ──
+
+     A card survives the filter on its `textContent` — every text node in the
+     subtree joined — but the highlighter used to run the pattern against each
+     text node ON ITS OWN. Any occurrence straddling an element boundary
+     (`<h2>Web</h2><span>hook</span>`, a title carrying an inline <code>, a
+     description broken by an <em>) therefore kept the card and marked nothing,
+     which reads to a visitor as a false positive: the filter claims this
+     matched and the card cannot show where.
+
+     `hubMarkRanges` is pure and DOM-free so the real property can be asserted
+     instead of one markup shape: **re-splitting the same text into different
+     nodes marks the same characters.** Every per-shape example below is an
+     instance of that one invariant — including the straddle case that was the
+     bug. Both directions matter: a term that is absent must still mark
+     nothing, or an implementation that marks everything passes. */
+  {
+    const { hubMarkRanges } = await import('../src/lib/hub-filter.ts')
+    /** The characters this implementation would wrap, in document order. */
+    const marked = (chunks, terms) =>
+      hubMarkRanges(chunks, terms)
+        .map((ranges, i) => ranges.map(([a, b]) => chunks[i].slice(a, b)).join(''))
+        .join('')
+    /** Per-node view, for the cases where WHICH node owns a slice is the point. */
+    const perNode = (chunks, terms) =>
+      hubMarkRanges(chunks, terms).map((ranges, i) => ranges.map(([a, b]) => chunks[i].slice(a, b)))
+
+    // The bug itself: one logical hit, two nodes, a slice painted in each.
+    assert.deepEqual(perNode(['Web', 'hook Inspector'], ['webhook']), [['Web'], ['hook']],
+      'a term straddling two text nodes must be marked in both — the card matched on the joined text')
+    assert.deepEqual(perNode(['Webhook Inspector'], ['webhook']), [['Webhook']],
+      'the same text in one node marks the same characters')
+    assert.deepEqual(perNode(['Deep', '', 'Shore'], ['deepshore']), [['Deep'], [], ['Shore']],
+      'an empty text node inside a match owns no slice — an empty <mark> is invisible and unaccountable')
+
+    // The invariant the above is an instance of, asserted over every cut.
+    const text = 'Cron Whisperer — a crontab explainer'
+    const terms = ['cron', 'explain']
+    const whole = marked([text], terms)
+    assert.equal(whole, 'Croncronexplain',
+      'baseline: both terms, longest-first, case-insensitive, original casing preserved')
+    for (let cut = 1; cut < text.length; cut++) {
+      assert.equal(marked([text.slice(0, cut), text.slice(cut)], terms), whole,
+        `splitting the card text at ${cut} changed what gets highlighted`)
+    }
+    // Three-way splits too — the boundary walk must not assume two chunks.
+    assert.equal(marked(['Cron Whi', 'sperer — a cront', 'ab explainer'], terms), whole)
+    // Empty nodes between real ones (a comment or an empty <span> leaves them).
+    assert.equal(marked(['Cron', '', ' Whisperer — a crontab explainer'], terms), whole)
+
+    // Case-insensitive, and the ORIGINAL casing is what gets wrapped.
+    assert.equal(marked(['WEBHOOK'], ['webhook']), 'WEBHOOK')
+    // Longest-first: "web|webhook" must not shadow the fuller match.
+    assert.deepEqual(hubMarkRanges(['webhook'], ['web', 'webhook']), [[[0, 7]]])
+    // User input is a search term, never regex syntax.
+    assert.equal(marked(['c++ and c# notes'], ['c++']), 'c++')
+    for (const hostile of ['(', '[a-z]', '*', '\\', '.*', '$^']) {
+      assert.doesNotThrow(() => hubMarkRanges(['plain text'], [hostile]),
+        `"${hostile}" must be treated as text, not compiled as a pattern`)
+    }
+
+    // The negative half — without it, "mark everything" passes every line above.
+    assert.equal(marked(['Webhook Inspector'], ['flowmap']), '')
+    assert.equal(marked(['Webhook Inspector'], []), '')
+    assert.equal(marked([], ['webhook']), '')
+    assert.equal(marked(['Webhook Inspector'], ['']), '',
+      'an empty term must mark nothing — it matches everywhere and would wrap the whole card')
+
+    // Ranges must be usable: in bounds, ascending and non-overlapping per node,
+    // since highlightTerms walks them once and slices between them.
+    const fixture = ['Hash Smith', ' — SHA-256, ', 'SHA-1 and MD5 hashes']
+    for (const [i, ranges] of hubMarkRanges(fixture, ['sha', 'hash']).entries()) {
+      let prevEnd = 0
+      for (const [a, b] of ranges) {
+        assert.ok(a >= prevEnd && b > a && b <= fixture[i].length,
+          `range [${a},${b}) in node ${i} is out of order or out of bounds`)
+        prevEnd = b
+      }
+    }
+
+    // Matcher/highlighter agreement, stated the way the filter states it: if
+    // every term is in the joined lowercased text, the card is KEPT, so the
+    // paint owes the visitor at least one mark.
+    for (const chunks of [
+      ['Link', ' Peek'], ['DNS', 'Sightline'], ['Chain', 'saw'],
+      ['Deep', '', 'Shore'], ['Token Bench'], ['Type', ' ', 'Trial'],
+    ]) {
+      const joined = chunks.join('').toLowerCase()
+      for (const term of ['link', 'sightline', 'chainsaw', 'deepshore', 'bench', 'type']) {
+        if (!joined.includes(term)) continue
+        assert.notEqual(marked(chunks, [term]), '',
+          `"${term}" keeps ${JSON.stringify(chunks)} but highlights nothing — a match the card cannot show`)
+      }
+    }
+  }
+
+  /* ── Status facet chips (2026-08-25) ──
+     The chips are DERIVED from the cards' data-status attributes, and a
+     ?status= arriving in a deep link is untrusted until checked against that
+     derived set — a URL parameter that picked its own facet could hide every
+     card on the page from anyone who follows the link. */
+  assert.ok(/btn\.type = 'button'/.test(hfSrc),
+    'facet chips must set type=button — a form button defaults to type=submit')
+  assert.ok(/statusCounts\.has\(st\)/.test(hfSrc),
+    'a deep-linked ?status must be validated against the statuses the grid really contains before it is trusted')
+  assert.ok(/card\.dataset\.status/.test(hfSrc) && /dataset\.status === facet/.test(hfSrc),
+    'chips and matching must both read the same card data-status attribute')
+  assert.ok(/statusCounts\.size >= 2/.test(hfSrc),
+    'chips render only when the grid has 2+ distinct statuses — one status can never narrow anything')
+  // The URL mirror: debounced (Safari rate-limits replaceState and throws past
+  // the limit) and pinned to the pathname it was scheduled on (a write firing
+  // after an in-site navigation would graffiti the NEXT page URL).
+  assert.ok(/setTimeout\(\(\) => \{ if \(location\.pathname === path\) syncUrl\(\) \}/.test(hfSrc),
+    'the debounced URL sync must be pinned to the pathname it was scheduled on')
+  assert.ok(/try \{ history\.replaceState/.test(hfSrc),
+    'replaceState must be wrapped — Safari throws when its rate limit is exceeded')
+  // Both hubs stamp the attribute the chips are derived from.
+  const toolsHub = await readFile(new URL('../src/pages/tools/index.astro', import.meta.url), 'utf8')
+  const gamesHub = await readFile(new URL('../src/pages/games.astro', import.meta.url), 'utf8')
+  assert.ok(/data-status=\{tool\.status\}/.test(toolsHub), '/tools cards must carry data-status for the facet chips')
+  assert.ok(/data-status=\{isPlayableGame\(g\) \? 'playable' : 'soon'\}/.test(gamesHub),
+    '/games cards must carry data-status for the facet chips')
+}
+console.log('hub filter highlighting escapes its input, facet chips validate ?status against the grid, and the URL mirror is debounced + path-pinned')
+
+/* ─────  404 suggested links read the section predicate  ─────
+   The 404 page's link list is one more consumer of "which sections exist".
+   Hand-written, it advertised /blogs for days after the section was gated
+   hidden — the one link list no predicate reached. It must derive from
+   navLinks(), which applies isBlogsPublic (asserted in both flag states
+   elsewhere in this file), so it can never disagree with the nav and footer. */
+{
+  const nf = await readFile(new URL('../src/pages/404.astro', import.meta.url), 'utf8')
+  assert.ok(/import \{ getSite, navLinks \} from/.test(nf), '404 must derive its suggested links from navLinks()')
+  assert.ok(/links\.map\(/.test(nf), '404 must render the derived links, not a literal list')
+  assert.ok(!/href="\/blogs"/.test(nf), '404 must not hand-write a /blogs link — the flag gates it via navLinks()')
+}
+console.log('404 suggested links derive from navLinks() — no hand-written section list to drift from the flag')
+
+/* ─────  Link Peek: the fetch is the trust boundary  ─────
+
+   /api/tools/link-peek makes the ORIGIN fetch a URL an anonymous visitor
+   typed — textbook SSRF surface. The guard has to hold in both halves:
+   the address classifier (pure — asserted against literal addresses, private,
+   link-local/metadata, CGNAT, mapped-v6 and the decimal/hex/octal IPv4 forms
+   the WHATWG URL parser canonicalises), and the fetch loop (asserted at source
+   level: every REDIRECT hop re-runs the full validation, because a redirect is
+   the remote server choosing the next URL — the thing being checked must not
+   supply the terms of its own check).
+
+   The unfurl side is asserted the same way the tool's product demands: the
+   extraction ignores commented-out and script-quoted tags, entities decode in
+   one pass, platform precedence matches the platforms, and — the negative that
+   keeps the linter honest — a complete, correct tag set produces ZERO findings,
+   while the snippet the tool recommends passes its own lint. */
+{
+  const {
+    LP_MAX_HTML_BYTES, LP_MAX_IMAGE_BYTES, LP_MAX_REDIRECTS, LP_TIMEOUT_MS, LP_USER_AGENTS,
+    lpDecodeHtml, lpIsForbiddenHostname, lpIsForbiddenIp, lpValidateUrl,
+  } = await import('../src/lib/link-peek-fetch.ts')
+  const {
+    lpDecodeEntities, lpExtractMeta, lpFirst, lpLint, lpMetaSnippet, lpResolvePreviews,
+  } = await import('../src/components/tools/link-peek/unfurl.ts')
+
+  // ── URL gate: scheme, credentials, port, length ──
+  assert.ok(lpValidateUrl('https://example.com/page').ok)
+  assert.ok(lpValidateUrl('http://example.com').ok)
+  for (const bad of [
+    'ftp://example.com/x', 'javascript:alert(1)', 'file:///etc/passwd',
+    'https://user:pw@example.com/', 'https://example.com:8443/', 'http://example.com:8080/',
+    '', 'not a url', 'https://' + 'a'.repeat(3000) + '.com/',
+  ]) {
+    assert.equal(lpValidateUrl(bad).ok, false, `URL gate must refuse: ${bad.slice(0, 40)}`)
+  }
+
+  // ── address classifier: every range the origin must never dial ──
+  for (const ip of [
+    '127.0.0.1', '127.255.255.255', '0.0.0.0', '10.0.0.1', '192.168.1.1',
+    '172.16.0.1', '172.31.255.255', '169.254.169.254', '100.64.0.1', '100.127.9.9',
+    '192.0.0.1', '192.0.2.1', '198.18.0.1', '198.51.100.7', '203.0.113.9',
+    '224.0.0.1', '255.255.255.255',
+    '::1', '::', 'fc00::1', 'fd12:3456::1', 'fe80::1', 'fec0::1',
+    '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:169.254.169.254',
+    '64:ff9b::a00:1', '2001:db8::1', 'ff02::1', 'not-an-ip',
+  ]) {
+    assert.ok(lpIsForbiddenIp(ip), `classifier must forbid ${ip}`)
+  }
+  for (const ip of [
+    '1.1.1.1', '8.8.8.8', '93.184.216.34', '172.15.0.1', '172.32.0.1',
+    '100.63.255.255', '100.128.0.1', '198.17.0.1', '223.255.255.255',
+    '2606:4700:4700::1111', '2600::1', '::ffff:8.8.8.8',
+  ]) {
+    assert.equal(lpIsForbiddenIp(ip), false, `classifier must allow public ${ip}`)
+  }
+
+  // The WHATWG URL parser canonicalises decimal/hex/octal IPv4 forms — assert
+  // the pipeline (parse, then classify .hostname) catches the classic bypass
+  // spellings of 127.0.0.1.
+  for (const sneaky of ['http://2130706433/', 'http://0x7f000001/', 'http://0177.0.0.1/', 'http://127.1/']) {
+    const parsed = lpValidateUrl(sneaky)
+    assert.ok(parsed.ok, `URL parser should parse ${sneaky}`)
+    assert.ok(lpIsForbiddenHostname(parsed.url.hostname), `canonicalised ${sneaky} → ${parsed.url.hostname} must be forbidden`)
+  }
+
+  // ── hostname gate ──
+  for (const host of ['localhost', 'sub.localhost', 'printer.local', 'db.internal', 'nas.home.arpa', 'router', '[::1]', '']) {
+    assert.ok(lpIsForbiddenHostname(host), `hostname gate must refuse ${host || '(empty)'}`)
+  }
+  assert.equal(lpIsForbiddenHostname('example.com'), false)
+  assert.equal(lpIsForbiddenHostname('example.com.'), false, 'a trailing dot is still the same public name')
+
+  // ── bounds exist and are sane ──
+  assert.ok(LP_MAX_HTML_BYTES <= 1024 * 1024, 'HTML read cap stays bounded')
+  assert.ok(LP_MAX_IMAGE_BYTES <= 1024 * 1024, 'image proxy cap stays bounded')
+  assert.ok(LP_MAX_REDIRECTS <= 5 && LP_TIMEOUT_MS <= 10_000, 'redirects and total time stay bounded')
+  assert.ok(!Object.values(LP_USER_AGENTS).some(v => /[\r\n]/.test(v)), 'no UA value can smuggle a header break')
+
+  // ── the redirect loop re-validates every hop, at source level ──
+  const lpFetchSrc = await readFile(new URL('../src/lib/link-peek-fetch.ts', import.meta.url), 'utf8')
+  const loopAt = lpFetchSrc.indexOf('for (let hop')
+  const fetchAt = lpFetchSrc.indexOf('await fetch(', loopAt)
+  assert.ok(loopAt !== -1 && fetchAt !== -1, 'the hop loop and its fetch exist')
+  for (const guard of ['lpValidateUrl(current)', 'lpIsForbiddenHostname(', 'lpCheckResolved(']) {
+    const at = lpFetchSrc.indexOf(guard, loopAt)
+    assert.ok(at !== -1 && at < fetchAt, `${guard} must run INSIDE the hop loop, before the fetch — a redirect is the server choosing the next URL`)
+  }
+  assert.ok(lpFetchSrc.includes("redirect: 'manual'"), 'fetch must not auto-follow redirects past the guard')
+
+  // ── the route: both limiters, allowlisted UA, no-store, image type check ──
+  const lpRouteSrc = await readFile(new URL('../src/pages/api/tools/link-peek.ts', import.meta.url), 'utf8')
+  assert.equal((lpRouteSrc.match(/createRateLimiter\(/g) || []).length, 2, 'per-client AND global outbound limiters — each hit costs the origin an outbound fetch')
+  assert.ok(lpRouteSrc.includes("'Cache-Control': 'no-store'"), 'preview responses are never edge-cached')
+  assert.ok(lpRouteSrc.includes('hasOwnProperty.call(LP_USER_AGENTS'), 'the UA is an allowlist KEY — free text here is header injection')
+  assert.ok(lpRouteSrc.includes("startsWith('image/')"), 'the image proxy only relays image/* bodies')
+
+  // ── charset decode: header wins, sniff second, junk falls back ──
+  const enc = new TextEncoder()
+  assert.equal(lpDecodeHtml(enc.encode('<p>plain</p>'), 'text/html; charset=utf-8').charset, 'utf-8')
+  assert.equal(lpDecodeHtml(enc.encode('<meta charset="ISO-8859-1"><p>x</p>'), 'text/html').charset, 'iso-8859-1')
+  assert.equal(lpDecodeHtml(enc.encode('<p>x</p>'), 'text/html; charset=no-such-charset').charset, 'utf-8', 'an unknown label degrades to utf-8, never throws')
+
+  // ── entities: one pass, no double decode ──
+  assert.equal(lpDecodeEntities('&amp;lt;'), '&lt;', 'single-pass decode — &amp;lt; is the TEXT "&lt;"')
+  assert.equal(lpDecodeEntities('&#x27;&#39;'), "''")
+  assert.equal(lpDecodeEntities('a &amp; b &lt;c&gt;'), 'a & b <c>')
+  assert.equal(lpDecodeEntities('&#xD800;'), '&#xD800;', 'a surrogate half is not a code point')
+  assert.equal(lpDecodeEntities('&nosuch;'), '&nosuch;')
+
+  // ── extraction ──
+  const lpPage = 'https://example.com/post?utm=1'
+  const lpHtml = `<!doctype html><html><head>
+    <title> The &amp; Title </title>
+    <meta charset=utf-8>
+    <!-- <meta property="og:title" content="commented out"> -->
+    <script>var x = '<meta property="og:title" content="in a script">';</script>
+    <meta property="og:title" content="First &quot;Wins&quot;">
+    <meta property="og:title" content="Second is dead weight">
+    <meta property='og:description' content='Desc &#8212; here'>
+    <meta property="og:image" content="/img/card.png">
+    <meta property="og:image:alt" content="">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="TW Title">
+    <meta name="description" content="Plain meta description">
+    <link rel="canonical" href="/post">
+    <link rel="shortcut icon" href="/fav.png">
+  </head><body></body></html>`
+  const lpMeta = lpExtractMeta(lpHtml, lpPage)
+  assert.equal(lpMeta.title, 'The & Title')
+  assert.equal(lpFirst(lpMeta.og, 'og:title'), 'First "Wins"', 'og repeats: first tag wins; commented/script-quoted tags are not tags')
+  assert.equal(lpFirst(lpMeta.og, 'og:description'), 'Desc — here')
+  assert.equal(lpMeta.metaDescription, 'Plain meta description')
+  assert.equal(lpMeta.canonical, 'https://example.com/post', 'relative canonical resolves against the final URL')
+  assert.equal(lpMeta.faviconUrl, 'https://example.com/fav.png')
+  assert.ok(lpMeta.og.some(t => t.key === 'og:image:alt' && t.value === ''), 'present-but-empty tags are KEPT — they lint as empty, not as missing')
+  assert.equal(lpMeta.charsetDeclared, 'utf-8')
+
+  // ── platform precedence ──
+  const lpPrev = lpResolvePreviews(lpMeta, lpPage)
+  assert.equal(lpPrev.domain, 'example.com')
+  assert.equal(lpPrev.x.title, 'TW Title', 'X reads twitter:* before og:*')
+  assert.equal(lpPrev.slack.title, 'First "Wins"', 'Slack reads og:* before twitter:*')
+  assert.equal(lpPrev.x.card, 'summary_large_image')
+  assert.equal(lpPrev.slack.large, true, 'Slack sizes its image from the twitter:card type')
+  assert.equal(lpPrev.slack.imageUrl, 'https://example.com/img/card.png', 'a relative og:image resolves against the page')
+  const lpNoCard = lpResolvePreviews(lpExtractMeta('<meta property="og:title" content="T">', lpPage), lpPage)
+  assert.equal(lpNoCard.x.card, null, 'no twitter:card → X renders NO card, however complete the og: tags')
+  const lpBadCard = lpResolvePreviews(lpExtractMeta('<meta name="twitter:card" content="mega"><meta property="og:title" content="T">', lpPage), lpPage)
+  assert.equal(lpBadCard.x.card, 'summary', 'an unknown card value degrades to summary')
+  const lpJsImg = lpResolvePreviews(lpExtractMeta('<meta property="og:image" content="javascript:alert(1)">', lpPage), lpPage)
+  assert.equal(lpJsImg.slack.imageUrl, null, 'a non-http(s) og:image never survives resolution')
+
+  // ── lint: the negative first — a correct page yields ZERO findings ──
+  const lpCleanHtml = `<title>Short title</title>
+    <meta charset="utf-8">
+    <meta property="og:title" content="Short title">
+    <meta property="og:description" content="A short description.">
+    <meta property="og:image" content="https://example.com/card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url" content="https://example.com/post">
+    <meta name="twitter:card" content="summary_large_image">`
+  assert.deepEqual(lpLint(lpExtractMeta(lpCleanHtml, lpPage), lpPage), [], 'a complete, correct tag set produces ZERO findings — a linter that always finds something gets ignored')
+
+  const lpFind = (html, code) => lpLint(lpExtractMeta(html, lpPage), lpPage).some(f => f.code === code)
+  assert.ok(lpFind('<title>t</title>', 'IMAGE_MISSING'))
+  assert.ok(lpFind('<meta property="og:title" content="">', 'EMPTY:og:title'), 'present-but-empty is its own finding, not "missing"')
+  assert.ok(lpFind('<meta property="og:image" content="/rel.png">', 'IMAGE_RELATIVE'))
+  assert.ok(lpFind('<meta property="og:image" content="http://example.com/x.png">', 'IMAGE_INSECURE'))
+  assert.ok(lpFind('<meta property="og:title" content="T">', 'CARD_MISSING'))
+  assert.ok(lpFind('<meta property="og:image" content="https://e.com/x.png"><meta property="og:image:width" content="64"><meta property="og:image:height" content="64">', 'IMAGE_TINY'))
+  assert.ok(lpFind(`<meta property="og:title" content="${'x'.repeat(80)}">`, 'TITLE_LONG'))
+  assert.ok(lpFind('<meta property="og:title" content="a"><meta property="og:title" content="b">', 'DUPLICATE:og:title'))
+
+  // ── the snippet the tool recommends passes its own lint ──
+  const lpSnippet = lpMetaSnippet(lpExtractMeta(lpCleanHtml, lpPage), lpPage)
+  assert.ok(!lpSnippet.includes('TODO'), 'a complete page needs no TODOs')
+  const lpRelint = lpLint(lpExtractMeta(`<title>Short title</title><meta charset="utf-8">${lpSnippet}`, lpPage), lpPage)
+  assert.deepEqual(lpRelint, [], 'the corrected snippet must pass the same lint that produced it')
+  assert.ok(lpMetaSnippet(lpExtractMeta('<meta property="og:title" content=\'has "quotes" & <angles>\'>', lpPage), lpPage).includes('has &quot;quotes&quot; &amp; &lt;angles&gt;'), 'snippet values are attribute-escaped')
+
+  // ── the component mounts through the shared dispatch ──
+  const lpSlugSrc = await readFile(new URL('../src/pages/tools/[slug].astro', import.meta.url), 'utf8')
+  assert.ok(lpSlugSrc.includes("slug === 'link-peek'") && lpSlugSrc.includes('link-peek/LinkPeek.ts'), 'link-peek is wired into the tool page and its astro:page-load mount dispatch')
+}
+console.log('link peek refuses every private address (each redirect hop re-checked), and its linter earns a clean bill')
+
+/* ────────────────────────── daily streak strip (/games hub) ──────────────────
+   The cross-game play-streak store: pure arithmetic (idempotent, rollback-
+   safe, gap-resetting), storage re-validated on read, keys from a fixed slug
+   allowlist, and the strip painted inside astro:page-load. The arithmetic is
+   exercised for real; the DOM-bound wiring is asserted at source level. */
+{
+  const {
+    DAILY_SLUGS,
+    MAX_STREAK,
+    advanceStreak,
+    currentStreak,
+    sanitizeStreak,
+    utcDayFromDateString,
+  } = await import('../src/lib/daily-streak.ts')
+  const { quintleDayNumber } = await import('../src/lib/quintle-daily.ts')
+
+  // ── pure arithmetic ──
+  const d0 = 600
+  const s1 = advanceStreak(null, d0)
+  assert.deepEqual(s1, { last: d0, streak: 1, best: 1 }, 'first daily → 1-day streak')
+  assert.deepEqual(advanceStreak(s1, d0), s1, 'a same-day record is a no-op — a re-render or second finish must not double-count')
+  const s2 = advanceStreak(s1, d0 + 1)
+  assert.deepEqual(s2, { last: d0 + 1, streak: 2, best: 2 }, 'the next day advances the streak')
+  const s3 = advanceStreak(s2, d0 + 5)
+  assert.deepEqual(s3, { last: d0 + 5, streak: 1, best: 2 }, 'a missed day resets the streak to 1 but never erases best')
+  assert.deepEqual(advanceStreak(s3, d0 + 3), s3, 'a day EARLIER than the recorded one is refused — a rolled-back clock must not rewrite history')
+  assert.deepEqual(advanceStreak(s3, Number.NaN), s3, 'a non-day is refused')
+  assert.deepEqual(advanceStreak(s3, 10_000_000), s3, 'an out-of-range day is refused')
+
+  // ── liveness as the hub reads it ──
+  assert.equal(currentStreak(s2, d0 + 1), 2, 'finished today → streak shows')
+  assert.equal(currentStreak(s2, d0 + 2), 2, 'finished yesterday → still alive (the come-back-today nudge)')
+  assert.equal(currentStreak(s2, d0 + 3), 0, 'two days silent → lapsed, reads 0')
+  assert.equal(currentStreak(null, d0), 0, 'no record → 0')
+
+  // ── storage re-validation: corrupt or hand-edited data degrades to null ──
+  assert.equal(sanitizeStreak('nope'), null)
+  assert.equal(sanitizeStreak(null), null)
+  assert.equal(sanitizeStreak({ last: 5, streak: 0, best: 0 }), null, 'a stored streak below 1 is not a state this module writes')
+  assert.equal(sanitizeStreak({ last: 5, streak: 3, best: 2 }), null, 'best < streak is internally inconsistent')
+  assert.equal(sanitizeStreak({ last: 5.5, streak: 1, best: 1 }), null, 'non-integer day')
+  assert.equal(sanitizeStreak({ last: -1, streak: 1, best: 1 }), null, 'negative day')
+  assert.equal(sanitizeStreak({ last: 5, streak: MAX_STREAK + 1, best: MAX_STREAK + 1 }), null, 'a streak past the ceiling is corrupt, not impressive')
+  assert.deepEqual(sanitizeStreak({ last: 5, streak: 2, best: 4 }), { last: 5, streak: 2, best: 4 }, 'a valid state round-trips')
+
+  // ── day-space glue ──
+  assert.equal(utcDayFromDateString('2026-08-26'), Math.floor(Date.UTC(2026, 7, 26) / 86400000), "type trial's UTC date string converts to the raw UTC day number")
+  assert.ok(Number.isNaN(utcDayFromDateString('26/08/2026')), 'a malformed date string yields NaN (which recordDailyPlay refuses)')
+  assert.equal(quintleDayNumber(new Date(Date.UTC(2025, 0, 1))), 0, "quintle's launch date is day 0 in the shared module")
+  assert.equal(quintleDayNumber(new Date(Date.UTC(2025, 0, 3, 12))), 2, 'quintle day numbers advance at UTC midnight')
+
+  // ── each daily game records at its real completion point, with its own slug ──
+  const qSrc = await readFile(new URL('../src/components/games/quintle/Quintle.ts', import.meta.url), 'utf8')
+  assert.ok(qSrc.includes("from '../../../lib/quintle-daily'"), 'quintle imports its day derivation from the shared module')
+  assert.ok(!qSrc.includes('Q_EPOCH_DAY'), 'the private epoch copy is gone — one day derivation, not two that can drift')
+  assert.ok(qSrc.includes("recordDailyPlay('quintle', day)"), 'quintle records a played daily (win or lose) into the shared store')
+  const ttSrc = await readFile(new URL('../src/components/games/type-trial/TypeTrial.ts', import.meta.url), 'utf8')
+  assert.ok(ttSrc.includes("recordDailyPlay('type-trial', utcDayFromDateString(todayUtcDay()))"), 'type trial records a finished plausible daily run')
+  const hhSrc = await readFile(new URL('../src/components/games/hue-hunt/HueHunt.ts', import.meta.url), 'utf8')
+  assert.ok(hhSrc.includes("recordDailyPlay('hue-hunt', this.daily.day)"), 'hue hunt records when the fifth colour is scored')
+
+  // ── the hub strip's wiring ──
+  const stripSrc = await readFile(new URL('../src/lib/daily-streak-strip.ts', import.meta.url), 'utf8')
+  assert.ok(stripSrc.includes('astro:page-load'), 'the strip must keep mounting inside astro:page-load (blank-on-nav bug otherwise)')
+  assert.ok(stripSrc.includes('badge.textContent'), 'badge text is written via textContent')
+  assert.ok(!stripSrc.includes('innerHTML'), 'the strip never writes innerHTML')
+  assert.ok(/badge\?\.remove\(\)/.test(stripSrc), 'a lapsed streak repaints away instead of lingering')
+  const gamesSrc = await readFile(new URL('../src/pages/games.astro', import.meta.url), 'utf8')
+  assert.ok(gamesSrc.includes('registerDailyStreaks()'), 'the /games hub registers the strip')
+  assert.ok(gamesSrc.indexOf('registerHubFilter()') < gamesSrc.indexOf('registerDailyStreaks()'), 'the filter registers first so streak badges never join its precomputed search haystacks')
+
+  // ── the slug allowlist is exactly the games the site ships as dailies ──
+  assert.deepEqual([...DAILY_SLUGS], ['quintle', 'type-trial', 'hue-hunt'], 'DAILY_SLUGS is the fixed store-key allowlist')
+}
+console.log('daily streaks: arithmetic idempotent + rollback-safe, stored state re-validated, all three dailies record at their completion points, strip mounts inside astro:page-load')
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Chainsaw — the TLS chain inspector (/tools/chainsaw).
+
+   Three families of assertion, because the tool makes three kinds of claim:
+   the DIAL is guarded (an anonymous visitor makes the origin open a socket),
+   the READING of the chain is what the server actually sent (the two-handshake
+   mechanism), and the FINDINGS are true about the certificates.
+
+   The fixture PKI below is a real three-level EC chain generated with openssl
+   — root → intermediate → leaf for fixture.chainsaw.test, with a wildcard SAN
+   and a twenty-year life so the assertions do not rot. It is used to run REAL
+   handshakes against a local TLS server, which is the only way to prove the
+   load-bearing claim: that a probe with an empty trust store reports what the
+   server put on the wire, while the ordinary one reports the chain the local
+   store helped build.
+   ──────────────────────────────────────────────────────────────────────────── */
+{
+  const CS_FIX_LEAF = `-----BEGIN CERTIFICATE-----
+MIICGDCCAb2gAwIBAgIUNPDb09uBvmH3fEQCsOv8ZJ3RR4AwCgYIKoZIzj0EAwIw
+QzEZMBcGA1UECgwQQ2hhaW5zYXcgRml4dHVyZTEmMCQGA1UEAwwdQ2hhaW5zYXcg
+Rml4dHVyZSBJbnRlcm1lZGlhdGUwHhcNMjYwOTE5MTUzNjQ1WhcNNDYwOTE0MTUz
+NjQ1WjAgMR4wHAYDVQQDDBVmaXh0dXJlLmNoYWluc2F3LnRlc3QwWTATBgcqhkjO
+PQIBBggqhkjOPQMBBwNCAAQns7Com2fUdccespLjYjz/l3gADNvC3p9OzlURh/Mn
+G0VvFGdV+Z5lDS2umBRED2hEO3Bwv77004nesJ+0wXtXo4GxMIGuMAwGA1UdEwEB
+/wQCMAAwDgYDVR0PAQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMBMDkGA1Ud
+EQQyMDCCFWZpeHR1cmUuY2hhaW5zYXcudGVzdIIXKi5maXh0dXJlLmNoYWluc2F3
+LnRlc3QwHQYDVR0OBBYEFPNcosGIO+1vnmYt6+mzQfHE7HRSMB8GA1UdIwQYMBaA
+FI4Q3zjY9Bmg9Diur9bxq9ruLMgQMAoGCCqGSM49BAMCA0kAMEYCIQDdMafp2mHQ
+Lvuh0wKiv+nRULnhBm62KAtnIjE6OU5TDQIhAKcmpLL+3GdPbBtDyHpH3IN2giaB
+bvD64SQyvLLJ3b7F
+-----END CERTIFICATE-----`
+  const CS_FIX_INT = `-----BEGIN CERTIFICATE-----
+MIIB5TCCAYygAwIBAgIUDaf6+aTK5CHgXeoFFxoEG8pgeQUwCgYIKoZIzj0EAwIw
+OzEZMBcGA1UECgwQQ2hhaW5zYXcgRml4dHVyZTEeMBwGA1UEAwwVQ2hhaW5zYXcg
+Rml4dHVyZSBSb290MB4XDTI2MDkxOTE1MzY0NVoXDTQ2MDkxNDE1MzY0NVowQzEZ
+MBcGA1UECgwQQ2hhaW5zYXcgRml4dHVyZTEmMCQGA1UEAwwdQ2hhaW5zYXcgRml4
+dHVyZSBJbnRlcm1lZGlhdGUwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARpRCv9
+t6ESGpDvvhIqb+g+FqSMR2/j7L8o3w2kYlJMMvVuV/EPPTShwbcatvdfS5aDJoHx
+ZUALL9cnFdZit2xKo2YwZDASBgNVHRMBAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQE
+AwICBDAdBgNVHQ4EFgQUjhDfONj0GaD0OK6v1vGr2u4syBAwHwYDVR0jBBgwFoAU
+YvBGstWm2dLeccA5CtU/Ox5sEGUwCgYIKoZIzj0EAwIDRwAwRAIgb9CiHomVDBgA
+zbgKvhJAxFoK9G4mTG2AfnSic9mVeScCICPPT5UZMNpBKaPaYWPcCen2rjow274c
+SLMhT7XXqw/P
+-----END CERTIFICATE-----`
+  const CS_FIX_ROOT = `-----BEGIN CERTIFICATE-----
+MIIB3DCCAYGgAwIBAgIUZn87TImMxfM794apaOy3MImWs0swCgYIKoZIzj0EAwIw
+OzEZMBcGA1UECgwQQ2hhaW5zYXcgRml4dHVyZTEeMBwGA1UEAwwVQ2hhaW5zYXcg
+Rml4dHVyZSBSb290MB4XDTI2MDkxOTE1MzY0NVoXDTQ2MDkxNDE1MzY0NVowOzEZ
+MBcGA1UECgwQQ2hhaW5zYXcgRml4dHVyZTEeMBwGA1UEAwwVQ2hhaW5zYXcgRml4
+dHVyZSBSb290MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9VdIxM1xJ+rSkP1Z
+T7OhkSbY1GleG6h8qWGuCLPEzRg/Y+G5ePci3BrLdYTLKn5ymdQ+riSj39KQiYnf
+ws590aNjMGEwHQYDVR0OBBYEFGLwRrLVptnS3nHAOQrVPzsebBBlMB8GA1UdIwQY
+MBaAFGLwRrLVptnS3nHAOQrVPzsebBBlMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0P
+AQH/BAQDAgEGMAoGCCqGSM49BAMCA0kAMEYCIQDuhmrlA3ypANlq00VV4TQ16u9A
+7urajAwB3oA7SyavtAIhAPdFskmuZeGFz5/bc1ijnZTJZ/hmljeE1G5c4+2Mf2cG
+-----END CERTIFICATE-----`
+  const CS_FIX_KEY = `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIE0+m48DSPKeiIH0amLVvmoq1MM37Iakn1El2TRJCYisoAoGCCqGSM49
+AwEHoUQDQgAEJ7OwqJtn1HXHHrKS42I8/5d4AAzbwt6fTs5VEYfzJxtFbxRnVfme
+ZQ0trpgURA9oRDtwcL++9NOJ3rCftMF7Vw==
+-----END EC PRIVATE KEY-----`
+
+  // ── the target gate: what may be dialled at all ──
+  const ok = (t) => {
+    const v = csValidateTarget(t)
+    assert.ok(v.ok, `${t} should be accepted: ${v.ok ? '' : v.reason}`)
+    return v
+  }
+  const no = (t, why) => assert.equal(csValidateTarget(t).ok, false, why)
+
+  assert.deepEqual({ ...ok('example.com') }, { ok: true, host: 'example.com', port: 443, isIpLiteral: false })
+  assert.equal(ok('EXAMPLE.com.').host, 'example.com', 'case and the trailing root dot are normalised')
+  assert.equal(ok('example.com:8443').port, 8443)
+  assert.equal(ok('https://example.com/deep/path?q=1').host, 'example.com', 'a pasted URL is reduced to its host')
+  assert.equal(ok('https://example.com:993/x').port, 993)
+  assert.equal(ok('[2606:4700:4700::1111]:993').host, '2606:4700:4700::1111')
+  assert.equal(ok('1.1.1.1').isIpLiteral, true, 'an IP literal is flagged so SNI is omitted — SNI may not carry an address')
+
+  // A port that is not on the TLS-on-connect list turns this into a port
+  // scanner, which is the reason the allowlist exists rather than a range.
+  for (const port of [22, 23, 80, 3306, 5432, 6379, 8080, 9200, 25, 587, 0, 65535]) {
+    no(`example.com:${port}`, `port ${port} must not be dialled`)
+  }
+  for (const port of CS_ALLOWED_PORTS) assert.ok(csValidateTarget(`example.com:${port}`).ok, `${port} is on the allowlist`)
+  assert.ok(CS_ALLOWED_PORTS.includes(443) && !CS_ALLOWED_PORTS.includes(80) && !CS_ALLOWED_PORTS.includes(22),
+    'the allowlist holds TLS-on-connect ports and nothing else')
+
+  no('', 'empty')
+  no('   ', 'whitespace')
+  no('ftp://example.com', 'a non-http scheme is refused rather than reinterpreted as a host')
+  no('file:///etc/passwd', 'file: is refused')
+  no('https://user:pw@example.com', 'embedded credentials are refused')
+  no('ex ample.com', 'a space is not a hostname')
+  no('exa\u0000mple.com', 'a NUL is not a hostname')
+  no('example.com/../x', 'a slash is not part of a bare hostname')
+  no('-example.com', 'a leading hyphen is not a hostname')
+  no('a'.repeat(400), 'over the length ceiling')
+
+  // ── the SSRF guard: ONE copy of the address rules, borrowed from Link Peek ──
+  for (const addr of [
+    '127.0.0.1', '10.0.0.1', '192.168.1.1', '172.16.0.1', '169.254.169.254',
+    '100.64.0.1', '0.0.0.0', '198.18.0.1', '224.0.0.1', '255.255.255.255',
+    '::1', '::', 'fe80::1', 'fc00::1', 'fec0::1', '64:ff9b::1', '::ffff:127.0.0.1',
+  ]) {
+    const v = await csResolvePinned(addr)
+    assert.equal(v.ok, false, `${addr} must never be dialled`)
+  }
+  for (const name of ['localhost', 'db.local', 'vault.internal', 'router', 'printer.home.arpa', '2130706433', '0x7f000001']) {
+    const v = await csResolvePinned(name)
+    assert.equal(v.ok, false, `${name} must never be dialled`)
+  }
+  for (const addr of ['1.1.1.1', '8.8.8.8', '2606:4700:4700::1111']) {
+    const v = await csResolvePinned(addr)
+    assert.ok(v.ok, `${addr} is a public address and may be dialled`)
+    assert.equal(v.address, addr, 'the checked address is the one handed on to be pinned')
+  }
+
+  // ── source-level: the guard is reused, not re-implemented, and it is pinned ──
+  const tlsSrc = await readFile(new URL('../src/lib/tls-inspect.ts', import.meta.url), 'utf-8')
+  assert.ok(tlsSrc.includes("from './link-peek-fetch'"), 'the address classifier has ONE copy and this file imports it')
+  assert.ok(!/\b169\.254\b/.test(tlsSrc.replace(/\/\*[\s\S]*?\*\//g, '')), 'no second copy of the private-range table outside comments')
+  const inspectBody = tlsSrc.slice(tlsSrc.indexOf('export async function csInspect'))
+  assert.ok(inspectBody.indexOf('csResolvePinned') < inspectBody.indexOf('csDial'), 'the address is resolved and checked BEFORE anything is dialled')
+  assert.ok(tlsSrc.includes('host: opts.address'), 'the socket connects to the checked address')
+  assert.ok(tlsSrc.includes('servername: opts.servername'), 'the NAME travels only as SNI — there is no second resolution to disagree with the first')
+  assert.ok(tlsSrc.includes('ca: []'), 'the second handshake trusts nothing, which is how the presented chain is observed')
+  assert.ok(/!bare\.authorized/.test(tlsSrc), 'an empty-store probe that comes back AUTHORIZED is discarded, not believed')
+  assert.ok(tlsSrc.includes('rejectUnauthorized: false'), 'a bad certificate is the product — the dial must not refuse to look at one')
+
+  const routeSrc = await readFile(new URL('../src/pages/api/tools/chainsaw.ts', import.meta.url), 'utf-8')
+  assert.ok(routeSrc.includes('createRateLimiter(60_000, 6)') && routeSrc.includes("createRateLimiter(60_000, 24)"),
+    'both a per-client and a global limiter — each hit costs the origin two outbound handshakes')
+  assert.ok(routeSrc.includes("'Cache-Control': 'no-store'"), 'nothing about an inspection is cached')
+  assert.ok(routeSrc.indexOf('csValidateTarget') < routeSrc.indexOf('allowClient'), 'a typo is rejected before it spends a rate-limit token')
+  assert.ok(!routeSrc.includes('csDial('), 'the route goes through csInspect, which guards — it never dials directly')
+  assert.ok(routeSrc.includes('csNameTrustAnchor'), 'the trust anchor is named by proof, not inferred from the authorized flag')
+
+  // ── csAuthCode: Node hands this back as a string on some versions and an
+  //    Error on others. Getting it wrong silently disables the anchor finding.
+  assert.equal(csAuthCode('SELF_SIGNED_CERT_IN_CHAIN'), 'SELF_SIGNED_CERT_IN_CHAIN')
+  assert.equal(csAuthCode(Object.assign(new Error('x'), { code: 'CERT_HAS_EXPIRED' })), 'CERT_HAS_EXPIRED')
+  assert.equal(csAuthCode(new Error('CERT_HAS_EXPIRED')), 'CERT_HAS_EXPIRED')
+  assert.equal(csAuthCode(null), null)
+  assert.equal(csAuthCode(undefined), null)
+
+  // ── the DER signature-algorithm read (X509Certificate does not expose it) ──
+  const { X509Certificate } = await import('node:crypto')
+  const fixLeaf = csDescribeCert(new X509Certificate(CS_FIX_LEAF))
+  const fixInt = csDescribeCert(new X509Certificate(CS_FIX_INT))
+  const fixRoot = csDescribeCert(new X509Certificate(CS_FIX_ROOT))
+  assert.equal(fixLeaf.sigAlg, 'ecdsa-with-SHA256', 'the signature algorithm is read out of the DER')
+  assert.equal(fixLeaf.subjectCN, 'fixture.chainsaw.test')
+  assert.deepEqual(fixLeaf.san, ['DNS:fixture.chainsaw.test', 'DNS:*.fixture.chainsaw.test'])
+  assert.deepEqual(fixLeaf.eku, ['serverAuth'], 'the EKU OID is resolved to a name')
+  assert.equal(fixLeaf.isCa, false)
+  assert.equal(fixLeaf.selfSigned, false)
+  assert.equal(fixRoot.selfSigned, true, 'a root names itself as its own issuer')
+  assert.equal(fixInt.isCa, true)
+  assert.equal(fixLeaf.keyType, 'ec')
+  // A certificate this cannot parse must cost the one field, never the report.
+  assert.equal(csSignatureAlgorithm(new Uint8Array(0)), null)
+  assert.equal(csSignatureAlgorithm(new Uint8Array([0x30, 0x80, 0x01])), null, 'indefinite length is BER, not DER — refused rather than guessed')
+  assert.equal(csSignatureAlgorithm(new Uint8Array([1, 2, 3, 4, 5])), null)
+  assert.equal(csSignatureAlgorithm(new Uint8Array(new X509Certificate(CS_FIX_LEAF).raw).subarray(0, 20)), null, 'a truncated certificate yields null, not a throw')
+
+  // ── name matching: the wildcard rules clients actually enforce ──
+  assert.equal(csNameMatches('example.com', 'example.com').match, true)
+  assert.equal(csNameMatches('EXAMPLE.com', 'example.COM.').match, true, 'case-insensitive, trailing dot stripped')
+  assert.equal(csNameMatches('*.example.com', 'www.example.com').match, true)
+  assert.equal(csNameMatches('*.example.com', 'example.com').match, false, 'a wildcard stands for one label, not for nothing')
+  assert.equal(csNameMatches('*.example.com', 'a.b.example.com').match, false, 'a wildcard is one label, not a suffix')
+  assert.equal(csNameMatches('www*.example.com', 'www1.example.com').match, false, 'a partial label is not a wildcard to any modern client')
+  assert.equal(csNameMatches('*.com', 'example.com').match, false, 'a registry-wide wildcard is refused')
+  assert.equal(csNameMatches('*', 'example.com').match, false)
+  // The label COUNT is what stops a suffix match, and the first version of this
+  // block asserted only the cases the left-aligned comparison already caught —
+  // so a mutation loosening the count survived. This is the case it guards: the
+  // labels line up from the left and the real domain is somebody else's.
+  assert.equal(csNameMatches('*.example.com', 'www.example.com.evil.test').match, false,
+    'a wildcard must not match a host that merely STARTS with its domain')
+  assert.equal(csNameMatches('*.a.example.com', 'x.example.com').match, false,
+    '…nor a host with fewer labels than the pattern')
+  assert.equal(csMatchHost('www.fixture.chainsaw.test.evil.test', fixLeaf).covered, false,
+    'and the same through the SAN matcher the page actually calls')
+
+  const fixMatch = csMatchHost('a.fixture.chainsaw.test', fixLeaf)
+  assert.equal(fixMatch.covered, true)
+  assert.equal(fixMatch.viaWildcard, true)
+  assert.equal(csMatchHost('fixture.chainsaw.test', fixLeaf).viaWildcard, false, 'the exact SAN wins over the wildcard')
+  assert.equal(csMatchHost('a.b.fixture.chainsaw.test', fixLeaf).covered, false)
+  assert.deepEqual(fixMatch.dnsNames, ['fixture.chainsaw.test', '*.fixture.chainsaw.test'], 'the DNS: prefix is stripped off the SAN entries')
+
+  // ── the CN-only trap: a name in the Common Name and in no SAN ──
+  const cnOnlyCert = { ...fixLeaf, san: [], subjectCN: 'legacy.example.com' }
+  const cnMatch = csMatchHost('legacy.example.com', cnOnlyCert)
+  assert.equal(cnMatch.covered, false, 'the Common Name does not cover anything — clients stopped reading it in 2017')
+  assert.equal(cnMatch.cnOnly, true, '…and the tool says WHY rather than just "no match"')
+
+  // ── an IP SAN ──
+  const ipCert = { ...fixLeaf, san: ['IP Address:203.0.113.10'] }
+  assert.equal(csMatchHost('203.0.113.10', ipCert).covered, true)
+  assert.equal(csMatchHost('203.0.113.11', ipCert).covered, false)
+
+  // ── …and an IPv6 SAN, where ONE address has many legal spellings. The
+  //    comparison used to be a string equality, so a certificate that really
+  //    did cover the address being checked was reported as not covering it
+  //    whenever Node's rendering and the visitor's typing disagreed — the worst
+  //    failure mode this tool has, since the answer looks authoritative.
+  assert.equal(csCanonicalIp('2001:0DB8:0000:0000:0000:0000:0000:0001'), csCanonicalIp('2001:db8::1'),
+    'expanded and compressed spellings of one address canonicalise together')
+  assert.equal(csCanonicalIp('[2001:db8::1]'), csCanonicalIp('2001:db8::1'), 'brackets are not part of the address')
+  assert.equal(csCanonicalIp('fe80::1%eth0'), csCanonicalIp('fe80::1'), 'a zone id is local to a machine, never to a certificate')
+  assert.equal(csCanonicalIp('::ffff:192.0.2.1'), csCanonicalIp('0:0:0:0:0:ffff:c000:201'), 'a trailing dotted quad is two hex groups')
+  assert.equal(csCanonicalIp('::'), '0:0:0:0:0:0:0:0', 'the all-zero address is still an address')
+  assert.equal(csCanonicalIp('203.0.113.10'), '203.0.113.10', 'a dotted quad canonicalises to itself')
+  // …and it must REFUSE, not guess, so a DNS name never takes the IP path.
+  for (const bad of ['example.com', '2001:db8::1::2', '2001:db8:0:0:0:0:0:0:1', 'gggg::1', '203.0.113', '203.0.113.256', '', '   ']) {
+    assert.equal(csCanonicalIp(bad), null, `not an IP literal: ${JSON.stringify(bad)}`)
+  }
+  assert.notEqual(csCanonicalIp('::ffff:192.0.2.1'), csCanonicalIp('192.0.2.1'),
+    'a v4-mapped v6 address is a DIFFERENT SAN entry from the v4 address it embeds, and is deliberately not folded onto it')
+
+  const ip6Cert = { ...fixLeaf, san: ['IP Address:2001:DB8:0:0:0:0:0:1'] }
+  assert.equal(csMatchHost('2001:db8::1', ip6Cert).covered, true, 'the host is covered however either side spells it')
+  assert.equal(csMatchHost('[2001:db8::1]', ip6Cert).covered, true)
+  assert.equal(csMatchHost('2001:db8::2', ip6Cert).covered, false, '…and a different address is still not covered')
+  // An unparseable SAN value must not become a silent never-match.
+  assert.equal(csMatchHost('not-an-ip', { ...fixLeaf, san: ['IP Address:not-an-ip'] }).covered, true,
+    'an IP SAN this parser cannot read falls back to the literal comparison rather than to "no"')
+
+  /* --- synthetic reports: one factory, so a finding test changes one field --- */
+  const CS_DAY = 86_400_000
+  const nowMs = Date.UTC(2026, 5, 1)
+  const cert = (over = {}) => ({
+    ...fixLeaf,
+    validFrom: new Date(nowMs - 30 * CS_DAY).toISOString(),
+    validTo: new Date(nowMs + 200 * CS_DAY).toISOString(),
+    ...over,
+  })
+  const report = (over = {}) => ({
+    host: 'fixture.chainsaw.test',
+    port: 443,
+    address: '203.0.113.1',
+    family: 4,
+    handshake: {
+      protocol: 'TLSv1.3', cipher: 'TLS_AES_128_GCM_SHA256', cipherStandard: 'TLS_AES_128_GCM_SHA256',
+      alpn: 'h2', ephemeralKey: 'ECDH X25519', ocspStapled: true,
+      authorized: true, authorizationError: null, verifiedLength: 3,
+    },
+    presented: [cert(), cert({ ...fixInt, fingerprint256: 'INT', validTo: new Date(nowMs + 900 * CS_DAY).toISOString() })],
+    anchorIncluded: false,
+    presentedObserved: true,
+    storeRoot: null,
+    namedRoot: 'Chainsaw Fixture Root',
+    elapsedMs: 42,
+    ...over,
+  })
+
+  // ── the negative that matters: a correct host produces NO findings at all ──
+  assert.deepEqual(csFindings(report(), nowMs), [],
+    'a healthy host yields ZERO findings — a linter that always finds something is indistinguishable from one that guesses')
+  assert.equal(csChainState(report()).state, 'complete')
+
+  const idsOf = (r, t = nowMs) => csFindings(r, t).map(f => f.id)
+
+  // incomplete chain: the headline finding
+  const leafOnly = report({
+    presented: [cert({ caIssuerUrls: ['http://ca.example/int.crt'] })],
+    handshake: { ...report().handshake, authorized: false, authorizationError: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', verifiedLength: 1 },
+  })
+  assert.equal(csChainState(leafOnly).state, 'leaf-only')
+  assert.ok(idsOf(leafOnly).includes('chain-incomplete'), 'a server that sent only the leaf is called out')
+  assert.ok(idsOf(leafOnly).includes('aia-available'), '…and the URL of the missing certificate is handed over')
+  assert.equal(idsOf(leafOnly).includes('untrusted'), false, 'the generic "not trusted" is suppressed when a specific finding already explains it')
+
+  // an anchor the server should not be sending
+  const withAnchor = report({
+    presented: [cert(), cert({ ...fixInt, fingerprint256: 'INT' }), cert({ ...fixRoot, fingerprint256: 'ROOT', selfSigned: true })],
+    anchorIncluded: true,
+  })
+  assert.equal(csChainState(withAnchor).state, 'anchor-included')
+  assert.ok(idsOf(withAnchor).includes('anchor-included'))
+
+  // expiry, in all four shapes
+  assert.ok(idsOf(report({ presented: [cert({ validTo: new Date(nowMs - CS_DAY).toISOString() })] })).includes('expired'))
+  assert.ok(idsOf(report({ presented: [cert({ validTo: new Date(nowMs + 5 * CS_DAY).toISOString() })] })).includes('expires-soon'))
+  assert.ok(idsOf(report({ presented: [cert({ validFrom: new Date(nowMs + 2 * CS_DAY).toISOString() })] })).includes('not-yet-valid'))
+  assert.ok(idsOf(report({
+    presented: [cert({ validFrom: new Date(nowMs - 500 * CS_DAY).toISOString() })],
+  })).includes('over-max-lifetime'), 'a leaf living longer than 398 days is flagged')
+
+  // the expiry nobody watches: an intermediate that goes first
+  const shortInt = report({
+    presented: [cert(), cert({ ...fixInt, fingerprint256: 'INT', validTo: new Date(nowMs + 20 * CS_DAY).toISOString() })],
+  })
+  const effective = csEffectiveExpiry(shortInt.presented)
+  assert.equal(effective.cert.fingerprint256, 'INT', 'the chain dies with its earliest certificate, which is not always the leaf')
+  assert.ok(idsOf(shortInt).includes('intermediate-expires-first'))
+  // …and an anchor's own expiry is the trust store's problem, not this server's
+  assert.equal(csEffectiveExpiry([cert(), cert({ fingerprint256: 'ROOT', selfSigned: true, validTo: new Date(nowMs + CS_DAY).toISOString() })]).cert.fingerprint256,
+    fixLeaf.fingerprint256, 'a self-signed anchor is excluded from the effective expiry')
+
+  // hostname, keys and protocol
+  assert.ok(idsOf(report({ host: 'elsewhere.example.com' })).includes('hostname-uncovered'))
+  assert.ok(idsOf(report({ host: 'legacy.example.com', presented: [cert({ san: [], subjectCN: 'legacy.example.com' })] })).includes('cn-only'))
+  assert.ok(idsOf(report({ presented: [cert({ sigAlg: 'sha1WithRSA' })] })).includes('weak-signature'))
+  assert.ok(idsOf(report({ presented: [cert({ keyType: 'rsa', keyBits: 1024, keyCurve: null })] })).includes('weak-key'))
+  assert.equal(idsOf(report({ presented: [cert({ keyType: 'rsa', keyBits: 2048, keyCurve: null })] })).includes('weak-key'), false, '2048-bit RSA is the floor, not a failure')
+  assert.ok(idsOf(report({ handshake: { ...report().handshake, protocol: 'TLSv1.1' } })).includes('old-tls'))
+  assert.ok(idsOf(report({ handshake: { ...report().handshake, ocspStapled: false } })).includes('no-ocsp-staple'))
+  assert.ok(idsOf(report({ presented: [cert({ eku: ['clientAuth'] })] })).includes('no-serverauth'))
+  assert.ok(idsOf(report({ presentedObserved: false })).includes('presented-unobserved'),
+    'when the sent chain could not be observed the tool says so instead of reporting a guess')
+
+  // findings are ordered errors → warns → infos, so the worst thing is first
+  const mixed = csFindings(report({
+    host: 'elsewhere.example.com',
+    handshake: { ...report().handshake, ocspStapled: false, protocol: 'TLSv1.1' },
+  }), nowMs)
+  const levels = mixed.map(f => f.level)
+  assert.deepEqual(levels, [...levels].sort((a, b) => ({ error: 0, warn: 1, info: 2 })[a] - ({ error: 0, warn: 1, info: 2 })[b]),
+    'findings run errors first')
+
+  // ── the PEM the user takes away ──
+  const three = [fixLeaf, fixInt, { ...fixRoot, selfSigned: true }]
+  assert.equal((csChainPem(three).match(/BEGIN CERTIFICATE/g) || []).length, 3, 'the chain as sent keeps everything')
+  const serve = csServeChainPem(three)
+  assert.equal((serve.match(/BEGIN CERTIFICATE/g) || []).length, 2, 'the chain to SERVE is leaf + intermediates and no anchor')
+  assert.ok(serve.startsWith('-----BEGIN CERTIFICATE-----') && serve.endsWith('\n'), 'a PEM bundle starts at a header and ends with a newline')
+  assert.ok(csServeChainPem([{ ...fixLeaf, selfSigned: true }]).includes('BEGIN CERTIFICATE'), 'a self-signed leaf is still the leaf — index 0 is never dropped')
+
+  /* --- and now the load-bearing one, against real handshakes ---------------
+     `getPeerCertificate(true)` reports the chain OpenSSL BUILT, not the one the
+     server sent: with the root trusted it hands back three certificates for a
+     server that sent two. A tool whose headline finding is "your chain is
+     incomplete" cannot read the chain through a lens that completes it. These
+     three servers prove the empty-store probe reports the wire, exactly. */
+  const tlsMod = await import('node:tls')
+  const serveFixture = (certBuf, port) => new Promise((res) => {
+    const server = tlsMod.createServer({ key: CS_FIX_KEY, cert: certBuf }, (sock) => sock.end())
+    server.listen(port, '127.0.0.1', () => res(server))
+  })
+  const shapes = [
+    ['leaf only', CS_FIX_LEAF, 1, 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'],
+    ['leaf + intermediate', `${CS_FIX_LEAF}\n${CS_FIX_INT}`, 2, 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY'],
+    ['leaf + intermediate + root', `${CS_FIX_LEAF}\n${CS_FIX_INT}\n${CS_FIX_ROOT}`, 3, 'SELF_SIGNED_CERT_IN_CHAIN'],
+  ]
+  let fixturePort = 15801
+  for (const [label, certText, expected, expectedCode] of shapes) {
+    const port = fixturePort++
+    const server = await serveFixture(certText, port)
+    try {
+      const seen = await csDial({ address: '127.0.0.1', port, servername: 'fixture.chainsaw.test', emptyStore: true, deadline: Date.now() + 5000 })
+      assert.ok(!seen.error, `${label}: the fixture handshake completed`)
+      assert.equal(seen.authorized, false, `${label}: an empty trust store can never authorize — that is what makes the reading honest`)
+      assert.equal(seen.chain.length, expected, `${label}: the empty-store probe reports exactly what the server put on the wire`)
+      assert.equal(seen.authorizationError, expectedCode, `${label}: the verification code is the signal an anchor was sent`)
+      assert.equal(seen.chain[0].subjectCN, 'fixture.chainsaw.test', `${label}: the leaf comes first`)
+      // The anchor set is held against the code a server that really does send
+      // its root produces, not against a remembered string.
+      assert.equal(CS_ANCHOR_CODES.has(seen.authorizationError), expected === 3,
+        `${label}: "the server sent its own root" is decided by the code this very handshake returned`)
+    } finally {
+      server.close()
+    }
+  }
+
+  /* --- …and the same servers, with a store that CAN complete the chain -----
+     This is the half that makes the claim falsifiable offline. The fixture root
+     is handed in as an explicit trust store, which is what a public root does
+     in production: the ordinary handshake then reports THREE certificates for a
+     server that sent two — the third came out of the store, not off the wire —
+     while the empty-store probe, applied afterwards and winning, still reports
+     two. Drop `ca: []` and this is where it shows: the probe starts authorizing
+     and starts reporting a certificate that never crossed the wire. */
+  {
+    const port = fixturePort++
+    const server = await serveFixture(`${CS_FIX_LEAF}\n${CS_FIX_INT}`, port)
+    try {
+      const dial = (over) => csDial({
+        address: '127.0.0.1', port, servername: 'fixture.chainsaw.test',
+        trustAnchors: [CS_FIX_ROOT], deadline: Date.now() + 5000, emptyStore: false, ...over,
+      })
+      const built = await dial({})
+      assert.equal(built.authorized, true, 'with the root trusted the chain verifies')
+      assert.equal(built.chain.length, 3, 'a trusting client reports the chain it BUILT — root included — for a server that sent two certificates')
+      assert.equal(built.chain[2].selfSigned, true, '…and that third certificate is the anchor the store supplied')
+
+      const wire = await dial({ emptyStore: true })
+      assert.equal(wire.authorized, false, 'the empty store beats an explicit one — it cannot authorize anything')
+      assert.equal(wire.chain.length, 2, 'the empty-store probe still reports exactly the two certificates the server sent')
+      assert.equal(wire.chain.some(c => c.selfSigned), false, 'no anchor appears in the wire reading, so "the server sends its root" is never reported for a correctly configured host')
+    } finally {
+      server.close()
+    }
+  }
+
+  /* --- a name mismatch must not contaminate the CHAIN verdict --------------
+     Node runs its own hostname check after path validation and, on a mismatch,
+     reports `authorized: false` with ERR_TLS_CERT_ALTNAME_INVALID even though
+     the chain verified perfectly. Left in place that leaked a hostname fact
+     into the trust tile, and `csChainState` read the false flag and fell
+     through to `incomplete` — telling the owner of a correctly configured
+     server that an intermediate was missing. The fixture certificate covers
+     fixture.chainsaw.test and nothing else, so dialling it under another SNI
+     is exactly that case. */
+  {
+    const port = fixturePort++
+    const server = await serveFixture(`${CS_FIX_LEAF}\n${CS_FIX_INT}`, port)
+    try {
+      const mismatched = await csDial({
+        address: '127.0.0.1', port, servername: 'wrong.example.test',
+        trustAnchors: [CS_FIX_ROOT], emptyStore: false, deadline: Date.now() + 5000,
+      })
+      assert.equal(mismatched.authorized, true, 'a chain that verifies is trusted even when the NAME does not match — the two are separate answers')
+      assert.equal(mismatched.authorizationError, null, 'no ERR_TLS_CERT_ALTNAME_INVALID leaks into the chain-trust signal')
+
+      const asReport = report({
+        host: 'wrong.example.test',
+        handshake: { ...report().handshake, authorized: mismatched.authorized, authorizationError: mismatched.authorizationError },
+      })
+      assert.equal(csChainState(asReport).state, 'complete', 'a perfect chain is still complete when the hostname is wrong')
+      const ids = idsOf(asReport)
+      assert.equal(ids.includes('chain-incomplete'), false, 'a hostname mismatch must never be reported as a missing intermediate')
+      assert.ok(ids.includes('hostname-uncovered'), '…it is reported as what it is, by the matcher that can explain why')
+    } finally {
+      server.close()
+    }
+  }
+
+  // A root's trust comes from the store, not from its own signature, so clients
+  // exempt a root self-signature from the SHA-1 rule. Walking anchors here fired
+  // a false weak-signature ERROR on healthy hosts that merely send their root.
+  {
+    const sha1Anchor = report({
+      presented: [cert(), cert({ ...fixInt, fingerprint256: 'INT' }), cert({ ...fixRoot, fingerprint256: 'ROOT', selfSigned: true, sigAlg: 'sha1WithRSA' })],
+      anchorIncluded: true,
+    })
+    const ids = idsOf(sha1Anchor)
+    assert.equal(ids.includes('weak-signature'), false, "a SHA-1 SELF-signature on an anchor is not a finding — plenty of trusted roots carry one")
+    assert.ok(ids.includes('anchor-included'), '…the anchor is still reported as wasted bytes')
+    assert.ok(idsOf(report({ presented: [cert(), cert({ ...fixInt, fingerprint256: 'INT', sigAlg: 'sha1WithRSA' })] })).includes('weak-signature'),
+      'a SHA-1 signature on a real INTERMEDIATE is still a finding')
+  }
+
+  // The port allowlist has ONE home. It used to be a hand-typed prose copy in
+  // the component, free to drift the first time a port was added.
+  {
+    const uiSrc = await readFile(new URL('../src/components/tools/chainsaw/Chainsaw.ts', import.meta.url), 'utf-8')
+    assert.ok(uiSrc.includes('CS_ALLOWED_PORTS.join'), 'the page renders the port list from the array it is enforced from')
+    for (const port of CS_ALLOWED_PORTS) {
+      assert.equal(new RegExp(`\\b${port}, `).test(uiSrc), false, `the component must not hand-type port ${port}`)
+    }
+    assert.ok(tlsSrc.includes('checkServerIdentity'), 'the dial neutralises Node\'s hostname check so `authorized` means chain trust alone')
+  }
+
+  // ── Naming the anchor when the server sends its OWN root.
+  //    The self-signed case used to return null, so the one configuration the
+  //    `anchor-included` finding is written about was also the only one whose
+  //    anchor the tool could not name. The name is in the subject line — and a
+  //    subject line is the cheapest thing on earth to forge on a self-signed
+  //    certificate, so it is proved instead: the exact certificate has to be in
+  //    the bundled store, byte for byte.
+  {
+    const { rootCertificates: storeRoots } = await import('node:tls')
+    assert.ok(storeRoots.length > 25, 'the premise: this build ships a root store')
+    const named = storeRoots
+      .slice(0, 25)
+      .map(pem => csNameTrustAnchor(pem))
+      .filter(n => typeof n === 'string' && n.length > 0)
+    assert.equal(named.length, 25, 'every certificate IN the store is named by the self-signed branch')
+
+    // The fixture root is self-signed and is emphatically not in any store.
+    assert.equal(csNameTrustAnchor(CS_FIX_ROOT), null,
+      'a self-signed top that is NOT in the store is a private CA and stays unnamed — the name is not read off the subject line')
+    // A self-signed certificate whose SUBJECT collides with a real store root
+    // must still be refused: the byte comparison is what does the work, and a
+    // subject match alone is one name collision away from a lie.
+    assert.ok(tlsSrc.includes('root.raw.equals(top.raw)'),
+      'the self-signed branch matches the whole certificate, not its subject')
+    assert.equal(csNameTrustAnchor('not a certificate'), null, 'unparseable input is not an anchor')
+    assert.equal(csNameTrustAnchor(CS_FIX_INT), null, 'an intermediate signed by a private root reaches no public anchor')
+  }
+
+  // …and csInspect must never reach for that test-only door.
+  assert.ok(!inspectBody.includes('trustAnchors'), 'csInspect never passes an explicit trust store — that field exists for the assertions above')
+}
+console.log('chainsaw: port allowlist + reused SSRF guard + pinned address, DER sig-alg read, wildcard/CN-only name rules, effective expiry across the chain, findings named (and ZERO for a healthy host), empty-store probe proven against real handshakes')
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Regression guards from the 2026-09-20 review pass. Each one is here because
+   a real bug was found and fixed; the assertion is what stops it coming back.
+   ──────────────────────────────────────────────────────────────────────────── */
+{
+  // ── Link Peek: a bracketed IPv6 literal is an ADDRESS, not a name to resolve.
+  //    `URL.hostname` keeps the brackets and `isIP('[::1]')` is 0, so without
+  //    unwrapping, every IPv6-literal URL — public ones included — fell through
+  //    to a DNS lookup of a string that can never resolve.
+  const { lpCheckResolved, lpIsForbiddenHostname } = await import('../src/lib/link-peek-fetch.ts')
+  const { lpMetaSnippet } = await import('../src/components/tools/link-peek/unfurl.ts')
+  assert.equal(isIP('[2606:4700:4700::1111]'), 0, 'the premise: a bracketed literal is not an IP to isIP')
+  const publicV6 = new URL('https://[2606:4700:4700::1111]/x').hostname
+  assert.equal(publicV6, '[2606:4700:4700::1111]', 'URL.hostname keeps the brackets')
+  assert.equal(lpIsForbiddenHostname(publicV6), false, 'the hostname gate already unwrapped and allowed it')
+  assert.deepEqual(await lpCheckResolved(publicV6), { ok: true }, 'a public IPv6 literal resolves to itself instead of failing as an unresolvable name')
+  const privateV6 = new URL('https://[::1]/x').hostname
+  assert.equal((await lpCheckResolved(privateV6)).ok, false, '…and a loopback literal is still refused through the same path')
+  assert.equal((await lpCheckResolved(new URL('https://[fe80::1]/x').hostname)).ok, false, 'link-local too')
+
+  // ── …and the name lookup is bounded. dns.lookup runs on libuv's 4-slot
+  //    threadpool and takes the OS resolver's timeout, which is outside this
+  //    module's own budget; a few black-holed names would otherwise occupy
+  //    every slot and stall unrelated fs/crypto work container-wide.
+  const lpSrc = await readFile(new URL('../src/lib/link-peek-fetch.ts', import.meta.url), 'utf-8')
+  assert.ok(lpSrc.includes('LP_DNS_TIMEOUT_MS'), 'the DNS lookup has its own ceiling')
+  assert.ok(/Promise\.race\(\s*\[\s*lookup\(/.test(lpSrc), '…and the lookup is actually raced against it')
+
+  // ── one escaping rule, not a second weaker copy. The local one omitted `'`,
+  //    which AGENTS.md names explicitly.
+  const snippet = lpMetaSnippet(
+    { title: null, metaDescription: null, canonical: null, og: [{ key: 'og:title', value: `it's "quoted" & <hot>` }], twitter: [] },
+    'https://example.com/',
+  )
+  assert.ok(snippet.includes('&#39;'), "the generated meta snippet escapes a single quote")
+  assert.ok(snippet.includes('&quot;') && snippet.includes('&lt;') && snippet.includes('&amp;'), '…along with the rest')
+  const unfurlSrc = await readFile(new URL('../src/components/tools/link-peek/unfurl.ts', import.meta.url), 'utf-8')
+  assert.ok(unfurlSrc.includes("from '../../../lib/escape'"), 'unfurl.ts uses the shared escape rather than a private copy')
+
+  // ── Link Peek: a late image load must not be measured against a newer page.
+  const peekSrc = await readFile(new URL('../src/components/tools/link-peek/LinkPeek.ts', import.meta.url), 'utf-8')
+  assert.ok(/reportImageSize\(img, result\.bytes \?\? 0, meta\)/.test(peekSrc), 'the meta is captured when the load listener is BOUND')
+  assert.ok(/meta !== forMeta/.test(peekSrc), '…and re-checked before the verdict is appended')
+
+  // ── Type Trial: one input event may add at most one character to a typed run.
+  //    The instant-fill guard only covered the FIRST event, so a mid-run jump
+  //    back-filled every newly-reached ghost mark with one identical timestamp.
+  const ttSrc2 = await readFile(new URL('../src/components/games/type-trial/TypeTrial.ts', import.meta.url), 'utf-8')
+  assert.ok(/len - this\.prevLen > 1\) this\.jumped = true/.test(ttSrc2), 'a multi-character jump is detected mid-run, not just at the start')
+  assert.ok(/plausible = s\.sec >= 1 && !this\.jumped/.test(ttSrc2), '…and disqualifies the ghost, the personal best and the daily board together')
+  assert.equal((ttSrc2.match(/this\.jumped = false/g) || []).length, 2, 'the flag is cleared on reset AND on the instant-fill discard, which rewinds without reset()')
+
+  // ── The Node-only boundary AGENTS.md claims. Nothing enforced it before.
+  //    Any module the browser can reach must carry no `node:` import — a leak
+  //    is a build failure at best and a server module shipped to visitors at
+  //    worst. Derived from the tree, so a new tool/game is covered automatically.
+  const browserDirs = ['../src/components/tools', '../src/components/games']
+  const offenders = []
+  const walk = async (dir) => {
+    for (const entry of await readdir(new URL(dir + '/', import.meta.url), { withFileTypes: true })) {
+      const child = `${dir}/${entry.name}`
+      if (entry.isDirectory()) { await walk(child); continue }
+      if (!entry.name.endsWith('.ts')) continue
+      const body = await readFile(new URL(child, import.meta.url), 'utf-8')
+      if (/from '(node:|.*\/lib\/(tls-inspect|link-peek-fetch|webhook-store|visits|session))'/.test(body)) offenders.push(child)
+    }
+  }
+  for (const dir of browserDirs) await walk(dir)
+  assert.deepEqual(offenders, [], 'no browser-reachable component imports a Node-only module')
+  const analyzeSrc = await readFile(new URL('../src/components/tools/chainsaw/analyze.ts', import.meta.url), 'utf-8')
+  assert.equal(/from 'node:/.test(analyzeSrc), false, "chainsaw's claims module stays isomorphic — the server and the browser share it")
+
+  // ── "SSR everywhere" was a convention with nothing enforcing it, and two
+  //    pages had quietly drifted off it. Derived by walking src/pages, so a new
+  //    route is covered the moment it exists rather than when someone remembers.
+  const pagesWithoutSsr = []
+  const walkPages = async (dir) => {
+    for (const entry of await readdir(new URL(dir + '/', import.meta.url), { withFileTypes: true })) {
+      const child = `${dir}/${entry.name}`
+      if (entry.isDirectory()) { await walkPages(child); continue }
+      if (!/\.(astro|ts)$/.test(entry.name)) continue
+      const body = await readFile(new URL(child, import.meta.url), 'utf-8')
+      if (!body.includes('prerender = false')) pagesWithoutSsr.push(child.replace('../src/pages/', ''))
+    }
+  }
+  await walkPages('../src/pages')
+  assert.deepEqual(pagesWithoutSsr, [], 'every route declares prerender = false — KV reads and middleware headers both need request time')
+}
+console.log('review regressions: v6 literals resolve, DNS bounded, one escape rule, late images self-check, typed runs stay typed, no node: import reaches the browser')
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Accessibility invariants, from the 2026-09-20 audit pass.
+
+   The palette half is the important one. Contrast was a thing somebody had
+   measured once, in a session nobody can rerun, and every token edit since has
+   been a bet that the measurement still held. It is now derived from
+   `theme.css` on every run, so a palette change that drops real body text under
+   AA fails here instead of shipping.
+   ──────────────────────────────────────────────────────────────────────────── */
+{
+  const themeSrc = await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8')
+
+  // Pull one palette out of a selector block. Only hex tokens participate —
+  // `--color-bg-blur` is an rgba() over whatever is behind it and has no fixed
+  // ratio to compute against.
+  const paletteIn = (selector) => {
+    const at = themeSrc.indexOf(selector)
+    assert.notEqual(at, -1, `theme.css still defines ${selector}`)
+    const open = themeSrc.indexOf('{', at)
+    const close = themeSrc.indexOf('}', open)
+    const body = themeSrc.slice(open, close)
+    const out = {}
+    for (const [, name, hex] of body.matchAll(/--color-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)) out[name] = hex.toLowerCase()
+    return out
+  }
+  const light = paletteIn(':root')
+  // The site RUNS dark, so the dark block is the one that ships; it overrides
+  // the light palette rather than restating all of it.
+  const dark = { ...light, ...paletteIn('[data-theme="dark"]') }
+
+  const relLum = (hex) => {
+    const chan = [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * chan[0] + 0.7152 * chan[1] + 0.0722 * chan[2]
+  }
+  const ratio = (a, b) => {
+    const [x, y] = [relLum(a), relLum(b)]
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+  }
+  // Sanity-check the maths against the two ratios everyone knows by heart
+  // before trusting it about anything else.
+  assert.equal(ratio('#000000', '#ffffff').toFixed(2), '21.00', 'black on white is 21:1')
+  assert.equal(ratio('#777777', '#ffffff').toFixed(2), '4.48', '#777 on white is the classic just-fails-AA value')
+
+  // Every pairing below is real text on a real surface, not a combinatorial
+  // sweep — `--color-border` is absent on purpose: it is a hairline, never a
+  // text colour, and holding a divider to a text ratio would force a palette
+  // change to satisfy an assertion nobody could read.
+  const textPairings = [
+    ['text', 'bg'], ['text', 'surface'],
+    ['muted', 'bg'], ['muted', 'surface'],
+    ['accent', 'bg'], ['accent', 'surface'],
+    ['error', 'bg'], ['error', 'surface'],
+    ['success', 'bg'], ['success', 'surface'],
+    // The label on an accent-filled button — the one place --color-bg is ink.
+    ['bg', 'accent'],
+  ]
+  const AA_NORMAL = 4.5
+  for (const [name, palette] of [['light', light], ['dark', dark]]) {
+    for (const [ink, ground] of textPairings) {
+      assert.ok(palette[ink], `${name}: --color-${ink} is defined`)
+      assert.ok(palette[ground], `${name}: --color-${ground} is defined`)
+      const r = ratio(palette[ink], palette[ground])
+      assert.ok(
+        r >= AA_NORMAL,
+        `${name}: --color-${ink} (${palette[ink]}) on --color-${ground} (${palette[ground]}) is ${r.toFixed(2)}:1 — under the ${AA_NORMAL}:1 WCAG AA floor for normal text`,
+      )
+    }
+  }
+
+  // …and the last pairing is a claim about the code, so it is read from the
+  // code: the accent-filled button really does set its ink to --color-bg.
+  const cxSrc = await readFile(new URL('../src/styles/canvas-export.css', import.meta.url), 'utf-8')
+  assert.ok(/background:\s*var\(--color-accent\);\s*\n\s*color:\s*var\(--color-bg\);/.test(cxSrc),
+    'the accent-filled button still pairs --color-accent with --color-bg, which is the pairing asserted above')
+
+  // ── The skip link must produce a PERCEIVABLE result (WCAG 2.4.7). A blanket
+  //    `main:focus { outline: none }` silently undid the only rule that draws
+  //    the ring, so keyboard users got no indication the skip had happened.
+  const sharedSrc = await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')
+  assert.ok(/:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--color-accent\)/.test(sharedSrc),
+    'the one rule that draws a focus ring is still there, and still token-driven')
+  assert.equal(/(^|[\s,>])main:focus\s*\{/m.test(sharedSrc), false,
+    'no blanket main:focus rule — it would suppress the ring for the keyboard user the skip link exists for')
+  assert.ok(/main:focus:not\(:focus-visible\)\s*\{\s*outline:\s*none/.test(sharedSrc),
+    '…the mouse case is silenced narrowly instead')
+
+  // Both shells wire the link to a focusable target, or the rule above guards
+  // nothing. Derived from the layouts so a third shell cannot skip it.
+  for (const layout of ['Base.astro', 'ToolBase.astro']) {
+    const src = await readFile(new URL(`../src/layouts/${layout}`, import.meta.url), 'utf-8')
+    assert.ok(src.includes('href="#main-content"') && src.includes('data-type="skip-link"'), `${layout} renders the skip link`)
+    assert.ok(/<main[^>]*id="main-content"/s.test(src), `${layout} gives main the id the link targets`)
+    assert.ok(/<main[^>]*tabindex="-1"/s.test(src), `${layout} makes main focusable, or the link jumps without moving focus`)
+  }
+
+  // ── Controls that are named by JavaScript are not named until JavaScript
+  //    runs. Regression guards for the three found in the audit.
+  const wiSrc = await readFile(new URL('../src/components/tools/webhook-inspector/WebhookInspector.ts', import.meta.url), 'utf-8')
+  const pollBtn = wiSrc.match(/<button data-action="toggle-poll"[^>]*>([\s\S]*?)<\/button>/)
+  assert.ok(pollBtn, 'the poll toggle is still in the markup')
+  assert.notEqual(pollBtn[1].trim(), '', 'the poll toggle ships with a label instead of being named by the first reflect() call')
+  assert.equal((wiSrc.match(/'Pause \(P\)'/g) ?? []).length, 1, 'that label has ONE definition, not one per call site')
+
+  const atSrc = await readFile(new URL('../src/components/tools/audio-transcriber/AudioTranscriber.ts', import.meta.url), 'utf-8')
+  assert.ok(/const MIC_SVG = `<svg aria-hidden="true"/.test(atSrc), 'the mic glyph is decoration and says so')
+  assert.ok(/aria-label="Start recording"/.test(atSrc), 'the mic button ships with a real accessible name, not just a tooltip')
+  assert.ok(/mic\.setAttribute\('aria-label', label\)/.test(atSrc) && /mic\.setAttribute\('aria-pressed'/.test(atSrc),
+    '…and the name and the pressed state move together with the recording state')
+
+  const dbSrc = await readFile(new URL('../src/components/tools/draftboard/Draftboard.ts', import.meta.url), 'utf-8')
+  assert.ok(/data-action="close-help"[^>]*aria-label="Close syntax reference"/.test(dbSrc),
+    'an icon-only close button is named by aria-label, not by the glyph it happens to contain')
+
+  // ── Validate before spending a rate-limit token. Both outbound-fetching
+  //    routes, stated once: a typo must not cost the visitor a chance or the
+  //    instance an outbound-request slot.
+  for (const [route, validator] of [
+    ['link-peek.ts', 'lpValidateUrl('],
+    ['chainsaw.ts', 'csValidateTarget('],
+    ['dns-sightline.ts', 'sgValidateName('],
+  ]) {
+    const src = await readFile(new URL(`../src/pages/api/tools/${route}`, import.meta.url), 'utf-8')
+    const validatedAt = src.indexOf(`= ${validator}`)
+    const limitedAt = src.indexOf('allowClient(')
+    assert.notEqual(validatedAt, -1, `${route} validates its target`)
+    assert.notEqual(limitedAt, -1, `${route} rate-limits`)
+    assert.ok(validatedAt < limitedAt, `${route} validates BEFORE spending a rate-limit token`)
+  }
+}
+console.log('a11y: palette contrast derived from theme.css clears AA, the skip link keeps a visible focus ring, JS-named controls ship named, and both fetch routes validate before rate-limiting')
+
+/* ─────────────────  DNS Sightline  ─────────────────
+
+   A DNS checker fails the way Chainsaw and the fractal renderer fail: not by
+   crashing, but by rendering a confident, attractive, wrong sentence about
+   somebody's zone. Every assertion below guards a claim whose failure mode is
+   a plausible answer.
+
+   Four of them are load-bearing and each one guards a bug that ships silently:
+
+   1. The RESOLVER DIFF excludes TTL and record order. Include either and the
+      tool reports that every load-balanced domain on the internet is
+      inconsistent — the page still renders, the finding is still phrased
+      confidently, and the one signal this tool exists for means nothing.
+
+   2. The SPF LOOKUP COUNT is checked against an INDEPENDENT implementation
+      written here, not against remembered numbers. The real one is bounded,
+      memoised, cycle-aware and breadth-first; the oracle below is a dumb
+      recursive string scan with no bounds at all, and it shares no code. Same
+      structure as `evaluateBest`/`scoreBest`: the fast, careful thing is held
+      to a slow, obvious thing. The bug it catches is the one every other SPF
+      checker has — counting the terms written in the record rather than the
+      terms the whole evaluation performs.
+
+   3. CAA's `issuewild` REPLACES `issue` for wildcards rather than adding to it,
+      and the policy comes from the closest ancestor that publishes one. Both
+      are easy to get backwards and neither produces an error when you do; you
+      just get told the opposite of the truth about whether your renewal will
+      work.
+
+   4. "DANGLING" means NXDOMAIN at the target, not "no address record". A tool
+      that reports a subdomain takeover on a name that merely has no A record
+      is inventing a vulnerability, which is worse than missing one.
+
+   The transport is exercised against a LOCAL FIXTURE resolver over loopback —
+   the timeout, the byte cap, a malformed body, the shared query budget and the
+   memo — so none of this needs the network and all of it is real. */
+{
+  const sg = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const doh = await import('../src/lib/dns-doh.ts')
+  const { canonicalIp } = await import('../src/lib/ip.ts')
+
+  /* ── 1. The name. ──────────────────────────────────────────────────────── */
+
+  assert.equal(sg.sgValidateName('https://Example.COM/pricing?a=1').name, 'example.com')
+  assert.equal(sg.sgValidateName('example.com.').name, 'example.com', 'a trailing root dot is not part of the name')
+  assert.equal(sg.sgValidateName('  EXAMPLE.com  ').name, 'example.com')
+  assert.equal(sg.sgValidateName('example.com:8443').name, 'example.com')
+  assert.equal(sg.sgValidateName('user@example.com').name, 'example.com')
+  // Underscore labels are the whole point of a DNS tool — `_dmarc` and
+  // `_acme-challenge` are what a person debugging mail or a certificate has in
+  // their clipboard. A hostname-shaped validator rejects them.
+  assert.equal(sg.sgValidateName('_dmarc.example.com').ok, true)
+  assert.equal(sg.sgValidateName('_acme-challenge.www.example.com').ok, true)
+  // IDNA through the engine's own implementation, not a hand-rolled encoder.
+  assert.equal(sg.sgValidateName('bücher.de').name, 'xn--bcher-kva.de')
+  // An IP is refused rather than silently asked as a name: NXDOMAIN for a real
+  // address is a worse answer than "this tool does not do reverse lookups".
+  assert.equal(sg.sgValidateName('1.2.3.4').ok, false)
+  assert.equal(sg.sgValidateName('2001:db8::1').ok, false)
+  assert.equal(sg.sgValidateName('localhost').ok, false, 'a single label is not a domain name')
+  assert.equal(sg.sgValidateName('a..b.com').ok, false)
+  assert.equal(sg.sgValidateName(`${'a'.repeat(64)}.com`).ok, false, 'a label stops at 63 characters')
+  assert.equal(sg.sgValidateName(`${'a'.repeat(60)}.${'b'.repeat(60)}.${'c'.repeat(60)}.${'d'.repeat(60)}.${'e'.repeat(60)}.com`).ok, false,
+    'a whole name stops at 253 characters even when every label is legal')
+  // The parameter-injection shape. The name is the only caller-supplied value
+  // that reaches a DoH URL, so a name that could carry its own `&type=` is
+  // refused here AND encoded there (asserted against the fixture below).
+  for (const hostile of ['a&type=ANY&name=b.com', 'ex.com?x=1', 'ex .com', 'ex .com', '-lead.com', 'trail-.com', 'ex.com#frag']) {
+    assert.equal(sg.sgValidateName(hostile).ok, false, `refused: ${JSON.stringify(hostile)}`)
+  }
+
+  /* ── 2. TXT is a LIST of strings, joined with nothing. ─────────────────── */
+
+  // RFC 1035 §3.3.14. DoH JSON renders the list quoted and space-separated, so
+  // the tempting `.replace(/"/g,'')` leaves a stray space where the split was —
+  // which lands in the middle of a DKIM key's base64 and stops it verifying, or
+  // splits an SPF mechanism in half. Neither throws.
+  assert.equal(sg.sgTxtValue('"abc" "def"'), 'abcdef')
+  assert.equal(sg.sgTxtValue('"v=spf1 ip4:1.2.3.4 " "include:x.net -all"'), 'v=spf1 ip4:1.2.3.4 include:x.net -all')
+  assert.equal(sg.sgTxtValue('"one"'), 'one')
+  assert.equal(sg.sgTxtValue('bare'), 'bare')
+  assert.equal(sg.sgTxtValue('"a\\"b"'), 'a"b', 'an escaped quote is content, not a delimiter')
+
+  /* ── 3. The diff: what it compares, and what it must not. ──────────────── */
+
+  const mkAnswer = (resolver, type, datas, rcode = 'NOERROR', ttlBase = 0) => ({
+    resolver,
+    type,
+    name: 'ex.com',
+    rcode,
+    // Deliberately different TTLs per resolver — that is the real world.
+    records: datas.map((d, i) => ({ type: 1, name: 'ex.com', data: d, ttl: ttlBase + i * 17 + 3 })),
+    elapsedMs: 4,
+  })
+
+  assert.equal(
+    sg.sgDiffAnswers('A', [mkAnswer('a', 'A', ['1.2.3.4', '5.6.7.8'], 'NOERROR', 30), mkAnswer('b', 'A', ['5.6.7.8', '1.2.3.4'], 'NOERROR', 3500)]).agree,
+    true,
+    'round-robin order and per-resolver TTLs must NOT read as a disagreement',
+  )
+  assert.equal(
+    sg.sgDiffAnswers('AAAA', [mkAnswer('a', 'AAAA', ['2001:0db8:0000:0000:0000:0000:0000:0001']), mkAnswer('b', 'AAAA', ['2001:DB8::1'])]).agree,
+    true,
+    'two legal spellings of one IPv6 address are one address',
+  )
+  assert.equal(
+    sg.sgDiffAnswers('CNAME', [mkAnswer('a', 'CNAME', ['Target.Example.COM.']), mkAnswer('b', 'CNAME', ['target.example.com'])]).agree,
+    true,
+    'DNS names are case-insensitive and the root dot is not data',
+  )
+  // …but a real difference is still a difference, or the tool says nothing ever.
+  const realDiff = sg.sgDiffAnswers('A', [mkAnswer('a', 'A', ['1.2.3.4']), mkAnswer('b', 'A', ['9.9.9.9'])])
+  assert.equal(realDiff.agree, false)
+  assert.equal(sg.sgDiffFindings([realDiff])[0].id, 'diff-A')
+  // A changed MX PREFERENCE is a real change and must survive normalisation.
+  assert.equal(sg.sgDiffAnswers('MX', [mkAnswer('a', 'MX', ['10 mail.ex.com']), mkAnswer('b', 'MX', ['20 mail.ex.com'])]).agree, false)
+  // One silent resolver among answering ones is FILTERING, not propagation —
+  // a different cause with a different fix, reported separately.
+  const filtered = sg.sgDiffAnswers('A', [mkAnswer('a', 'A', ['1.2.3.4']), mkAnswer('b', 'A', ['1.2.3.4']), mkAnswer('q', 'A', [], 'NXDOMAIN')])
+  assert.equal(filtered.looksFiltered, true)
+  assert.equal(sg.sgDiffFindings([filtered])[0].id, 'filtered-A')
+  assert.equal(sg.sgDiffFindings([filtered])[0].level, 'info', 'a policy decision at one operator is not a warning about your zone')
+  // A resolver that could not be reached is excluded from the verdict rather
+  // than counted as a third opinion.
+  const dead = resolver => ({ resolver, type: 'A', name: 'ex.com', rcode: 'ERROR', records: [], elapsedMs: 1, error: 'timeout' })
+  const withDead = sg.sgDiffAnswers('A', [mkAnswer('a', 'A', ['1.2.3.4']), dead('x')])
+  assert.equal(withDead.agree, true)
+  assert.equal(withDead.answered, 1)
+  assert.deepEqual(withDead.failed, ['x'])
+
+  /* …and when NOBODY answered, "they agree" is a sentence nobody earned. This
+     one was found by running the endpoint with outbound network blocked: all
+     three resolvers errored and the page reported agreement on eight record
+     types, which is precisely the confident-wrong-sentence failure the evidence
+     rule exists to prevent. `answered` is what the UI and the finding read. */
+  const blackout = ['A', 'AAAA', 'CNAME', 'MX'].map(t =>
+    sg.sgDiffAnswers(t, ['cloudflare', 'google', 'quad9'].map(r => ({ ...dead(r), type: t }))))
+  for (const d of blackout) {
+    assert.equal(d.answered, 0, `${d.type}: nothing was observed`)
+    assert.equal(d.groups.length, 0)
+  }
+  const blackoutFindings = sg.sgReachabilityFindings(blackout)
+  assert.equal(blackoutFindings.length, 1, 'said once, not once per record type')
+  assert.equal(blackoutFindings[0].id, 'resolvers-unreachable')
+  assert.equal(blackoutFindings[0].level, 'error')
+  assert.ok(/could not ask/.test(blackoutFindings[0].detail), 'it has to say this is not a fact about the zone')
+  // One working resolver and the blackout finding must go away, or it fires on
+  // every partial outage and stops meaning anything.
+  assert.deepEqual(sg.sgReachabilityFindings([...blackout, withDead]), [])
+  assert.deepEqual(sg.sgReachabilityFindings([]), [])
+  // The component must read `answered`, not `agree`, for that row.
+  const uiSrc = await readFile(new URL('../src/components/tools/dns-sightline/DnsSightline.ts', import.meta.url), 'utf-8')
+  const answeredAt = uiSrc.indexOf('d.answered === 0')
+  const agreeAt = uiSrc.indexOf('if (d.agree)')
+  assert.notEqual(answeredAt, -1, 'the diff table handles the nobody-answered case')
+  assert.ok(answeredAt < agreeAt, 'and handles it BEFORE the agreement branch, or the branch never runs')
+
+  /* ── 4. SPF, against an independent oracle. ────────────────────────────── */
+
+  const spfZone = {
+    'ex.com': ['"v=spf1 ip4:1.2.3.4 ip6:2001:db8::/32 include:a.net include:b.net ~all"'],
+    'a.net': ['"v=spf1 a mx include:c.org ~all"'],
+    'b.net': ['"v=spf1 ip4:5.6.7.8 -all"'],
+    'c.org': ['"v=spf1 a:mail.c.org exists:%{i}._spf.c.org ptr -all"'],
+    'wide.com': ['"v=spf1 include:a.net include:c.org include:d.net include:e.net -all"'],
+    // Exactly nine of the ten — the "one more provider and you are broken" case.
+    'near.com': ['"v=spf1 include:a.net a mx -all"'],
+    'd.net': ['"v=spf1 mx mx:alt.d.net -all"'],
+    'e.net': ['"v=spf1 a a:x.e.net a:y.e.net -all"'],
+    'exp.com': ['"v=spf1 ip4:1.1.1.1 exp=why.exp.com -all"'],
+    'loop.com': ['"v=spf1 include:loop2.com -all"'],
+    'loop2.com': ['"v=spf1 include:loop.com -all"'],
+    'two.com': ['"v=spf1 -all"', '"v=spf1 ip4:9.9.9.9 -all"'],
+    'redir.com': ['"v=spf1 redirect=b.net"'],
+    'redirall.com': ['"v=spf1 redirect=b.net -all"'],
+    'open.com': ['"v=spf1 +all"'],
+    'noall.com': ['"v=spf1 ip4:1.2.3.4"'],
+    'void.com': ['"v=spf1 include:gone1.net include:gone2.net include:gone3.net -all"'],
+  }
+  let spfQueries = 0
+  const spfLookup = async (name, type) => {
+    spfQueries += 1
+    const key = name.toLowerCase().replace(/\.+$/, '')
+    const data = type === 'TXT' ? spfZone[key] : undefined
+    return {
+      resolver: 'fixture',
+      type,
+      name: key,
+      rcode: data ? 'NOERROR' : 'NXDOMAIN',
+      records: (data ?? []).map(d => ({ type: 16, name: key, data: d, ttl: 300 })),
+      elapsedMs: 0,
+    }
+  }
+
+  /* The oracle. Deliberately the dumbest possible implementation: no bounds, no
+     memo, no queue, and no line of code shared with the module it checks. It
+     exists to make the ANSWER checkable rather than remembered — a hand-written
+     expected number is a second chance to make the same counting mistake twice.
+
+     Note `path`, not a shared visited set: a domain reached twice by two routes
+     is a DIAMOND and a receiver evaluates it twice, so only a name inside its
+     own ancestry is a cycle. Writing this oracle is what caught the walker
+     doing the other thing — a single global visited set, which silently
+     under-counts exactly the diamond-shaped zones that are near the limit.
+     Valid only on acyclic zones, which is why the loop fixtures are asserted
+     separately and not put through it. */
+  const naiveSpfCount = (domain, path = []) => {
+    const key = domain.toLowerCase().replace(/\.+$/, '')
+    if (path.includes(key)) throw new Error('oracle is only valid on acyclic zones')
+    const seen = [...path, key]
+    const raw = (spfZone[key] ?? []).find(r => /v=spf1/i.test(r))
+    if (!raw) return 0
+    const record = raw.replace(/"/g, '')
+    const tokens = record.trim().split(/\s+/).slice(1)
+    const hasAll = tokens.some(t => /^[+\-~?]?all$/i.test(t))
+    let n = 0
+    for (const token of tokens) {
+      const bare = token.replace(/^[+\-~?]/, '').toLowerCase()
+      if (/^all$/.test(bare) || bare.startsWith('ip4') || bare.startsWith('ip6') || bare.startsWith('exp=')) continue
+      if (bare.startsWith('redirect=')) continue // handled after the loop
+      const kind = bare.split(/[:/=]/)[0]
+      if (!['include', 'a', 'mx', 'ptr', 'exists'].includes(kind)) continue
+      n += 1
+      if (kind === 'include') n += naiveSpfCount(token.split(':')[1], seen)
+    }
+    const redirect = tokens.find(t => /^redirect=/i.test(t))
+    if (redirect && !hasAll) n += 1 + naiveSpfCount(redirect.split('=')[1], seen)
+    return n
+  }
+
+  for (const domain of ['ex.com', 'a.net', 'b.net', 'c.org', 'wide.com', 'd.net', 'e.net', 'exp.com', 'redir.com', 'redirall.com', 'noall.com']) {
+    const report = await sg.sgAnalyzeSpf(domain, spfLookup)
+    assert.equal(
+      report.lookups,
+      naiveSpfCount(domain),
+      `${domain}: the walker and the independent oracle must count the same terms (walker ${report.lookups})`,
+    )
+  }
+
+  // Nine of ten is its own finding: the record works today and breaks on the
+  // next provider, which is the only moment a warning is useful.
+  const nearReport = await sg.sgAnalyzeSpf('near.com', spfLookup)
+  assert.equal(nearReport.lookups, 9)
+  assert.equal(nearReport.exceeded, false)
+  assert.ok(sg.sgSpfFindings(nearReport, 'near.com').some(f => f.id === 'spf-lookup-near'))
+
+  // The specific shape the rule exists for: a three-mechanism record whose real
+  // cost is eight, because an include spends the SAME budget inside itself.
+  const exReport = await sg.sgAnalyzeSpf('ex.com', spfLookup)
+  assert.equal(exReport.lookups, 8)
+  assert.ok(
+    exReport.record.split(/\s+/).filter(t => /^(include|a|mx|ptr|exists)/.test(t)).length < exReport.lookups,
+    'the top-level term count must be LOWER than the real total, or this fixture is not testing the thing',
+  )
+  assert.equal(exReport.exceeded, false)
+  assert.equal(exReport.all, '~')
+
+  // `ip4`/`ip6` are free however many there are; `exp=` is exempt by §4.6.4.
+  assert.equal((await sg.sgAnalyzeSpf('exp.com', spfLookup)).lookups, 0)
+  assert.equal((await sg.sgAnalyzeSpf('b.net', spfLookup)).lookups, 0)
+
+  // `redirect=` counts — and is ignored entirely when the record also has `all`.
+  assert.equal((await sg.sgAnalyzeSpf('redirall.com', spfLookup)).lookups, 0, 'a redirect alongside `all` is never evaluated')
+  const redirReport = await sg.sgAnalyzeSpf('redir.com', spfLookup)
+  assert.equal(redirReport.lookups, 1)
+  assert.equal(redirReport.terms[0].kind, 'redirect')
+
+  // Over the limit, and the finding names the number.
+  const wide = await sg.sgAnalyzeSpf('wide.com', spfLookup)
+  assert.ok(wide.lookups > sg.SG_SPF_LOOKUP_LIMIT, `wide.com should exceed ten (got ${wide.lookups})`)
+  assert.equal(wide.exceeded, true)
+  const wideFindings = sg.sgSpfFindings(wide, 'wide.com')
+  assert.ok(wideFindings.some(f => f.id === 'spf-lookup-limit'))
+  assert.ok(wideFindings.find(f => f.id === 'spf-lookup-limit').title.includes(String(wide.lookups)))
+
+  // A cycle TERMINATES and is reported, rather than hanging the request. The
+  // oracle above cannot check this one — it throws on a cycle by construction,
+  // which is exactly why the real walker needs the visited set.
+  assert.throws(() => naiveSpfCount('loop.com'), /acyclic/)
+  const loopReport = await sg.sgAnalyzeSpf('loop.com', spfLookup)
+  assert.ok(loopReport.problems.some(p => p.includes('loop')), 'an include cycle is a finding')
+  assert.ok(loopReport.queries < sg.SG_SPF_MAX_QUERIES, 'the cycle must stop on the visited set, not on the ceiling')
+  assert.ok(sg.sgSpfFindings(loopReport, 'loop.com').some(f => f.id === 'spf-loop'))
+
+  // Void lookups are their own §4.6.4 limit.
+  const voidReport = await sg.sgAnalyzeSpf('void.com', spfLookup)
+  assert.equal(voidReport.voidLookups, 3)
+  assert.equal(voidReport.voidExceeded, true)
+  assert.ok(sg.sgSpfFindings(voidReport, 'void.com').some(f => f.id === 'spf-void-limit'))
+
+  // Two SPF records is a permerror, not a merge.
+  const twoReport = await sg.sgAnalyzeSpf('two.com', spfLookup)
+  assert.equal(twoReport.recordCount, 2)
+  assert.ok(sg.sgSpfFindings(twoReport, 'two.com').some(f => f.id === 'spf-multiple'))
+
+  assert.ok(sg.sgSpfFindings(await sg.sgAnalyzeSpf('open.com', spfLookup), 'open.com').some(f => f.id === 'spf-all-pass'))
+  assert.ok(sg.sgSpfFindings(await sg.sgAnalyzeSpf('noall.com', spfLookup), 'noall.com').some(f => f.id === 'spf-no-all'))
+  assert.ok(sg.sgSpfFindings(await sg.sgAnalyzeSpf('nothing.com', spfLookup), 'nothing.com').some(f => f.id === 'spf-missing'))
+
+  // The walk is bounded whatever the zone says. A zone that hands back a fresh
+  // include every time cannot make this run forever.
+  /* The fixture resolver REFUSES to be asked more than the ceiling allows,
+     rather than answering forever and letting the assertion below decide. An
+     unbounded walk then fails with a named error instead of hanging the suite —
+     a test that hangs is a test that gets its timeout raised. */
+  const SG_FIXTURE_CEILING = sg.SG_SPF_MAX_QUERIES + 5
+  let generated = 0
+  const hostileLookup = async (name, type) => {
+    generated += 1
+    if (generated > SG_FIXTURE_CEILING) throw new Error(`the SPF walk is unbounded: it asked ${generated} questions, past its own ceiling of ${sg.SG_SPF_MAX_QUERIES}`)
+    const n = generated
+    return {
+      resolver: 'fixture',
+      type,
+      name,
+      rcode: 'NOERROR',
+      records: [{ type: 16, name, data: `"v=spf1 include:gen${n}.evil.test -all"`, ttl: 1 }],
+      elapsedMs: 0,
+    }
+  }
+  const hostile = await sg.sgAnalyzeSpf('evil.test', hostileLookup)
+  assert.ok(hostile.truncated, 'an unbounded include chain must stop on this tool\'s ceiling and SAY so')
+  assert.ok(hostile.queries <= sg.SG_SPF_MAX_QUERIES + 1, `the walk spent ${hostile.queries} queries — the ceiling is ${sg.SG_SPF_MAX_QUERIES}`)
+
+  /* …and a WIDE zone, which the depth ceiling cannot stop. Twelve includes per
+     record, each of which has twelve of its own, is 157 queries at depth two —
+     shallow enough that only the query ceiling and the overshoot guard bound
+     it. Depth and breadth are separate attacks and each needs its own bound;
+     asserting only the chain lets the breadth ceiling be deleted unnoticed. */
+  let wideQueries = 0
+  const hostileWide = await sg.sgAnalyzeSpf('fan.test', async (name, type) => {
+    wideQueries += 1
+    if (wideQueries > SG_FIXTURE_CEILING) throw new Error(`the SPF walk is unbounded in BREADTH: it asked ${wideQueries} questions, past its own ceiling of ${sg.SG_SPF_MAX_QUERIES}`)
+    const includes = Array.from({ length: 12 }, (_, i) => `include:c${i}.${name}`).join(' ')
+    return { resolver: 'fixture', type, name, rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 16, name, data: `"v=spf1 ${includes} -all"`, ttl: 1 }] }
+  })
+  assert.ok(hostileWide.truncated, 'a fan-shaped include tree must stop on a ceiling and say so')
+  assert.ok(wideQueries <= sg.SG_SPF_MAX_QUERIES + 1, `a wide tree spent ${wideQueries} queries — the ceiling is ${sg.SG_SPF_MAX_QUERIES}`)
+  assert.ok(hostileWide.lookups < 500, `the term count must stay bounded too (got ${hostileWide.lookups})`)
+  // …and "truncated" must be distinguishable from "over the limit", because one
+  // is a fact about the zone and the other is a fact about this tool.
+  assert.notEqual(hostile.truncated, false)
+
+  /* ── 5. DMARC: alignment is a different question from the SPF pass. ────── */
+
+  const txtAnswer = (name, values) => ({
+    resolver: 'fixture',
+    type: 'TXT',
+    name,
+    rcode: values.length ? 'NOERROR' : 'NXDOMAIN',
+    records: values.map(v => ({ type: 16, name, data: v, ttl: 300 })),
+    elapsedMs: 0,
+  })
+
+  const strict = sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=reject; aspf=s; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2)
+  assert.equal(strict.tags.p, 'reject')
+  const strictFindings = sg.sgDmarcFindings(strict, 'ex.com')
+  assert.ok(strictFindings.some(f => f.id === 'dmarc-strict-alignment'))
+  assert.ok(
+    strictFindings.find(f => f.id === 'dmarc-strict-alignment').detail.includes('MAIL FROM'),
+    'the strict-alignment finding has to explain the failure it predicts, not just name the tag',
+  )
+  // Relaxed is the default and must NOT produce the finding, or it fires on
+  // every domain and stops meaning anything.
+  assert.equal(
+    sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=reject; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com')
+      .some(f => f.id === 'dmarc-strict-alignment'),
+    false,
+  )
+  // Two records DISCARD each other — the surprising one, because the zone looks
+  // more protected than a zone with one record and is protected by neither.
+  const dup = sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=reject"', '"v=DMARC1; p=none"']), txtAnswer('ex.com', []), 2)
+  assert.equal(dup.recordCount, 2)
+  assert.ok(sg.sgDmarcFindings(dup, 'ex.com').some(f => f.id === 'dmarc-multiple'))
+  // A DMARC record published at the apex is read by nobody.
+  const misplaced = sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', []), txtAnswer('ex.com', ['"v=spf1 -all"', '"v=DMARC1; p=reject"']), 2)
+  assert.equal(misplaced.atApex, true)
+  assert.ok(sg.sgDmarcFindings(misplaced, 'ex.com').some(f => f.id === 'dmarc-at-apex'))
+  assert.ok(sg.sgDmarcFindings(strict, 'ex.com').every(f => f.id !== 'dmarc-at-apex'), 'a correctly-placed record must not trip the apex finding')
+  // For a subdomain the tool says what it does NOT know rather than guessing at
+  // the organizational domain without a Public Suffix List.
+  const sub = sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.mail.ex.com', []), txtAnswer('mail.ex.com', []), 3), 'mail.ex.com')
+  assert.ok(sub.find(f => f.id === 'dmarc-missing').detail.includes('Public Suffix List'))
+  assert.equal(sub.find(f => f.id === 'dmarc-missing').level, 'info', 'an inherited policy is not the same as no policy')
+
+  /* ── 6. CAA: the ancestor walk, and issuewild REPLACING issue. ─────────── */
+
+  const caaZone = { 'ex.com': ['0 issue "letsencrypt.org"', '0 issuewild ";"'] }
+  const caaLookup = async (name, type) => {
+    const key = name.toLowerCase()
+    const data = type === 'CAA' ? (caaZone[key] ?? []) : []
+    return { resolver: 'fixture', type, name: key, rcode: 'NOERROR', records: data.map(d => ({ type: 257, name: key, data: d, ttl: 60 })), elapsedMs: 0 }
+  }
+  const walk = await sg.sgAnalyzeCaa('www.ex.com', caaLookup)
+  assert.equal(walk.foundAt, 'ex.com', 'a CA checks the exact name and then each parent — a policy at the apex governs a host with none')
+  assert.deepEqual(walk.walked, ['www.ex.com', 'ex.com'])
+  const verdict = sg.sgCaaVerdict(walk)
+  assert.equal(sg.sgCaaAllows(verdict, 'letsencrypt.org', false), true)
+  assert.equal(sg.sgCaaAllows(verdict, 'digicert.com', false), false)
+  assert.equal(
+    sg.sgCaaAllows(verdict, 'letsencrypt.org', true),
+    false,
+    'issuewild ";" blocks wildcards for EVERY CA, including one that issue permits',
+  )
+  // The other direction: with no issuewild at all, issue governs wildcards too.
+  const noWild = sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['ex.com'], entries: [sg.sgParseCaa('0 issue "letsencrypt.org"')] })
+  assert.equal(sg.sgCaaAllows(noWild, 'letsencrypt.org', true), true)
+  assert.equal(sg.sgCaaAllows(noWild, 'digicert.com', true), false)
+  // `issue ";"` is a deliberate instruction that nobody may issue.
+  const none = sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['ex.com'], entries: [sg.sgParseCaa('0 issue ";"')] })
+  assert.equal(none.forbidsAll, true)
+  assert.equal(sg.sgCaaAllows(none, 'letsencrypt.org', false), false)
+  // An unrecognised CRITICAL tag blocks every CA — a spectacular silent way to
+  // break a renewal, and the reason the flag is parsed rather than ignored.
+  const crit = sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['ex.com'], entries: [sg.sgParseCaa('128 weirdtag "x"'), sg.sgParseCaa('0 issue "letsencrypt.org"')] })
+  assert.deepEqual(crit.unknownCritical, ['weirdtag'])
+  assert.equal(sg.sgCaaAllows(crit, 'letsencrypt.org', false), false)
+  // A non-critical unknown tag does NOT block anything.
+  const softUnknown = sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['ex.com'], entries: [sg.sgParseCaa('0 weirdtag "x"'), sg.sgParseCaa('0 issue "letsencrypt.org"')] })
+  assert.deepEqual(softUnknown.unknownCritical, [])
+  assert.equal(sg.sgCaaAllows(softUnknown, 'letsencrypt.org', false), true)
+  // No policy anywhere means any CA may issue — the walk must not invent one.
+  const empty = await sg.sgAnalyzeCaa('a.b.nothing.test', caaLookup)
+  assert.equal(empty.foundAt, null)
+  assert.equal(sg.sgCaaAllows(sg.sgCaaVerdict(empty), 'anyone.example', true), true)
+  assert.deepEqual(empty.walked, ['a.b.nothing.test', 'b.nothing.test', 'nothing.test'], 'the walk stops at two labels')
+  // The blocked-CA finding fires, and only when a CA was actually named.
+  assert.ok(sg.sgCaaFindings(verdict, 'ex.com', 'digicert.com').some(f => f.id === 'caa-blocks-ca'))
+  assert.equal(sg.sgCaaFindings(verdict, 'ex.com', null).some(f => f.id === 'caa-blocks-ca'), false)
+  // Every id this route can offer is one the parser recognises, or the picker
+  // silently offers a CA the checker can never match.
+  for (const ca of sg.SG_KNOWN_CAS) {
+    assert.match(ca.id, /^[a-z0-9.-]+$/, `${ca.id} is a CAA identifier, not a label`)
+    assert.equal(sg.sgCaaAllows(sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['ex.com'], entries: [sg.sgParseCaa(`0 issue "${ca.id}"`)] }), ca.id, false), true)
+  }
+
+  /* ── 7. MX and CNAME. ──────────────────────────────────────────────────── */
+
+  const mxAnswer = {
+    resolver: 'fixture',
+    type: 'MX',
+    name: 'ex.com',
+    rcode: 'NOERROR',
+    elapsedMs: 0,
+    records: [
+      { type: 15, name: 'ex.com', data: '10 mail.ex.com.', ttl: 300 },
+      { type: 15, name: 'ex.com', data: '20 1.2.3.4', ttl: 300 },
+      { type: 15, name: 'ex.com', data: '30 gone.ex.com', ttl: 300 },
+    ],
+  }
+  const mailZone = {
+    'mail.ex.com': { CNAME: ['alias.host.net.'], A: ['9.9.9.9'] },
+  }
+  const mxLookup = async (name, type) => {
+    const key = name.toLowerCase()
+    const data = mailZone[key]?.[type] ?? []
+    return { resolver: 'fixture', type, name: key, rcode: data.length ? 'NOERROR' : 'NXDOMAIN', records: data.map(d => ({ type: 1, name: key, data: d, ttl: 60 })), elapsedMs: 0 }
+  }
+  const targets = await sg.sgResolveMxTargets(mxAnswer, mxLookup)
+  const mxFindings = sg.sgMxFindings(mxAnswer, targets)
+  const mxIds = mxFindings.map(f => f.id)
+  assert.ok(mxIds.includes('mx-cname-target'), 'an MX pointing at a CNAME is forbidden by RFC 2181 §10.3')
+  assert.ok(mxIds.includes('mx-ip-target'), 'an MX holds a hostname; an address there resolves to NXDOMAIN at every sender')
+  assert.ok(mxIds.includes('mx-unresolvable'))
+  // A perfectly ordinary MX must produce NONE of those, or every domain gets a
+  // mail error and the section is noise.
+  const goodMx = { ...mxAnswer, records: [{ type: 15, name: 'ex.com', data: '10 mail.ex.com', ttl: 300 }] }
+  const goodTargets = await sg.sgResolveMxTargets(goodMx, async (name, type) => ({
+    resolver: 'fixture', type, name, rcode: type === 'A' ? 'NOERROR' : 'NXDOMAIN', elapsedMs: 0,
+    records: type === 'A' ? [{ type: 1, name, data: '9.9.9.9', ttl: 60 }] : [],
+  }))
+  assert.deepEqual(sg.sgMxFindings(goodMx, goodTargets), [], 'a healthy MX produces no findings at all')
+  // Null MX is a correct record, reported as information rather than a fault.
+  const nullMx = { ...mxAnswer, records: [{ type: 15, name: 'ex.com', data: '0 .', ttl: 300 }] }
+  assert.equal(sg.sgIsNullMx(nullMx.records), true)
+  assert.equal(sg.sgMxFindings(nullMx, []).map(f => f.level).join(), 'info')
+  assert.equal(sg.sgIsNullMx([{ type: 15, name: 'x', data: '0 mail.ex.com', ttl: 1 }]), false)
+  assert.equal(sg.sgIsNullMx([{ type: 15, name: 'x', data: '0 .', ttl: 1 }, { type: 15, name: 'x', data: '10 m.ex.com', ttl: 1 }]), false,
+    'a null MX is only null when it is the ONLY record')
+
+  /* "Dangling" must mean NXDOMAIN, not "has no address record". Getting this
+     wrong does not break the page — it reports a subdomain takeover on a name
+     nobody can take over, which is the most damaging sentence this tool could
+     print. The rule is a claim and therefore lives in `analyze.ts`, not in the
+     orchestrator, so it can be driven directly. */
+  const nx = type => ({ resolver: 'f', type, name: 't.test', rcode: 'NXDOMAIN', records: [], elapsedMs: 0 })
+  const ok0 = (type, data) => ({ resolver: 'f', type, name: 't.test', rcode: 'NOERROR', records: data ? [{ type: 1, name: 't.test', data, ttl: 60 }] : [], elapsedMs: 0 })
+  assert.equal(sg.sgIsDangling(nx('A'), nx('AAAA'), nx('CNAME')), true)
+  assert.equal(sg.sgIsDangling(ok0('A', '1.2.3.4'), nx('AAAA'), nx('CNAME')), false)
+  // The name exists carrying nothing of these three types — an odd zone, not an
+  // unclaimed hostname. NOERROR is not NXDOMAIN.
+  assert.equal(sg.sgIsDangling(ok0('A', null), ok0('AAAA', null), ok0('CNAME', null)), false,
+    'a name that exists with no address is not available for anyone to claim')
+  // A CNAME chain is ordinary hosted-service plumbing, not a dangling record.
+  assert.equal(sg.sgIsDangling(nx('A'), nx('AAAA'), ok0('CNAME', 'next.host.net')), false)
+  // A resolver that failed is not evidence of absence.
+  assert.equal(sg.sgIsDangling({ ...nx('A'), rcode: 'ERROR', error: 'timeout' }, nx('AAAA'), nx('CNAME')), false)
+
+  // The finding itself, given the flag.
+  const dangling = sg.sgCnameFindings({ target: 'proj.github.io', dangling: true, service: 'GitHub Pages', coexisting: [], atApex: false }, 'blog.ex.com')
+  assert.equal(dangling[0].id, 'cname-dangling')
+  assert.ok(dangling[0].detail.includes('GitHub Pages'), 'naming the service is what turns this from a broken link into a takeover')
+  const live = sg.sgCnameFindings({ target: 'proj.github.io', dangling: false, service: 'GitHub Pages', coexisting: [], atApex: false }, 'blog.ex.com')
+  assert.equal(live.some(f => f.id === 'cname-dangling'), false)
+  assert.equal(live[0].id, 'cname-hosted')
+  assert.equal(live[0].level, 'info')
+  assert.equal(sg.sgTakeoverService('x.herokuapp.com'), 'Heroku')
+  assert.equal(sg.sgTakeoverService('www.example.com'), null)
+  assert.equal(sg.sgTakeoverService('notgithub.io'), null, 'the suffix match is on a label boundary, not a substring')
+  assert.ok(sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com').map(f => f.id).includes('cname-at-apex'))
+  assert.ok(sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com').map(f => f.id).includes('cname-coexists'))
+  assert.deepEqual(sg.sgCnameFindings({ target: null, dangling: false, service: null, coexisting: [], atApex: true }, 'ex.com'), [],
+    'no CNAME, no CNAME findings')
+
+  /* ── 8. Every finding cites the record it rests on. ────────────────────── */
+
+  /* The organising rule of this tool, asserted on EVERY producer rather than on
+     the ones it was written for — the token-bench lesson, where a `proof` label
+     was checked on the diagnosis half and a lint finding dressed as proved
+     survived a merge. The producer list is DERIVED from the module's exports,
+     so a finding function added later is covered without anybody remembering
+     this block exists. */
+  const analyzeSrc = await readFile(new URL('../src/components/tools/dns-sightline/analyze.ts', import.meta.url), 'utf-8')
+  // Derived from the signatures rather than from the names: a producer RETURNS
+  // findings and does not TAKE them, which excludes `sgSortFindings` without
+  // naming it and picks up a producer called something else entirely.
+  const producers = [...analyzeSrc.matchAll(/export function (sg\w+)\(([^{}]*?)\): SgFinding\[\]/g)]
+    .filter(m => !m[2].includes('SgFinding[]'))
+    .map(m => m[1])
+  assert.ok(producers.length >= 6, `expected the finding producers to be discoverable from their signatures (found ${producers.join(', ')})`)
+  for (const name of producers) assert.equal(typeof sg[name], 'function', `${name} is exported`)
+  const exercised = {
+    sgSpfFindings: [
+      sg.sgSpfFindings(wide, 'wide.com'),
+      sg.sgSpfFindings(voidReport, 'void.com'),
+      sg.sgSpfFindings(twoReport, 'two.com'),
+      sg.sgSpfFindings(nearReport, 'near.com'),
+      sg.sgSpfFindings(loopReport, 'loop.com'),
+      sg.sgSpfFindings(await sg.sgAnalyzeSpf('open.com', spfLookup), 'open.com'),
+      sg.sgSpfFindings(await sg.sgAnalyzeSpf('noall.com', spfLookup), 'noall.com'),
+      sg.sgSpfFindings(await sg.sgAnalyzeSpf('a.net', spfLookup), 'a.net'),
+      sg.sgSpfFindings(await sg.sgAnalyzeSpf('nothing.com', spfLookup), 'nothing.com'),
+    ],
+    sgDmarcFindings: [
+      strictFindings,
+      sg.sgDmarcFindings(dup, 'ex.com'),
+      sub,
+      sg.sgDmarcFindings(misplaced, 'ex.com'),
+      // p=none with a pct rollout, and a record missing the mandatory p= tag.
+      sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=none; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
+      sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=quarantine; pct=25; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
+      sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
+    ],
+    sgCaaFindings: [
+      sg.sgCaaFindings(verdict, 'ex.com', 'digicert.com'),
+      sg.sgCaaFindings(crit, 'ex.com', null),
+      sg.sgCaaFindings(none, 'ex.com', 'letsencrypt.org'),
+      sg.sgCaaFindings(sg.sgCaaVerdict(empty), 'x.test', null),
+    ],
+    sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, [])],
+    sgCnameFindings: [dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com')],
+    sgDiffFindings: [sg.sgDiffFindings([realDiff, filtered])],
+    sgReachabilityFindings: [blackoutFindings],
+    sgNsFindings: [
+      sg.sgNsFindings({ resolver: 'f', type: 'NS', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 2, name: 'ex.com', data: 'a.ns.ex.com', ttl: 60 }] }, { resolver: 'f', type: 'SOA', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [] }, 'ex.com'),
+      sg.sgNsFindings({ resolver: 'f', type: 'NS', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [] }, { resolver: 'f', type: 'SOA', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 6, name: 'ex.com', data: 'a b 1', ttl: 1 }, { type: 6, name: 'ex.com', data: 'c d 2', ttl: 1 }] }, 'ex.com'),
+    ],
+  }
+  for (const name of producers) {
+    assert.ok(exercised[name], `${name} is a finding producer with no fixture here — add one rather than letting it go unchecked`)
+  }
+  const everyFinding = Object.values(exercised).flat(2)
+  assert.ok(everyFinding.length >= 20, `expected a broad sample of findings (got ${everyFinding.length})`)
+  const seenIds = new Set()
+  for (const f of everyFinding) {
+    assert.ok(f.id && f.title && f.detail, `a finding needs an id, a title and a detail: ${JSON.stringify(f)}`)
+    assert.ok(['error', 'warn', 'info'].includes(f.level), `${f.id} has a real level`)
+    assert.ok(['record', 'absence'].includes(f.basis), `${f.id} declares its basis`)
+    if (f.basis === 'record') {
+      assert.ok(f.evidence.length > 0, `${f.id} claims to rest on a record and cites none`)
+      assert.ok(f.evidence.every(e => typeof e === 'string' && e.trim()), `${f.id} cites an empty string as evidence`)
+    } else {
+      assert.equal(f.evidence.length, 0, `${f.id} is about an absent record and must cite nothing`)
+    }
+    seenIds.add(f.id)
+  }
+  /* …and the fixtures above have to REACH every finding the module can emit.
+     The evidence rule is only as strong as its coverage: mutation 12 (a finding
+     that claims a record and cites none) survived the first version of this
+     block, because the one producer branch that emitted it had no fixture. The
+     id list is derived from the source, so a finding added later either gets a
+     fixture or fails here — nobody has to remember. Ids built at runtime carry
+     a template literal and are matched by prefix. */
+  const declaredIds = [...analyzeSrc.matchAll(/^\s+id: '([a-z0-9-]+)',$/gm)].map(m => m[1])
+  const templateIds = [...analyzeSrc.matchAll(/^\s+id: [`']([a-z-]+)-\$\{/gm)].map(m => m[1])
+  assert.ok(declaredIds.length >= 15, `expected the finding ids to be discoverable in the source (found ${declaredIds.length})`)
+  for (const id of declaredIds) {
+    assert.ok(seenIds.has(id), `no fixture above ever produces the finding "${id}" — its evidence is unchecked`)
+  }
+  for (const prefix of new Set(templateIds)) {
+    assert.ok([...seenIds].some(id => id.startsWith(`${prefix}-`)), `no fixture produces a "${prefix}-*" finding`)
+  }
+  assert.ok(seenIds.size >= 15, `expected many distinct finding ids (got ${seenIds.size})`)
+
+  // Ordering: errors first. A page that leads with a note while an error sits
+  // below the fold has technically reported it.
+  const sorted = sg.sgSortFindings(everyFinding)
+  let worst = 0
+  for (const f of sorted) {
+    const rank = { error: 0, warn: 1, info: 2 }[f.level]
+    assert.ok(rank >= worst, 'findings are ordered error → warn → info')
+    worst = rank
+  }
+
+  /* ── 9. The transport, against a fixture resolver on loopback. ─────────── */
+
+  const { createServer } = await import('node:http')
+  let lastQuery = null
+  let hits = 0
+  const fixture = createServer((req, res) => {
+    hits += 1
+    const u = new URL(req.url, 'http://127.0.0.1')
+    lastQuery = u.searchParams
+    const name = u.searchParams.get('name') ?? ''
+    if (name === 'slow.test') return // never answers — exercises the timeout
+    if (name === 'huge.test') {
+      res.writeHead(200, { 'content-type': 'application/dns-json' })
+      res.end(JSON.stringify({ Status: 0, Answer: [{ name, type: 16, TTL: 1, data: 'x'.repeat(200_000) }] }))
+      return
+    }
+    if (name === 'garbage.test') {
+      res.writeHead(200, { 'content-type': 'application/dns-json' })
+      res.end('<html>not json</html>')
+      return
+    }
+    if (name === 'error.test') {
+      res.writeHead(503)
+      res.end('nope')
+      return
+    }
+    res.writeHead(200, { 'content-type': 'application/dns-json' })
+    res.end(JSON.stringify({
+      Status: name === 'missing.test' ? 3 : 0,
+      Answer: name === 'missing.test' ? [] : [
+        { name, type: 1, TTL: 60, data: '1.2.3.4' },
+        // A record of a DIFFERENT type in the same answer section — a CNAME on
+        // the way to the A record is normal, and counting it as an A record
+        // would make every aliased name disagree with itself.
+        { name, type: 5, TTL: 60, data: 'alias.test' },
+      ],
+    }))
+  })
+  await new Promise(resolve => fixture.listen(0, '127.0.0.1', resolve))
+  const endpointOverride = `http://127.0.0.1:${fixture.address().port}/dns-query`
+
+  try {
+    const ok = await doh.sgQuery('cloudflare', 'ex.test', 'A', { endpointOverride })
+    assert.equal(ok.rcode, 'NOERROR')
+    assert.equal(ok.records.length, 1, 'only records of the type asked for are kept')
+    assert.equal(ok.records[0].data, '1.2.3.4')
+    assert.equal(lastQuery.get('type'), 'A')
+
+    // Parameter injection: the name is the only caller-supplied value that
+    // reaches the URL, and it must arrive as ONE parameter value rather than
+    // rewriting the question.
+    await doh.sgQuery('cloudflare', 'a&type=ANY&name=evil.test', 'A', { endpointOverride })
+    assert.equal(lastQuery.getAll('type').length, 1, 'a crafted name must not inject a second type parameter')
+    assert.equal(lastQuery.get('type'), 'A')
+    assert.equal(lastQuery.get('name'), 'a&type=ANY&name=evil.test', 'the whole name arrives as one encoded value')
+
+    // NXDOMAIN is an answer, not an error.
+    const missing = await doh.sgQuery('cloudflare', 'missing.test', 'A', { endpointOverride })
+    assert.equal(missing.rcode, 'NXDOMAIN')
+    assert.equal(missing.error, undefined)
+
+    // Failure modes come back as answers carrying `error`, never as throws —
+    // one slow resolver must not cost the whole inspection.
+    const slow = await doh.sgQuery('cloudflare', 'slow.test', 'A', { endpointOverride, timeoutMs: 150 })
+    assert.ok(slow.error && /no answer within/.test(slow.error), `timeout should be reported, got ${JSON.stringify(slow.error)}`)
+    const huge = await doh.sgQuery('cloudflare', 'huge.test', 'TXT', { endpointOverride })
+    assert.ok(huge.error && /size cap/.test(huge.error), 'an oversized body is refused by the byte ceiling')
+    const garbage = await doh.sgQuery('cloudflare', 'garbage.test', 'A', { endpointOverride })
+    assert.ok(garbage.error && /not JSON/.test(garbage.error))
+    const http503 = await doh.sgQuery('cloudflare', 'error.test', 'A', { endpointOverride })
+    assert.ok(http503.error && /HTTP 503/.test(http503.error))
+
+    // An unknown resolver key does not reach the network at all.
+    const before = hits
+    const unknown = await doh.sgQuery('not-a-resolver', 'ex.test', 'A', { endpointOverride })
+    assert.equal(unknown.error, 'unknown resolver')
+    assert.equal(hits, before, 'an unknown key must not cause a request')
+
+    // The override is loopback-and-http only, so even a caller that wired it to
+    // a request parameter by mistake could not turn it into an SSRF.
+    for (const bad of ['https://127.0.0.1/x', 'http://169.254.169.254/latest', 'http://example.com/', 'http://[::ffff:127.0.0.1]/', 'not a url']) {
+      assert.equal(doh.sgOverrideAllowed(bad), false, `override refused: ${bad}`)
+      const refused = await doh.sgQuery('cloudflare', 'ex.test', 'A', { endpointOverride: bad })
+      assert.equal(refused.error, 'endpoint override refused')
+    }
+    assert.equal(doh.sgOverrideAllowed('http://127.0.0.1:8080/dns-query'), true)
+    assert.equal(doh.sgOverrideAllowed('http://localhost:1/x'), true)
+
+    // The budget is shared and it actually stops the work.
+    const budget = doh.sgNewBudget(3)
+    const spent = []
+    for (let i = 0; i < 5; i += 1) spent.push(await doh.sgQuery('cloudflare', `b${i}.test`, 'A', { endpointOverride, budget }))
+    assert.equal(budget.spent, 3)
+    assert.equal(budget.left, 0)
+    assert.equal(spent.filter(s => s.error === 'query budget exhausted').length, 2)
+
+    // The memo: same question once, different questions separately, and an
+    // ERROR is not retained — a timeout is a fact about one moment, and caching
+    // it would turn one slow response into a whole inspection of failures.
+    const memoBudget = doh.sgNewBudget(20)
+    const lookup = doh.sgMakeLookup('cloudflare', memoBudget, { endpointOverride })
+    const a1 = await lookup('ex.test', 'A')
+    const a2 = await lookup('EX.test.', 'A')
+    assert.equal(memoBudget.spent, 1, 'the memo key is derived from the normalised name and the type')
+    assert.deepEqual(a1.records, a2.records, 'the memo must AGREE with the uncached function, not merely be fast')
+    await lookup('ex.test', 'TXT')
+    assert.equal(memoBudget.spent, 2, 'a different type is a different question')
+    await lookup('other.test', 'A')
+    assert.equal(memoBudget.spent, 3)
+    const errBudget = doh.sgNewBudget(20)
+    const errLookup = doh.sgMakeLookup('cloudflare', errBudget, { endpointOverride, timeoutMs: 120 })
+    await errLookup('slow.test', 'A')
+    await errLookup('slow.test', 'A')
+    assert.equal(errBudget.spent, 2, 'a failed answer is retried rather than remembered')
+
+    // The pool keeps result order regardless of completion order.
+    const pooled = await doh.sgPool([
+      () => new Promise(r => setTimeout(() => r('a'), 30)),
+      () => Promise.resolve('b'),
+      () => new Promise(r => setTimeout(() => r('c'), 10)),
+    ], 3)
+    assert.deepEqual(pooled, ['a', 'b', 'c'])
+  } finally {
+    await new Promise(resolve => fixture.close(resolve))
+  }
+
+  /* ── 10. The outbound surface, and the escape hatch staying shut. ──────── */
+
+  assert.ok(doh.SG_RESOLVERS.length >= 3, 'the diff needs at least three opinions to be worth having')
+  assert.equal(new Set(doh.SG_RESOLVERS.map(r => r.key)).size, doh.SG_RESOLVERS.length)
+  for (const r of doh.SG_RESOLVERS) {
+    assert.ok(r.endpoint.startsWith('https://'), `${r.key} is reached over TLS`)
+    assert.doesNotThrow(() => new URL(r.endpoint))
+  }
+  assert.ok(doh.SG_RESOLVERS.some(r => r.key === doh.SG_PRIMARY_RESOLVER), 'the analysis resolver is one of the three')
+
+  const dohSrc = await readFile(new URL('../src/lib/dns-doh.ts', import.meta.url), 'utf-8')
+  // The destination is only ever `info.endpoint` or a loopback override. If a
+  // future edit interpolates anything else into the fetch URL, this fails.
+  assert.ok(/const url = `\$\{base\}\?name=\$\{encodeURIComponent\(name\)\}&type=\$\{encodeURIComponent\(type\)\}`/.test(dohSrc),
+    'the DoH URL is built from the allowlisted base with both parameters encoded')
+  assert.equal((dohSrc.match(/await fetch\(/g) ?? []).length, 1, 'there is exactly one outbound call site in the transport')
+  assert.ok(/redirect: 'error'/.test(dohSrc), 'a resolver redirecting us somewhere else is an error, not a hop to follow')
+
+  const inspectSrc = await readFile(new URL('../src/components/tools/dns-sightline/inspect.ts', import.meta.url), 'utf-8')
+  const routeSrc = await readFile(new URL('../src/pages/api/tools/dns-sightline.ts', import.meta.url), 'utf-8')
+  // The override exists for the fixture above and nothing else. Mentioning it
+  // in a comment is fine; passing it is not.
+  assert.equal(/endpointOverride\s*[:=]/.test(inspectSrc.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')), false,
+    'sgInspect must never set endpointOverride')
+  assert.equal(/endpointOverride/.test(routeSrc), false, 'the route must never mention endpointOverride')
+  assert.ok(/export const prerender = false/.test(routeSrc))
+  assert.ok(/'Cache-Control': 'no-store'/.test(routeSrc), 'an inspection is per-request and must not be cached')
+  // The CA parameter is an allowlist selection, not free text echoed back.
+  assert.ok(/SG_KNOWN_CAS\.some\(c => c\.id === caParam\)/.test(routeSrc),
+    'the ca parameter must be matched against the bundled identifiers, never used as given')
+
+  /* ── 11. Every live tool reaches its module AND its stylesheet. ────────── */
+
+  /* The tools-lane twin of the game-wiring guard above, and it closes the same
+     silent pair: no dispatch branch renders an empty custom element, and a
+     missing stylesheet import renders an unstyled one. Derived from the tools
+     config and from the route's own dispatch, so the next tool is covered
+     without anybody remembering this exists. */
+  const slugRoute = await readFile(new URL('../src/pages/tools/[slug].astro', import.meta.url), 'utf-8')
+  for (const tool of tools) {
+    if (tool.status !== 'live' || tool.slug === 'driftfield') continue // driftfield is its own hub route
+    const marker = `slug === '${tool.slug}') import('`
+    const at = slugRoute.indexOf(marker)
+    assert.notEqual(at, -1, `${tool.slug} has no dispatch branch in tools/[slug].astro — its page would render an empty element`)
+    const importPath = slugRoute.slice(at + marker.length, slugRoute.indexOf("'", at + marker.length))
+    const dir = importPath.replace(/\/[^/]+$/, '').replace('../../components/tools/', '')
+    assert.ok(dir && dir !== importPath, `${tool.slug}'s dispatch must import from src/components/tools/`)
+    assert.ok(
+      slugRoute.includes(`../../components/tools/${dir}/`) && new RegExp(`import '\\.\\./\\.\\./components/tools/${dir}/[a-z0-9-]+\\.css'`).test(slugRoute),
+      `${tool.slug}'s stylesheet is not imported by tools/[slug].astro — the page would render unstyled`,
+    )
+  }
+
+  /* ── 12. The hoisted IP canonicaliser still serves both callers. ───────── */
+
+  /* `canonicalIp` moved out of chainsaw/analyze.ts so DNS Sightline could reuse
+     it. Chainsaw's own assertions still run against `csCanonicalIp`; this pins
+     the two names to ONE implementation, so a later "tidy-up" cannot fork them
+     and leave the two tools disagreeing about whether two spellings of an
+     address are the same address. */
+  const csAnalyze = await import('../src/components/tools/chainsaw/analyze.ts')
+  assert.equal(csAnalyze.csCanonicalIp, canonicalIp, 'Chainsaw and DNS Sightline must share one canonicaliser, not two copies')
+  assert.equal(canonicalIp('2001:0DB8:0000:0000:0000:0000:0000:0001'), canonicalIp('2001:db8::1'))
+  assert.equal(canonicalIp('not-an-ip'), null)
+}
+console.log('dns sightline: the resolver diff ignores TTL and order, the SPF walk matches an independent oracle and terminates on a hostile zone, CAA issuewild replaces issue, every finding cites its record, and the only hosts reachable are the three allowlisted resolvers')

@@ -218,6 +218,94 @@ div[data-type="writing-summary"] {
   margin: 0.5rem 0 0 0;
 }
 
+/* ── Hub filter (/tools, /games) ──────────────────────────────────────────
+   A live search box between the intro and the card grid, mounted by
+   src/lib/hub-filter.ts. The form ships `hidden` (progressive enhancement —
+   no JS means no dead control) and is revealed only when the grid is long
+   enough to need narrowing. Base-only idiom: no ToolBase page renders it,
+   which is why it may live here rather than shared.css. */
+form[data-type="hub-filter"] {
+  margin: 0;
+  max-width: 24rem;
+}
+
+form[data-type="hub-filter"] input[type="search"] {
+  width: 100%;
+}
+
+form[data-type="hub-filter"] p[data-type="hub-filter-status"] {
+  margin: 0.5rem 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* Status facet chips — built client-side by hub-filter.ts from the cards'
+   data-status attributes, so like the form itself they simply don't exist for
+   a no-JS visitor. aria-pressed doubles as the styling hook: the pressed state
+   is the accessible state, so the two can never disagree. */
+form[data-type="hub-filter"] div[data-type="hub-filter-facets"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  margin-top: var(--space-2xs);
+}
+
+form[data-type="hub-filter"] div[data-type="hub-filter-facets"] button {
+  font-size: var(--text-xs);
+  padding: var(--space-2xs) var(--space-xs);
+  color: var(--color-muted);
+}
+
+form[data-type="hub-filter"] div[data-type="hub-filter-facets"] button[aria-pressed="true"] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* Status pill on each /games card. Lives here rather than in a scoped <style>
+   in games.astro because the daily-streak strip (src/lib/daily-streak-strip.ts)
+   inserts one of these at runtime, and a JS-created element never carries
+   Astro's scoping attribute — a scoped rule cannot reach it. Tokens only. */
+[data-type="game-badge"] {
+  font-size: var(--text-xs);
+  border: 1px solid var(--color-border);
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+[data-type="game-badge"][data-live] {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+/* Coming-soon reads as secondary: a muted label, distinct from the green live
+   state and from primary body text, so the badge states are ranked. */
+[data-type="game-badge"]:not([data-live]):not([data-streak]) {
+  color: var(--color-muted);
+}
+
+/* The personal daily-streak pill — accent, so "yours" reads apart from the
+   green "live" state and the muted "coming soon" state. */
+[data-type="game-badge"][data-streak] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* Two pills on one card (streak + play) need breathing room between them. */
+[data-type="game-badge"] + [data-type="game-badge"] {
+  margin-left: var(--space-2xs);
+}
+
+/* The filter hides non-matching cards with the `hidden` attribute. The shared
+   card rule (`[data-type="card-grid"] > *`, shared.css) sets `display: flex`,
+   and any author rule beats the UA's `[hidden] { display: none }` — so without
+   this refinement a "hidden" card would keep rendering. A higher-specificity
+   Base-only refinement of a shared idiom, which is the one shape allowed to
+   live here (see the load-order note in shared.css). */
+[data-type="card-grid"] > [hidden] {
+  display: none;
+}
+
 @media (max-width: 560px) {
   /* Keep the side gutter on mobile: since the content column moved from <body>
      to <main>, the horizontal padding lives here (var(--space-page-x)) — a bare

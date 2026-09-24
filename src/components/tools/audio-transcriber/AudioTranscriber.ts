@@ -1,11 +1,28 @@
 import { flashLabel } from '../../../lib/flash'
 
-const MIC_SVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+const MIC_SVG = `<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <rect x="9" y="1" width="6" height="11" rx="3"/>
   <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
   <line x1="12" y1="19" x2="12" y2="23"/>
   <line x1="8" y1="23" x2="16" y2="23"/>
 </svg>`
+
+/**
+ * Put the mic button's four representations of one state in one place: the
+ * styling hook, the pressed state, the accessible name and the tooltip. They
+ * were set at three separate call sites, `title` was doing the naming on its
+ * own (a tooltip is not a label — it is skipped entirely by several AT
+ * configurations and never surfaces on touch), and the icon-only button
+ * exposed no pressed state at all, so a screen-reader user could not tell a
+ * live recording from a stopped one.
+ */
+function atReflectMic(mic: HTMLElement, recording: boolean): void {
+  const label = recording ? 'Stop recording' : 'Start recording'
+  mic.setAttribute('data-recording', recording ? 'true' : 'false')
+  mic.setAttribute('aria-pressed', recording ? 'true' : 'false')
+  mic.setAttribute('aria-label', label)
+  mic.title = label
+}
 
 const LANGUAGES = [
   { code: 'en-US', label: 'English (US)' },
@@ -48,7 +65,7 @@ class AudioTranscriberTool extends HTMLElement {
             <span data-type="at-duration" hidden>00:00</span>
           </div>
           <div data-type="at-mic-area">
-            <button data-type="at-mic" data-recording="false" title="Start recording">
+            <button data-type="at-mic" type="button" data-recording="false" aria-pressed="false" aria-label="Start recording" title="Start recording">
               ${MIC_SVG}
             </button>
           </div>
@@ -167,8 +184,7 @@ class AudioTranscriberTool extends HTMLElement {
     const status = this.querySelector<HTMLElement>('[data-type="at-status"]')!
     const duration = this.querySelector<HTMLElement>('[data-type="at-duration"]')!
 
-    mic.setAttribute('data-recording', 'true')
-    mic.title = 'Stop recording'
+    atReflectMic(mic, true)
     status.textContent = 'Listening...'
     duration.hidden = false
 
@@ -188,8 +204,7 @@ class AudioTranscriberTool extends HTMLElement {
     const mic = this.querySelector<HTMLElement>('[data-type="at-mic"]')!
     const status = this.querySelector<HTMLElement>('[data-type="at-status"]')!
 
-    mic.setAttribute('data-recording', 'false')
-    mic.title = 'Start recording'
+    atReflectMic(mic, false)
     status.textContent = 'Stopped'
 
     if (this.timer) {

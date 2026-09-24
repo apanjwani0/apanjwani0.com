@@ -31,6 +31,3 @@ span[data-type="tool-description"] {
   color: var(--color-muted);
 }
 
-p[data-type="tool-description"] {
-  color: var(--color-muted);
-}
