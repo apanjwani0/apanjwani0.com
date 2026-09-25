@@ -21,8 +21,9 @@
  * CAA walk add more, and a hostile zone can make that tree as deep as it likes.
  * So an inspection carries a single mutable budget (`SgBudget`) that every
  * query decrements, and the walk stops when it runs out rather than when the
- * zone stops being interesting. Per-request timeout, per-response byte cap,
- * per-client and global rate limits sit on top.
+ * zone stops being interesting. Per-request timeout, per-response byte cap, an
+ * overall inspection deadline (`SG_INSPECT_DEADLINE_MS`), and per-client and
+ * global rate limits sit on top.
  *
  * ── The outbound allowlist ────────────────────────────────────────────────
  * Every URL this module fetches is built from a frozen compile-time constant.
@@ -85,6 +86,22 @@ export const SG_RESOLVER_KEYS: readonly string[] = SG_RESOLVERS.map(r => r.key)
 export const SG_PRIMARY_RESOLVER = 'cloudflare'
 
 export const SG_TIMEOUT_MS = 4_000
+/**
+ * One whole inspection's deadline, however many questions are still queued.
+ *
+ * Every other bound here is per question, and per-question bounds multiply. The
+ * SPF walk is sequential by nature — an include is only known once its parent
+ * has answered — so `SG_SPF_MAX_QUERIES` questions at `SG_TIMEOUT_MS` apiece
+ * held one inbound socket for close to three minutes against a resolver that
+ * had stopped answering, with the CAA walk and the MX targets queued behind it.
+ * Fifteen seconds leaves the diff its worst case (three pooled waves of four
+ * seconds) and the analysis whatever remains.
+ *
+ * Reaching it is not an error. Every question still unasked comes back at once
+ * as an answer carrying `error`, and each walk reports itself truncated or
+ * incomplete — never as a zone that lacks the record nobody managed to read.
+ */
+export const SG_INSPECT_DEADLINE_MS = 15_000
 /** A DoH JSON answer is a few hundred bytes; 64 KiB is a generous ceiling. */
 export const SG_MAX_RESPONSE_BYTES = 64 * 1024
 /** Total outbound DoH requests one inspection may make, whatever the zone says. */
@@ -136,6 +153,11 @@ export function sgSpend(budget: SgBudget): boolean {
 export interface SgQueryOptions {
   timeoutMs?: number
   budget?: SgBudget
+  /**
+   * The inspection's signal (`sgInspectionSignal`): its deadline and the
+   * visitor's own disconnect. Once it has aborted, no further question is sent
+   * or charged to the budget.
+   */
   signal?: AbortSignal
   /**
    * Point a resolver key at a local fixture server. This exists **solely** so
@@ -168,6 +190,25 @@ export function sgResolverInfo(key: string): SgResolverInfo | null {
 }
 
 /**
+ * The signal one inspection runs under: the caller's own (the visitor's request,
+ * which aborts when they leave) joined to the overall deadline.
+ */
+export function sgInspectionSignal(outer: AbortSignal | undefined, deadlineMs = SG_INSPECT_DEADLINE_MS): AbortSignal {
+  const deadline = AbortSignal.timeout(deadlineMs)
+  return outer ? AbortSignal.any([outer, deadline]) : deadline
+}
+
+/** True when `signal` stopped on the deadline rather than on the visitor leaving. */
+export function sgDeadlineReached(signal: AbortSignal): boolean {
+  return signal.aborted && signal.reason?.name === 'TimeoutError'
+}
+
+/** Why a question went unasked or unfinished, as the answer's `error` says it. */
+function sgStopped(signal: AbortSignal): string {
+  return sgDeadlineReached(signal) ? 'inspection deadline reached' : 'inspection cancelled'
+}
+
+/**
  * Ask one resolver one question.
  *
  * Never throws: a resolver that times out, refuses, or answers with something
@@ -195,6 +236,12 @@ export async function sgQuery(
 
   if (!info) return fail('unknown resolver')
   if (!(type in SG_TYPE_NUMBERS)) return fail('unsupported record type')
+  // An abort listener never fires on a signal that has ALREADY aborted, so
+  // without this check every question asked after the deadline would still go
+  // out and sit through its own full timeout — and a sequential walk would pay
+  // that once per remaining step. Nobody will read the answer, so it is neither
+  // sent nor charged to the budget.
+  if (opts.signal?.aborted) return fail(sgStopped(opts.signal))
   if (opts.budget && !sgSpend(opts.budget)) return fail('query budget exhausted')
 
   let base = info.endpoint
@@ -255,8 +302,14 @@ export async function sgQuery(
       elapsedMs: Date.now() - started,
     }
   } catch (err: any) {
+    // The inspection stopping and this question's own timer abort the same
+    // controller; only the outer signal can say which of the two it was.
+    if (opts.signal?.aborted) return fail(sgStopped(opts.signal))
     if (err?.name === 'AbortError') return fail(`no answer within ${opts.timeoutMs ?? SG_TIMEOUT_MS}ms`)
-    return fail(typeof err?.message === 'string' ? err.message.slice(0, 120) : 'resolver unreachable')
+    // A fixed sentence, not the exception's text: this string reaches the page,
+    // and a network error's message describes this server's own connection
+    // rather than anything about the resolver worth showing a stranger.
+    return fail('resolver unreachable')
   } finally {
     clearTimeout(timer)
     opts.signal?.removeEventListener('abort', onOuterAbort)

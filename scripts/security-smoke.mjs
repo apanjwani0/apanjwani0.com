@@ -5010,6 +5010,13 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
     '::1', '::', 'fc00::1', 'fd12:3456::1', 'fe80::1', 'fec0::1',
     '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:169.254.169.254',
     '64:ff9b::a00:1', '2001:db8::1', 'ff02::1', 'not-an-ip',
+    // 6to4 (2002::/16) is routed to the v4 address in its next 32 bits, so it is
+    // classified AS that address: loopback, RFC 1918 and the metadata service.
+    '2002:7f00:0001::', '2002:0a00:0001::1', '2002:a9fe:a9fe::1',
+    // Teredo (2001::/32) tunnels to wherever the relay says; discard-only 100::/64.
+    '2001::1', '2001:0:4136:e378:8000:63bf:3fff:fdd2', '100::1', '100::ffff:ffff:ffff:ffff',
+    // The 6to4 relay anycast block, deprecated by RFC 7526.
+    '192.88.99.1', '192.88.99.255',
   ]) {
     assert.ok(lpIsForbiddenIp(ip), `classifier must forbid ${ip}`)
   }
@@ -5017,6 +5024,11 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
     '1.1.1.1', '8.8.8.8', '93.184.216.34', '172.15.0.1', '172.32.0.1',
     '100.63.255.255', '100.128.0.1', '198.17.0.1', '223.255.255.255',
     '2606:4700:4700::1111', '2600::1', '::ffff:8.8.8.8',
+    // The v6 rules are prefixes, not "starts with 2001": Google's public
+    // resolver lives in 2001:4860::/32, one hextet away from Teredo. And a
+    // 6to4 address embedding a PUBLIC v4 is that public address.
+    '2001:4860:4860::8888', '2002:0808:0808::1',
+    '192.88.98.1', '192.88.100.1',
   ]) {
     assert.equal(lpIsForbiddenIp(ip), false, `classifier must allow public ${ip}`)
   }
@@ -5059,7 +5071,8 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
   assert.equal((lpRouteSrc.match(/createRateLimiter\(/g) || []).length, 2, 'per-client AND global outbound limiters — each hit costs the origin an outbound fetch')
   assert.ok(lpRouteSrc.includes("'Cache-Control': 'no-store'"), 'preview responses are never edge-cached')
   assert.ok(lpRouteSrc.includes('hasOwnProperty.call(LP_USER_AGENTS'), 'the UA is an allowlist KEY — free text here is header injection')
-  assert.ok(lpRouteSrc.includes("startsWith('image/')"), 'the image proxy only relays image/* bodies')
+  assert.ok(/const type = lpImageMediaType\(fetched\.contentType\)/.test(lpRouteSrc) && !lpRouteSrc.includes("startsWith('image/')"),
+    'the image proxy relays only an allowlisted image media type — see the PR 19 nits block for the grammar')
 
   // ── charset decode: header wins, sniff second, junk falls back ──
   const enc = new TextEncoder()
@@ -5221,6 +5234,15 @@ console.log('link peek refuses every private address (each redirect hop re-check
   assert.ok(/badge\?\.remove\(\)/.test(stripSrc), 'a lapsed streak repaints away instead of lingering')
   const gamesSrc = await readFile(new URL('../src/pages/games.astro', import.meta.url), 'utf8')
   assert.ok(gamesSrc.includes('registerDailyStreaks()'), 'the /games hub registers the strip')
+  // The hub's intro counts the dailies in words. Pinned to the claim itself,
+  // not to the first number word in the paragraph (the lesson of the /tools
+  // intro assertion), and compared with the list the strip actually records.
+  const gamesIntro = gamesSrc.slice(gamesSrc.indexOf('data-type="page-intro"'), gamesSrc.indexOf('</p>', gamesSrc.indexOf('data-type="page-intro"')))
+  const dailyClaim = gamesIntro.match(/\b([A-Za-z]+)\s+have\s+a\s+daily\s+round\s+that\s+is\s+the\s+same\s+for\s+everyone\b/)
+  assert.ok(dailyClaim, 'the /games intro still says, in words, how many games "have a daily round that is the same for everyone"')
+  const DAILY_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 }
+  assert.equal(DAILY_WORDS[dailyClaim[1].toLowerCase()], DAILY_SLUGS.length,
+    `the /games intro says "${dailyClaim[1]}" games have a daily round, but DAILY_SLUGS records ${DAILY_SLUGS.length} — update the copy and the list together`)
 
   // ── the slug allowlist is exactly the games the site ships as dailies ──
   assert.deepEqual([...DAILY_SLUGS], ['quintle', 'type-trial', 'hue-hunt'], 'DAILY_SLUGS is the fixed store-key allowlist')
@@ -5741,10 +5763,11 @@ console.log('chainsaw: port allowlist + reused SSRF guard + pinned address, DER 
   // ── …and the name lookup is bounded. dns.lookup runs on libuv's 4-slot
   //    threadpool and takes the OS resolver's timeout, which is outside this
   //    module's own budget; a few black-holed names would otherwise occupy
-  //    every slot and stall unrelated fs/crypto work container-wide.
+  //    every slot and stall unrelated fs/crypto work container-wide. The bound
+  //    now lives in src/lib/dns-lookup.ts, shared with Chainsaw, and is proved
+  //    against a lookup that never answers in the PR 19 review block below.
   const lpSrc = await readFile(new URL('../src/lib/link-peek-fetch.ts', import.meta.url), 'utf-8')
-  assert.ok(lpSrc.includes('LP_DNS_TIMEOUT_MS'), 'the DNS lookup has its own ceiling')
-  assert.ok(/Promise\.race\(\s*\[\s*lookup\(/.test(lpSrc), '…and the lookup is actually raced against it')
+  assert.ok(/await lookupAllBounded\(bare, dns\)/.test(lpSrc), 'the DNS lookup goes through the one bounded helper')
 
   // ── one escaping rule, not a second weaker copy. The local one omitted `'`,
   //    which AGENTS.md names explicitly.
@@ -5782,7 +5805,7 @@ console.log('chainsaw: port allowlist + reused SSRF guard + pinned address, DER 
       if (entry.isDirectory()) { await walk(child); continue }
       if (!entry.name.endsWith('.ts')) continue
       const body = await readFile(new URL(child, import.meta.url), 'utf-8')
-      if (/from '(node:|.*\/lib\/(tls-inspect|link-peek-fetch|webhook-store|visits|session))'/.test(body)) offenders.push(child)
+      if (/from '(node:|.*\/lib\/(tls-inspect|link-peek-fetch|dns-lookup|webhook-store|visits|session))'/.test(body)) offenders.push(child)
     }
   }
   for (const dir of browserDirs) await walk(dir)
@@ -6481,6 +6504,72 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   assert.deepEqual(sg.sgCnameFindings({ target: null, dangling: false, service: null, coexisting: [], atApex: true }, 'ex.com'), [],
     'no CNAME, no CNAME findings')
 
+  /* ── 7b. A question that got no ANSWER is not a record that is absent. ────
+
+     The CAA walk learned this first (see the CAA-and-issuer block at the end of
+     this file); SPF, DMARC and MX learned it when the inspection gained a
+     deadline, because a deadline turns every question still queued into a
+     failure at once. Before, a stalled include read exactly like NXDOMAIN —
+     "include:x has no SPF record — a receiver treats that as a permerror", plus
+     a void lookup — so one slow resolver produced a permerror finding, a
+     void-limit error and a lookup count presented as complete; and a failed MX
+     target read "no address, so mail bounces". Every fixture below fails with
+     the same empty record set a real absence has, which is the point. */
+  const noAnswer = (name, type, error = 'inspection deadline reached') =>
+    ({ resolver: 'fixture', type, name, rcode: 'ERROR', records: [], elapsedMs: 0, error })
+  const stallAt = names => async (name, type) => {
+    const key = name.toLowerCase().replace(/\.+$/, '')
+    return names.includes(key) ? noAnswer(key, type) : spfLookup(name, type)
+  }
+  assert.equal(sg.sgUnanswered(noAnswer('x.test', 'TXT')), true)
+  assert.equal(sg.sgUnanswered({ ...noAnswer('x.test', 'TXT'), error: undefined, rcode: 'SERVFAIL' }), true,
+    'SERVFAIL is not an answer even when the transport reported no error of its own')
+  assert.equal(sg.sgUnanswered({ ...noAnswer('x.test', 'TXT'), error: undefined, rcode: 'NXDOMAIN' }), false,
+    'NXDOMAIN IS an answer: the name holds nothing')
+
+  // An include that got no answer: the walk goes on, and the count is a floor.
+  const stalledSpf = await sg.sgAnalyzeSpf('ex.com', stallAt(['c.org']))
+  assert.equal(stalledSpf.truncated, true, 'an unanswered include cuts the walk short, and the report must say so')
+  assert.deepEqual(stalledSpf.unanswered, ['c.org'])
+  assert.ok(stalledSpf.lookups < naiveSpfCount('ex.com'), 'the fixture really did hide part of the tree from the walk')
+  assert.equal(stalledSpf.voidLookups, 0, 'a lookup that got no answer is not a void lookup — that is an ANSWER saying "nothing here"')
+  assert.equal(stalledSpf.problems.some(p => /permerror/.test(p)), false, '…and not a permerror either')
+  const stalledSpfFindings = sg.sgSpfFindings(stalledSpf, 'ex.com')
+  assert.deepEqual(stalledSpfFindings.map(f => f.id), ['spf-truncated'])
+  assert.ok(/^At least /.test(stalledSpfFindings[0].title), 'a floor is titled as a floor, not as the count')
+  // Over the limit AND cut short is still over the limit — the count only grows
+  // with what was not walked — but it is still a floor.
+  const stalledWide = await sg.sgAnalyzeSpf('wide.com', stallAt(['e.net']))
+  assert.ok(stalledWide.exceeded && stalledWide.truncated, `wide.com stays over the limit with e.net unanswered (${stalledWide.lookups} counted)`)
+  const stalledWideFindings = sg.sgSpfFindings(stalledWide, 'wide.com')
+  assert.ok(/^At least \d+ DNS lookups/.test(stalledWideFindings.find(f => f.id === 'spf-lookup-limit').title))
+  assert.equal(stalledWideFindings.some(f => f.id === 'spf-truncated'), false, 'one finding for the count, not two')
+  // The ROOT lookup unanswered is not "no SPF record".
+  const unreadSpf = await sg.sgAnalyzeSpf('ex.com', stallAt(['ex.com']))
+  assert.equal(unreadSpf.recordCount, 0)
+  assert.deepEqual(unreadSpf.unanswered, ['ex.com'])
+  const unreadSpfFindings = sg.sgSpfFindings(unreadSpf, 'ex.com')
+  assert.deepEqual(unreadSpfFindings.map(f => f.id), ['spf-inconclusive'], 'the opposite sentence to spf-missing, off the same zero records')
+
+  // DMARC: a failed `_dmarc` lookup is not a missing policy.
+  const unreadDmarc = sg.sgReadDmarc(noAnswer('_dmarc.ex.com', 'TXT'), txtAnswer('ex.com', []), 2)
+  assert.equal(unreadDmarc.unanswered, true)
+  const unreadDmarcFindings = sg.sgDmarcFindings(unreadDmarc, 'ex.com')
+  assert.deepEqual(unreadDmarcFindings.map(f => f.id), ['dmarc-inconclusive'])
+  assert.equal(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', []), txtAnswer('ex.com', []), 2).unanswered, false,
+    'an NXDOMAIN at _dmarc is an answer, and still reads as no DMARC record')
+
+  // MX: the question itself unanswered, and the targets' address lookups.
+  const unreadMxFindings = sg.sgMxFindings(noAnswer('ex.com', 'MX'), [])
+  assert.deepEqual(unreadMxFindings.map(f => f.id), ['mx-inconclusive'])
+  const stalledTargets = await sg.sgResolveMxTargets(goodMx, async (name, type) => noAnswer(name, type))
+  assert.equal(stalledTargets[0].resolves, false)
+  assert.equal(stalledTargets[0].unanswered, true)
+  const stalledMxFindings = sg.sgMxFindings(goodMx, stalledTargets)
+  assert.deepEqual(stalledMxFindings.map(f => f.id), ['mx-unchecked'], 'no answer to an address lookup is not "no address, so mail bounces"')
+  // …and a host that really has no address still says so.
+  assert.ok(mxIds.includes('mx-unresolvable'), 'NXDOMAIN at an MX target is still an unresolvable target')
+
   /* ── 8. Every finding cites the record it rests on. ────────────────────── */
 
   /* The organising rule of this tool, asserted on EVERY producer rather than on
@@ -6509,6 +6598,9 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('noall.com', spfLookup), 'noall.com'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('a.net', spfLookup), 'a.net'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('nothing.com', spfLookup), 'nothing.com'),
+      stalledSpfFindings,
+      stalledWideFindings,
+      unreadSpfFindings,
     ],
     sgDmarcFindings: [
       strictFindings,
@@ -6519,6 +6611,7 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=none; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
       sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=quarantine; pct=25; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
       sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
+      unreadDmarcFindings,
     ],
     sgCaaFindings: [
       sg.sgCaaFindings(verdict, 'ex.com', 'digicert.com'),
@@ -6529,8 +6622,10 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       // and the opposite conclusion — see the CAA-and-issuer block at the end
       // of this file for why that distinction is the load-bearing one.
       sg.sgCaaFindings(sg.sgCaaVerdict({ foundAt: null, walked: ['x.test'], entries: [], incomplete: true }), 'x.test', null),
+      // …and a policy FOUND above a lookup that failed, which cites what it found.
+      sg.sgCaaFindings(sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['www.ex.com', 'ex.com'], entries: [sg.sgParseCaa('0 issue "letsencrypt.org"')], incomplete: true }), 'www.ex.com', 'digicert.com'),
     ],
-    sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, [])],
+    sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, []), unreadMxFindings, stalledMxFindings],
     sgCnameFindings: [dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com')],
     sgDiffFindings: [sg.sgDiffFindings([realDiff, filtered])],
     sgReachabilityFindings: [blackoutFindings],
@@ -7178,10 +7273,13 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
   assert.equal(sgc.sgCaaVerdict(brokenWalk).incomplete, true)
   assert.equal(sgc.sgCaaVerdict(cleanWalk).incomplete, false)
 
-  // A policy that WAS found is complete by construction — the walk stops at the
-  // first name with any CAA record, so nothing below it can change the answer.
+  // A policy that WAS found is NOT complete by construction — this line used to
+  // assert that it was. The walk stops at the first name with a policy, so
+  // nothing ABOVE it matters; a name BELOW it that never answered might hold a
+  // CAA set of its own. The verdict must carry the flag through; section 6b
+  // below holds the walk, the findings and the outlook to it.
   const foundDespite = caa.caaVerdict([caa.parseCaa('0 issue "letsencrypt.org"')], 'example.com', true)
-  assert.equal(foundDespite.incomplete, false, 'a found policy cannot be inconclusive')
+  assert.equal(foundDespite.incomplete, true, 'the verdict passes incomplete through even when a policy was found')
 
   // The finding side of the same distinction: opposite ids off the same zero.
   const inconclusive = sgc.sgCaaFindings(sgc.sgCaaVerdict(brokenWalk), 'a.b.example.com', null)
@@ -7284,6 +7382,86 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
   assert.equal(/any CA may issue/i.test(unavailable.detail), false,
     'the inconclusive message must not contain the sentence the absent-policy message exists to say')
 
+  /* ── 6b. A failed lookup BELOW a found policy leaves the answer open. ─────
+
+     `sub.example.com` did not answer and `example.com` publishes a policy. A CA
+     checks the exact name first and stops at the first name with any CAA set,
+     so if sub.example.com holds one, THAT governs and example.com's is
+     irrelevant — and nobody knows whether it does. The walk used to return the
+     parent's policy with no flag, and every sentence built on it (who may
+     issue, "CAA blocks your CA", "may renew this") was a confident answer to a
+     question nobody got answered. */
+  const caaAt = (fail = {}, zone = { 'example.com': ['0 issue "letsencrypt.org"'] }) => async (name, type) => {
+    if (fail[name]) return { resolver: 'fixture', type, name, records: [], elapsedMs: 0, ...fail[name] }
+    const data = zone[name] ?? []
+    return { resolver: 'fixture', type, name, rcode: 'NOERROR', records: data.map(d => ({ type: 257, name, data: d, ttl: 60 })), elapsedMs: 0 }
+  }
+  const digicert = { issuer: { issuerO: 'DigiCert Inc', issuerCN: 'DigiCert TLS RSA SHA256 2020 CA1' } }
+  for (const [why, failure] of [
+    ['SERVFAIL', { rcode: 'SERVFAIL' }],
+    ['a timeout', { rcode: 'ERROR', error: 'no answer within 4000ms' }],
+    ['the query budget', { rcode: 'ERROR', error: 'query budget exhausted' }],
+    ['the deadline', { rcode: 'ERROR', error: 'inspection deadline reached' }],
+  ]) {
+    const walk = await sgc.sgAnalyzeCaa('sub.example.com', caaAt({ 'sub.example.com': failure }))
+    assert.equal(walk.foundAt, 'example.com', `(${why}) the walk still reaches the parent's policy`)
+    assert.equal(walk.incomplete, true, `(${why}) a failed lookup below the stop point makes the answer incomplete`)
+    const verdict = sgc.sgCaaVerdict(walk)
+    assert.equal(verdict.incomplete, true, `(${why}) and the verdict carries it rather than dropping it because a policy was found`)
+    const found = sgc.sgCaaFindings(verdict, 'sub.example.com', 'digicert.com')
+    assert.deepEqual(found.map(f => f.id), ['caa-inconclusive'],
+      `(${why}) no caa-policy and no caa-blocks-ca off a policy that may not be the one that governs`)
+    assert.ok(/take precedence/.test(found[0].detail) && found[0].detail.includes('example.com'), 'it names the policy it found and why that is not the answer')
+    assert.equal(found[0].basis, 'record')
+    assert.deepEqual(found[0].evidence, ['example.com  0 issue "letsencrypt.org"'], 'and cites the records it found, literally')
+    for (const [issuer, label] of [[{}, "Let's Encrypt, whom the parent permits"], [digicert, 'DigiCert, whom the parent forbids']]) {
+      const o = outlook(verdict, issuer)
+      assert.equal(o.state, 'unavailable', `(${why}) ${label}: neither "may renew" nor "refused" — the governing policy is unknown`)
+      assert.equal(o.problem, false)
+      assert.equal(o.policyAt, null, 'the facts row must not present the parent as the policy that governs')
+      assert.deepEqual(o.evidence, [])
+      assert.ok(o.detail.includes('example.com') && /take precedence/.test(o.detail))
+      assert.equal(/any CA may issue/i.test(o.detail), false)
+    }
+  }
+  // NXDOMAIN at the full name IS an answer — the name holds nothing, so it holds
+  // no CAA — and the parent's policy governs, completely.
+  const nxBelow = await sgc.sgAnalyzeCaa('sub.example.com', caaAt({ 'sub.example.com': { rcode: 'NXDOMAIN' } }))
+  assert.equal(nxBelow.foundAt, 'example.com')
+  assert.equal(nxBelow.incomplete, false, 'NXDOMAIN below the policy is an answer, not a failure')
+  const nxVerdict = sgc.sgCaaVerdict(nxBelow)
+  assert.deepEqual(sgc.sgCaaFindings(nxVerdict, 'sub.example.com', null).map(f => f.id), ['caa-policy'])
+  assert.equal(outlook(nxVerdict).state, 'permitted')
+  assert.equal(outlook(nxVerdict, digicert).state, 'refused')
+  // …and so is the ordinary case, an empty NOERROR on the way up.
+  assert.equal((await sgc.sgAnalyzeCaa('sub.example.com', caaAt())).incomplete, false)
+  // A failure ABOVE the stop point cannot matter, and the walk never asks it.
+  const above = await sgc.sgAnalyzeCaa('a.b.example.com',
+    caaAt({ 'example.com': { rcode: 'SERVFAIL' } }, { 'b.example.com': ['0 issue "letsencrypt.org"'] }))
+  assert.deepEqual(above.walked, ['a.b.example.com', 'b.example.com'], 'the walk stops at the first name with a policy')
+  assert.equal(above.incomplete, false, 'nothing above the stop point can change the answer')
+
+  /* ── 6c. An empty issuer authorises nobody, whatever follows the `;`. ────
+
+     RFC 8659 §4.2: the issuer-domain-name is optional, and an `issue` value
+     without one grants no issuance. Parameters may still follow the semicolon,
+     so `"; accounturi=…"` is `";"` with extra words — and testing the whole
+     value against `";"` read it as an allowed CA called "", which no CA ever
+     matches: every renewal refused while `forbidsAll` said false. */
+  const paramsOnly = v(['0 issue "; accounturi=https://acme.example/acct/1"'])
+  assert.equal(paramsOnly.forbidsAll, true, 'an empty issuer-domain-name forbids issuance, parameters or not')
+  assert.deepEqual(paramsOnly.allowed, [], 'and is not a permitted CA with an empty name')
+  assert.equal(caa.caaAllows(paramsOnly, 'letsencrypt.org', false), false)
+  assert.equal(outlook(paramsOnly).state, 'forbidden-all')
+  assert.equal(v(['0 issue "letsencrypt.org"', '0 issuewild " ; validationmethods=dns-01"']).forbidsAllWild, true,
+    'the same rule for issuewild, whitespace and all')
+  assert.deepEqual(v(['0 issue "LetsEncrypt.org; validationmethods=dns-01"']).allowed, ['letsencrypt.org'],
+    'a named issuer keeps its name and drops its parameters')
+  const mixed = v(['0 issue ";"', '0 issue "letsencrypt.org"'])
+  assert.equal(mixed.forbidsAll, false, 'one empty issue entry beside a named one forbids nobody the named one permits')
+  assert.equal(caa.caaAllows(mixed, 'letsencrypt.org', false), true)
+  assert.equal(caa.caaAllows(mixed, 'digicert.com', false), false)
+
   // Every state the type declares is reachable from a fixture above, so a state
   // added later without one fails here rather than shipping unexercised.
   const declaredStates = [...(await readFile(new URL('../src/lib/caa.ts', import.meta.url), 'utf-8'))
@@ -7370,4 +7548,473 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
   assert.ok(/this\.caaInflight\?\.abort\(\)/.test(chainsawSrc),
     'the CAA fetch is aborted on unmount and on a new inspection — ClientRouter keeps the document')
 }
-console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unrecognised issuer draws no verdict, a failed lookup is not an absent policy, the issuer-independent refusals survive an unknown CA, and the narrow scope\'s looser rate limit is paid for by its smaller query budget')
+console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unrecognised issuer draws no verdict, a failed lookup is neither an absent policy nor licence to trust the one found above it, an empty issuer forbids all, the issuer-independent refusals survive an unknown CA, and the narrow scope\'s looser rate limit is paid for by its smaller query budget')
+
+/* ─────  the boot check boots what the image runs, and the shell cannot pass it  ─────
+   `npm run boot:check` exists because build and check were both green on a
+   server that crashed on its first line (AGENTS.md → Build / Test / Run). Two
+   things make it meaningful and both read like details. It must start the SAME
+   entry point the Dockerfile's CMD starts, so that path is derived from the
+   Dockerfile rather than trusted to agree. And it must scrub
+   ASTRO_NODE_LOGGING from the child's env: the crash lived in the adapter's
+   startup-logging branch, which that variable switches off, so a check that
+   inherited it from the caller's shell passed on the broken build — measured,
+   not assumed, by deleting the scrub and running it against 11.1.0.
+   ──────────────────────────────────────────────────────────────────────────── */
+{
+  const bootSrc = await readFile(new URL('./boot-check.mjs', import.meta.url), 'utf-8')
+  const dockerfile = await readFile(new URL('../Dockerfile', import.meta.url), 'utf-8')
+  const cmd = /^CMD \["node", "([^"]+)"\]$/m.exec(dockerfile)
+  assert.ok(cmd, 'the Dockerfile CMD is `node <entry>` — the boot check derives its entry point from it')
+  assert.ok(bootSrc.includes(`new URL('../${cmd[1]}', import.meta.url)`),
+    `the boot check must start ${cmd[1]}, the file the image's CMD runs`)
+  assert.ok(/spawn\(process\.execPath, \[entry\]/.test(bootSrc), 'the boot check runs the entry under node itself')
+  assert.ok(/^delete env\.ASTRO_NODE_LOGGING$/m.test(bootSrc),
+    'the boot check must scrub ASTRO_NODE_LOGGING — inherited, it disables the branch that crashed')
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf-8'))
+  assert.equal(pkg.scripts['boot:check'], 'node scripts/boot-check.mjs', 'npm run boot:check is the documented entry')
+}
+console.log('boot check: starts the entry the Dockerfile runs, and no inherited env var can switch off the branch that crashed')
+
+/* ─────  PR 19 review: who pays for a refusal, and how long one request may hold a socket  ─────
+
+   Three bounds that each existed somewhere and were missing somewhere else,
+   which is the shape every one of them had in the review: a rule one tool
+   followed and its sibling did not.
+
+     1. A per-client bucket must be consulted BEFORE the shared one, and the
+        shared one only when the client was allowed. `createRateLimiter`
+        counts a hit even when it refuses, so a route that asks both buckets
+        unconditionally lets one client who is already over its own limit keep
+        spending everybody's allowance. DNS Sightline did; Link Peek and
+        Chainsaw did not.
+     2. DNS Sightline had a per-question timeout and no deadline, and its SPF
+        walk asks one question after another — forty of them at four seconds
+        each is close to three minutes of one held socket.
+     3. Link Peek raced its name lookup against a timer; Chainsaw awaited the
+        same call bare. The bound now has one home both of them import.
+   ──────────────────────────────────────────────────────────────────────────── */
+{
+  /* ── 1. A refused client does not spend the shared bucket. ────────────────
+
+     Derived from every API route, not listed: a limiter called with a string
+     literal is one bucket for everybody, anything else is keyed per client,
+     and every call to a shared bucket must be the right-hand side of a
+     short-circuit whose left-hand side is a per-client bucket that ALLOWED the
+     request — `client(k) && shared('g')`, or `!client(k) || !shared('g')`. */
+  const callOf = name => new RegExp(`\\b${name}\\(((?:[^()]|\\([^()]*\\))*)\\)`, 'g')
+  const pairedRoutes = []
+  for (const route of await apiRouteFiles()) {
+    const code = (await readFile(new URL(`../${route}`, import.meta.url), 'utf-8'))
+      .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+    const limiters = [...code.matchAll(/const (\w+) = createRateLimiter\(/g)].map(m => m[1])
+    const calls = limiters.flatMap(name => [...code.matchAll(callOf(name))].map(m => ({ name, arg: m[1].trim(), at: m.index })))
+    const shared = c => /^(['"`])[^'"`]*\1$/.test(c.arg)
+    const sharedCalls = calls.filter(shared)
+    if (!sharedCalls.length) continue
+    pairedRoutes.push(route)
+    const clientNames = [...new Set(calls.filter(c => !shared(c)).map(c => c.name))]
+    assert.ok(clientNames.length, `${route} has a shared rate-limit bucket with no per-client bucket in front of it — one client can drain it for everybody`)
+    const clientCall = `(?:${clientNames.join('|')})\\((?:[^()]|\\([^()]*\\))*\\)`
+    for (const g of sharedCalls) {
+      const before = code.slice(0, g.at)
+      const andForm = new RegExp(`(?<![!\\w])${clientCall}\\s*&&\\s*$`).test(before)
+      const notOrForm = new RegExp(`!\\s*${clientCall}\\s*\\|\\|\\s*!\\s*$`).test(before)
+      assert.ok(andForm || notOrForm,
+        `${route}: ${g.name}(${g.arg}) must run only once a per-client bucket has allowed the request — createRateLimiter counts refused hits, so asking it unconditionally lets one refused client drain the shared bucket`)
+    }
+  }
+  assert.ok(pairedRoutes.length >= 3, `expected to discover the routes that pair a client and a shared bucket (found ${pairedRoutes.join(', ')})`)
+  assert.ok(pairedRoutes.includes('src/pages/api/tools/dns-sightline.ts'), 'DNS Sightline is one of them')
+
+  /* …and the same thing as behaviour, on the route that got it wrong. One
+     address floods; a different visitor must still get in. The outbound side
+     is stubbed to fail at once, so the few requests that ARE allowed cost
+     nothing and touch no network. */
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => { throw new TypeError('offline in the smoke suite') }
+  try {
+    const { GET } = await import('../src/pages/api/tools/dns-sightline.ts')
+    const ask = ip => GET({ request: new Request('http://localhost/api/tools/dns-sightline?name=example.com', { headers: { 'cf-connecting-ip': ip } }) })
+    const flood = []
+    for (let i = 0; i < 20; i += 1) flood.push((await ask('203.0.113.7')).status)
+    assert.equal(flood.filter(s => s === 429).length, 16, 'one client past its own four requests a minute is refused')
+    const bystander = await ask('198.51.100.9')
+    assert.notEqual(bystander.status, 429,
+      'a flood from one address that was already being refused must not lock a different visitor out — the refused hits were spending the shared bucket')
+    const failing = await bystander.json()
+    assert.equal(failing.ok, true, 'the bystander gets a report, whose failed lookups say so inside it')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+
+  /* ── 2. The inspection has a deadline, and reaching it is not an answer. ──
+
+     A resolver that accepts the connection and never says a word, which is
+     what a black-holed endpoint looks like from here. Every resolver is pointed
+     at it by stubbing `fetch` itself — sgInspect takes no endpoint override,
+     and that is asserted in the DNS Sightline block — so the real transport,
+     its real per-question timeout and the real abort path are what run. The
+     per-question timeout is left at its default on purpose: it is FOUR
+     SECONDS, so a pass here can only come from the deadline. */
+  const insp = await import('../src/components/tools/dns-sightline/inspect.ts')
+  const doh = await import('../src/lib/dns-doh.ts')
+  const { SG_TYPES } = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const { createServer } = await import('node:http')
+  const silent = createServer(() => { /* never answers */ })
+  await new Promise(resolve => silent.listen(0, '127.0.0.1', resolve))
+  const silentBase = `http://127.0.0.1:${silent.address().port}/dns-query`
+  globalThis.fetch = (url, init) => realFetch(`${silentBase}${new URL(url).search}`, init)
+  const DEADLINE = 300
+  const SLACK = 2_000
+  try {
+    let t0 = Date.now()
+    const full = await insp.sgInspect('deadline.example.com', { deadlineMs: DEADLINE })
+    const took = Date.now() - t0
+    assert.ok(took < DEADLINE + SLACK, `one inspection held its request for ${took}ms against a ${DEADLINE}ms deadline`)
+    assert.equal(full.deadlineHit, true, 'the report says it stopped at the deadline')
+    assert.ok(full.queries <= doh.SG_CONCURRENCY,
+      `only the questions already in flight when the deadline arrived may be charged (spent ${full.queries}) — one asked afterwards would still go out and sit through its own timeout`)
+    const ids = full.findings.map(f => f.id)
+    for (const id of ['resolvers-unreachable', 'spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
+      assert.ok(ids.includes(id), `a deadline-cut inspection reports ${id} (got ${ids.join(', ')})`)
+    }
+    for (const id of ['spf-missing', 'dmarc-missing', 'mx-none', 'caa-none']) {
+      assert.equal(ids.includes(id), false, `${id} is a claim about the zone, and a deadline is not evidence for it`)
+    }
+    assert.equal(full.spf.truncated, true)
+    assert.equal(full.caa.incomplete, true)
+
+    t0 = Date.now()
+    const narrow = await insp.sgInspectCaa('deadline.example.com', { deadlineMs: DEADLINE })
+    assert.ok(Date.now() - t0 < DEADLINE + SLACK, 'the CAA-only scope has the same deadline')
+    assert.equal(narrow.deadlineHit, true)
+    assert.equal(narrow.caa.incomplete, true)
+    assert.deepEqual(narrow.findings.map(f => f.id), ['caa-inconclusive'])
+  } finally {
+    globalThis.fetch = realFetch
+    silent.closeAllConnections?.()
+    await new Promise(resolve => silent.close(resolve))
+  }
+  // The default has to leave the diff its own worst case, or a slow-but-working
+  // set of resolvers could never finish even the first half of an inspection —
+  // and stay small enough to be a bound on a held socket at all.
+  const diffWorstCase = Math.ceil((SG_TYPES.length * doh.SG_RESOLVERS.length) / doh.SG_CONCURRENCY) * doh.SG_TIMEOUT_MS
+  assert.ok(doh.SG_INSPECT_DEADLINE_MS > diffWorstCase,
+    `the deadline (${doh.SG_INSPECT_DEADLINE_MS}ms) must exceed the diff's own worst case (${diffWorstCase}ms)`)
+  assert.ok(doh.SG_INSPECT_DEADLINE_MS <= 20_000, 'and stay a bound on how long one request may hold a socket')
+  const dnsRouteSrc = await readFile(new URL('../src/pages/api/tools/dns-sightline.ts', import.meta.url), 'utf-8')
+  assert.equal(/deadlineMs/.test(dnsRouteSrc), false, 'the deadline is injectable for this block alone — the route never sets it')
+
+  /* ── 3. One bounded name lookup, and both dialers use it. ─────────────────
+
+     Each call is raced against this block's own timer as well, so a mutation
+     that removes the bound FAILS here with a named error instead of hanging
+     the suite — a test that hangs is a test whose timeout gets raised. */
+  const { DNS_LOOKUP_TIMEOUT_MS } = await import('../src/lib/dns-lookup.ts')
+  const { lpCheckResolved } = await import('../src/lib/link-peek-fetch.ts')
+  const { CS_TIMEOUT_MS } = await import('../src/lib/tls-inspect.ts')
+  const HUNG = Symbol('hung')
+  const within = (p, ms) => Promise.race([p, new Promise(resolve => setTimeout(() => resolve(HUNG), ms))])
+  const neverAnswers = () => new Promise(() => {})
+  const pinned = await within(csResolvePinned('black-hole.example', { resolve: neverAnswers, timeoutMs: 100 }), 2_000)
+  assert.notEqual(pinned, HUNG, 'csResolvePinned must stop waiting on a lookup that never answers — it runs before any handshake deadline applies')
+  assert.equal(pinned.ok, false)
+  assert.ok(/did not resolve within/.test(pinned.reason), `…and say it got no answer, not that the name does not exist (${pinned.reason})`)
+  const peeked = await within(lpCheckResolved('black-hole.example', { resolve: neverAnswers, timeoutMs: 100 }), 2_000)
+  assert.notEqual(peeked, HUNG, 'Link Peek has the same bound through the same helper')
+  assert.equal(peeked.ok, false)
+  const enotfound = async () => { throw Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' }) }
+  assert.ok(/does not resolve\.$/.test((await csResolvePinned('gone.example', { resolve: enotfound })).reason), 'a real NXDOMAIN still reads as one')
+  // The answers still go through the ONE classifier, seam or no seam.
+  assert.equal((await csResolvePinned('rebind.example', { resolve: async () => [{ address: '10.0.0.1', family: 4 }] })).ok, false)
+  assert.equal((await lpCheckResolved('rebind.example', { resolve: async () => [{ address: '8.8.8.8', family: 4 }, { address: '127.0.0.1', family: 4 }] })).ok, false)
+  assert.ok(DNS_LOOKUP_TIMEOUT_MS > 0 && DNS_LOOKUP_TIMEOUT_MS < CS_TIMEOUT_MS, 'the lookup bound leaves the handshakes most of their budget')
+  for (const [file, production] of [
+    ['../src/lib/tls-inspect.ts', /const pinned = await csResolvePinned\(host\)/],
+    ['../src/lib/link-peek-fetch.ts', /const resolved = await lpCheckResolved\(checked\.url\.hostname\)/],
+  ]) {
+    const src = await readFile(new URL(file, import.meta.url), 'utf-8')
+    assert.ok(src.includes("from './dns-lookup'"), `${file} takes its lookup from the shared bounded helper`)
+    assert.equal(/from 'node:dns/.test(src), false, `${file} must not call dns.lookup itself — the bound lives in one place`)
+    assert.ok(production.test(src), `${file}: the production caller passes no test seam`)
+  }
+}
+console.log('pr 19 review: a refused client never spends the shared bucket (derived over every route), one inspection stops at its deadline without claiming absence, and both dialers share one bounded name lookup')
+
+/* ─────  PR 19 review: what a page leaves behind, and what a keyboard can reach  ─────
+
+   ClientRouter keeps one document for the whole session on the lanes that use
+   it, so anything registered against `document` or `window` per mount outlives
+   the page that registered it. Two such leaks were in the review, and both were
+   invisible in every screenshot: the canvas export bar added an
+   `astro:before-swap` listener on every attach and never removed it, and the
+   embed chrome observer only disconnected on a hit that one figure never
+   produces. The third item is the keyboard: a table that scrolls sideways is
+   reachable only if its wrapper can take focus. */
+{
+  /* ── 1. No document or window listener outlives what added it. ────────────
+
+     Derived from every .ts file under src/components and src/lib, not listed:
+     each `document|window.addEventListener` must be removed with the SAME
+     handler in the same file, be bound by a `signal` or `once`, or sit behind a
+     module-level once-guard (`if (flag) return` … `flag = true`, with
+     `let flag = false` at module scope) — the singleton shape nav-ui,
+     analytics-client and the daily-streak strip already use. Whole comment
+     lines are dropped first, so a docblock quoting a call is not a call. */
+  const clientTs = []
+  const walkTs = async dir => {
+    for (const entry of await readdir(new URL(`${dir}/`, import.meta.url), { withFileTypes: true })) {
+      const child = `${dir}/${entry.name}`
+      if (entry.isDirectory()) await walkTs(child)
+      else if (entry.name.endsWith('.ts')) clientTs.push(child)
+    }
+  }
+  await walkTs('../src/components')
+  await walkTs('../src/lib')
+  const scanArgs = (code, from) => {
+    let depth = 0
+    let quote = null
+    for (let i = from; i < code.length; i += 1) {
+      const c = code[i]
+      if (quote) { if (c === '\\') i += 1; else if (c === quote) quote = null; continue }
+      if (c === "'" || c === '"' || c === '`') { quote = c; continue }
+      if ('([{'.includes(c)) depth += 1
+      else if (')]}'.includes(c)) { if (depth === 0) return code.slice(from, i); depth -= 1 }
+    }
+    return code.slice(from)
+  }
+  const splitFirstArg = text => {
+    let depth = 0
+    let quote = null
+    for (let i = 0; i < text.length; i += 1) {
+      const c = text[i]
+      if (quote) { if (c === '\\') i += 1; else if (c === quote) quote = null; continue }
+      if (c === "'" || c === '"' || c === '`') { quote = c; continue }
+      if ('([{'.includes(c)) depth += 1
+      else if (')]}'.includes(c)) depth -= 1
+      else if (c === ',' && depth === 0) return [text.slice(0, i), text.slice(i + 1)]
+    }
+    return [text, '']
+  }
+  const unbounded = []
+  let listenerSites = 0
+  for (const file of clientTs) {
+    const code = (await readFile(new URL(file, import.meta.url), 'utf-8'))
+      .split('\n').filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n')
+    for (const m of code.matchAll(/\b(document|window)\.addEventListener\(\s*(['"])([^'"]+)\2\s*,/g)) {
+      listenerSites += 1
+      const [target, , event] = [m[1], m[2], m[3]]
+      const [handlerRaw, options] = splitFirstArg(scanArgs(code, m.index + m[0].length))
+      const handler = handlerRaw.trim()
+      if (/\bsignal\b|\bonce\s*:\s*true/.test(options)) continue
+      const escaped = handler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (new RegExp(`\\b${target}\\.removeEventListener\\(\\s*['"]${event}['"]\\s*,\\s*${escaped}\\s*[,)]`).test(code)) continue
+      const before = code.slice(0, m.index)
+      const guard = [...before.matchAll(/\bif \((\w+)\) return\b/g)].pop()
+      if (guard) {
+        const since = before.slice(guard.index)
+        if (new RegExp(`^let ${guard[1]} = false\\b`, 'm').test(code)
+          && new RegExp(`\\b${guard[1]} = true\\b`).test(since)
+          && !/\n\}/.test(since)) continue
+      }
+      unbounded.push(`${file.replace('../', '')}: ${target}.addEventListener('${event}', ${handler.slice(0, 48)})`)
+    }
+  }
+  assert.ok(listenerSites >= 20, `expected to discover the document/window listeners (found ${listenerSites}) — has the tree moved?`)
+  assert.deepEqual(unbounded, [],
+    'a document/window listener added per mount must be removed with the same handler, be signal/once-bound, or be registered once behind a module-level guard — otherwise every in-site navigation leaves one more behind, holding whatever its closure reached')
+  // The export bar specifically: nothing registered per attach.
+  const cxSrc = await readFile(new URL('../src/lib/canvas-export.ts', import.meta.url), 'utf-8')
+  const attachBody = cxSrc.slice(cxSrc.indexOf('export function attachCanvasExport'))
+  assert.equal(/\b(document|window)\.addEventListener\(/.test(attachBody), false,
+    'attachCanvasExport registers no document listener of its own — the shared pair in trackBar serves every bar')
+  assert.ok(/trackBar\(bar, clearPending\)/.test(attachBody), '…and every bar joins that registry, or its preview is never revoked on a swap')
+
+  /* ── 2. The chrome observer is bounded for every embed. ───────────────────
+
+     `EMBED_NO_CHROME` is a claim about what components render, so it is held to
+     the components' sources in BOTH directions: a figure that writes no h1 and
+     no *-header must be listed (or its observer never disconnects), and one that
+     does must not be (or its h1 survives into the article). The dispatch in
+     game-mount.ts says which directory each slug renders from. */
+  const { EMBED_NO_CHROME } = await import('../src/lib/embeds.ts')
+  const mountSrc = await readFile(new URL('../src/lib/game-mount.ts', import.meta.url), 'utf-8')
+  const dispatch = [...mountSrc.matchAll(/slug === '([^']+)'\) return import\('\.\.\/components\/games\/([^/']+)\//g)]
+  assert.equal(dispatch.length, Object.keys(EMBED_TAGS).length, 'every embed has exactly one dispatch branch to read its source from')
+  const chromeMarker = /<h1[\s>]|['"]h1['"]|data-type="[a-z0-9-]+-header"|'data-type': '[a-z0-9-]+-header'/
+  for (const [, slug, dir] of dispatch) {
+    const sources = []
+    const collect = async d => {
+      for (const entry of await readdir(new URL(`${d}/`, import.meta.url), { withFileTypes: true })) {
+        if (entry.isDirectory()) await collect(`${d}/${entry.name}`)
+        else if (entry.name.endsWith('.ts')) sources.push(await readFile(new URL(`${d}/${entry.name}`, import.meta.url), 'utf-8'))
+      }
+    }
+    await collect(`../src/components/games/${dir}`)
+    const writesChrome = sources.some(src => chromeMarker.test(src))
+    assert.equal(EMBED_NO_CHROME.has(slug), !writesChrome, writesChrome
+      ? `${slug} writes its own title block, so EMBED_NO_CHROME must not list it — its h1 would survive into the article`
+      : `${slug} writes no h1 and no *-header, so its chrome observer would never get a hit — list it in EMBED_NO_CHROME`)
+  }
+  assert.ok(EMBED_NO_CHROME.has('diagram-atlas'), 'the figure the review found is one of them')
+  const stripBody = mountSrc.slice(mountSrc.indexOf('export function stripEmbedChrome'), mountSrc.indexOf('export function mountEmbed'))
+  const at = needle => stripBody.indexOf(needle)
+  assert.ok(at('new MutationObserver(') !== -1, 'still an observer, not a timed sweep — cold and warm module caches land the markup on opposite sides of page-load')
+  assert.ok(at('if (handled.has(container)) return') !== -1 && at('if (handled.has(container)) return') < at('new MutationObserver('),
+    'one observer per container: both routes mount twice on a cold load, and the second observer would never see a hit')
+  assert.ok(at('EMBED_NO_CHROME.has(slug)) return') !== -1 && at('EMBED_NO_CHROME.has(slug)) return') < at('new MutationObserver('),
+    'a figure that writes no chrome gets no observer at all')
+  assert.ok(/addEventListener\('astro:before-swap', \(\) => \{\s*for \(const waiter of \[\.\.\.waiting\]\) waiter\(\)/.test(stripBody),
+    'whatever is still waiting is released at the next swap, so no observer outlives its page')
+  assert.ok(/waiting\.add\(release\)/.test(stripBody) && /waiting\.delete\(release\)/.test(stripBody),
+    'an observer that got its hit leaves the waiting set, so the set is bounded by what is on the page')
+
+  /* ── 3. A table that scrolls sideways can be reached from the keyboard. ───
+
+     A scroll container nobody can focus is unreachable without a pointer. The
+     two wrappers the review found are asserted directly — which element a
+     tool stylesheet scrolls cannot be mapped onto rendered markup robustly
+     from here — and each must be a NAMED region, so the extra tab stop
+     announces what it is, and ringed by the site's own :focus-visible rule. */
+  for (const [component, sheet, dt] of [
+    ['../src/components/tools/dns-sightline/DnsSightline.ts', '../src/components/tools/dns-sightline/dns-sightline.css', 'sg-scroll'],
+    ['../src/components/tools/link-peek/LinkPeek.ts', '../src/components/tools/link-peek/link-peek.css', 'lp-tablewrap'],
+  ]) {
+    const css = await readFile(new URL(sheet, import.meta.url), 'utf-8')
+    assert.ok(new RegExp(`\\[data-type="${dt}"\\] \\{\\s*overflow-x: auto;`).test(css), `${dt} is the element that scrolls`)
+    assert.equal(/outline:\s*(none|0)\b/.test(css), false, `${sheet} must not switch the focus ring off`)
+    const src = await readFile(new URL(component, import.meta.url), 'utf-8')
+    const wrappers = [...src.matchAll(new RegExp(`<div data-type="${dt}"([^>]*)>`, 'g'))]
+    assert.ok(wrappers.length > 0, `${component} renders ${dt}`)
+    for (const w of wrappers) {
+      assert.ok(/\btabindex="0"/.test(w[1]), `every ${dt} wrapper takes focus (tabindex="0") — the columns past the edge are otherwise out of a keyboard's reach`)
+      assert.ok(/\brole="region"/.test(w[1]) && /\baria-label="[^"]+"/.test(w[1]), `every ${dt} wrapper is a named region, so the tab stop says what it is`)
+    }
+  }
+  const sharedCssSrc = await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')
+  assert.ok(/(^|\n):focus-visible \{\s*outline: 2px solid var\(--color-accent\);/.test(sharedCssSrc),
+    'the site-wide ring that shows where keyboard focus went applies to any focusable element, a scroll region included')
+}
+console.log('pr 19 review: no document/window listener outlives what added it (derived over every client module), the chrome observer is bounded for every embed, and the scrolling tables take keyboard focus')
+
+/* ─────  PR 19 review: the small trust boundaries  ─────
+
+   Each of these is one line wide and sits where text from somebody else's
+   server meets this site's output: a Content-Type header that becomes part of
+   CSS, a URL off a stranger's certificate that becomes a link, and an
+   exception's message that became part of a JSON answer. */
+{
+  const { lpImageMediaType } = await import('../src/lib/link-peek-fetch.ts')
+  const { csLinkableUrl } = await import('../src/components/tools/chainsaw/analyze.ts')
+
+  /* ── 1. The proxied image's media type is allowlisted, not prefix-matched. ──
+     It becomes part of a `data:` URI the page drops into CSS `url("…")`. */
+  for (const [header, type] of [
+    ['image/png', 'image/png'],
+    ['IMAGE/PNG; charset=binary', 'image/png'],
+    ['image/svg+xml', 'image/svg+xml'],
+    ['image/vnd.microsoft.icon', 'image/vnd.microsoft.icon'],
+    ['  image/webp  ', 'image/webp'],
+  ]) {
+    assert.equal(lpImageMediaType(header), type, `${JSON.stringify(header)} is the image type ${type}`)
+  }
+  for (const hostile of [
+    'image/png"); background:url(https://x.test/steal', "image/png'", 'image/png )', 'image/pn g',
+    'image/', 'image', 'text/html', 'image/png\u0000', 'image/*', '', null,
+  ]) {
+    assert.equal(lpImageMediaType(hostile), null, `${JSON.stringify(hostile)} is refused, not relayed`)
+  }
+  const lpRoute = await readFile(new URL('../src/pages/api/tools/link-peek.ts', import.meta.url), 'utf-8')
+  const typeAt = lpRoute.indexOf('const type = lpImageMediaType(fetched.contentType)')
+  const uriAt = lpRoute.indexOf('dataUri: `data:${type};base64,')
+  assert.ok(typeAt !== -1 && uriAt > typeAt, 'the data URI is built from the allowlisted type and nothing else')
+
+  /* ── 2. A URL off a certificate is a link only when it is plainly http(s). ── */
+  assert.equal(csLinkableUrl('http://r11.i.lencr.org/'), 'http://r11.i.lencr.org/', 'AIA is usually plain http, and that is still a link')
+  assert.equal(csLinkableUrl('https://pki.goog/repo/certs/gts1c3.der'), 'https://pki.goog/repo/certs/gts1c3.der')
+  for (const hostile of [
+    'javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:x',
+    'http://user:pw@ca.example/x', 'http://ca.example/a b', 'http://ca.example/\u0000', 'ldap://ca.example/cn=x',
+    'not a url', '',
+  ]) {
+    assert.equal(csLinkableUrl(hostile), null, `${JSON.stringify(hostile)} stays text`)
+  }
+  const csComponent = await readFile(new URL('../src/components/tools/chainsaw/Chainsaw.ts', import.meta.url), 'utf-8')
+  assert.ok(/<dd>\$\{csIssuerLink\(cert\.caIssuerUrls\[0\]\)\}<\/dd>/.test(csComponent), 'the Issuer URL row goes through csIssuerLink')
+  assert.ok(/const href = csLinkableUrl\(raw\)\s*return href\s*\? `<a href="\$\{csEsc\(href\)\}" rel="noopener noreferrer" target="_blank">\$\{csEsc\(raw\)\}<\/a>`\s*: csEsc\(raw\)/.test(csComponent),
+    'the link is escaped, opens with no opener and no referrer, and anything csLinkableUrl refuses is escaped text')
+
+  /* ── 3. An exception's message is not an answer. ────────────────────────
+     Every failure these routes expect comes back as a fixed sentence; the text
+     of one they did not expect — a runtime's wording about this server's own
+     connection — is not something to hand a stranger. */
+  for (const file of ['../src/pages/api/tools/dns-sightline.ts', '../src/pages/api/tools/chainsaw.ts', '../src/lib/dns-doh.ts']) {
+    const code = (await readFile(new URL(file, import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\/|^\s*\/\/[^\n]*/gm, '')
+    assert.equal(/\berr(or)?\??\.message\b/.test(code), false, `${file} must not put an exception's message into a response`)
+  }
+  const csRoute = await readFile(new URL('../src/pages/api/tools/chainsaw.ts', import.meta.url), 'utf-8')
+  assert.ok(/try \{\s*result = await csInspect\([^)]*\)\s*\} catch \{\s*return json\(\{ ok: false, error: '[^']+' \}, 500\)/.test(csRoute),
+    'csInspect is wrapped, so a throw answers a fixed JSON error rather than Astro\'s error page')
+  assert.ok(/'Cache-Control': 'no-store'/.test(csRoute.slice(csRoute.indexOf('function json('))), '…through the same no-store json() every answer uses')
+}
+console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a certificate\'s URL is a link only when plainly http(s), and no exception text reaches a response')
+
+/* ─────  PR 19 review: a retired article keeps its readers  ─────
+
+   `/learnings/the-test-that-shared-the-bug` is live on `main`, and the merge
+   that retires it would have turned every link to it — shares, bookmarks, the
+   search result — into a 404. RETIRED_LEARNINGS answers those with a 301 to the
+   hub, and a redirect is not a page: the one publish predicate refuses a retired
+   slug, so the sitemap and every listing follow without a second list. */
+{
+  const { RETIRED_LEARNINGS, retiredLearningTarget } = await import('../src/lib/learnings.ts')
+
+  assert.equal(retiredLearningTarget('the-test-that-shared-the-bug'), '/learnings',
+    'the article this merge retires redirects to the hub — its replacement is about a different question')
+  assert.equal(retiredLearningTarget('constructor'), null, 'an inherited property is not a retired slug')
+  assert.equal(retiredLearningTarget(undefined), null)
+  for (const [slug, to] of Object.entries(RETIRED_LEARNINGS)) {
+    assert.ok(/^\/learnings(\/[a-z0-9-]+)?$/.test(to), `${slug} redirects to ${to}, which is not a learnings URL`)
+    const targetSlug = to.slice('/learnings/'.length)
+    assert.ok(to === '/learnings' || learnings.some(l => l.slug === targetSlug && isPublishedLearning(l)),
+      `${slug} redirects to ${to}, which this site does not serve`)
+    assert.equal(retiredLearningTarget(targetSlug || undefined), null, `${slug} redirects to another retired slug — a chain, not a destination`)
+    assert.equal(learnings.some(l => l.slug === slug), false,
+      `${slug} is retired AND in the learnings config — its route redirects before the article can render; drop one of the two`)
+  }
+
+  // A redirect is not a page, whatever the flags say.
+  assert.equal(isPublishedLearning({ slug: 'the-test-that-shared-the-bug', published: true, content: 'a body' }), false,
+    'a retired slug is not a page, even saved again as published with a body — the sitemap, hub and cards all read this predicate')
+  assert.equal(isPublishedLearning({ slug: 'which-diagram-to-draw', published: true, content: 'a body' }), true,
+    'a live slug is unaffected')
+  assert.equal(isPublishedLearning({ published: true, content: 'a body' }), true, 'flags without a slug read as they always did')
+
+  // The REAL sitemap route, fed a config that saves an entry under the retired
+  // slug again (as an /admin save could). The canary proves the stub config was
+  // used at all — getConfig falls back to the bundled config on invalid data,
+  // and the bundled config has no retired slug in it, so without the canary
+  // this would pass by never reading the fixture.
+  const { GET: sitemapRoute } = await import('../src/pages/sitemap.xml.ts')
+  const resaved = [
+    { slug: 'the-test-that-shared-the-bug', title: 'Back again', summary: 's', date: '2026-09-25', content: 'a body', published: true },
+    { slug: 'retirement-canary', title: 'Canary', summary: 's', date: '2026-09-24', content: 'a body', published: true },
+  ]
+  const stubLocals = { runtime: { env: { SITE_CONFIG: { get: async key => (key === 'learnings' ? resaved : key === 'site' ? site : null) } } } }
+  const xml = await (await sitemapRoute({ locals: stubLocals })).text()
+  assert.ok(xml.includes('/learnings/retirement-canary'), 'the sitemap read the fixture config (canary present)')
+  assert.equal(xml.includes('the-test-that-shared-the-bug'), false, 'a retired slug is never in the sitemap — its URL answers 301')
+
+  // The route answers the redirect FIRST — before config, before the 404 — with
+  // the map's own target, and a policy that keeps browsers from pinning it.
+  const slugRouteSrc = await readFile(new URL('../src/pages/learnings/[slug].astro', import.meta.url), 'utf-8')
+  const frontmatter = slugRouteSrc.slice(0, slugRouteSrc.indexOf('\n---', 4))
+  const retiredAt = frontmatter.indexOf('const retiredTo = retiredLearningTarget(slug)')
+  assert.ok(retiredAt !== -1, 'the article route consults RETIRED_LEARNINGS')
+  assert.ok(retiredAt < frontmatter.indexOf('getLearnings(') && retiredAt < frontmatter.indexOf('status: 404'),
+    'the redirect is answered before config is read and before the 404 — a retired slug is not in config, so a later check would never run')
+  assert.ok(/if \(retiredTo\) \{\s*return new Response\(null, \{\s*status: 301,\s*headers: \{ Location: retiredTo, 'Cache-Control': 'public, max-age=0, s-maxage=\d+' \},/.test(frontmatter),
+    'a permanent redirect to the mapped target, edge-cacheable but not pinned in the browser')
+}
+console.log('pr 19 review: a retired learning answers 301 to the hub, the publish predicate refuses it so no sitemap can list it, and the /games intro counts its dailies')

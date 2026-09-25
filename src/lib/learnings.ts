@@ -14,19 +14,54 @@ import type { Learning } from '../config/learnings'
 
 /** The only fields the predicate reads, so callers can state this shape instead
  *  of hand-rolling a second, looser one. */
-export type LearningFlags = Pick<Learning, 'published' | 'content'>
+export type LearningFlags = Pick<Learning, 'published' | 'content'> & { slug?: string }
 
 /**
- * Published means: flagged published AND actually has a body.
+ * Learning slugs that were live on the production site and have since been
+ * withdrawn, each with where it now permanently redirects.
+ *
+ * An article deleted from config 404s, and a 404 costs every link already out
+ * there — a share, a bookmark, a search result — its reader. So a slug that was
+ * ever served from `main` gets an entry here when it goes, and the article route
+ * answers it with a 301. Slugs that never left `develop` never had a reader and
+ * need none.
+ *
+ * The destination is the hub unless a replacement answers the SAME question.
+ * `the-test-that-shared-the-bug` was about a smoke test that shared its formula
+ * with the code it checked, and what replaced it on this site is about
+ * diagrams — pointing the old link there would hand its reader a different
+ * article wearing the old one's address.
+ *
+ * A redirect is not a page, so `isPublishedLearning` is false for every slug
+ * here: the sitemap, the hub, the share cards and the related links all read
+ * that one predicate, and none of them can list a retired slug even if an entry
+ * under it is saved again from /admin. `security:smoke` refuses that entry
+ * outright, drives the real sitemap route to prove the rest, and pins the
+ * article route to answering the redirect before anything else.
+ */
+export const RETIRED_LEARNINGS: Readonly<Record<string, string>> = Object.freeze({
+  'the-test-that-shared-the-bug': '/learnings',
+})
+
+/** Where a retired slug now redirects, or null for a slug that is not retired. */
+export function retiredLearningTarget(slug: string | undefined): string | null {
+  if (!slug || !Object.hasOwn(RETIRED_LEARNINGS, slug)) return null
+  return RETIRED_LEARNINGS[slug]
+}
+
+/**
+ * Published means: flagged published AND actually has a body, under a slug
+ * that has not been retired.
  *
  * The second condition is the one the flag cannot express. An entry saved from
  * /admin with `published` ticked but the content box still empty would otherwise
  * be listed in the sitemap and carry a share card while the page itself renders
  * nothing — the same contradiction that let a never-wired game into the sitemap
- * before `isPlayableGame()` existed.
+ * before `isPlayableGame()` existed. The third is the same contradiction again:
+ * a retired slug's route answers 301, so nothing may list it as a page.
  */
 export function isPublishedLearning(learning: LearningFlags): boolean {
-  return Boolean(learning.published && learning.content.trim())
+  return Boolean(learning.published && learning.content.trim()) && !retiredLearningTarget(learning.slug)
 }
 
 /**

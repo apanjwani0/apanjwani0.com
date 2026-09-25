@@ -641,6 +641,30 @@ export function csServeChainPem(presented: CsCert[]): string {
   return csChainPem(presented.filter((c, i) => i === 0 || !c.selfSigned))
 }
 
+/**
+ * A certificate's CA Issuers URL (its Authority Information Access), as an href
+ * — or null, and the page shows it as text.
+ *
+ * The value comes off a certificate a stranger's server sent, so it is a link
+ * only when it parses as plain `http:` or `https:` (AIA is usually `http:`:
+ * the file it names is signed, so it needs no TLS) with no credentials and no
+ * control characters or whitespace. `javascript:`, `data:` and anything
+ * malformed stay text. The href is the parser's own serialisation, and the
+ * caller still escapes it for the attribute.
+ */
+export function csLinkableUrl(raw: string): string | null {
+  const value = raw.trim()
+  if (!value || /[\u0000-\u001F\u007F\s]/.test(value)) return null
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    if (url.username || url.password) return null
+    return url.href
+  } catch {
+    return null
+  }
+}
+
 export function csOpensslCommand(host: string, port: number): string {
   return `openssl s_client -connect ${host}:${port} -servername ${host} -showcerts </dev/null`
 }

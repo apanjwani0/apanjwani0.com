@@ -21,10 +21,22 @@
  *    outbound cost to answer a question none of them would answer differently.
  *    The page says which resolver did the walking rather than implying the
  *    analysis is a consensus.
+ *
+ * ── One deadline over both ────────────────────────────────────────────────
+ * Every question in an inspection runs under ONE signal: the visitor's request
+ * joined to `SG_INSPECT_DEADLINE_MS`. The per-question timeout bounds a single
+ * answer and nothing else, and the SPF walk asks its questions one after
+ * another, so without an overall deadline one inspection could hold a socket
+ * for minutes. At the deadline the remaining questions fail at once rather than
+ * throwing, and the walks report themselves truncated or incomplete from those
+ * failed answers — `analyze.ts` is where "no answer" is kept apart from "no
+ * record", so this file only has to make sure the answers stop coming.
  */
 import {
   SG_PRIMARY_RESOLVER,
   SG_RESOLVERS,
+  sgDeadlineReached,
+  sgInspectionSignal,
   sgMakeLookup,
   sgNewBudget,
   sgPool,
@@ -79,6 +91,8 @@ export interface SgInspection {
   queries: number
   budgetLeft: number
   elapsedMs: number
+  /** The inspection stopped at its deadline; some sections are marked incomplete. */
+  deadlineHit: boolean
 }
 
 export interface SgInspectOptions {
@@ -87,15 +101,22 @@ export interface SgInspectOptions {
   signal?: AbortSignal
   budget?: SgBudget
   timeoutMs?: number
+  /**
+   * The overall deadline, `SG_INSPECT_DEADLINE_MS` unless given. Injectable so
+   * `security:smoke` can hold the bound against a resolver that never answers
+   * in milliseconds rather than in fifteen seconds; the route never sets it.
+   */
+  deadlineMs?: number
 }
 
 export async function sgInspect(name: string, opts: SgInspectOptions = {}): Promise<SgInspection> {
   const started = Date.now()
   const budget = opts.budget ?? sgNewBudget()
+  const signal = sgInspectionSignal(opts.signal, opts.deadlineMs)
   // NOTE: no `endpointOverride` is passed here, and none ever should be — the
   // escape hatch exists for the assertions alone. `security:smoke` asserts this
   // file never mentions it.
-  const queryOpts = { signal: opts.signal, timeoutMs: opts.timeoutMs, budget }
+  const queryOpts = { signal, timeoutMs: opts.timeoutMs, budget }
 
   // ── 1. the diff: every type, every resolver ──────────────────────────────
   const jobs: Array<() => Promise<SgAnswer>> = []
@@ -114,7 +135,7 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
 
   // ── 2. the analysis: one resolver, shared budget, memoised ───────────────
   const lookup: SgLookup = sgMakeLookup(SG_PRIMARY_RESOLVER, budget, {
-    signal: opts.signal,
+    signal,
     timeoutMs: opts.timeoutMs,
   })
 
@@ -188,6 +209,7 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
     queries: budget.spent,
     budgetLeft: budget.left,
     elapsedMs: Date.now() - started,
+    deadlineHit: sgDeadlineReached(signal),
   }
 }
 
@@ -219,6 +241,7 @@ export interface SgCaaInspection {
   findings: SgFinding[]
   queries: number
   elapsedMs: number
+  deadlineHit: boolean
 }
 
 /**
@@ -236,8 +259,9 @@ export interface SgCaaInspection {
 export async function sgInspectCaa(name: string, opts: SgInspectOptions = {}): Promise<SgCaaInspection> {
   const started = Date.now()
   const budget = opts.budget ?? sgNewBudget(SG_CAA_SCOPE_QUERIES)
+  const signal = sgInspectionSignal(opts.signal, opts.deadlineMs)
   const lookup: SgLookup = sgMakeLookup(SG_PRIMARY_RESOLVER, budget, {
-    signal: opts.signal,
+    signal,
     timeoutMs: opts.timeoutMs,
   })
   const report = await sgAnalyzeCaa(name, lookup)
@@ -250,5 +274,6 @@ export async function sgInspectCaa(name: string, opts: SgInspectOptions = {}): P
     findings: sgSortFindings(sgCaaFindings(caa, name, opts.wantedCa ?? null)),
     queries: budget.spent,
     elapsedMs: Date.now() - started,
+    deadlineHit: sgDeadlineReached(signal),
   }
 }

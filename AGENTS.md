@@ -38,6 +38,7 @@ npm run generate-types # wrangler types (regen Cloudflare/KV bindings)
 npm run graph          # graphify update . — refresh the local code-graph
 npm run og             # regenerate the social share cards (see Share cards)
 npm run security:smoke # assert the security invariants (see Security)
+npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
 npm run origin:check   # assert the DEPLOYED edge posture against production
 ```
@@ -54,9 +55,26 @@ five phantom parse errors under `astro check`, because TypeScript reads the
 object literal as the next arrow's parameter list.
 Run both; `check` must stay at 0 errors. For
 UI/route changes, also run `/browser-debug` against the dev server.
+
+**Neither of them ever starts the server**, and that gap has already shipped a
+dead origin: the lockfile resolved astro 7.3.3 against `@astrojs/node` 11.1.0,
+whose `standalone()` calls `app.pipeline.getLogger()` on an `app` that astro 7.3
+no longer gives a `pipeline` (11.1.6 calls `app.getLogger()`), so `node
+dist/server/entry.mjs` — the Dockerfile `CMD` — threw a `TypeError` on boot
+while `build` and `check` were both green. `npm run
+boot:check` (`scripts/boot-check.mjs`) closes it: after a build it starts that
+entry point the way the image does, on a free loopback port, and requires a
+complete 200 HTML page from `/` plus a process still alive a second later. It
+deletes `ASTRO_NODE_LOGGING` from the child's env on purpose — that variable
+switches off exactly the branch that crashed, so inheriting it from a shell
+would pass the check on the regression it exists for.
 The production GitHub deploy builds a Docker image on `main`, restarts the OCI
 container from the self-hosted runner, then fetches `/` inside the container
-before reporting success.
+before reporting success. That probe runs *after* the old container is stopped,
+so it reports a boot failure with the site already down; `boot:check` is the
+same question asked before anything ships. It is not wired into `deploy.yml`,
+because the image is built inside `docker/build-push-action` and there is no
+npm step on the runner to hang it on.
 
 ## Configuration
 
@@ -259,6 +277,17 @@ an unbounded map is a memory-exhaustion vector rather than a defence. The host i
 a 1 GB VM; the container is capped (`--memory=768m`) so a leak restarts the
 container instead of taking down SSH and the CI runner with it.
 
+**A route that pairs a per-client bucket with a shared one asks the shared one
+only after the client's has said yes** — `allowClient(key) &&
+allowGlobal('global')`, never both evaluated up front. `createRateLimiter`
+counts a hit even when it refuses, so DNS Sightline, which asked both
+unconditionally, let one address that was already being refused keep spending
+the shared bucket: sixteen requests in a minute from a single client locked every
+other visitor out of the tool. `security:smoke` derives the rule over every
+route in `src/pages/api` (a limiter called with a string literal is the shared
+bucket, anything else is per-client) and floods the DNS Sightline route from one
+address to prove a second one still gets in.
+
 ### Public endpoints must be bounded in every dimension
 
 Body size, per-key count, global bytes, retention, *and* how long a request may
@@ -266,6 +295,25 @@ occupy a socket. The Webhook Inspector is the reference: `WEBHOOK_MAX_*` in
 `src/lib/webhook-store.ts` plus the 2s `?delay=` ceiling. Budget for byte
 accounting being optimistic — `.length` counts UTF-16 code units, not bytes, and
 object overhead is real.
+
+**Per-step bounds multiply, so a sequence of steps needs a bound of its own.**
+DNS Sightline had a 4s timeout on every question and no deadline on the
+inspection, and its SPF walk asks one question after another — forty of them
+held one socket for close to three minutes against a resolver that had stopped
+answering. `SG_INSPECT_DEADLINE_MS` (15s, `src/lib/dns-doh.ts`) is joined to the
+request's own signal with `AbortSignal.any`, and `sgQuery` checks
+`signal.aborted` before it asks anything: an abort listener never fires on a
+signal that has *already* aborted, so without that check every question after
+the deadline still went out and sat through its own timeout — measured at 16s
+for a 300ms deadline. Reaching the deadline is not an error; see *A failed
+lookup is not an absent record* for what the walks report instead.
+
+Name lookups count too. `dns.lookup` runs on libuv's four-slot threadpool with
+the OS resolver's timeout, outside every budget the callers keep, so Link Peek
+and Chainsaw both go through `lookupAllBounded` (`src/lib/dns-lookup.ts`, 3s).
+Chainsaw used to await the bare call while Link Peek raced it — one guard, two
+habits — and `security:smoke` now proves the bound for both with a lookup that
+never answers.
 
 The Type Trial daily leaderboard is the second worked example: `DAILY_*` in
 `src/lib/type-trial-leaderboard.ts` bounds name length, entries per day, retained
@@ -494,15 +542,39 @@ timeout into a claim about somebody's zone, produced by the least evidence
 possible, and no screenshot of it looks wrong.
 
 So `SgCaaReport.incomplete` records that any lookup in the walk errored or was
-refused by the query budget (NXDOMAIN is an *answer* — the name has no CAA
-because it has nothing at all — while SERVFAIL, REFUSED and a timeout are not),
-`CaaVerdict.incomplete` carries it forward, and `caa-inconclusive` is the finding
-that says so rather than `caa-none`. A policy that *was* found is complete by
-construction, since nothing below the stop point can change the answer.
+refused by the query budget or the deadline (NXDOMAIN is an *answer* — the name
+has no CAA because it has nothing at all — while SERVFAIL, REFUSED and a timeout
+are not), `CaaVerdict.incomplete` carries it forward, and `caa-inconclusive` is
+the finding that says so rather than `caa-none`.
+
+**A policy that *was* found is not complete by construction**, which this
+section used to claim. The walk stops at the first name with a CAA set, so
+nothing *above* the stop point can change the answer — but the names *below* it
+were passed over only because they answered "no CAA here", and one that did not
+answer at all might hold a set of its own, which a CA would obey instead. So
+`sub.example.com` timing out beneath a policy at `example.com` is incomplete
+too: `caaVerdict` passes the flag through instead of dropping it whenever
+`foundAt` is set, `caa-inconclusive` cites the parent's records without claiming
+they govern, `caaRenewalOutlook` answers `unavailable` rather than "may renew" or
+"refused", and the page's CAA panel says the same. The confident permit-or-forbid
+sentence was the found-policy twin of turning a timeout into "no policy".
 
 This is the same shape as `sgIsDangling` refusing to call a name unclaimed when
 it merely has no address record: the damaging output is the confident sentence,
 not the crash.
+
+The rule is not CAA's alone, and it took the inspection deadline to show it: a
+deadline turns every question still queued into a failed one at once. SPF read
+a failed include exactly like NXDOMAIN — "no SPF record, a receiver treats that
+as a permerror", plus a void lookup — and DMARC and MX read a failed lookup as no
+record and no address ("mail bounces"). `sgUnanswered` (`analyze.ts`) is now the
+one test of whether a question got an answer, and every finding that reads an
+empty record set asks it first: an unanswered include makes the SPF count a
+floor (`truncated`, titled "At least N"), and an unanswered root, `_dmarc`, MX or
+MX-target lookup yields `spf-inconclusive`, `dmarc-inconclusive`,
+`mx-inconclusive` or `mx-unchecked` in place of the absence finding. The page's
+panels read the same fields, so a panel cannot say "No MX records" beside a
+finding that says the MX lookup failed.
 
 ### A conclusion that does not depend on X must not be gated on X
 
@@ -550,6 +622,16 @@ numbers fails the gate rather than a comment going stale.
   `</script>` cannot break out.
 - Markdown goes through `src/lib/markdown.ts` only: raw HTML is escaped and URLs
   pass `safeMarkdownUrl()`. Never hand `marked` output to `set:html` directly.
+- A value a remote server chose that lands in CSS or in an `href` is held to its
+  grammar first, because escaping for HTML says nothing about either. Link Peek's
+  proxied image type becomes part of a `data:` URI inside CSS `url("…")`, so it
+  must match `image/` plus `[a-z0-9.+-]` (`lpImageMediaType`) rather than merely
+  start with `image/`; Chainsaw's CA Issuers URL comes off a stranger's
+  certificate, so it is a link only when it parses as plain http(s) with no
+  credentials (`csLinkableUrl`), and escaped text otherwise.
+- An exception's message never goes into a response: routes answer failures
+  they expect with fixed sentences, and wrap the call that could throw one they
+  do not (`csInspect`) so it answers fixed `no-store` JSON too.
 
 ### Unguessable ids are a security control
 
@@ -563,6 +645,7 @@ it server-side, not just in the UI that mints them.
 npm run security:smoke   # asserts these invariants
 npm run build            # must stay green
 npm run check            # must stay at 0 errors
+npm run boot:check       # the built server must boot and serve / (after build)
 ```
 
 Add an assertion for each new invariant, in whichever of the two homes fits: a
@@ -783,6 +866,9 @@ was a second, mirrored fixture that does.
   exactly that is what this replaced, and none of them offered a GIF for engines
   whose whole point is that they move. Sizes and the custom-resolution validator
   (`parseCustomSize`, bounded on both edges *and* total pixels) live there too.
+  An attach registers nothing on `document`: every bar joins one registry that a
+  single guarded pair of swap listeners serves (`trackBar`), because a listener
+  per attach outlived its page on every in-site navigation.
 
   There are now **three** ways in, and the third exists because live capture is
   the wrong instrument for some engines rather than a worse one. `AnimationSource`
@@ -815,7 +901,10 @@ was a second, mirrored fixture that does.
   outlive its server; and it reads the number word out of the intro copy and
   compares it to the set's size, so a fifth server tool cannot ship while the
   prose still says "four". Same family as the learnings rule that an article
-  quoting numbers is quoting a component.
+  quoting numbers is quoting a component. The `/games` intro gets the same
+  treatment for its dailies: "Three have a daily round that is the same for
+  everyone" is read back, pinned to that phrase, and compared with
+  `DAILY_SLUGS`.
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
 - **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
@@ -850,8 +939,8 @@ was a second, mirrored fixture that does.
   `nodeDimensionsIncludeLabels: true` is **required** on every Cytoscape layout —
   it defaults to off, and without it a graph of word-labelled nodes lays out
   using the box and ignores the text, piling up overlapping in one corner.
-- **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
-- **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed. Two modules are Node-only and say so in their own docblocks: `src/lib/link-peek-fetch.ts` (`node:dns`, `node:net`) and `src/lib/tls-inspect.ts` (`node:tls`, `node:crypto`). Both are reached only from their API routes, never from the browser bundle — asserted by the build carrying no `node:` import into any client chunk. A Workers deploy has no raw-socket TLS, so Chainsaw is the one surface that would need a different transport behind the same JSON shape.
+- **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading. The same persistence cuts the other way: the document outlives every page, so **a `document` or `window` listener added per mount must be removed with the same handler, be bound by a `signal`/`once`, or be registered once behind a module-level guard** (`if (wired) return`, as `nav-ui.ts` does). `canvas-export.ts` added an `astro:before-swap` listener on every attach and never removed it — seven engines, again on every reconnect — and Draftboard added a document click listener per connect; `security:smoke` derives the rule over every `.ts` under `src/components` and `src/lib`.
+- **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed. Three modules are Node-only and say so in their own docblocks: `src/lib/link-peek-fetch.ts` (`node:net`), `src/lib/tls-inspect.ts` (`node:tls`, `node:crypto`) and `src/lib/dns-lookup.ts` (`node:dns`, the bounded name lookup the other two share). All three are reached only from the Link Peek and Chainsaw API routes, never from the browser bundle — asserted by the build carrying no `node:` import into any client chunk. A Workers deploy has no raw-socket TLS, so Chainsaw is the one surface that would need a different transport behind the same JSON shape.
 
 ## Design System
 
@@ -1020,7 +1109,10 @@ was a second, mirrored fixture that does.
   gets held — `min-width` on the SVG plus `overflow-x: auto` on its container —
   and the reader swipes, which is the trade `learnings/[slug].astro` already
   makes for a wide table. A scrollable container also takes `tabindex="0"`, or
-  the content past the edge is unreachable without a pointer. `security:smoke`
+  the content past the edge is unreachable without a pointer — DNS Sightline's
+  two tables and Link Peek's tag table shipped without it; their wrappers are now
+  named regions (`role="region"` + `aria-label`), ringed by the site's own
+  `:focus-visible`, and asserted. `security:smoke`
   parses the floor out of the stylesheet, because a lone `min-width` reads like a
   stray constraint to the next person tidying the file.
 - **Theming**: `theme.css` defines light at `:root` and overrides the palette under `[data-theme="dark"]` (the site runs dark). Add a theme by adding another `[data-theme="…"]` block — palette tokens only.
@@ -1116,9 +1208,17 @@ So each kind has exactly **one** predicate, and every consumer reads it:
   so it is noindex, out of the sitemap, and cardless. `external` and `disabled`
   404 outright.
 - **Learnings** — `isPublishedLearning()` in `src/lib/learnings.ts`: `published
-  && content.trim()`. The second condition is the one the flag cannot express —
-  an entry saved from /admin with the box ticked and the body still empty would
-  otherwise be sitemapped and carry a card while its page rendered nothing.
+  && content.trim()`, under a slug that is not retired. The second condition is
+  the one the flag cannot express — an entry saved from /admin with the box
+  ticked and the body still empty would otherwise be sitemapped and carry a card
+  while its page rendered nothing. The third is `RETIRED_LEARNINGS`: an article
+  that was live on `main` and is withdrawn keeps its URL as a **301** (to the hub
+  unless a replacement answers the same question), because a 404 costs every link
+  already out there its reader. The route answers the redirect before it reads
+  config, and since a redirect is not a page the predicate refuses the slug —
+  so no sitemap, hub or card can list it even if an entry under it is saved
+  again. Add a slug here when you delete an article that ever reached `main`;
+  `security:smoke` refuses a slug that is both retired and in the config.
 - **Driftfield** — `isDriftfieldPublic()` in `src/lib/driftfield.ts`: the
   `driftfield` entry in the tools config is `status === 'live'`. The hub, every
   `/tools/driftfield/<mode>` route, the sitemap and `scripts/generate-og.mjs`
@@ -1279,6 +1379,18 @@ already broken once:
   it on a cold load, so no single moment is safe to sweep at. A timing-based
   version passed a hard reload and failed on every in-site click.
 
+  "Disconnects on the first hit" is only a bound for a component that produces
+  one, and three things make it hold for all of them. A figure that writes no
+  chrome at all is declared in `EMBED_NO_CHROME` (`src/lib/embeds.ts`) and gets no
+  observer — the Diagram Atlas never writes an `<h1>`, so the diagrams article ran
+  eight observers that never disconnected, re-scanning on every beat of its
+  animated figures; `security:smoke` derives that set from the components' own
+  sources in both directions. Each container gets ONE observer, because both
+  routes mount at script evaluation *and* on `astro:page-load`, which fires for
+  the first page too — the second observer of a pair never sees a hit once its
+  twin has stripped the chrome. And whatever is still waiting is released at the
+  next `astro:before-swap`.
+
 Unknown or absent `embed` degrades to a prose article rather than throwing — a
 typo in /admin should cost the simulation, not the page. `security:smoke` asserts
 that every shipped article's `embed` is really in `EMBED_TAGS`, because nothing
@@ -1309,11 +1421,11 @@ without anybody remembering this paragraph. Same shape as the blogs flag: a fact
 corrected in one signal and stale in another is worse than either alone.
 
 **A figure may also be the article's whole argument, in which case it needs a
-component of its own.** `/learnings/how-to-think-on-paper` argues Larkin &
-Simon's point — a picture is cheap only for the question its layout groups for —
-and that is unprovable in prose, because the reader has to watch one unchanged
-scenario become seven pictures and find each one blind to what the last one
-showed. So `diagram-atlas` (`src/components/games/diagram-atlas/`) is the first
+component of its own.** `/learnings/which-diagram-to-draw` argues that an
+arrow can mean seven different things and the question you are asking picks the
+notation — and that is unprovable in prose, because the reader has to watch one
+unchanged scenario become seven pictures and find each one blind to what the
+last one showed. So `diagram-atlas` (`src/components/games/diagram-atlas/`) is the first
 embed that is neither a game nor a Driftfield mode: an article figure, and the
 reason `EMBED_TAGS` is the wider list. It is also the first that is **not** a
 canvas toy — seven notations drawn as inline SVG, because the labels have to be
@@ -1398,10 +1510,13 @@ Three things about it are load-bearing:
   ledger.
 
 The pass commits to `develop` behind the full gate (`build` + `check` +
-`security:smoke` + `poker:check`) and never pushes or touches `main`. `check` is
-in that list because `build` alone does not catch what it catches — see Build /
-Test / Run. The older daily `daily-portfolio-improvement` cowork task targets the
-same working tree — run one or the other, not both.
+`security:smoke` + `poker:check` + `boot:check`) and never pushes or touches
+`main`. `check` is in that list because `build` alone does not catch what it
+catches, and `boot:check` because neither of them starts the server — see Build
+/ Test / Run. It boots the *built* entry point on loopback and stops it again, so
+it needs no dev server and runs unattended. The older daily
+`daily-portfolio-improvement` cowork task targets the same working tree — run
+one or the other, not both.
 
 An unattended run **cannot** start the dev server, so it cannot do the in-site
 click-through that the `astro:page-load` mounting bug requires. It appends the

@@ -47,16 +47,18 @@ interface SgReport {
     exceeded: boolean
     voidLookups: number
     truncated: boolean
+    unanswered: string[]
     all: string | null
   }
-  dmarc: { record: string | null; recordCount: number; tags: Record<string, string>; atApex: boolean }
-  caa: { policyAt: string | null; allowed: string[]; allowedWild: string[]; forbidsAll: boolean; forbidsAllWild: boolean; unknownCritical: string[] }
+  dmarc: { record: string | null; recordCount: number; tags: Record<string, string>; atApex: boolean; unanswered: boolean }
+  caa: { policyAt: string | null; allowed: string[]; allowedWild: string[]; forbidsAll: boolean; forbidsAllWild: boolean; unknownCritical: string[]; incomplete: boolean }
   caaWalked: string[]
-  mxTargets: Array<{ preference: number; host: string; isCname: boolean; cnameTo: string | null; addresses: string[]; resolves: boolean }>
+  mxTargets: Array<{ preference: number; host: string; isCname: boolean; cnameTo: string | null; addresses: string[]; resolves: boolean; unanswered: boolean }>
   cname: { target: string | null; dangling: boolean; service: string | null; coexisting: string[]; atApex: boolean }
   findings: SgFinding[]
   queries: number
   elapsedMs: number
+  deadlineHit: boolean
 }
 
 interface SgResponse {
@@ -237,9 +239,11 @@ class DnsSightlineTool extends HTMLElement {
       this.report = body.report
       this.render(body.report)
       const counts = sgCountByLevel(body.report.findings)
+      // A run that hit its deadline is a partial answer, and the status line is
+      // what a screen reader announces — so it says so before the counts do.
       this.setStatus(
-        `${body.report.queries} DNS queries in ${body.report.elapsedMs}ms · ${counts.error} error${counts.error === 1 ? '' : 's'}, ${counts.warn} warning${counts.warn === 1 ? '' : 's'}`,
-        counts.error ? 'bad' : 'ok',
+        `${body.report.deadlineHit ? 'Stopped at the time limit, so some sections are incomplete · ' : ''}${body.report.queries} DNS queries in ${body.report.elapsedMs}ms · ${counts.error} error${counts.error === 1 ? '' : 's'}, ${counts.warn} warning${counts.warn === 1 ? '' : 's'}`,
+        counts.error || body.report.deadlineHit ? 'bad' : 'ok',
       )
       // Keep the address bar in step so the result is shareable. replaceState,
       // not pushState: one inspection is not a history entry.
@@ -339,7 +343,7 @@ class DnsSightlineTool extends HTMLElement {
           <div data-group="toolbar"><button data-copy="dig" type="button">Copy dig commands</button></div>
         </div>
         <p data-type="sg-note">${r.resolvers.map(x => `<code>${sgEsc(x.label)}</code> ${sgEsc(x.operator)}`).join(' · ')}. TTL and record order are excluded from the comparison.</p>
-        <div data-type="sg-scroll">
+        <div data-type="sg-scroll" tabindex="0" role="region" aria-label="Resolver agreement table">
           <table data-type="sg-table">
             <thead><tr><th scope="col">Type</th><th scope="col">Verdict</th><th scope="col">Answer</th></tr></thead>
             <tbody>${rows}</tbody>
@@ -356,7 +360,7 @@ class DnsSightlineTool extends HTMLElement {
           <h2 id="sg-records-h">Records</h2>
           <div data-group="toolbar"><button data-copy="zone" type="button">Copy as zone file</button></div>
         </div>
-        <div data-type="sg-scroll">
+        <div data-type="sg-scroll" tabindex="0" role="region" aria-label="Records table">
           <table data-type="sg-table">
             <thead><tr><th scope="col">Type</th><th scope="col">Value</th><th scope="col">TTL</th></tr></thead>
             <tbody>${rows || '<tr><td colspan="3">No records of any queried type.</td></tr>'}</tbody>
@@ -386,11 +390,17 @@ class DnsSightlineTool extends HTMLElement {
           .map(
             t =>
               `<li><code>${t.preference} ${sgEsc(t.host)}</code> — ${
-                t.isCname ? `<span data-bad="1">CNAME → ${sgEsc(t.cnameTo ?? '')}</span>` : t.resolves ? sgEsc(t.addresses.slice(0, 3).join(', ')) : '<span data-bad="1">no address</span>'
+                t.isCname
+                  ? `<span data-bad="1">CNAME → ${sgEsc(t.cnameTo ?? '')}</span>`
+                  : t.resolves
+                    ? sgEsc(t.addresses.slice(0, 3).join(', '))
+                    : t.unanswered ? 'no answer to the address lookup' : '<span data-bad="1">no address</span>'
               }</li>`,
           )
           .join('')}</ul>`
-      : '<p data-type="sg-note">No MX records.</p>'
+      : r.diffs.find(d => d.type === 'MX')?.answered === 0
+        ? '<p data-type="sg-note">No resolver answered the MX question, so the mail servers could not be read.</p>'
+        : '<p data-type="sg-note">No MX records.</p>'
 
     return `
       <section data-type="sg-card" aria-labelledby="sg-mail-h">
@@ -400,12 +410,18 @@ class DnsSightlineTool extends HTMLElement {
         </div>
 
         <h3>SPF</h3>
-        ${spf.record ? `<p data-type="sg-record"><code>${sgEsc(spf.record)}</code></p>` : '<p data-type="sg-note">No <code>v=spf1</code> record.</p>'}
+        ${
+          spf.record
+            ? `<p data-type="sg-record"><code>${sgEsc(spf.record)}</code></p>`
+            : spf.unanswered.length
+              ? '<p data-type="sg-note">The TXT lookup got no answer, so the SPF record could not be read.</p>'
+              : '<p data-type="sg-note">No <code>v=spf1</code> record.</p>'
+        }
         ${
           spf.record
             ? `<p data-type="sg-meter" data-over="${spf.exceeded ? '1' : '0'}">
                  <span data-type="sg-meter-fill" style="width:${bar}%"></span>
-                 <span data-type="sg-meter-label">${spf.lookups} of ${spf.limit} DNS lookups${spf.truncated ? ' (walk truncated)' : ''}</span>
+                 <span data-type="sg-meter-label">${spf.truncated ? 'At least ' : ''}${spf.lookups} of ${spf.limit} DNS lookups${spf.truncated ? ' — the walk stopped before the end' : ''}</span>
                </p>${terms}`
             : ''
         }
@@ -414,7 +430,9 @@ class DnsSightlineTool extends HTMLElement {
         ${
           r.dmarc.record
             ? `<p data-type="sg-record"><code>${sgEsc(r.dmarc.record)}</code></p><ul data-type="sg-tags">${dmarcTags}</ul>`
-            : `<p data-type="sg-note">No record at <code>_dmarc.${sgEsc(r.name)}</code>.</p>`
+            : r.dmarc.unanswered
+              ? `<p data-type="sg-note">The lookup for <code>_dmarc.${sgEsc(r.name)}</code> got no answer, so the DMARC record could not be read.</p>`
+              : `<p data-type="sg-note">No record at <code>_dmarc.${sgEsc(r.name)}</code>.</p>`
         }
 
         <h3>MX</h3>
@@ -424,8 +442,19 @@ class DnsSightlineTool extends HTMLElement {
 
   private renderCaa(r: SgReport): string {
     const c = r.caa
+    const walked = r.caaWalked.map(w => `<code>${sgEsc(w)}</code>`).join(' → ')
+    // The panel reads `incomplete` BEFORE `policyAt`, for the same reason the
+    // findings do: an unanswered lookup below the policy means it may not be
+    // the one that governs, and an unanswered walk that found nothing means
+    // "unknown", never "any CA may issue". Without this the panel printed that
+    // sentence directly under the finding that said the lookup had failed.
+    const caveat = c.incomplete
+      ? c.policyAt
+        ? `<p data-type="sg-note">A policy is published at <code>${sgEsc(c.policyAt)}</code>, but a CAA lookup for a more specific name on the way there got no answer (checked ${walked}). A record at that name would take precedence, so this is not known to be the policy that governs <code>${sgEsc(r.name)}</code>.</p>`
+        : `<p data-type="sg-note">At least one CAA lookup got no answer (checked ${walked}), so whether any policy governs <code>${sgEsc(r.name)}</code> is unknown — which is not the same as knowing that none does.</p>`
+      : ''
     const body = c.policyAt
-      ? `<p data-type="sg-note">Policy found at <code>${sgEsc(c.policyAt)}</code> after checking ${r.caaWalked.map(w => `<code>${sgEsc(w)}</code>`).join(' → ')}.</p>
+      ? `${caveat || `<p data-type="sg-note">Policy found at <code>${sgEsc(c.policyAt)}</code> after checking ${walked}.</p>`}
          <ul data-type="sg-tags">
            <li>Certificates: ${c.forbidsAll ? '<span data-bad="1">no CA may issue</span>' : c.allowed.length ? c.allowed.map(a => `<code>${sgEsc(a)}</code>`).join(', ') : 'any CA'}</li>
            <li>Wildcards: ${
@@ -437,7 +466,7 @@ class DnsSightlineTool extends HTMLElement {
            }</li>
            ${c.unknownCritical.length ? `<li><span data-bad="1">critical tag no CA understands: ${sgEsc(c.unknownCritical.join(', '))}</span></li>` : ''}
          </ul>`
-      : `<p data-type="sg-note">No CAA record at <code>${sgEsc(r.name)}</code> or any parent up to the registered domain, so any CA may issue.</p>`
+      : caveat || `<p data-type="sg-note">No CAA record at <code>${sgEsc(r.name)}</code> or any parent up to the registered domain, so any CA may issue.</p>`
 
     // The other half of this question is on the wire, not in DNS: a CAA record
     // says who MAY issue, and only a handshake says who actually DID. Chainsaw

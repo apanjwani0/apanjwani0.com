@@ -23,8 +23,9 @@
  *  - Two handshakes are made, not one. See `csInspect` for why — it is a
  *    correctness requirement, not a nicety.
  *
- * Node-only (`node:tls`, `node:net`, `node:dns` via the Link Peek guard) —
- * imported by the API route, never by the browser bundle. A Cloudflare Workers
+ * Node-only (`node:tls`, `node:net`, and `node:dns` through `dns-lookup.ts`,
+ * the bounded lookup Link Peek shares) — imported by the API route, never by
+ * the browser bundle. A Cloudflare Workers
  * deploy has no raw-socket TLS, so this tool is the one surface that would need
  * a different transport behind the same JSON shape if the adapter is swapped.
  */
@@ -33,7 +34,7 @@ import tls from 'node:tls'
 import type { ConnectionOptions, DetailedPeerCertificate, EphemeralKeyInfo, PeerCertificate, TLSSocket } from 'node:tls'
 import { X509Certificate } from 'node:crypto'
 import { isIP } from 'node:net'
-import { lookup } from 'node:dns/promises'
+import { DnsLookupTimeout, lookupAllBounded, type DnsLookupOptions } from './dns-lookup'
 import { lpIsForbiddenHostname, lpIsForbiddenIp } from './link-peek-fetch'
 // The wire shape has ONE definition, and it lives with the module that reasons
 // about it — the browser and this file must not carry two copies that drift.
@@ -124,8 +125,14 @@ export function csValidateTarget(raw: string): CsTargetCheck {
  * Resolve, check EVERY answer, and return the address the connection will be
  * pinned to. Any private answer refuses the whole dial: a name that maps to
  * both a public and a private address is exactly the rebinding setup.
+ *
+ * The lookup goes through `lookupAllBounded`, the bound Link Peek shares. It
+ * used to be awaited bare here, so one name whose nameservers black-hole
+ * packets held a request — and a libuv threadpool slot — for as long as the OS
+ * resolver liked, and `CS_TIMEOUT_MS` was never consulted. `dns` is its test
+ * seam, and `csInspect` never passes it.
  */
-export async function csResolvePinned(host: string): Promise<{ ok: true; address: string; family: 4 | 6 } | { ok: false; reason: string }> {
+export async function csResolvePinned(host: string, dns: DnsLookupOptions = {}): Promise<{ ok: true; address: string; family: 4 | 6 } | { ok: false; reason: string }> {
   if (lpIsForbiddenHostname(host)) {
     return { ok: false, reason: 'That host is private or local — this tool only dials public hosts.' }
   }
@@ -137,9 +144,15 @@ export async function csResolvePinned(host: string): Promise<{ ok: true; address
   }
   let answers: { address: string; family: number }[]
   try {
-    answers = await lookup(host, { all: true })
-  } catch {
-    return { ok: false, reason: `The name "${host}" does not resolve.` }
+    answers = await lookupAllBounded(host, dns)
+  } catch (err) {
+    // No answer in time is not the same claim as "no such name".
+    return {
+      ok: false,
+      reason: err instanceof DnsLookupTimeout
+        ? `The name "${host}" did not resolve within ${Math.round(err.timeoutMs / 1000)}s.`
+        : `The name "${host}" does not resolve.`,
+    }
   }
   if (answers.length === 0) return { ok: false, reason: `The name "${host}" does not resolve.` }
   for (const a of answers) {

@@ -1,3 +1,5 @@
+import { EMBED_NO_CHROME } from './embeds'
+
 /**
  * Mounts the game controller for whichever component is on the page.
  *
@@ -39,6 +41,12 @@ export function mountGame(): Promise<unknown> {
   return Promise.resolve()
 }
 
+/** Containers already handed to `stripEmbedChrome`, so each gets one observer. */
+const handled = new WeakSet<Element>()
+/** Release functions for the observers still waiting for their component's chrome. */
+const waiting = new Set<() => void>()
+let swapHooked = false
+
 /**
  * Remove the component's own title block from a container that supplies its own.
  *
@@ -53,16 +61,43 @@ export function mountGame(): Promise<unknown> {
  * single moment that is safe to sweep at. A timing-based version of this passed
  * a hard reload and failed on every in-site click. Self-disconnects on the first
  * hit — the block is written once, in connectedCallback.
+ *
+ * Three things bound the observer, because "disconnects on the first hit" is
+ * only a bound for a component that produces one:
+ *
+ *  - A figure that writes no chrome at all (`EMBED_NO_CHROME`) gets no observer.
+ *    Without that the diagrams article ran eight that never disconnected,
+ *    re-scanning on every beat of five animated figures.
+ *  - One observer per container. Both embedding routes mount at script
+ *    evaluation AND on `astro:page-load`, which fires for the first page too, so
+ *    a cold load started two per figure — and the second, whose twin had
+ *    already removed the chrome, never saw a hit and never disconnected.
+ *  - None outlives its page: the next `astro:before-swap` releases whatever is
+ *    still waiting, through one listener registered once for the session.
  */
 export function stripEmbedChrome(container: Element): void {
+  if (handled.has(container)) return
+  handled.add(container)
+  const slug = container.querySelector('[data-game]')?.getAttribute('data-game')
+  if (slug && EMBED_NO_CHROME.has(slug)) return
   const strip = () => {
     const chrome = container.querySelectorAll('[data-type$="-header"], h1')
     chrome.forEach(el => el.remove())
     return chrome.length > 0
   }
   if (strip()) return
-  const observer = new MutationObserver(() => { if (strip()) observer.disconnect() })
+  const observer = new MutationObserver(() => { if (strip()) release() })
+  const release = () => {
+    observer.disconnect()
+    waiting.delete(release)
+  }
+  waiting.add(release)
   observer.observe(container, { childList: true, subtree: true })
+  if (swapHooked) return
+  swapHooked = true
+  document.addEventListener('astro:before-swap', () => {
+    for (const waiter of [...waiting]) waiter()
+  })
 }
 
 /**

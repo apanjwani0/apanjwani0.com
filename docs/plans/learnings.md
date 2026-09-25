@@ -4,17 +4,22 @@ Written 2026-08-18. **Phases 1–3 and P-1 and T-1 are shipped on `develop`.**
 
 > **Superseded 2026-08-20 — the whole article series below was deleted.** All nine
 > articles were removed and replaced by a single one,
-> `the-test-that-shared-the-bug`. Everything from *The article series* down is
-> kept as a record of what was built and why, not as a description of what
-> ships; the two `Outstanding: npm run og` notes are moot — their pages no
-> longer exist and their cards are deleted. Note especially that Article 9's
-> "own b/(pot+bet)" is the bug the surviving article is *about*: the assertion
-> restated the formula it was checking instead of deriving it.
+> `the-test-that-shared-the-bug` — and that one was withdrawn in turn on
+> 2026-09-25 for `which-diagram-to-draw`. **No article slug named in this
+> document is live.** `the-test-that-shared-the-bug` was served from `main`, so
+> its URL now answers 301 to `/learnings` (`RETIRED_LEARNINGS` in
+> `src/lib/learnings.ts`); the rest were removed before that map existed and
+> 404. Everything from *The article series* down is kept as a record of what was
+> built and why, not as a description of what ships; the two `Outstanding: npm
+> run og` notes are moot — their pages no longer exist and their cards are
+> deleted. Note especially that Article 9's "own b/(pot+bet)" is the bug
+> `the-test-that-shared-the-bug` was *about*: the assertion restated the formula
+> it was checking instead of deriving it.
 
 | Phase | State |
 |---|---|
 | 1 — Learnings, end to end (L-1…L-9) | **Done.** Section, routes, admin tab, predicate, sitemap, cards, smoke assertions |
-| 2 — Remaining articles (L-10…L-15) | **Done.** All seven articles live, each with its simulation embedded |
+| 2 — Remaining articles (L-10…L-15) | **Done, since deleted** — all seven shipped with their simulations embedded; see the note above |
 | 3 — Driftfield (D-1…D-5) | **Done.** Six mode routes, 301s from `/games/*` and `/tools/wallpaper-forge`, games config pruned 14 → 7 |
 | 4 — T-1 Token Bench | **Done.** JWT signature verification, extracted to `src/lib/jwt.ts` and asserted |
 | 4 — T-2 tool renames | **Not started — needs a decision from you.** See Open below |
@@ -149,7 +154,7 @@ this section, and it is worth repeating where a component supports it.
 **Outstanding: `npm run og` for `learnings-maze-generation-bias.png`.** Without
 the card the page falls back to the avatar and the small Twitter card.
 
-### Article 9 — `pot-odds-and-bluff-frequency`, shipped 2026-08-18
+### Article 9 — `pot-odds-and-bluff-frequency`, shipped 2026-08-18 (deleted since — see the note at the top)
 
 Embed: `poker-trainer`. Picked over the other four unwritten embeds (`2048`,
 `quintle`, `type-trial`, `hue-hunt`) on one criterion — which component sits on

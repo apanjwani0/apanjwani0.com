@@ -182,6 +182,10 @@ div[data-tool="dns-sightline"] [data-type="sg-evidence-none"] {
 
 /* ---------- tables ---------- */
 
+/* A sideways-scrolling table is keyboard-reachable only if its wrapper can
+   take focus, so both wrappers render `tabindex="0"` as a named region — the
+   site's own :focus-visible ring (shared.css) is what shows where focus went.
+   Without it the columns past the edge need a pointer to reach. */
 div[data-tool="dns-sightline"] [data-type="sg-scroll"] {
   overflow-x: auto;
 }

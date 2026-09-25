@@ -27,6 +27,16 @@ class DraftboardTool extends HTMLElement {
   private mapMode: MdMapMode = 'headings'
   private mapTimer: number | undefined
 
+  /** A click anywhere outside the export group closes its menu. Named so
+   *  `disconnectedCallback` can remove it — a document listener added on every
+   *  connect and never removed outlives the element and keeps it reachable. */
+  private onDocumentClick = (e: MouseEvent) => {
+    const exportGroup = this.querySelector('[data-group="export"]')
+    if (exportGroup && !exportGroup.contains(e.target as Node)) {
+      this.toggleExportMenu(false)
+    }
+  }
+
   connectedCallback() {
     const helpHtml = helpSections.map(s => `
       <div data-type="help-group">
@@ -135,12 +145,7 @@ class DraftboardTool extends HTMLElement {
         }
       })
 
-    document.addEventListener('click', (e) => {
-      const exportGroup = this.querySelector('[data-group="export"]')
-      if (exportGroup && !exportGroup.contains(e.target as Node)) {
-        this.toggleExportMenu(false)
-      }
-    })
+    document.addEventListener('click', this.onDocumentClick)
 
     this.querySelector('[data-action="close-help"]')!
       .addEventListener('click', () => this.toggleHelp(false))
@@ -154,6 +159,7 @@ class DraftboardTool extends HTMLElement {
   }
 
   disconnectedCallback() {
+    document.removeEventListener('click', this.onDocumentClick)
     clearTimeout(this.mapTimer)
     this.cy?.destroy()
     this.cy = null
