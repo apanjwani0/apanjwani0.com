@@ -59,3 +59,30 @@ export function learningEmbedTag(learning: { embed?: string }): string | undefin
 export function learningsAboutEmbed(embed: string, all: Learning[]): Learning[] {
   return all.filter(l => l.embed === embed && isPublishedLearning(l))
 }
+
+/**
+ * Minutes to read an article, derived from its own content.
+ *
+ * Derived and never stored, for the reason `learningsAboutEmbed` is derived: a
+ * number typed into config is a second copy of a fact the content already
+ * states, and it goes stale on the next edit with nothing to catch it.
+ *
+ * The markers are stripped before counting, so the figure syntax and callout
+ * fences do not read as words. Figures are then added back at a flat 8s each —
+ * an article in the current house format is mostly figures, and counting only
+ * the prose between them reports "1 min" for a page that takes four. 200 wpm is
+ * the usual estimate for screen reading of ordinary prose.
+ *
+ * Rounded up, floor of 1: "0 min read" is not a thing, and rounding 90 seconds
+ * down to one minute is the friendlier error.
+ */
+export function readingTime(content: string): number {
+  const figures = [...content.matchAll(/^[ \t]*\{\{embed(?::[a-z0-9-]+)?\}\}[ \t]*$/gm)].length
+  const words = content
+    .replace(/^[ \t]*\{\{embed(?::[a-z0-9-]+)?\}\}[ \t]*$/gm, ' ')
+    .replace(/^:::.*$/gm, ' ')
+    .replace(/[#>=*`|_-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean).length
+  return Math.max(1, Math.ceil(words / 200 + (figures * 8) / 60))
+}

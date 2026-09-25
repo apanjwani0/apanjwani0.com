@@ -65,9 +65,17 @@ export function stripEmbedChrome(container: Element): void {
   observer.observe(container, { childList: true, subtree: true })
 }
 
-/** Strip the component's chrome, then mount it. What both embedding routes do. */
+/**
+ * Strip the component's chrome, then mount it. What both embedding routes do.
+ *
+ * All matching containers, not the first: an article in the house format places
+ * the same component several times (`{{embed:view}}` — see splitOnEmbeds), and
+ * every copy writes its own `<h1>` and blurb into itself. Stripping only the
+ * first leaves the document with one heading per remaining figure. `mountGame()`
+ * still runs once — importing the module upgrades every instance of the custom
+ * element on the page, so the dispatch has nothing per-copy to do.
+ */
 export function mountEmbed(containerSelector: string): void {
-  const container = document.querySelector(containerSelector)
-  if (container) stripEmbedChrome(container)
+  for (const container of document.querySelectorAll(containerSelector)) stripEmbedChrome(container)
   mountGame()
 }

@@ -10,6 +10,46 @@ element directly."
 Every one of those is a fair reading of what shipped. This file exists so the
 next article does not repeat them.
 
+## The format (2026-09-25 — supersedes the length rule below)
+
+Read after the owner read the diagrams article: *"it's just very bad, it's not
+something I would write myself… you don't have to write some philosophical
+shit."* The 2026-08 rules below fixed the prose. They did not fix the **shape**,
+and the shape is what was still wrong: a 1,071-word essay whose actual subject —
+what these diagrams *are* — was compressed into one table, under three pages of
+cognitive-science citation.
+
+**1. It has to read as if the owner handwrote it.** Not essay voice. No
+philosophical closing line. No research paper used as the spine of the piece. A
+study may appear where it settles a question the reader is already asking; it
+may not be the reason the article exists.
+
+**2. The reader must finish knowing more about the subject.** That is the whole
+test. For the diagrams piece it meant naming things: what a class diagram is,
+what UML actually refers to, what the HLD picture is called and what the LLD one
+is called, how a mind map differs from a knowledge graph. If a reader could have
+got the same value from the title, the article did not happen.
+
+**3. Short lines.** One idea per line. If a sentence has two clauses joined by a
+dash or a semicolon, it is usually two lines.
+
+**4. A visual beat every one to three lines.** A figure, an interaction, a
+diagram, a GIF — something to look at. The prose is the connective tissue
+between the figures, not the other way round. Write the figure list FIRST, then
+write the lines between them.
+
+**5. Budget: aim for 350–550 words of prose.** The instruction was "if your
+first draft says a thousand words, make it two hundred". Figures, captions and
+tables are not counted against it — they are the article. A piece may run longer
+only when the extra length is itself interesting; length is never the goal.
+
+**6. Every article shows its read time**, the way Medium does. Derived from the
+content, never typed into config — see `readingTime()` in `src/lib/learnings.ts`.
+
+One constraint that shapes the structure and is **never written on the site**:
+build it as if for a reader with ADHD. Short, visual, always something to do
+next. It is a design brief, not a topic, and it is not mentioned in copy.
+
 ## The four failures, named
 
 **1. One skeleton, seven times.** Every article ran: cold-open hook → potted
@@ -81,9 +121,11 @@ right after the sentence that makes them curious and before the one that answers
 it. The caption is an **instruction**, not a description: "Drop in a glider gun
 and watch the population climb forever" beats "The real thing, running here."
 
-**Length: 700–1100 words.** The old ones ran long because the closing summary and
-the self-announcing transitions padded them. Cut those and the piece is shorter
-and better.
+**Length: see the budget above (350–550 words of prose).** This used to say
+700–1100. That range was set when an article was all prose and one figure; it is
+superseded by the format section at the top of this file, which inverts the
+ratio. The reasoning survives: the old ones ran long because the closing summary
+and the self-announcing transitions padded them.
 
 ## The marks available
 
@@ -96,7 +138,8 @@ Use them sparingly — a page with six highlights has none.
 | `:::key Label` … `:::` | accented callout | The takeaway a skimmer must not miss. |
 | `:::note Label` … `:::` | plain callout | Context that would derail the main line — an aside, a caveat, a definition. |
 | `:::warn Label` … `:::` | red-accented callout | A common misreading, or a claim that is contested. |
-| `{{embed}}` | the interactive figure | Exactly once, at the moment of maximum curiosity. |
+| `{{embed}}` | the interactive figure, full | The moment of maximum curiosity. |
+| `{{embed:view}}` | the same component pinned to one view | The per-section beats. Several per article is the point. |
 
 `>` is still a real blockquote and means *someone said this*. Do not use it for
 emphasis; that is what `>>` is for.

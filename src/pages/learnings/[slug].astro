@@ -6,9 +6,9 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import RelatedLinks from '../../components/RelatedLinks.astro'
 import { getSite, getLearnings } from '../../lib/config'
 import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
-import { isPublishedLearning, learningEmbedTag } from '../../lib/learnings'
+import { isPublishedLearning, learningEmbedTag, readingTime } from '../../lib/learnings'
 import { existingOgCardPath, learningHasOgCard } from '../../lib/og'
-import { render, splitOnEmbed } from '../../lib/markdown'
+import { render, splitOnEmbeds } from '../../lib/markdown'
 import { formatDisplayDate } from '../../lib/date'
 import '../../styles/games-embed.css'
 
@@ -51,9 +51,11 @@ const starfield = !EmbedTag
 //
 // No marker is a valid article: everything lands in `before` and the figure goes
 // after it. A missing marker should cost the position, never the simulation.
-const { before, after } = splitOnEmbed(learning.content)
-const beforeHtml = render(before)
-const afterHtml = after.trim() ? render(after) : ''
+const segments = splitOnEmbeds(learning.content).map(seg => ({
+  bodyHtml: seg.markdown.trim() ? render(seg.markdown) : '',
+  view: seg.view,
+}))
+const minutes = readingTime(learning.content)
 
 const related = learnings
   .filter(l => isPublishedLearning(l) && l.slug !== learning.slug)
@@ -107,23 +109,36 @@ const breadcrumbLd = breadcrumbListJsonLd([
   <article>
     <header>
       <h1>{learning.title}</h1>
-      <time datetime={learning.date}>{formatDisplayDate(learning.date)}</time>
+      <p data-type="article-meta">
+        <time datetime={learning.date}>{formatDisplayDate(learning.date)}</time>
+        <span aria-hidden="true">·</span>
+        <span>{minutes} min read</span>
+      </p>
     </header>
     {/* The standfirst — display-size, not a labelled "Summary:" field. It is the
         second thing a reader looks at after the headline, and its job is to make
         them start; a form-label in front of it announced that this was metadata
         about an article rather than the opening of one. */}
     <p data-type="standfirst">{learning.summary}</p>
-    <section data-type="post-content" set:html={beforeHtml} />
-    {EmbedTag && (
-      <figure data-type="learning-embed">
-        {/* data-game is what src/lib/game-mount.ts dispatches on — the same
-            attribute the game route uses, so one mount function serves both. */}
-        <EmbedTag data-game={learning.embed} />
-        {learning.embedCaption && <figcaption>{learning.embedCaption}</figcaption>}
-      </figure>
-    )}
-    {afterHtml && <section data-type="post-content" set:html={afterHtml} />}
+    {segments.map((seg, i) => (
+      <>
+        {seg.bodyHtml && <section data-type="post-content" set:html={seg.bodyHtml} />}
+        {EmbedTag && seg.view !== undefined && (
+          <figure data-type="learning-embed" data-pinned={seg.view || undefined}>
+            {/* data-game is what src/lib/game-mount.ts dispatches on — the same
+                attribute the game route uses, so one mount function serves both.
+                data-view pins the component to one of its views; a component
+                that does not read it renders its default. */}
+            <EmbedTag data-game={learning.embed} data-view={seg.view || undefined} />
+            {/* The caption belongs to the FULL figure only. A pinned view is a
+                beat inside the prose and the line above it is already its
+                caption; repeating the article-level caption under all seven
+                would be seven copies of one sentence. */}
+            {!seg.view && learning.embedCaption && <figcaption>{learning.embedCaption}</figcaption>}
+          </figure>
+        )}
+      </>
+    ))}
   </article>
   <RelatedLinks heading="More learnings" items={related} />
 
@@ -181,8 +196,13 @@ const breadcrumbLd = breadcrumbListJsonLd([
     margin-bottom: 0.75rem;
   }
 
-  article header time {
-    display: block;
+  /* Date · read time. The minutes are derived from the content by readingTime()
+     and never stored, so they cannot go stale against an edit. */
+  article header p[data-type="article-meta"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--space-2xs, 0.4rem);
+    margin: 0;
     font-family: var(--font-mono);
     font-size: var(--text-label);
     color: var(--color-muted);
@@ -368,6 +388,14 @@ const breadcrumbLd = breadcrumbListJsonLd([
      frontmatter. Tokens only. */
   figure[data-type="learning-embed"] {
     margin: var(--space-section) 0;
+  }
+
+  /* A pinned figure is a beat between two lines of prose, not a section break,
+     so it sits tighter than the full one and drops the picker's own top gap.
+     The house format puts one every few lines; at section spacing the article
+     would be mostly air. */
+  figure[data-type="learning-embed"][data-pinned] {
+    margin: var(--space-lg, 1.25rem) 0;
   }
 
   /* The component's own title block, hidden before it can paint — the script

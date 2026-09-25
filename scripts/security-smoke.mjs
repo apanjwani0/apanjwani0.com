@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto'
 import { isIP } from 'node:net'
 import { readFile, readdir } from 'node:fs/promises'
 import { INTEREST_MAX_COUNT, sanitizeStore } from '../src/lib/interest.ts'
-import { render, renderInline, splitOnEmbed } from '../src/lib/markdown.ts'
+import { render, renderInline, splitOnEmbeds } from '../src/lib/markdown.ts'
 import {
   createRateLimiter,
   getClientIp,
@@ -145,12 +145,21 @@ assert.equal(
 )
 assert.equal(render('==<b>x</b>==').includes('<b>'), false, 'raw HTML inside a highlight is escaped')
 
-// {{embed}} placement. No marker means the whole article is `before` — the
-// caller then falls back to putting the figure after the prose, never dropping
-// it, because a typo in /admin should cost the position and not the simulation.
-assert.deepEqual(splitOnEmbed('a\n{{embed}}\nb'), { before: 'a\n', after: '\nb' })
-assert.deepEqual(splitOnEmbed('a only'), { before: 'a only', after: '' })
-assert.equal(splitOnEmbed('inline {{embed}} text').after, '', 'the marker must be on its own line')
+// {{embed}} placement. No marker means the whole article is one segment with no
+// figure — the caller then falls back to putting the figure after the prose,
+// never dropping it, because a typo in /admin should cost the position and not
+// the simulation.
+assert.deepEqual(splitOnEmbeds('a\n{{embed}}\nb'), [{ markdown: 'a\n', view: '' }, { markdown: '\nb' }])
+assert.deepEqual(splitOnEmbeds('a only'), [{ markdown: 'a only' }])
+assert.equal(splitOnEmbeds('inline {{embed}} text').length, 1, 'the marker must be on its own line')
+// Several figures per article is the house format, and a pinned name rides on
+// the marker. An unknown name is NOT rejected here: the component falls back to
+// its default view, so a typo costs the pinning and never the figure.
+assert.deepEqual(
+  splitOnEmbeds('a\n{{embed:flow}}\nb\n{{embed:er}}\nc'),
+  [{ markdown: 'a\n', view: 'flow' }, { markdown: '\nb\n', view: 'er' }, { markdown: '\nc' }],
+)
+assert.equal(splitOnEmbeds('x\n{{embed:Flow Chart}}\ny').length, 1, 'a view name is one lowercase token')
 
 assert.equal(safeExternalUrl('https://github.com/apanjwani0/repo'), 'https://github.com/apanjwani0/repo')
 assert.equal(safeExternalUrl('http://example.com'), null)
@@ -713,15 +722,14 @@ const learningRouteSrc = await readFile(new URL('../src/pages/learnings/[slug].a
 // learning.content)` and broke the moment the placement marker was added, which
 // is a test failing for a reason that has nothing to do with the invariant.
 assert.ok(
-  learningRouteSrc.includes('splitOnEmbed(learning.content)'),
+  learningRouteSrc.includes('splitOnEmbeds(learning.content)'),
   'learning content is split for embed placement',
 )
-for (const half of ['before', 'after']) {
-  assert.ok(
-    new RegExp(`render\\(${half}\\)`).test(learningRouteSrc),
-    `the ${half} half is rendered through markdown.ts`,
-  )
-}
+assert.ok(
+  /render\(seg\.markdown\)/.test(learningRouteSrc),
+  'every segment between two figures is rendered through markdown.ts — with N figures there is no '
+  + 'fixed number of halves, so the guard is that the segment content is what render() is given',
+)
 // Whatever gets handed to set:html must be a *Html variable, i.e. the output of
 // render() — never a config field.
 for (const [, expr] of learningRouteSrc.matchAll(/set:html=\{([^}]+)\}/g)) {
@@ -6827,15 +6835,27 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
     )
   }
 
-  // …and the article's table carries one row per view, for the same reason. A
-  // notation in the figure and absent from the table is the contradiction the
-  // reader resolves by trusting neither.
-  const rows = article.content
-    .split('\n')
-    .filter(l => l.startsWith('|') && !/^\|[\s|:-]+\|$/.test(l))
-  assert.equal(
-    rows.length - 1, ATLAS_VIEWS.length,
-    `the article's table has ${rows.length - 1} notations and the atlas has ${ATLAS_VIEWS.length}`,
+  /* …and the article shows one figure per view, for the same reason. A notation
+     in the atlas and absent from the article is the contradiction the reader
+     resolves by trusting neither.
+
+     This used to count rows of a markdown table. The house format (see
+     docs/plans/learnings-voice.md) replaced that table with a pinned figure per
+     notation, so the mapping now lives in the `{{embed:view}}` markers — which
+     is a stronger place for it than prose, because the marker is the thing that
+     actually renders. Both directions are asserted, and the second one is the
+     one a table could never give: a marker naming a view that does not exist
+     renders the full picker instead, which looks deliberate and is not. */
+  const pinned = [...article.content.matchAll(/^[ \t]*\{\{embed:([a-z0-9-]+)\}\}[ \t]*$/gm)].map(m => m[1])
+  for (const id of pinned) {
+    assert.ok(
+      ATLAS_VIEWS.some(v => v.id === id),
+      `the article pins a figure to "${id}", which is not a view — it would silently render the full picker`,
+    )
+  }
+  assert.deepEqual(
+    [...pinned].sort(), ATLAS_VIEWS.map(v => v.id).sort(),
+    'every view must get its own figure in the article, and none twice',
   )
 
   /* ── 2. Every view carries a full legend. ──
@@ -6967,6 +6987,80 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
     'a horizontally scrollable region must be reachable without a pointer',
   )
 }
+/* ─────  the house article format: many figures, and a cost that follows them  ──
+
+   `{{embed:view}}` lets one article carry a figure every few lines
+   (docs/plans/learnings-voice.md). That is the format the owner asked for, and
+   it brings a cost the single-embed version did not have: the diagrams article
+   now mounts EIGHT copies of the same component, five of which animate on a
+   timer. The component autoplayed in `select()`, so the first version of this
+   started five setIntervals on connect and ran all of them forever, on a page
+   whose entire job is to be read — the same objection that took the starfield
+   off tool and game pages, arrived at from the other direction.
+
+   Playback therefore follows visibility. The invariant is that no path starts
+   the timer without checking it, which is asserted at the source rather than by
+   counting timers, because a leaked interval is invisible in every screenshot
+   and is exactly what a later refactor would reintroduce. */
+{
+  const atlasComponent = await readFile(
+    new URL('../src/components/games/diagram-atlas/DiagramAtlas.ts', import.meta.url), 'utf-8')
+
+  assert.ok(
+    /IntersectionObserver/.test(atlasComponent),
+    'the atlas must gate playback on visibility — eight copies of it share one article',
+  )
+  assert.ok(
+    /private autoplay\(\)[\s\S]*?this\.visible/.test(atlasComponent),
+    'autoplay() must check visibility before starting the timer',
+  )
+  // select() runs on connect for every copy, so a bare play() there is the
+  // regression: it would restore autoplay-on-mount for all eight at once.
+  const selectBody = atlasComponent.slice(
+    atlasComponent.indexOf('private select('),
+    atlasComponent.indexOf('private autoplay('))
+  assert.ok(
+    !/\bthis\.play\(\)/.test(selectBody),
+    'select() must reach playback through autoplay(), never call play() directly',
+  )
+  assert.ok(
+    /prefers-reduced-motion/.test(atlasComponent),
+    'a figure that moves on its own must respect prefers-reduced-motion',
+  )
+
+  /* ── Read time is derived, never stored ──
+     Same rule as `learningsAboutEmbed`: a number typed into config is a second
+     copy of a fact the content already states, and it goes stale on the next
+     edit with nothing to catch it. */
+  const { readingTime } = await import('../src/lib/learnings.ts')
+  const learningsConfigSrc = await readFile(new URL('../src/config/learnings.ts', import.meta.url), 'utf-8')
+  assert.ok(
+    !/"(readingTime|minutes|readTime)"\s*:/.test(learningsConfigSrc),
+    'read time must not be a config field — it is derived from the content by readingTime()',
+  )
+  assert.equal(readingTime(''), 1, 'a "0 min read" is not a thing')
+  assert.ok(
+    readingTime('word '.repeat(400)) > readingTime('word '.repeat(100)),
+    'read time must grow with the article',
+  )
+  // Figures are most of a house-format article; counting only the prose between
+  // them reports "1 min" for a page that takes several.
+  assert.ok(
+    readingTime('word '.repeat(100) + '\n{{embed:flow}}\n'.repeat(7))
+      > readingTime('word '.repeat(100)),
+    'figures must count toward the read time, or a figure-led article reads as a minute',
+  )
+  assert.ok(
+    learningRouteSrc.includes('readingTime(learning.content)'),
+    'the article route must derive the read time from the content it renders',
+  )
+  assert.ok(
+    /min read/.test(learningRouteSrc),
+    'the article must show its read time — the owner asked for the Medium-style estimate',
+  )
+}
+console.log('learnings format: figures are visibility-gated and motion-safe, and the read time is derived from the content')
+
 console.log('diagram atlas: seven views, every beat lights an element that exists, the structural notations refuse to animate, and the prose still says seven')
 
 /* ─────  CAA x issuer: the finding neither tool can make alone  ─────────────

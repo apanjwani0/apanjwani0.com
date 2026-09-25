@@ -43,6 +43,15 @@ class DiagramAtlasFigure extends HTMLElement {
   private step = 0
   private timer = 0
   private playing = false
+  /* An article in the house format carries eight of these, five of which
+     animate. Autoplaying on connect therefore started five setIntervals at
+     once, all of them running forever whether or not they were anywhere near
+     the viewport — on a page whose job is to be read. So playback follows
+     visibility, and `paused` remembers a deliberate pause so scrolling back to
+     a figure the reader stopped does not restart it behind them. */
+  private visible = false
+  private pausedByReader = false
+  private io?: IntersectionObserver
 
   private stage!: HTMLElement
   private caption!: HTMLElement
@@ -51,14 +60,27 @@ class DiagramAtlasFigure extends HTMLElement {
   private transport!: HTMLElement
 
   connectedCallback() {
+    /* Pinned mode. An article carries a figure every few lines (the house
+       format — docs/plans/learnings-voice.md), and at that size the reader has
+       already been told which notation they are looking at by the line above
+       it, so seven question buttons over every figure is seven copies of a
+       control answering a question the prose just answered. `data-view` drops
+       the picker and shows that one view; the full component, with the picker,
+       is what a bare `{{embed}}` still renders.
+
+       An unknown name falls back to the picker rather than throwing — a typo in
+       config costs the pinning, never the figure. */
+    const asked = this.getAttribute('data-view')
+    const pinned = ATLAS_VIEWS.find(v => v.id === asked)
+
     this.innerHTML = `
-      <div data-type="at-figure">
-        <div data-type="at-ask" role="group" aria-label="The question you are asking">
+      <div data-type="at-figure"${pinned ? ' data-pinned' : ''}>
+        ${pinned ? '' : `<div data-type="at-ask" role="group" aria-label="The question you are asking">
           ${ATLAS_VIEWS.map(
             (v, i) =>
               `<button type="button" data-view="${v.id}" aria-pressed="${i === 0}">${v.question}</button>`,
           ).join('')}
-        </div>
+        </div>`}
         <div data-type="at-stage" tabindex="0"></div>
         <p data-type="at-caption" aria-live="polite"></p>
         <div data-type="at-transport" role="group" aria-label="Playback">
@@ -75,11 +97,19 @@ class DiagramAtlasFigure extends HTMLElement {
     this.playBtn = this.querySelector('[data-action="play"]') as HTMLButtonElement
 
     this.addEventListener('click', this.onClick)
-    this.select(ATLAS_VIEWS[0].id)
+    this.select((pinned ?? ATLAS_VIEWS[0]).id)
+
+    this.io = new IntersectionObserver(([entry]) => {
+      this.visible = entry.isIntersecting
+      if (this.visible) this.autoplay()
+      else this.pause()
+    })
+    this.io.observe(this)
   }
 
   disconnectedCallback() {
     this.pause()
+    this.io?.disconnect()
     this.removeEventListener('click', this.onClick)
   }
 
@@ -91,8 +121,12 @@ class DiagramAtlasFigure extends HTMLElement {
       this.select(viewId)
       return
     }
-    if (btn.dataset.action === 'play') this.playing ? this.pause() : this.play()
+    if (btn.dataset.action === 'play') {
+      this.pausedByReader = this.playing
+      this.playing ? this.pause() : this.play()
+    }
     if (btn.dataset.action === 'step') {
+      this.pausedByReader = true
       this.pause()
       this.advance()
     }
@@ -100,6 +134,7 @@ class DiagramAtlasFigure extends HTMLElement {
 
   /** Switch notation. The scenario does not change — only the picture of it does. */
   private select(id: string) {
+    this.pausedByReader = false
     this.pause()
     this.view = atlasView(id)
     this.step = 0
@@ -133,11 +168,18 @@ class DiagramAtlasFigure extends HTMLElement {
     this.transport.hidden = !animated
     if (animated) {
       this.render()
-      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) this.play()
+      this.autoplay()
     } else {
       this.caption.textContent =
         'Nothing moves here, and nothing should: every line on this one is true at every instant.'
     }
+  }
+
+  /** Start only if it would be seen, wanted, and is not a still diagram. */
+  private autoplay() {
+    if (!this.visible || this.pausedByReader) return
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    this.play()
   }
 
   private play() {

@@ -1192,15 +1192,53 @@ were fair. `docs/plans/learnings-voice.md` is the response and is **binding on
 every new article** — its "Hard bans" list is a set of LLM tics, not stylistic
 preferences.
 
+A second round on 2026-09-25, on the diagrams article: *"it's just very bad,
+it's not something I would write myself… you don't have to write some
+philosophical shit."* The first round fixed the prose; it did not fix the
+**shape**. What shipped was a 1,071-word essay whose actual subject — what
+these diagrams *are*, what a class diagram is, which picture is the HLD one —
+was compressed into a single table under three pages of cognitive-science
+citation. The format section at the top of the voice doc is the response and it
+supersedes the old length rule: **350–550 words of prose, a visual beat every
+one to three lines, and a read time on the page.** The rewrite came out at 420
+words and eight figures. A study may appear where it settles a question the
+reader is already asking; it may not be the reason the article exists.
+
 Three mechanisms exist because of that feedback:
 
-- **`{{embed}}` places the figure.** The route used to pin the component between
-  the summary and the prose, which is the worst available position — the reader
-  meets a simulation before being told what it is, and the article then has to
-  open by pointing at "the thing above". That single constraint is most of why
-  all seven read identically. `splitOnEmbed()` (src/lib/markdown.ts) splits the
-  source on a `{{embed}}` line; no marker means the figure goes after the prose,
-  so a typo costs the position and never the simulation.
+- **`{{embed}}` places the figure, and `{{embed:view}}` places the others.** The
+  route used to pin the component between the summary and the prose, which is
+  the worst available position — the reader meets a simulation before being told
+  what it is, and the article then has to open by pointing at "the thing above".
+  That single constraint is most of why all seven read identically.
+  `splitOnEmbeds()` (src/lib/markdown.ts) splits the source on every `{{embed}}`
+  line and returns the article as segments; no marker means the figure goes
+  after the prose, so a typo costs the position and never the simulation.
+
+  A bare `{{embed}}` is the full component. `{{embed:some-view}}` is the same
+  component **pinned** to one of its views with the picker dropped, which is
+  what lets one article carry a figure every few lines — the format the owner
+  asked for on 2026-09-25 (see `docs/plans/learnings-voice.md`), where the prose
+  is connective tissue between figures rather than the other way round. An
+  unknown view name falls back to the full picker instead of throwing, so
+  `security:smoke` checks every shipped marker against the component's own view
+  list: a mistyped pin renders something that looks deliberate and is not.
+
+  **Many figures bring a cost one figure did not.** The diagrams article mounts
+  eight copies of the atlas, five of which animate on a timer, and the component
+  autoplayed on connect — so the first version started five `setInterval`s at
+  once and ran them forever on a page whose job is to be read. That is the same
+  objection that took the StarField off tool and game pages, reached from the
+  other side. Playback now follows an `IntersectionObserver` and a deliberate
+  pause is remembered, both asserted at the source, because a leaked timer is
+  invisible in every screenshot.
+
+- **Read time is derived, never stored.** `readingTime()` (src/lib/learnings.ts)
+  counts the prose and adds a flat 8s per figure — an article in this format is
+  mostly figures, and counting only the words between them reports "1 min" for a
+  page that takes four. Same rule as `learningsAboutEmbed()`: a number typed
+  into config is a second copy of a fact the content already states, and it goes
+  stale on the next edit with nothing to catch it.
 - **Editorial marks**: `==highlight==`, `>> pull quote`, and
   `:::note/:::key/:::aside/:::warn` callouts, all parsed in
   `src/lib/markdown.ts`. They are markdown extensions and **not** raw HTML on
