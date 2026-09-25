@@ -277,6 +277,17 @@ an unbounded map is a memory-exhaustion vector rather than a defence. The host i
 a 1 GB VM; the container is capped (`--memory=768m`) so a leak restarts the
 container instead of taking down SSH and the CI runner with it.
 
+**A route that pairs a per-client bucket with a shared one asks the shared one
+only after the client's has said yes** — `allowClient(key) &&
+allowGlobal('global')`, never both evaluated up front. `createRateLimiter`
+counts a hit even when it refuses, so DNS Sightline, which asked both
+unconditionally, let one address that was already being refused keep spending
+the shared bucket: sixteen requests in a minute from a single client locked every
+other visitor out of the tool. `security:smoke` derives the rule over every
+route in `src/pages/api` (a limiter called with a string literal is the shared
+bucket, anything else is per-client) and floods the DNS Sightline route from one
+address to prove a second one still gets in.
+
 ### Public endpoints must be bounded in every dimension
 
 Body size, per-key count, global bytes, retention, *and* how long a request may
@@ -284,6 +295,25 @@ occupy a socket. The Webhook Inspector is the reference: `WEBHOOK_MAX_*` in
 `src/lib/webhook-store.ts` plus the 2s `?delay=` ceiling. Budget for byte
 accounting being optimistic — `.length` counts UTF-16 code units, not bytes, and
 object overhead is real.
+
+**Per-step bounds multiply, so a sequence of steps needs a bound of its own.**
+DNS Sightline had a 4s timeout on every question and no deadline on the
+inspection, and its SPF walk asks one question after another — forty of them
+held one socket for close to three minutes against a resolver that had stopped
+answering. `SG_INSPECT_DEADLINE_MS` (15s, `src/lib/dns-doh.ts`) is joined to the
+request's own signal with `AbortSignal.any`, and `sgQuery` checks
+`signal.aborted` before it asks anything: an abort listener never fires on a
+signal that has *already* aborted, so without that check every question after
+the deadline still went out and sat through its own timeout — measured at 16s
+for a 300ms deadline. Reaching the deadline is not an error; see *A failed
+lookup is not an absent record* for what the walks report instead.
+
+Name lookups count too. `dns.lookup` runs on libuv's four-slot threadpool with
+the OS resolver's timeout, outside every budget the callers keep, so Link Peek
+and Chainsaw both go through `lookupAllBounded` (`src/lib/dns-lookup.ts`, 3s).
+Chainsaw used to await the bare call while Link Peek raced it — one guard, two
+habits — and `security:smoke` now proves the bound for both with a lookup that
+never answers.
 
 The Type Trial daily leaderboard is the second worked example: `DAILY_*` in
 `src/lib/type-trial-leaderboard.ts` bounds name length, entries per day, retained
@@ -521,6 +551,19 @@ construction, since nothing below the stop point can change the answer.
 This is the same shape as `sgIsDangling` refusing to call a name unclaimed when
 it merely has no address record: the damaging output is the confident sentence,
 not the crash.
+
+The rule is not CAA's alone, and it took the inspection deadline to show it: a
+deadline turns every question still queued into a failed one at once. SPF read
+a failed include exactly like NXDOMAIN — "no SPF record, a receiver treats that
+as a permerror", plus a void lookup — and DMARC and MX read a failed lookup as no
+record and no address ("mail bounces"). `sgUnanswered` (`analyze.ts`) is now the
+one test of whether a question got an answer, and every finding that reads an
+empty record set asks it first: an unanswered include makes the SPF count a
+floor (`truncated`, titled "At least N"), and an unanswered root, `_dmarc`, MX or
+MX-target lookup yields `spf-inconclusive`, `dmarc-inconclusive`,
+`mx-inconclusive` or `mx-unchecked` in place of the absence finding. The page's
+panels read the same fields, so a panel cannot say "No MX records" beside a
+finding that says the MX lookup failed.
 
 ### A conclusion that does not depend on X must not be gated on X
 
@@ -870,7 +913,7 @@ was a second, mirrored fixture that does.
   it defaults to off, and without it a graph of word-labelled nodes lays out
   using the box and ignores the text, piling up overlapping in one corner.
 - **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
-- **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed. Two modules are Node-only and say so in their own docblocks: `src/lib/link-peek-fetch.ts` (`node:dns`, `node:net`) and `src/lib/tls-inspect.ts` (`node:tls`, `node:crypto`). Both are reached only from their API routes, never from the browser bundle — asserted by the build carrying no `node:` import into any client chunk. A Workers deploy has no raw-socket TLS, so Chainsaw is the one surface that would need a different transport behind the same JSON shape.
+- **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed. Three modules are Node-only and say so in their own docblocks: `src/lib/link-peek-fetch.ts` (`node:net`), `src/lib/tls-inspect.ts` (`node:tls`, `node:crypto`) and `src/lib/dns-lookup.ts` (`node:dns`, the bounded name lookup the other two share). All three are reached only from the Link Peek and Chainsaw API routes, never from the browser bundle — asserted by the build carrying no `node:` import into any client chunk. A Workers deploy has no raw-socket TLS, so Chainsaw is the one surface that would need a different transport behind the same JSON shape.
 
 ## Design System
 

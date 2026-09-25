@@ -47,16 +47,18 @@ interface SgReport {
     exceeded: boolean
     voidLookups: number
     truncated: boolean
+    unanswered: string[]
     all: string | null
   }
-  dmarc: { record: string | null; recordCount: number; tags: Record<string, string>; atApex: boolean }
+  dmarc: { record: string | null; recordCount: number; tags: Record<string, string>; atApex: boolean; unanswered: boolean }
   caa: { policyAt: string | null; allowed: string[]; allowedWild: string[]; forbidsAll: boolean; forbidsAllWild: boolean; unknownCritical: string[] }
   caaWalked: string[]
-  mxTargets: Array<{ preference: number; host: string; isCname: boolean; cnameTo: string | null; addresses: string[]; resolves: boolean }>
+  mxTargets: Array<{ preference: number; host: string; isCname: boolean; cnameTo: string | null; addresses: string[]; resolves: boolean; unanswered: boolean }>
   cname: { target: string | null; dangling: boolean; service: string | null; coexisting: string[]; atApex: boolean }
   findings: SgFinding[]
   queries: number
   elapsedMs: number
+  deadlineHit: boolean
 }
 
 interface SgResponse {
@@ -237,9 +239,11 @@ class DnsSightlineTool extends HTMLElement {
       this.report = body.report
       this.render(body.report)
       const counts = sgCountByLevel(body.report.findings)
+      // A run that hit its deadline is a partial answer, and the status line is
+      // what a screen reader announces — so it says so before the counts do.
       this.setStatus(
-        `${body.report.queries} DNS queries in ${body.report.elapsedMs}ms · ${counts.error} error${counts.error === 1 ? '' : 's'}, ${counts.warn} warning${counts.warn === 1 ? '' : 's'}`,
-        counts.error ? 'bad' : 'ok',
+        `${body.report.deadlineHit ? 'Stopped at the time limit, so some sections are incomplete · ' : ''}${body.report.queries} DNS queries in ${body.report.elapsedMs}ms · ${counts.error} error${counts.error === 1 ? '' : 's'}, ${counts.warn} warning${counts.warn === 1 ? '' : 's'}`,
+        counts.error || body.report.deadlineHit ? 'bad' : 'ok',
       )
       // Keep the address bar in step so the result is shareable. replaceState,
       // not pushState: one inspection is not a history entry.
@@ -386,11 +390,17 @@ class DnsSightlineTool extends HTMLElement {
           .map(
             t =>
               `<li><code>${t.preference} ${sgEsc(t.host)}</code> — ${
-                t.isCname ? `<span data-bad="1">CNAME → ${sgEsc(t.cnameTo ?? '')}</span>` : t.resolves ? sgEsc(t.addresses.slice(0, 3).join(', ')) : '<span data-bad="1">no address</span>'
+                t.isCname
+                  ? `<span data-bad="1">CNAME → ${sgEsc(t.cnameTo ?? '')}</span>`
+                  : t.resolves
+                    ? sgEsc(t.addresses.slice(0, 3).join(', '))
+                    : t.unanswered ? 'no answer to the address lookup' : '<span data-bad="1">no address</span>'
               }</li>`,
           )
           .join('')}</ul>`
-      : '<p data-type="sg-note">No MX records.</p>'
+      : r.diffs.find(d => d.type === 'MX')?.answered === 0
+        ? '<p data-type="sg-note">No resolver answered the MX question, so the mail servers could not be read.</p>'
+        : '<p data-type="sg-note">No MX records.</p>'
 
     return `
       <section data-type="sg-card" aria-labelledby="sg-mail-h">
@@ -400,12 +410,18 @@ class DnsSightlineTool extends HTMLElement {
         </div>
 
         <h3>SPF</h3>
-        ${spf.record ? `<p data-type="sg-record"><code>${sgEsc(spf.record)}</code></p>` : '<p data-type="sg-note">No <code>v=spf1</code> record.</p>'}
+        ${
+          spf.record
+            ? `<p data-type="sg-record"><code>${sgEsc(spf.record)}</code></p>`
+            : spf.unanswered.length
+              ? '<p data-type="sg-note">The TXT lookup got no answer, so the SPF record could not be read.</p>'
+              : '<p data-type="sg-note">No <code>v=spf1</code> record.</p>'
+        }
         ${
           spf.record
             ? `<p data-type="sg-meter" data-over="${spf.exceeded ? '1' : '0'}">
                  <span data-type="sg-meter-fill" style="width:${bar}%"></span>
-                 <span data-type="sg-meter-label">${spf.lookups} of ${spf.limit} DNS lookups${spf.truncated ? ' (walk truncated)' : ''}</span>
+                 <span data-type="sg-meter-label">${spf.truncated ? 'At least ' : ''}${spf.lookups} of ${spf.limit} DNS lookups${spf.truncated ? ' — the walk stopped before the end' : ''}</span>
                </p>${terms}`
             : ''
         }
@@ -414,7 +430,9 @@ class DnsSightlineTool extends HTMLElement {
         ${
           r.dmarc.record
             ? `<p data-type="sg-record"><code>${sgEsc(r.dmarc.record)}</code></p><ul data-type="sg-tags">${dmarcTags}</ul>`
-            : `<p data-type="sg-note">No record at <code>_dmarc.${sgEsc(r.name)}</code>.</p>`
+            : r.dmarc.unanswered
+              ? `<p data-type="sg-note">The lookup for <code>_dmarc.${sgEsc(r.name)}</code> got no answer, so the DMARC record could not be read.</p>`
+              : `<p data-type="sg-note">No record at <code>_dmarc.${sgEsc(r.name)}</code>.</p>`
         }
 
         <h3>MX</h3>

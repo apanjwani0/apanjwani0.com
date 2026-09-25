@@ -29,11 +29,12 @@
  * link-local metadata service behind it, which bounds the blast radius of the
  * remaining window.
  *
- * Node-only (dns) — imported by the API route, never by the browser bundle.
+ * Node-only (`node:net`, and `node:dns` through `dns-lookup.ts`) — imported by
+ * the API route, never by the browser bundle.
  */
 
 import { isIP } from 'node:net'
-import { lookup } from 'node:dns/promises'
+import { DnsLookupTimeout, lookupAllBounded, type DnsLookupOptions } from './dns-lookup'
 
 export const LP_MAX_URL_CHARS = 2048
 export const LP_MAX_REDIRECTS = 4
@@ -177,20 +178,14 @@ export function lpIsForbiddenHostname(hostname: string): boolean {
 }
 
 /**
- * How long a single name lookup may take. `dns.lookup` runs on libuv's
- * threadpool (4 slots by default) and takes the OS resolver's own timeout,
- * which can be tens of seconds — far outside this module's 6s budget, because
- * that budget is only consulted AFTER the lookup returns. A handful of
- * requests for names whose nameservers black-hole packets would otherwise sit
- * in every threadpool slot and stall unrelated fs/crypto/zlib work across the
- * whole container. Racing it with a timer bounds the wait; the lookup itself
- * cannot be cancelled, so the slot frees when the OS gives up, but nothing
- * downstream waits on it.
+ * Resolve and check every address the name answers with.
+ *
+ * The lookup is bounded by `lookupAllBounded` (`dns-lookup.ts`), which is the
+ * one copy of that bound Chainsaw shares — see its docblock for why an
+ * unbounded `dns.lookup` is a container-wide stall and not a slow request.
+ * `dns` is its test seam; `lpFetchBounded` never passes it.
  */
-export const LP_DNS_TIMEOUT_MS = 3000
-
-/** Resolve and check every address the name answers with. */
-export async function lpCheckResolved(hostname: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+export async function lpCheckResolved(hostname: string, dns: DnsLookupOptions = {}): Promise<{ ok: true } | { ok: false; reason: string }> {
   // A v6 literal arrives bracketed from `URL.hostname` ([2606:4700::1111]).
   // `isIP` says 0 for that, so without unwrapping — exactly as the hostname
   // gate above already does — every IPv6-literal URL fell through to a DNS
@@ -203,12 +198,15 @@ export async function lpCheckResolved(hostname: string): Promise<{ ok: true } | 
   }
   let addresses: { address: string }[]
   try {
-    addresses = await Promise.race([
-      lookup(bare, { all: true }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('dns timeout')), LP_DNS_TIMEOUT_MS).unref?.()),
-    ])
-  } catch {
-    return { ok: false, reason: `The name "${hostname}" does not resolve.` }
+    addresses = await lookupAllBounded(bare, dns)
+  } catch (err) {
+    // No answer in time is not the same claim as "no such name".
+    return {
+      ok: false,
+      reason: err instanceof DnsLookupTimeout
+        ? `The name "${hostname}" did not resolve within ${Math.round(err.timeoutMs / 1000)}s.`
+        : `The name "${hostname}" does not resolve.`,
+    }
   }
   if (addresses.length === 0) return { ok: false, reason: `The name "${hostname}" does not resolve.` }
   // ANY private answer refuses the whole fetch: a name that maps to both a

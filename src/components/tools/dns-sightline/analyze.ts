@@ -66,6 +66,22 @@ export interface SgFinding {
   basis: 'record' | 'absence'
 }
 
+/**
+ * Did this question get an answer at all?
+ *
+ * NOERROR and NXDOMAIN are answers — the second says "this name holds nothing",
+ * which is a fact about the zone. SERVFAIL, REFUSED, a timeout, an exhausted
+ * query budget and the inspection deadline are not: nothing was learned. Every
+ * finding that reads an EMPTY record set asks this first, because "no SPF
+ * record", "no DMARC record" and "no address" are claims about somebody's zone,
+ * and a failed lookup produces the same empty set as a real absence. The CAA
+ * walk learned that first; the rest learned it when the inspection gained a
+ * deadline, which turns every question still queued into a failure at once.
+ */
+export function sgUnanswered(answer: SgAnswer): boolean {
+  return !!answer.error || (answer.rcode !== 'NOERROR' && answer.rcode !== 'NXDOMAIN')
+}
+
 /* ------------------------------------------------------------------ */
 /* the name                                                            */
 /* ------------------------------------------------------------------ */
@@ -373,8 +389,17 @@ export interface SgSpfReport {
   voidExceeded: boolean
   /** Include loops, unreachable includes and syntax this walker refused. */
   problems: string[]
-  /** True when the walk stopped on its own ceiling rather than on the zone. */
+  /**
+   * True when the walk stopped before the end of the tree — on its own ceiling,
+   * or at a lookup that got no answer — so `lookups` is a floor, not a count.
+   */
   truncated: boolean
+  /**
+   * Names whose TXT lookup got no answer (see `sgUnanswered`). Not void
+   * lookups: a void lookup is an ANSWER that said "nothing here", and these
+   * said nothing at all.
+   */
+  unanswered: string[]
   /** Has the record an `all` mechanism, and with what qualifier? */
   all: '+' | '-' | '~' | '?' | null
   queries: number
@@ -415,6 +440,7 @@ function sgSpfRecordsIn(answer: SgAnswer): string[] {
  */
 export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<SgSpfReport> {
   const problems: string[] = []
+  const unanswered: string[] = []
   let queries = 0
   let voidLookups = 0
   let truncated = false
@@ -433,10 +459,21 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
     voidExceeded: false,
     problems,
     truncated: false,
+    unanswered,
     all: null,
     queries,
   }
-  if (!found.length) return report
+  if (!found.length) {
+    // "No SPF record" is only a finding when the question was answered. A
+    // lookup that failed learned nothing about the name, and reporting it as
+    // absent is the sentence the evidence rule exists to stop.
+    if (sgUnanswered(txt)) {
+      report.truncated = true
+      unanswered.push(domain)
+      problems.push(`the TXT lookup for ${domain} got no answer (${txt.error ?? txt.rcode})`)
+    }
+    return report
+  }
 
   /** How many expansions past the limit are still worth walking. Once a record
    *  is a permerror the exact total stops mattering, and a wide diamond can
@@ -518,6 +555,16 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
     const answer = await lookup(target, 'TXT')
     queries += 1
     const records = sgSpfRecordsIn(answer)
+    if (!records.length && sgUnanswered(answer)) {
+      // Neither a void lookup nor a permerror: nothing was learned about
+      // `target`, so from here the count is a floor. Reading this as "no SPF
+      // record" reported a permerror — and spent the void allowance — for every
+      // include still queued when a resolver stalled or the deadline arrived.
+      truncated = true
+      unanswered.push(target)
+      problems.push(`${via === 'include' ? `include:${target}` : `redirect=${target}`} got no answer (${answer.error ?? answer.rcode}) — nothing below it was counted`)
+      return null
+    }
     if (answer.rcode === 'NXDOMAIN' || !answer.records.length) voidLookups += 1
     if (!records.length) {
       problems.push(`${via === 'include' ? `include:${target}` : `redirect=${target}`} has no SPF record — a receiver treats that as a permerror`)
@@ -539,6 +586,18 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
 
 export function sgSpfFindings(spf: SgSpfReport, domain: string): SgFinding[] {
   const out: SgFinding[] = []
+  if (spf.recordCount === 0 && spf.unanswered.length) {
+    // The opposite sentence to `spf-missing`, off the same zero records.
+    out.push({
+      id: 'spf-inconclusive',
+      level: 'warn',
+      title: 'SPF record could not be read',
+      detail: `The TXT lookup for ${domain} got no answer, so whether it publishes SPF is unknown — this is a missing answer, not a missing record. Re-run the inspection before concluding that no sender is authorised.`,
+      evidence: [],
+      basis: 'absence',
+    })
+    return out
+  }
   if (spf.recordCount === 0) {
     out.push({
       id: 'spf-missing',
@@ -561,17 +620,32 @@ export function sgSpfFindings(spf: SgSpfReport, domain: string): SgFinding[] {
     })
   }
   if (spf.exceeded) {
+    // A walk that stopped early counted a floor. Over the limit is still over
+    // the limit, but the number is not the total, and the title must not say it
+    // is.
     out.push({
       id: 'spf-lookup-limit',
       level: 'error',
-      title: `${spf.lookups} DNS lookups — the limit is ${spf.limit}`,
+      title: `${spf.truncated ? 'At least ' : ''}${spf.lookups} DNS lookups — the limit is ${spf.limit}`,
       detail:
         `Counted the way a receiver counts: every \`include\`, \`a\`, \`mx\`, \`ptr\`, \`exists\` and \`redirect\` term in the **whole** evaluation, including the ones inside each included record. ` +
         `Over the limit is a permerror, which most receivers treat as a hard SPF failure. \`ip4\` and \`ip6\` terms are free — replacing an include with the addresses it resolves to is the usual fix.`,
       evidence: spf.terms.slice(0, SG_SPF_LOOKUP_LIMIT + 4).map(t => `${t.raw}  (in ${t.parent})`),
       basis: 'record',
     })
-  } else if (spf.lookups >= spf.limit - 1 && !spf.truncated) {
+  } else if (spf.truncated) {
+    // Under the limit SO FAR, which says nothing about the part of the tree that
+    // was never walked. Without this the page showed a count below ten, no
+    // finding at all, and — on an otherwise quiet zone — "nothing to report".
+    out.push({
+      id: 'spf-truncated',
+      level: 'warn',
+      title: `At least ${spf.lookups} of ${spf.limit} DNS lookups — the walk did not finish`,
+      detail: `The walk stopped before the end of the include tree${spf.unanswered.length ? `, because ${spf.unanswered.length === 1 ? 'a lookup' : `${spf.unanswered.length} lookups`} got no answer` : ''}, so ${spf.lookups} is a floor rather than the total a receiver counts. Re-run the inspection before relying on the number.`,
+      evidence: [spf.record ?? '', ...spf.problems.filter(p => !p.includes('loop'))].filter(e => e.trim()),
+      basis: 'record',
+    })
+  } else if (spf.lookups >= spf.limit - 1) {
     out.push({
       id: 'spf-lookup-near',
       level: 'warn',
@@ -636,6 +710,8 @@ export interface SgDmarcReport {
   atApex: boolean
   /** True when the queried name has a parent whose policy would be inherited. */
   couldInherit: boolean
+  /** The `_dmarc` lookup got no answer, so `recordCount: 0` means unknown, not absent. */
+  unanswered: boolean
 }
 
 export function sgParseDmarcTags(record: string): Record<string, string> {
@@ -661,6 +737,7 @@ export function sgReadDmarc(dmarcAnswer: SgAnswer, apexTxt: SgAnswer, labels: nu
     tags: found[0] ? sgParseDmarcTags(found[0]) : {},
     atApex,
     couldInherit: labels > 2,
+    unanswered: !found.length && sgUnanswered(dmarcAnswer),
   }
 }
 
@@ -676,6 +753,18 @@ export function sgDmarcFindings(d: SgDmarcReport, domain: string): SgFinding[] {
       evidence: [`TXT ${domain} contains v=DMARC1`],
       basis: 'record',
     })
+  }
+
+  if (d.recordCount === 0 && d.unanswered) {
+    out.push({
+      id: 'dmarc-inconclusive',
+      level: 'warn',
+      title: `The DMARC record at _dmarc.${domain} could not be read`,
+      detail: 'The lookup got no answer, so whether a policy is published is unknown — a missing answer, not a missing record. Re-run the inspection before concluding there is no DMARC.',
+      evidence: [],
+      basis: 'absence',
+    })
+    return out
   }
 
   if (d.recordCount === 0) {
@@ -935,6 +1024,11 @@ export interface SgMxTarget {
   cnameTo: string | null
   addresses: string[]
   resolves: boolean
+  /**
+   * No address came back AND an address lookup got no answer, so whether this
+   * host resolves is unknown — not the same claim as "it has no address".
+   */
+  unanswered: boolean
 }
 
 export function sgParseMx(data: string): { preference: number; host: string } | null {
@@ -968,6 +1062,7 @@ export async function sgResolveMxTargets(mx: SgAnswer, lookup: SgLookup, max = 8
       cnameTo: cname.records[0]?.data.toLowerCase().replace(/\.+$/, '') ?? null,
       addresses,
       resolves: addresses.length > 0,
+      unanswered: addresses.length === 0 && (sgUnanswered(a) || sgUnanswered(aaaa)),
     })
   }
   return out
@@ -983,6 +1078,17 @@ export function sgMxFindings(mx: SgAnswer, targets: SgMxTarget[]): SgFinding[] {
       detail: 'RFC 7505: a single `0 .` record tells senders to stop immediately rather than retry for five days. This is the correct record for a domain that never receives mail.',
       evidence: mx.records.map(r => `MX ${r.data}`),
       basis: 'record',
+    })
+    return out
+  }
+  if (!mx.records.length && sgUnanswered(mx)) {
+    out.push({
+      id: 'mx-inconclusive',
+      level: 'warn',
+      title: 'MX records could not be read',
+      detail: 'The MX lookup got no answer, so whether this domain receives mail — and where — is unknown. A missing answer is not a missing record; re-run the inspection.',
+      evidence: [],
+      basis: 'absence',
     })
     return out
   }
@@ -1018,7 +1124,7 @@ export function sgMxFindings(mx: SgAnswer, targets: SgMxTarget[]): SgFinding[] {
         evidence: [`MX ${t.preference} ${t.host}`],
         basis: 'record',
       })
-    } else if (!t.resolves) {
+    } else if (!t.resolves && !t.unanswered) {
       out.push({
         id: 'mx-unresolvable',
         level: 'error',
@@ -1028,6 +1134,20 @@ export function sgMxFindings(mx: SgAnswer, targets: SgMxTarget[]): SgFinding[] {
         basis: 'record',
       })
     }
+  }
+  // "No address, so mail bounces" is the claim above, and a host whose lookups
+  // got no answer has not earned it. Up to eight targets resolve one after
+  // another, so the deadline reaches these more often than anything else.
+  const unchecked = targets.filter(t => t.unanswered && !canonicalIp(t.host))
+  if (unchecked.length) {
+    out.push({
+      id: 'mx-unchecked',
+      level: 'warn',
+      title: unchecked.length === 1 ? `MX ${unchecked[0].host} could not be checked` : `${unchecked.length} MX hosts could not be checked`,
+      detail: 'Their address lookups got no answer, so whether mail can be delivered there is unknown — which is a different thing from having no address. Re-run the inspection.',
+      evidence: unchecked.map(t => `MX ${t.preference} ${t.host}`),
+      basis: 'record',
+    })
   }
   return out
 }

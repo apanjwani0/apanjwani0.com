@@ -5741,10 +5741,11 @@ console.log('chainsaw: port allowlist + reused SSRF guard + pinned address, DER 
   // ── …and the name lookup is bounded. dns.lookup runs on libuv's 4-slot
   //    threadpool and takes the OS resolver's timeout, which is outside this
   //    module's own budget; a few black-holed names would otherwise occupy
-  //    every slot and stall unrelated fs/crypto work container-wide.
+  //    every slot and stall unrelated fs/crypto work container-wide. The bound
+  //    now lives in src/lib/dns-lookup.ts, shared with Chainsaw, and is proved
+  //    against a lookup that never answers in the PR 19 review block below.
   const lpSrc = await readFile(new URL('../src/lib/link-peek-fetch.ts', import.meta.url), 'utf-8')
-  assert.ok(lpSrc.includes('LP_DNS_TIMEOUT_MS'), 'the DNS lookup has its own ceiling')
-  assert.ok(/Promise\.race\(\s*\[\s*lookup\(/.test(lpSrc), '…and the lookup is actually raced against it')
+  assert.ok(/await lookupAllBounded\(bare, dns\)/.test(lpSrc), 'the DNS lookup goes through the one bounded helper')
 
   // ── one escaping rule, not a second weaker copy. The local one omitted `'`,
   //    which AGENTS.md names explicitly.
@@ -5782,7 +5783,7 @@ console.log('chainsaw: port allowlist + reused SSRF guard + pinned address, DER 
       if (entry.isDirectory()) { await walk(child); continue }
       if (!entry.name.endsWith('.ts')) continue
       const body = await readFile(new URL(child, import.meta.url), 'utf-8')
-      if (/from '(node:|.*\/lib\/(tls-inspect|link-peek-fetch|webhook-store|visits|session))'/.test(body)) offenders.push(child)
+      if (/from '(node:|.*\/lib\/(tls-inspect|link-peek-fetch|dns-lookup|webhook-store|visits|session))'/.test(body)) offenders.push(child)
     }
   }
   for (const dir of browserDirs) await walk(dir)
@@ -6481,6 +6482,72 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   assert.deepEqual(sg.sgCnameFindings({ target: null, dangling: false, service: null, coexisting: [], atApex: true }, 'ex.com'), [],
     'no CNAME, no CNAME findings')
 
+  /* ── 7b. A question that got no ANSWER is not a record that is absent. ────
+
+     The CAA walk learned this first (see the CAA-and-issuer block at the end of
+     this file); SPF, DMARC and MX learned it when the inspection gained a
+     deadline, because a deadline turns every question still queued into a
+     failure at once. Before, a stalled include read exactly like NXDOMAIN —
+     "include:x has no SPF record — a receiver treats that as a permerror", plus
+     a void lookup — so one slow resolver produced a permerror finding, a
+     void-limit error and a lookup count presented as complete; and a failed MX
+     target read "no address, so mail bounces". Every fixture below fails with
+     the same empty record set a real absence has, which is the point. */
+  const noAnswer = (name, type, error = 'inspection deadline reached') =>
+    ({ resolver: 'fixture', type, name, rcode: 'ERROR', records: [], elapsedMs: 0, error })
+  const stallAt = names => async (name, type) => {
+    const key = name.toLowerCase().replace(/\.+$/, '')
+    return names.includes(key) ? noAnswer(key, type) : spfLookup(name, type)
+  }
+  assert.equal(sg.sgUnanswered(noAnswer('x.test', 'TXT')), true)
+  assert.equal(sg.sgUnanswered({ ...noAnswer('x.test', 'TXT'), error: undefined, rcode: 'SERVFAIL' }), true,
+    'SERVFAIL is not an answer even when the transport reported no error of its own')
+  assert.equal(sg.sgUnanswered({ ...noAnswer('x.test', 'TXT'), error: undefined, rcode: 'NXDOMAIN' }), false,
+    'NXDOMAIN IS an answer: the name holds nothing')
+
+  // An include that got no answer: the walk goes on, and the count is a floor.
+  const stalledSpf = await sg.sgAnalyzeSpf('ex.com', stallAt(['c.org']))
+  assert.equal(stalledSpf.truncated, true, 'an unanswered include cuts the walk short, and the report must say so')
+  assert.deepEqual(stalledSpf.unanswered, ['c.org'])
+  assert.ok(stalledSpf.lookups < naiveSpfCount('ex.com'), 'the fixture really did hide part of the tree from the walk')
+  assert.equal(stalledSpf.voidLookups, 0, 'a lookup that got no answer is not a void lookup — that is an ANSWER saying "nothing here"')
+  assert.equal(stalledSpf.problems.some(p => /permerror/.test(p)), false, '…and not a permerror either')
+  const stalledSpfFindings = sg.sgSpfFindings(stalledSpf, 'ex.com')
+  assert.deepEqual(stalledSpfFindings.map(f => f.id), ['spf-truncated'])
+  assert.ok(/^At least /.test(stalledSpfFindings[0].title), 'a floor is titled as a floor, not as the count')
+  // Over the limit AND cut short is still over the limit — the count only grows
+  // with what was not walked — but it is still a floor.
+  const stalledWide = await sg.sgAnalyzeSpf('wide.com', stallAt(['e.net']))
+  assert.ok(stalledWide.exceeded && stalledWide.truncated, `wide.com stays over the limit with e.net unanswered (${stalledWide.lookups} counted)`)
+  const stalledWideFindings = sg.sgSpfFindings(stalledWide, 'wide.com')
+  assert.ok(/^At least \d+ DNS lookups/.test(stalledWideFindings.find(f => f.id === 'spf-lookup-limit').title))
+  assert.equal(stalledWideFindings.some(f => f.id === 'spf-truncated'), false, 'one finding for the count, not two')
+  // The ROOT lookup unanswered is not "no SPF record".
+  const unreadSpf = await sg.sgAnalyzeSpf('ex.com', stallAt(['ex.com']))
+  assert.equal(unreadSpf.recordCount, 0)
+  assert.deepEqual(unreadSpf.unanswered, ['ex.com'])
+  const unreadSpfFindings = sg.sgSpfFindings(unreadSpf, 'ex.com')
+  assert.deepEqual(unreadSpfFindings.map(f => f.id), ['spf-inconclusive'], 'the opposite sentence to spf-missing, off the same zero records')
+
+  // DMARC: a failed `_dmarc` lookup is not a missing policy.
+  const unreadDmarc = sg.sgReadDmarc(noAnswer('_dmarc.ex.com', 'TXT'), txtAnswer('ex.com', []), 2)
+  assert.equal(unreadDmarc.unanswered, true)
+  const unreadDmarcFindings = sg.sgDmarcFindings(unreadDmarc, 'ex.com')
+  assert.deepEqual(unreadDmarcFindings.map(f => f.id), ['dmarc-inconclusive'])
+  assert.equal(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', []), txtAnswer('ex.com', []), 2).unanswered, false,
+    'an NXDOMAIN at _dmarc is an answer, and still reads as no DMARC record')
+
+  // MX: the question itself unanswered, and the targets' address lookups.
+  const unreadMxFindings = sg.sgMxFindings(noAnswer('ex.com', 'MX'), [])
+  assert.deepEqual(unreadMxFindings.map(f => f.id), ['mx-inconclusive'])
+  const stalledTargets = await sg.sgResolveMxTargets(goodMx, async (name, type) => noAnswer(name, type))
+  assert.equal(stalledTargets[0].resolves, false)
+  assert.equal(stalledTargets[0].unanswered, true)
+  const stalledMxFindings = sg.sgMxFindings(goodMx, stalledTargets)
+  assert.deepEqual(stalledMxFindings.map(f => f.id), ['mx-unchecked'], 'no answer to an address lookup is not "no address, so mail bounces"')
+  // …and a host that really has no address still says so.
+  assert.ok(mxIds.includes('mx-unresolvable'), 'NXDOMAIN at an MX target is still an unresolvable target')
+
   /* ── 8. Every finding cites the record it rests on. ────────────────────── */
 
   /* The organising rule of this tool, asserted on EVERY producer rather than on
@@ -6509,6 +6576,9 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('noall.com', spfLookup), 'noall.com'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('a.net', spfLookup), 'a.net'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('nothing.com', spfLookup), 'nothing.com'),
+      stalledSpfFindings,
+      stalledWideFindings,
+      unreadSpfFindings,
     ],
     sgDmarcFindings: [
       strictFindings,
@@ -6519,6 +6589,7 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=none; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
       sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; p=quarantine; pct=25; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
       sg.sgDmarcFindings(sg.sgReadDmarc(txtAnswer('_dmarc.ex.com', ['"v=DMARC1; rua=mailto:a@ex.com"']), txtAnswer('ex.com', []), 2), 'ex.com'),
+      unreadDmarcFindings,
     ],
     sgCaaFindings: [
       sg.sgCaaFindings(verdict, 'ex.com', 'digicert.com'),
@@ -6530,7 +6601,7 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       // of this file for why that distinction is the load-bearing one.
       sg.sgCaaFindings(sg.sgCaaVerdict({ foundAt: null, walked: ['x.test'], entries: [], incomplete: true }), 'x.test', null),
     ],
-    sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, [])],
+    sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, []), unreadMxFindings, stalledMxFindings],
     sgCnameFindings: [dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com')],
     sgDiffFindings: [sg.sgDiffFindings([realDiff, filtered])],
     sgReachabilityFindings: [blackoutFindings],
@@ -7397,3 +7468,169 @@ console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unr
   assert.equal(pkg.scripts['boot:check'], 'node scripts/boot-check.mjs', 'npm run boot:check is the documented entry')
 }
 console.log('boot check: starts the entry the Dockerfile runs, and no inherited env var can switch off the branch that crashed')
+
+/* ─────  PR 19 review: who pays for a refusal, and how long one request may hold a socket  ─────
+
+   Three bounds that each existed somewhere and were missing somewhere else,
+   which is the shape every one of them had in the review: a rule one tool
+   followed and its sibling did not.
+
+     1. A per-client bucket must be consulted BEFORE the shared one, and the
+        shared one only when the client was allowed. `createRateLimiter`
+        counts a hit even when it refuses, so a route that asks both buckets
+        unconditionally lets one client who is already over its own limit keep
+        spending everybody's allowance. DNS Sightline did; Link Peek and
+        Chainsaw did not.
+     2. DNS Sightline had a per-question timeout and no deadline, and its SPF
+        walk asks one question after another — forty of them at four seconds
+        each is close to three minutes of one held socket.
+     3. Link Peek raced its name lookup against a timer; Chainsaw awaited the
+        same call bare. The bound now has one home both of them import.
+   ──────────────────────────────────────────────────────────────────────────── */
+{
+  /* ── 1. A refused client does not spend the shared bucket. ────────────────
+
+     Derived from every API route, not listed: a limiter called with a string
+     literal is one bucket for everybody, anything else is keyed per client,
+     and every call to a shared bucket must be the right-hand side of a
+     short-circuit whose left-hand side is a per-client bucket that ALLOWED the
+     request — `client(k) && shared('g')`, or `!client(k) || !shared('g')`. */
+  const callOf = name => new RegExp(`\\b${name}\\(((?:[^()]|\\([^()]*\\))*)\\)`, 'g')
+  const pairedRoutes = []
+  for (const route of await apiRouteFiles()) {
+    const code = (await readFile(new URL(`../${route}`, import.meta.url), 'utf-8'))
+      .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+    const limiters = [...code.matchAll(/const (\w+) = createRateLimiter\(/g)].map(m => m[1])
+    const calls = limiters.flatMap(name => [...code.matchAll(callOf(name))].map(m => ({ name, arg: m[1].trim(), at: m.index })))
+    const shared = c => /^(['"`])[^'"`]*\1$/.test(c.arg)
+    const sharedCalls = calls.filter(shared)
+    if (!sharedCalls.length) continue
+    pairedRoutes.push(route)
+    const clientNames = [...new Set(calls.filter(c => !shared(c)).map(c => c.name))]
+    assert.ok(clientNames.length, `${route} has a shared rate-limit bucket with no per-client bucket in front of it — one client can drain it for everybody`)
+    const clientCall = `(?:${clientNames.join('|')})\\((?:[^()]|\\([^()]*\\))*\\)`
+    for (const g of sharedCalls) {
+      const before = code.slice(0, g.at)
+      const andForm = new RegExp(`(?<![!\\w])${clientCall}\\s*&&\\s*$`).test(before)
+      const notOrForm = new RegExp(`!\\s*${clientCall}\\s*\\|\\|\\s*!\\s*$`).test(before)
+      assert.ok(andForm || notOrForm,
+        `${route}: ${g.name}(${g.arg}) must run only once a per-client bucket has allowed the request — createRateLimiter counts refused hits, so asking it unconditionally lets one refused client drain the shared bucket`)
+    }
+  }
+  assert.ok(pairedRoutes.length >= 3, `expected to discover the routes that pair a client and a shared bucket (found ${pairedRoutes.join(', ')})`)
+  assert.ok(pairedRoutes.includes('src/pages/api/tools/dns-sightline.ts'), 'DNS Sightline is one of them')
+
+  /* …and the same thing as behaviour, on the route that got it wrong. One
+     address floods; a different visitor must still get in. The outbound side
+     is stubbed to fail at once, so the few requests that ARE allowed cost
+     nothing and touch no network. */
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => { throw new TypeError('offline in the smoke suite') }
+  try {
+    const { GET } = await import('../src/pages/api/tools/dns-sightline.ts')
+    const ask = ip => GET({ request: new Request('http://localhost/api/tools/dns-sightline?name=example.com', { headers: { 'cf-connecting-ip': ip } }) })
+    const flood = []
+    for (let i = 0; i < 20; i += 1) flood.push((await ask('203.0.113.7')).status)
+    assert.equal(flood.filter(s => s === 429).length, 16, 'one client past its own four requests a minute is refused')
+    const bystander = await ask('198.51.100.9')
+    assert.notEqual(bystander.status, 429,
+      'a flood from one address that was already being refused must not lock a different visitor out — the refused hits were spending the shared bucket')
+    const failing = await bystander.json()
+    assert.equal(failing.ok, true, 'the bystander gets a report, whose failed lookups say so inside it')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+
+  /* ── 2. The inspection has a deadline, and reaching it is not an answer. ──
+
+     A resolver that accepts the connection and never says a word, which is
+     what a black-holed endpoint looks like from here. Every resolver is pointed
+     at it by stubbing `fetch` itself — sgInspect takes no endpoint override,
+     and that is asserted in the DNS Sightline block — so the real transport,
+     its real per-question timeout and the real abort path are what run. The
+     per-question timeout is left at its default on purpose: it is FOUR
+     SECONDS, so a pass here can only come from the deadline. */
+  const insp = await import('../src/components/tools/dns-sightline/inspect.ts')
+  const doh = await import('../src/lib/dns-doh.ts')
+  const { SG_TYPES } = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const { createServer } = await import('node:http')
+  const silent = createServer(() => { /* never answers */ })
+  await new Promise(resolve => silent.listen(0, '127.0.0.1', resolve))
+  const silentBase = `http://127.0.0.1:${silent.address().port}/dns-query`
+  globalThis.fetch = (url, init) => realFetch(`${silentBase}${new URL(url).search}`, init)
+  const DEADLINE = 300
+  const SLACK = 2_000
+  try {
+    let t0 = Date.now()
+    const full = await insp.sgInspect('deadline.example.com', { deadlineMs: DEADLINE })
+    const took = Date.now() - t0
+    assert.ok(took < DEADLINE + SLACK, `one inspection held its request for ${took}ms against a ${DEADLINE}ms deadline`)
+    assert.equal(full.deadlineHit, true, 'the report says it stopped at the deadline')
+    assert.ok(full.queries <= doh.SG_CONCURRENCY,
+      `only the questions already in flight when the deadline arrived may be charged (spent ${full.queries}) — one asked afterwards would still go out and sit through its own timeout`)
+    const ids = full.findings.map(f => f.id)
+    for (const id of ['resolvers-unreachable', 'spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
+      assert.ok(ids.includes(id), `a deadline-cut inspection reports ${id} (got ${ids.join(', ')})`)
+    }
+    for (const id of ['spf-missing', 'dmarc-missing', 'mx-none', 'caa-none']) {
+      assert.equal(ids.includes(id), false, `${id} is a claim about the zone, and a deadline is not evidence for it`)
+    }
+    assert.equal(full.spf.truncated, true)
+    assert.equal(full.caa.incomplete, true)
+
+    t0 = Date.now()
+    const narrow = await insp.sgInspectCaa('deadline.example.com', { deadlineMs: DEADLINE })
+    assert.ok(Date.now() - t0 < DEADLINE + SLACK, 'the CAA-only scope has the same deadline')
+    assert.equal(narrow.deadlineHit, true)
+    assert.equal(narrow.caa.incomplete, true)
+    assert.deepEqual(narrow.findings.map(f => f.id), ['caa-inconclusive'])
+  } finally {
+    globalThis.fetch = realFetch
+    silent.closeAllConnections?.()
+    await new Promise(resolve => silent.close(resolve))
+  }
+  // The default has to leave the diff its own worst case, or a slow-but-working
+  // set of resolvers could never finish even the first half of an inspection —
+  // and stay small enough to be a bound on a held socket at all.
+  const diffWorstCase = Math.ceil((SG_TYPES.length * doh.SG_RESOLVERS.length) / doh.SG_CONCURRENCY) * doh.SG_TIMEOUT_MS
+  assert.ok(doh.SG_INSPECT_DEADLINE_MS > diffWorstCase,
+    `the deadline (${doh.SG_INSPECT_DEADLINE_MS}ms) must exceed the diff's own worst case (${diffWorstCase}ms)`)
+  assert.ok(doh.SG_INSPECT_DEADLINE_MS <= 20_000, 'and stay a bound on how long one request may hold a socket')
+  const dnsRouteSrc = await readFile(new URL('../src/pages/api/tools/dns-sightline.ts', import.meta.url), 'utf-8')
+  assert.equal(/deadlineMs/.test(dnsRouteSrc), false, 'the deadline is injectable for this block alone — the route never sets it')
+
+  /* ── 3. One bounded name lookup, and both dialers use it. ─────────────────
+
+     Each call is raced against this block's own timer as well, so a mutation
+     that removes the bound FAILS here with a named error instead of hanging
+     the suite — a test that hangs is a test whose timeout gets raised. */
+  const { DNS_LOOKUP_TIMEOUT_MS } = await import('../src/lib/dns-lookup.ts')
+  const { lpCheckResolved } = await import('../src/lib/link-peek-fetch.ts')
+  const { CS_TIMEOUT_MS } = await import('../src/lib/tls-inspect.ts')
+  const HUNG = Symbol('hung')
+  const within = (p, ms) => Promise.race([p, new Promise(resolve => setTimeout(() => resolve(HUNG), ms))])
+  const neverAnswers = () => new Promise(() => {})
+  const pinned = await within(csResolvePinned('black-hole.example', { resolve: neverAnswers, timeoutMs: 100 }), 2_000)
+  assert.notEqual(pinned, HUNG, 'csResolvePinned must stop waiting on a lookup that never answers — it runs before any handshake deadline applies')
+  assert.equal(pinned.ok, false)
+  assert.ok(/did not resolve within/.test(pinned.reason), `…and say it got no answer, not that the name does not exist (${pinned.reason})`)
+  const peeked = await within(lpCheckResolved('black-hole.example', { resolve: neverAnswers, timeoutMs: 100 }), 2_000)
+  assert.notEqual(peeked, HUNG, 'Link Peek has the same bound through the same helper')
+  assert.equal(peeked.ok, false)
+  const enotfound = async () => { throw Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' }) }
+  assert.ok(/does not resolve\.$/.test((await csResolvePinned('gone.example', { resolve: enotfound })).reason), 'a real NXDOMAIN still reads as one')
+  // The answers still go through the ONE classifier, seam or no seam.
+  assert.equal((await csResolvePinned('rebind.example', { resolve: async () => [{ address: '10.0.0.1', family: 4 }] })).ok, false)
+  assert.equal((await lpCheckResolved('rebind.example', { resolve: async () => [{ address: '8.8.8.8', family: 4 }, { address: '127.0.0.1', family: 4 }] })).ok, false)
+  assert.ok(DNS_LOOKUP_TIMEOUT_MS > 0 && DNS_LOOKUP_TIMEOUT_MS < CS_TIMEOUT_MS, 'the lookup bound leaves the handshakes most of their budget')
+  for (const [file, production] of [
+    ['../src/lib/tls-inspect.ts', /const pinned = await csResolvePinned\(host\)/],
+    ['../src/lib/link-peek-fetch.ts', /const resolved = await lpCheckResolved\(checked\.url\.hostname\)/],
+  ]) {
+    const src = await readFile(new URL(file, import.meta.url), 'utf-8')
+    assert.ok(src.includes("from './dns-lookup'"), `${file} takes its lookup from the shared bounded helper`)
+    assert.equal(/from 'node:dns/.test(src), false, `${file} must not call dns.lookup itself — the bound lives in one place`)
+    assert.ok(production.test(src), `${file}: the production caller passes no test seam`)
+  }
+}
+console.log('pr 19 review: a refused client never spends the shared bucket (derived over every route), one inspection stops at its deadline without claiming absence, and both dialers share one bounded name lookup')

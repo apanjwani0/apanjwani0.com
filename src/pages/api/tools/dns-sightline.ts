@@ -13,9 +13,9 @@
  * not: **how many outbound requests one inbound request can cause.** A resolver
  * diff is 24 DoH fetches before any analysis, and an SPF include tree is as
  * deep as the zone owner wants it to be. One shared `SgBudget` caps the whole
- * inspection; the rate limits are the tightest of any route here for the same
- * reason. Nothing is stored; the response is computed per request and
- * `no-store`.
+ * inspection, `SG_INSPECT_DEADLINE_MS` caps how long it may hold the request,
+ * and the rate limits are the tightest of any route here for the same reason.
+ * Nothing is stored; the response is computed per request and `no-store`.
  *
  * The outbound destinations are compile-time constants (`SG_RESOLVERS`), so
  * unlike Link Peek and Chainsaw there is no address-classification step here —
@@ -85,9 +85,19 @@ export const GET: APIRoute = async ({ request }) => {
   }
   const narrow = scopeParam === 'caa'
 
-  const okClient = narrow ? allowCaaClient(rateLimitKey(request)) : allowClient(rateLimitKey(request))
-  const okGlobal = narrow ? allowCaaGlobal('global') : allowGlobal('global')
-  if (!okClient || !okGlobal) {
+  // The client's own bucket first, and the shared one ONLY once the client is
+  // allowed. `createRateLimiter` counts a hit even when it refuses, so asking
+  // both unconditionally let one client who was already over its own limit keep
+  // spending the global bucket: sixteen requests from one address in a minute —
+  // four served, twelve refused — used up the whole shared sixteen and locked
+  // every other visitor out of the tool. Link Peek and Chainsaw short-circuit
+  // the same way, and `security:smoke` holds every route that pairs the two
+  // buckets to it.
+  const key = rateLimitKey(request)
+  const allowed = narrow
+    ? allowCaaClient(key) && allowCaaGlobal('global')
+    : allowClient(key) && allowGlobal('global')
+  if (!allowed) {
     return json(
       {
         ok: false,
@@ -105,7 +115,10 @@ export const GET: APIRoute = async ({ request }) => {
       ? await sgInspectCaa(checked.name, { wantedCa, signal: request.signal })
       : await sgInspect(checked.name, { wantedCa, signal: request.signal })
     return json({ ok: true, scope: scopeParam, budget: narrow ? SG_CAA_SCOPE_QUERIES : undefined, report })
-  } catch (err: any) {
-    return json({ ok: false, error: typeof err?.message === 'string' ? err.message.slice(0, 160) : 'inspection failed' })
+  } catch {
+    // Every failure the inspection expects comes back inside the report. An
+    // exception is one it did not expect, and its text is not something to
+    // hand a stranger, so the answer is a fixed sentence.
+    return json({ ok: false, error: 'the inspection failed unexpectedly — try again in a moment' }, 500)
   }
 }

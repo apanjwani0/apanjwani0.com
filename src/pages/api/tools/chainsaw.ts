@@ -51,7 +51,16 @@ export const GET: APIRoute = async ({ request }) => {
     return json({ ok: false, error: 'rate limited — every check opens real TLS connections, so give it a minute' }, 429, { 'Retry-After': '60' })
   }
 
-  const result = await csInspect(checked.host, checked.port, checked.isIpLiteral)
+  // csInspect reports every failure it expects as `{ error }`. Anything it
+  // throws is a failure it did not expect, and the text of that exception is
+  // not something to hand a stranger — so it gets a fixed sentence, `no-store`
+  // like every other answer here, instead of Astro's error page.
+  let result: Awaited<ReturnType<typeof csInspect>>
+  try {
+    result = await csInspect(checked.host, checked.port, checked.isIpLiteral)
+  } catch {
+    return json({ ok: false, error: 'the inspection failed unexpectedly — try again in a moment' }, 500)
+  }
   if ('error' in result) return json({ ok: false, error: result.error })
 
   const top = result.presented[result.presented.length - 1]
