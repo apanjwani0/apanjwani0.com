@@ -7571,10 +7571,30 @@ console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unr
   assert.ok(/spawn\(process\.execPath, \[entry\]/.test(bootSrc), 'the boot check runs the entry under node itself')
   assert.ok(/^delete env\.ASTRO_NODE_LOGGING$/m.test(bootSrc),
     'the boot check must scrub ASTRO_NODE_LOGGING — inherited, it disables the branch that crashed')
+  assert.ok(/\['SIGINT', 130\], \['SIGTERM', 143\]\]\)\s*\{\s*process\.once\(signal, \(\) => stop\(\)\.then/.test(bootSrc),
+    'the boot check stops its server when it is itself interrupted, or the server outlives it on its port')
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf-8'))
   assert.equal(pkg.scripts['boot:check'], 'node scripts/boot-check.mjs', 'npm run boot:check is the documented entry')
+
+  // The image asks the same question before it can ship, and WHERE it asks is
+  // the point: the final stage, after the production-only install and the USER
+  // switch. The builder holds devDependencies and runs as root, so a server
+  // that breaks only without a devDependency, or only as the container's user,
+  // would boot fine there and still ship dead.
+  const finalStage = dockerfile.slice(dockerfile.lastIndexOf('\nFROM '))
+  const at = (re) => { const m = re.exec(finalStage); return m ? m.index : -1 }
+  const install = at(/^RUN npm ci --omit=dev$/m)
+  const user = at(/^USER \S+$/m)
+  const copy = at(/^COPY \S*\s*scripts\/boot-check\.mjs \.\/scripts\/boot-check\.mjs$/m)
+  const run = at(/^RUN node scripts\/boot-check\.mjs$/m)
+  const start = at(/^CMD /m)
+  assert.ok(run > -1, 'the image boots its own server before it can ship: RUN node scripts/boot-check.mjs in the final stage')
+  assert.ok(copy > -1 && copy < run, 'the final stage copies the boot check in before running it')
+  assert.ok(install > -1 && install < run, 'the image boot check runs after the production-only install, so it tests the tree that ships')
+  assert.ok(user > -1 && user < run, 'the image boot check runs as the container user, not root')
+  assert.ok(run < start, 'the image boot check runs before CMD')
 }
-console.log('boot check: starts the entry the Dockerfile runs, and no inherited env var can switch off the branch that crashed')
+console.log('boot check: starts the entry the Dockerfile runs, no inherited env var can switch off the branch that crashed, and the image runs it on its own production tree before it can ship')
 
 /* ─────  PR 19 review: who pays for a refusal, and how long one request may hold a socket  ─────
 
