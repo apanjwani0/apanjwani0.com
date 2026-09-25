@@ -25,6 +25,9 @@ import '../../components/tools/hash-smith/hash-smith.css'
 import '../../components/tools/cron-whisperer/cron-whisperer.css'
 import '../../components/tools/regex-lab/regex-lab.css'
 import '../../components/tools/webhook-inspector/webhook-inspector.css'
+import '../../components/tools/link-peek/link-peek.css'
+import '../../components/tools/chainsaw/chainsaw.css'
+import '../../components/tools/dns-sightline/dns-sightline.css'
 import '../../components/tools/token-bench/token-bench.css'
 import '../../components/tools/flowmap/flowmap.css'
 
@@ -199,6 +202,24 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
       <p>{tool.intro || tool.description}</p>
     </webhook-inspector-tool>
   )}
+  {slug === 'link-peek' && (
+    <link-peek-tool data-tool="link-peek">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </link-peek-tool>
+  )}
+  {slug === 'chainsaw' && (
+    <chainsaw-tool data-tool="chainsaw">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </chainsaw-tool>
+  )}
+  {slug === 'dns-sightline' && (
+    <dns-sightline-tool data-tool="dns-sightline">
+      <h1>{tool.title}</h1>
+      <p>{tool.intro || tool.description}</p>
+    </dns-sightline-tool>
+  )}
   {toolSeoContentHtml && <section data-type="seo-support" set:html={toolSeoContentHtml} />}
   <RelatedLinks heading="Read about it" items={stories} />
   <RelatedLinks heading="More tools" items={relatedTools} />
@@ -222,6 +243,9 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
     else if (slug === 'cron-whisperer') import('../../components/tools/cron-whisperer/CronWhisperer.ts')
     else if (slug === 'regex-lab') import('../../components/tools/regex-lab/RegexLab.ts')
     else if (slug === 'webhook-inspector') import('../../components/tools/webhook-inspector/WebhookInspector.ts')
+    else if (slug === 'link-peek') import('../../components/tools/link-peek/LinkPeek.ts')
+    else if (slug === 'chainsaw') import('../../components/tools/chainsaw/Chainsaw.ts')
+    else if (slug === 'dns-sightline') import('../../components/tools/dns-sightline/DnsSightline.ts')
     else if (slug === 'token-bench') import('../../components/tools/token-bench/TokenBench.ts')
     else if (slug === 'flowmap') import('../../components/tools/flowmap/Flowmap.ts')
   }

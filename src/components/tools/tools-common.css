@@ -61,6 +61,9 @@ div[data-tool="hash-smith"] [data-group="toolbar"],
 div[data-tool="cron-whisperer"] [data-group="toolbar"],
 div[data-tool="regex-lab"] [data-group="toolbar"],
 div[data-tool="webhook-inspector"] [data-group="toolbar"],
+div[data-tool="link-peek"] [data-group="toolbar"],
+div[data-tool="chainsaw"] [data-group="toolbar"],
+div[data-tool="dns-sightline"] [data-group="toolbar"],
 div[data-tool="flowmap"] [data-group="toolbar"],
 div[data-tool="token-bench"] [data-group="toolbar"] {
   display: flex;
@@ -78,6 +81,9 @@ div[data-tool="hash-smith"] button,
 div[data-tool="cron-whisperer"] button,
 div[data-tool="regex-lab"] button,
 div[data-tool="webhook-inspector"] button,
+div[data-tool="link-peek"] button,
+div[data-tool="chainsaw"] button,
+div[data-tool="dns-sightline"] button,
 div[data-tool="flowmap"] button,
 div[data-tool="token-bench"] button {
   padding: 0.32rem 0.85rem;
@@ -100,6 +106,9 @@ div[data-tool="hash-smith"] button:hover,
 div[data-tool="cron-whisperer"] button:hover,
 div[data-tool="regex-lab"] button:hover,
 div[data-tool="webhook-inspector"] button:hover,
+div[data-tool="link-peek"] button:hover,
+div[data-tool="chainsaw"] button:hover,
+div[data-tool="dns-sightline"] button:hover,
 div[data-tool="flowmap"] button:hover,
 div[data-tool="token-bench"] button:hover {
   color: var(--color-text);
@@ -138,6 +147,9 @@ div[data-tool="hash-smith"] button:disabled,
 div[data-tool="cron-whisperer"] button:disabled,
 div[data-tool="regex-lab"] button:disabled,
 div[data-tool="webhook-inspector"] button:disabled,
+div[data-tool="link-peek"] button:disabled,
+div[data-tool="chainsaw"] button:disabled,
+div[data-tool="dns-sightline"] button:disabled,
 div[data-tool="flowmap"] button:disabled,
 div[data-tool="token-bench"] button:disabled {
   opacity: var(--opacity-disabled);
@@ -157,7 +169,10 @@ section[data-type="cl-card"],
 section[data-type="ew-card"],
 section[data-type="cw-card"],
 section[data-type="rl-card"],
-section[data-type="wi-card"] {
+section[data-type="wi-card"],
+section[data-type="lp-card"],
+section[data-type="cs-card"],
+section[data-type="sg-card"] {
   margin-top: 1.25rem;
   padding: 1rem 1.1rem 1.15rem;
   border: 1px solid var(--color-border);
@@ -175,7 +190,10 @@ section[data-type="cl-card"] h2,
 section[data-type="ew-card"] h2,
 section[data-type="cw-card"] h2,
 section[data-type="rl-card"] h2,
-section[data-type="wi-card"] h2 {
+section[data-type="wi-card"] h2,
+section[data-type="lp-card"] h2,
+section[data-type="cs-card"] h2,
+section[data-type="sg-card"] h2 {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   letter-spacing: 0.03em;

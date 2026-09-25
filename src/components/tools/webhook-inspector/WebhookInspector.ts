@@ -90,6 +90,18 @@ function wiFmtAge(sec: number): string {
 }
 
 /**
+ * The poll toggle's label, in one place because it is written twice: once into
+ * the initial markup and once on every state flip. The markup copy is not
+ * decoration — the button shipped EMPTY and was named only by the first
+ * `reflectPollBtn()` call, so anything that read the DOM before that ran (a
+ * screen reader announcing the toolbar, a test, a mount that threw earlier in
+ * the same tick) met a control with no accessible name at all.
+ */
+function wiPollLabel(paused: boolean): string {
+  return paused ? 'Resume (P)' : 'Pause (P)'
+}
+
+/**
  * What the signature panel says about one captured request.
  *
  * `state` is the badge; `detail` is pre-escaped HTML for the expanded row. The
@@ -247,7 +259,7 @@ class WebhookInspectorTool extends HTMLElement {
           <div data-group="wi-reqhead">
             <h2 id="wi-req-h">Captured requests <span data-for="count"></span></h2>
             <div data-group="toolbar">
-              <button data-action="toggle-poll" type="button"></button>
+              <button data-action="toggle-poll" type="button">${wiPollLabel(false)}</button>
               <button data-action="refresh" type="button">Refresh (R)</button>
               <button data-action="download-json" type="button">Download JSON</button>
               <button data-action="clear" type="button">Clear (C)</button>
@@ -363,7 +375,7 @@ class WebhookInspectorTool extends HTMLElement {
   }
 
   private reflectPollBtn() {
-    this.pollBtn.textContent = this.paused ? 'Resume (P)' : 'Pause (P)'
+    this.pollBtn.textContent = wiPollLabel(this.paused)
     this.root.setAttribute('data-paused', this.paused ? 'true' : 'false')
   }
 

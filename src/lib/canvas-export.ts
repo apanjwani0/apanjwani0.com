@@ -17,7 +17,7 @@
  * it drifted: seven copies of the same two lines, no two quite alike, and the
  * capability everyone actually wanted in none of them.
  *
- * Two ways in, because the engines genuinely differ:
+ * Three ways in, because the engines genuinely differ:
  *
  * - `attachCanvasExport()` records a LIVE canvas. It needs to know nothing about
  *   how the thing is drawn, which is what makes it adoptable by an animation
@@ -27,6 +27,13 @@
  * - `renderExport()` takes a resolution-independent draw function and renders
  *   offscreen at any size. Driftfield's patterns are written this way, so its
  *   PNG really is a 2560x1440 render and not an upscaled preview.
+ * - `attachCanvasExport({ animation })` takes frames the engine renders ON
+ *   PURPOSE (see `AnimationSource`). Live capture assumes the canvas is already
+ *   moving on its own clock; Deep Shore only redraws when you touch it, and each
+ *   of its frames can cost a second of arithmetic, so filming it produced "a
+ *   still frame at a video's file size" — a caveat the page had to print next to
+ *   the button. An engine that knows what its own animation IS renders it here
+ *   and gets the same encode, preview and save flow.
  *
  * Nothing downloads on its own. Encoding returns a Blob and the caller shows it
  * — an animated GIF that lands in the downloads folder unseen is the failure the
@@ -194,6 +201,67 @@ export async function encodeGif(
 
 /* ─────────────────  live-canvas capture, for the engines  ───────────────── */
 
+/**
+ * Escaped even though today's only callers pass literals from their own source.
+ * Per AGENTS.md: attribute quoting is a property of the call site and will
+ * eventually change, so `'` goes too.
+ */
+function escapeText(value: string): string {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function escapeAttr(value: string): string {
+  return escapeText(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+/** Frames an engine rendered deliberately, plus how to play them back. */
+export interface AnimationFrames {
+  ok: true
+  /** In order, all at the requested size. The last is held (see the GIF button). */
+  frames: ImageData[]
+  /** Milliseconds per frame. */
+  delay: number
+  /** One line describing the file, shown beside the preview. */
+  note: string
+}
+
+/** Why there is nothing to record. Shown verbatim, so write it for a visitor. */
+export interface AnimationRefusal {
+  ok: false
+  reason: string
+}
+
+/**
+ * A deterministic frame source, for an engine that can render its own animation
+ * rather than be filmed.
+ *
+ * Live capture (below) is the right tool for an engine that is already animating
+ * on its own clock. It is the WRONG tool for one that only redraws when you touch
+ * it, or whose frames each cost a second to compute: sampling that in real time
+ * produces a time-lapse of an interaction, or a still. Such an engine renders its
+ * frames here instead, at its own pace, and gets the same encode / preview / save
+ * flow — including, crucially, the look-before-you-save step this module exists
+ * for.
+ *
+ * `cancelled()` is polled by the engine between frames: a deep render is long
+ * enough that the visitor must be able to stop it.
+ */
+export interface AnimationSource {
+  /** Button label, e.g. "Record the dive". */
+  label: string
+  title?: string
+  /** Inserted into the filename, e.g. "dive" → `deep-shore-dive-480x298.gif`. */
+  suffix?: string
+  render: (
+    w: number,
+    h: number,
+    report: (done: number, total: number) => void,
+    cancelled: () => boolean,
+  ) => Promise<AnimationFrames | AnimationRefusal>
+  /** Frames of the final frame appended so a looping GIF reads as arriving. */
+  hold?: number
+}
+
 export interface LiveExportOptions {
   /** File-name stem, e.g. "murmuration". */
   name: string
@@ -203,6 +271,62 @@ export interface LiveExportOptions {
   frames?: number
   /** Longest GIF edge. Capped low on purpose — a full-resolution GIF is enormous. */
   maxGifEdge?: number
+  /**
+   * Offer the live-capture GIF button. Default true.
+   *
+   * Set false where filming the canvas is known to produce a worse artifact than
+   * the `animation` source below — leaving both buttons up would mean shipping a
+   * control whose own help text has to warn you off it.
+   */
+  liveGif?: boolean
+  /** A deterministic alternative to filming the canvas. */
+  animation?: AnimationSource
+}
+
+/**
+ * The export bars on the page, each with the function that drops its unsaved
+ * preview.
+ *
+ * ONE pair of document listeners serves all of them, registered the first time
+ * a bar is attached and never again — the module is evaluated once per session,
+ * because the client router keeps the module cache. `attachCanvasExport` used to
+ * add its own `astro:before-swap` listener on every call and never remove it,
+ * and seven engines call it, again on every reconnect: each in-site navigation
+ * to a page with a canvas left one more document listener behind, holding its
+ * bar, its preview image and everything its closure reached, for the rest of the
+ * session. The registry is bounded by the bars actually on the page — a bar
+ * whose host has gone leaves it at the next swap or the next attach.
+ */
+const liveBars = new Map<HTMLElement, () => void>()
+let swapHooked = false
+
+function trackBar(bar: HTMLElement, clearPending: () => void): void {
+  // A bar whose engine unmounted without a navigation (an embed removed in
+  // place) is let go here, preview revoked, rather than waiting for a swap.
+  for (const [b, clear] of liveBars) {
+    if (!b.isConnected) {
+      clear()
+      liveBars.delete(b)
+    }
+  }
+  liveBars.set(bar, clearPending)
+  if (swapHooked) return
+  swapHooked = true
+  // A preview the visitor never saved or discarded holds an object URL until
+  // the document goes away — and on the /learnings lane the document does NOT
+  // go away, because those pages run the client router and navigate by swapping
+  // it. Generate a GIF, click through to another article, and the blob was
+  // pinned for the rest of the session. The tools and games lanes pass
+  // `clientRouter={false}` and so always got a full reload, which is why this
+  // only ever leaked in one place. Revoking on the swap costs nothing when
+  // there is no pending preview.
+  document.addEventListener('astro:before-swap', () => {
+    for (const clear of liveBars.values()) clear()
+  })
+  // The swap has replaced the page: every bar it did not carry across is gone.
+  document.addEventListener('astro:after-swap', () => {
+    for (const b of liveBars.keys()) if (!b.isConnected) liveBars.delete(b)
+  })
 }
 
 /**
@@ -228,7 +352,7 @@ export function attachCanvasExport(
   // frame count is what the encode time is linear in. 480px rather than 640 for
   // the same reason: quantize cost scales with pixels, and a GIF wallpaper is
   // not something anyone views at full resolution.
-  const { name, seconds = 2, frames = 20, maxGifEdge = 480 } = options
+  const { name, seconds = 2, frames = 20, maxGifEdge = 480, liveGif = true, animation } = options
 
   const bar = document.createElement('div')
   bar.dataset.type = 'canvas-export'
@@ -242,7 +366,10 @@ export function attachCanvasExport(
         </select>
       </label>
       <button data-cx="png" type="button">Save image</button>
-      <button data-cx="gif" type="button">Make a GIF</button>
+      ${liveGif ? '<button data-cx="gif" type="button">Make a GIF</button>' : ''}
+      ${animation
+        ? `<button data-cx="anim" type="button"${animation.title ? ` title="${escapeAttr(animation.title)}"` : ''}>${escapeText(animation.label)}</button>`
+        : ''}
       <span data-type="cx-status" role="status" aria-live="polite"></span>
     </div>
     <div data-type="cx-preview" hidden>
@@ -290,6 +417,10 @@ export function attachCanvasExport(
     previewImg.removeAttribute('src')
   }
 
+  // Swapping the page revokes an unsaved preview — through the one shared pair
+  // of listeners, never a new one per bar (see `trackBar`).
+  trackBar(bar, clearPending)
+
   const show = (blob: Blob, filename: string, note: string) => {
     clearPending()
     const url = URL.createObjectURL(blob)
@@ -333,7 +464,14 @@ export function attachCanvasExport(
     }, 'image/png')
   })
 
-  bar.querySelector('[data-cx="gif"]')!.addEventListener('click', async event => {
+  /** Fit inside maxGifEdge, preserving aspect. A GIF of a 2560px canvas is
+   *  hundreds of megabytes and will not open on a phone. */
+  const gifSize = (source: HTMLCanvasElement): [number, number] => {
+    const ratio = Math.min(1, maxGifEdge / Math.max(source.width, source.height))
+    return [Math.max(2, Math.round(source.width * ratio)), Math.max(2, Math.round(source.height * ratio))]
+  }
+
+  bar.querySelector('[data-cx="gif"]')?.addEventListener('click', async event => {
     const button = event.currentTarget as HTMLButtonElement
     const source = readyCanvas()
     if (!source) {
@@ -343,11 +481,7 @@ export function attachCanvasExport(
     button.disabled = true
     clearPending()
     try {
-      // Fit inside maxGifEdge, preserving aspect. A GIF of a 2560px canvas is
-      // hundreds of megabytes and will not open on a phone.
-      const ratio = Math.min(1, maxGifEdge / Math.max(source.width, source.height))
-      const w = Math.max(2, Math.round(source.width * ratio))
-      const h = Math.max(2, Math.round(source.height * ratio))
+      const [w, h] = gifSize(source)
       const gap = (seconds * 1000) / frames
 
       // Two phases, and they are kept separate on purpose.
@@ -394,6 +528,75 @@ export function attachCanvasExport(
       button.disabled = false
     }
   })
+
+  /* ── the deterministic path: frames the engine renders on purpose ── */
+  if (animation) {
+    const animButton = bar.querySelector('[data-cx="anim"]') as HTMLButtonElement
+    let running = false
+    let stop = false
+    animButton.addEventListener('click', async () => {
+      // A second click on a running render is a stop, not a second render. The
+      // frames of a deep dive cost a second each, so this cannot be a control
+      // the visitor is merely locked out of while it works.
+      if (running) {
+        stop = true
+        status.textContent = 'Stopping…'
+        return
+      }
+      const source = readyCanvas()
+      if (!source) {
+        status.textContent = 'Still drawing — try again in a moment.'
+        return
+      }
+      running = true
+      stop = false
+      const label = animButton.textContent
+      animButton.textContent = 'Stop'
+      clearPending()
+      try {
+        const [w, h] = gifSize(source)
+        const plan = await animation.render(
+          w,
+          h,
+          (done, total) => { status.textContent = `Rendering frame ${done}/${total}…` },
+          () => stop,
+        )
+        if (!plan.ok) {
+          status.textContent = plan.reason
+          return
+        }
+        if (plan.frames.length === 0) {
+          status.textContent = 'Nothing was rendered.'
+          return
+        }
+        // Held frames reuse the last ImageData rather than rendering it again —
+        // the point is a pause at the destination, and a repeat pass of the most
+        // expensive frame in the dive is the last thing this should cost.
+        const hold = Math.max(0, Math.min(30, Math.round(animation.hold ?? 0)))
+        const total = plan.frames.length + hold
+        const blob = await encodeGif(
+          (ctx, _width, _height, frame) => {
+            ctx.putImageData(plan.frames[Math.min(frame, plan.frames.length - 1)], 0, 0)
+          },
+          {
+            width: w,
+            height: h,
+            frames: total,
+            delay: plan.delay,
+            onProgress: (done, count) => { status.textContent = `Encoding frame ${done}/${count}…` },
+          },
+        )
+        const stem = animation.suffix ? `${name}-${animation.suffix}` : name
+        show(blob, `${stem}-${w}x${h}.gif`, plan.note)
+      } catch {
+        status.textContent = 'Recording failed.'
+      } finally {
+        running = false
+        stop = false
+        animButton.textContent = label
+      }
+    })
+  }
 
   bar.querySelector('[data-cx="save"]')!.addEventListener('click', () => {
     if (!pending) return

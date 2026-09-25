@@ -9,6 +9,24 @@ html {
   scroll-padding-top: var(--nav-h, var(--space-header-offset));
 }
 
+/* The page shell. BOTH layouts render <body>, so it is owned here and not in
+   global.css, which only Base.astro loads — the same bare-element trap the page
+   title fell into one level up. ToolBase carried its own copy in an `is:global`
+   block, and the two had drifted: it set the font, colour and background but not
+   the column, so on every tool, game and Driftfield route a page shorter than
+   the viewport left the footer floating with a slab of bare background beneath
+   it. The column (flex + min-height here, `flex: 1 0 auto` on main below) is
+   what pins the footer to the bottom, and both lanes need all four. */
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  font-family: var(--font-serif);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
 /* Make the `hidden` attribute reliable. Some elements set an explicit display
    (e.g. flex) whose specificity beats the UA `[hidden] { display: none }`, so
    toggling `.hidden` in JS leaves them visible. This guarantees hidden wins. */
@@ -47,9 +65,17 @@ a[data-type="skip-link"]:focus {
   top: 0.5rem;
 }
 
-/* main is a programmatic focus target for the skip link — don't draw a ring
-   around the whole content column when it receives focus. */
-main:focus {
+/* main is a programmatic focus target for the skip link, so it must not draw a
+   ring on an ordinary mouse click — but it MUST draw one when a keyboard user
+   activates the skip link, or the skip has no perceivable result and the link
+   is decorative (WCAG 2.4.7). The earlier blanket `main:focus { outline: none }`
+   killed the ring in both cases, because the `:focus-visible` rule above is the
+   *only* thing that draws it and `main:focus` out-specifies nothing — it simply
+   applied to the same element afterwards. `:not(:focus-visible)` keeps the
+   mouse case silent and lets the keyboard case through. If an engine declines
+   to match `:focus-visible` on a programmatic focus, the outcome is the old
+   behaviour, so this cannot regress. */
+main:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -214,6 +240,7 @@ nav[data-type="hero-nav"] a[data-active] {
 main {
   position: relative;
   z-index: 1;
+  flex: 1 0 auto;
   padding-top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-section));
 }
 
@@ -301,18 +328,22 @@ p[data-type="page-intro"] {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-  gap: 1.25rem;
+  gap: var(--space-card);
 }
 
+/* `position: relative` is load-bearing, not tidiness: it is the containing
+   block for the stretched card link below. Without it the link's ::after
+   escapes to the nearest positioned ancestor and covers the whole page. */
 [data-type="card-grid"] > * {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-sm);
   margin: 0;
-  padding: 1.25rem;
+  padding: var(--space-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   transition: border-color 0.15s ease;
+  position: relative;
 }
 
 /* Card lights up on hover AND when a control inside it takes keyboard focus, so
@@ -323,11 +354,47 @@ p[data-type="page-intro"] {
 }
 
 /* Listing card titles are real headings (<h2>/<h3>) so screen readers can jump
-   between cards by heading; the reset makes the heading visually identical to
-   the former bold link — it just inherits the card's type scale. */
+   between cards by heading. Size and line-height inherit the card's type scale;
+   the WEIGHT is set here and is the only place any hub may set it.
+
+   Before this, five hubs rendered four different card titles — /tools at
+   20.8px/600 from its own tools.css override, /games and /projects at 16px/700
+   from a global.css refinement, and /learnings and /tools/driftfield at
+   16px/400 because they matched no weight rule at all, leaving their card
+   titles identical in size AND weight to the description underneath. Same
+   shape as the `h1` three-dialects bug one level up: a shared idiom whose base
+   declared less than every consumer needed, so each consumer patched locally.
+   Set it here; never in a per-hub or per-tool sheet. */
 [data-type="card-title"] {
   margin: 0;
   font-size: inherit;
-  font-weight: inherit;
+  font-weight: 600;
   line-height: inherit;
 }
+
+/* The whole card is the click target. The card frame already lights up on
+   :hover and :focus-within, which promised an affordance only the ~29px title
+   link actually had — 11% of a 326x156 card. A stretched ::after on the title
+   keeps ONE link and one accessible name per card (a wrapping <a> around a
+   heading would bury the heading inside a link, and duplicate links per card
+   read as repeated noise in a screen reader's link list). */
+[data-type="card-grid"] > * [data-type="card-title"] a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+/* A card may carry secondary links after its title — /projects cards have up
+   to three (repo, live site, writeup). Those come later in the DOM than the
+   title, so `position: relative` alone lifts them above the stretched ::after
+   and they stay clickable. Cards with NO link (a coming-soon Driftfield mode)
+   simply grow no ::after, so nothing special is needed for them. */
+[data-type="card-grid"] > * a:not([data-type="card-title"] a) {
+  position: relative;
+}
+
+/* No min-height on the title link: the stretched ::after above makes the whole
+   card the tap target, so the 29px link is no longer the thing a thumb has to
+   hit. Padding the link instead would inflate every card to satisfy a floor
+   the card already clears. */

@@ -155,7 +155,7 @@ export function renderInline(text: string): string {
 }
 
 /**
- * Where an article wants its interactive figure.
+ * Where an article wants its figures — plural, and optionally pinned.
  *
  * Every learnings article used to open with its embed, because the route
  * hardcoded the position: summary, component, then all the prose. That is the
@@ -164,15 +164,37 @@ export function renderInline(text: string): string {
  * referring to "the thing above" — which is why they all read the same.
  *
  * `{{embed}}` on its own line moves it to the moment the writing has earned it.
- * Returns the source split around the marker; when there is no marker the whole
- * article is `before` and the caller falls back to placing the figure after it.
+ * `{{embed:some-view}}` places the SAME component pinned to one of its views,
+ * which is what lets an article carry a figure every few lines instead of one
+ * big one in the middle — the house format (docs/plans/learnings-voice.md)
+ * wants the prose to be connective tissue between figures, and one embed per
+ * article cannot express that. A component that does not understand the view
+ * name simply renders its default: a typo costs the pinning, never the page.
+ *
+ * Returns the article as alternating segments. Every segment carries the
+ * markdown that precedes its figure; the last one carries the trailing prose
+ * and no figure. No marker at all yields a single segment, and the caller falls
+ * back to placing the figure after the prose.
  */
-export function splitOnEmbed(content: string): { before: string; after: string } {
-  const marker = /^[ \t]*\{\{embed\}\}[ \t]*$/m
-  const match = marker.exec(content)
-  if (!match) return { before: content, after: '' }
-  return {
-    before: content.slice(0, match.index),
-    after: content.slice(match.index + match[0].length),
+export interface EmbedSegment {
+  /** The markdown that comes before this segment's figure. */
+  markdown: string
+  /**
+   * The figure that follows `markdown`, when there is one. `''` is the full
+   * component; a non-empty string pins it to that view. Absent on the final
+   * segment, which is the prose after the last figure.
+   */
+  view?: string
+}
+
+export function splitOnEmbeds(content: string): EmbedSegment[] {
+  const marker = /^[ \t]*\{\{embed(?::([a-z0-9-]+))?\}\}[ \t]*$/gm
+  const out: EmbedSegment[] = []
+  let last = 0
+  for (const m of content.matchAll(marker)) {
+    out.push({ markdown: content.slice(last, m.index), view: m[1] ?? '' })
+    last = m.index + m[0].length
   }
+  out.push({ markdown: content.slice(last) })
+  return out
 }

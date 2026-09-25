@@ -1,0 +1,331 @@
+/* DNS Sightline — layout for the target row, the findings list, the resolver
+   agreement table, the record table, the SPF lookup meter and the CAA panel.
+   Tokens only (theme.css); the shared card, toolbar and button chrome come from
+   tools-common.css (this tool opts in via its selectors there). */
+
+/* Card <h2> bottom margin — the one property the shared card-h2 rule leaves
+   bespoke (see tools-common.css). */
+section[data-type="sg-card"] h2 {
+  margin-bottom: 0.8rem;
+}
+
+div[data-tool="dns-sightline"] [data-group="sg-row"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+div[data-tool="dns-sightline"] [data-input="name"] {
+  flex: 1 1 18rem;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-field"] {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="dns-sightline"] [data-input="ca"] {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-status"] {
+  display: block;
+  min-height: 1.2em;
+  margin-top: 0.5rem;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-status"][data-tone="ok"] {
+  color: var(--color-success);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-status"][data-tone="bad"] {
+  color: var(--color-error);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-hint"],
+div[data-tool="dns-sightline"] [data-type="sg-note"] {
+  margin: 0.75rem 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+div[data-tool="dns-sightline"] [data-group="sg-cardhead"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+div[data-tool="dns-sightline"] [data-group="sg-cardhead"] [data-group="toolbar"] {
+  margin: 0 0 0.8rem;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-count"] {
+  margin-left: 0.4rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+div[data-tool="dns-sightline"] h3 {
+  margin: 1.25rem 0 0.4rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---------- findings ---------- */
+
+div[data-tool="dns-sightline"] [data-type="sg-findings"] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.6rem;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-findings"] > li {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-muted);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-findings"] > li[data-level="error"] {
+  border-left-color: var(--color-error);
+}
+
+/* There is no `--color-warning` token, and inventing one for this tool would
+   make a palette decision in a component sheet. Warn and note therefore share
+   the accent and are told apart by the label chip, not by hue — which is also
+   the accessible reading, since colour alone was never carrying that
+   distinction for anyone. */
+div[data-tool="dns-sightline"] [data-type="sg-findings"] > li[data-level="warn"],
+div[data-tool="dns-sightline"] [data-type="sg-findings"] > li[data-level="info"] {
+  border-left-color: var(--color-accent);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-findings"] > li[data-level="info"] {
+  border-left-style: dotted;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-finding-head"] {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-level"] {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+}
+
+div[data-tool="dns-sightline"] [data-level="error"] [data-type="sg-level"] {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-finding-detail"] {
+  margin: 0.35rem 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.65;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-evidence"] {
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-evidence-none"] {
+  margin: 0.5rem 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+
+/* ---------- tables ---------- */
+
+/* A sideways-scrolling table is keyboard-reachable only if its wrapper can
+   take focus, so both wrappers render `tabindex="0"` as a named region — the
+   site's own :focus-visible ring (shared.css) is what shows where focus went.
+   Without it the columns past the edge need a pointer to reach. */
+div[data-tool="dns-sightline"] [data-type="sg-scroll"] {
+  overflow-x: auto;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-table"] {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-table"] th,
+div[data-tool="dns-sightline"] [data-type="sg-table"] td {
+  padding: 0.4rem 0.6rem 0.4rem 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.6;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-table"] th {
+  color: var(--color-muted);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-table"] tr[data-agree="0"] td {
+  color: var(--color-text);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-table"] tr[data-agree="1"] td {
+  color: var(--color-muted);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-failed"] {
+  color: var(--color-error);
+}
+
+/* ---------- SPF ---------- */
+
+div[data-tool="dns-sightline"] [data-type="sg-record"] {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-meter"] {
+  position: relative;
+  display: block;
+  margin: 0.6rem 0 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-meter-fill"] {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-meter"][data-over="1"] [data-type="sg-meter-fill"] {
+  background: color-mix(in srgb, var(--color-error) 25%, transparent);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-meter-label"] {
+  position: relative;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-terms"] {
+  margin: 0.6rem 0 0;
+  padding-left: 1.4rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.8;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-terms"] > li[data-depth="1"] { margin-left: 0.9rem; }
+div[data-tool="dns-sightline"] [data-type="sg-terms"] > li[data-depth="2"] { margin-left: 1.8rem; }
+div[data-tool="dns-sightline"] [data-type="sg-terms"] > li[data-depth="3"] { margin-left: 2.7rem; }
+div[data-tool="dns-sightline"] [data-type="sg-terms"] > li[data-depth="4"] { margin-left: 3.6rem; }
+
+div[data-tool="dns-sightline"] [data-type="sg-tags"],
+div[data-tool="dns-sightline"] [data-type="sg-mx"] {
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.8;
+}
+
+div[data-tool="dns-sightline"] [data-bad="1"] {
+  color: var(--color-error);
+}
+
+/* ---------- explainers ---------- */
+
+div[data-tool="dns-sightline"] [data-type="sg-explainer"] {
+  margin-top: 1.25rem;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-explainer"] summary {
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-explainer"] p {
+  margin: 0.75rem 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+
+/* ---------- the handoff to Chainsaw ---------- */
+
+/* CAA answers "who may issue"; only a handshake answers "who did". The link in
+   the policy card is the one place this tool points at another, so it is styled
+   as a link rather than dressed up as one of the copy buttons beside it. */
+
+div[data-tool="dns-sightline"] [data-type="sg-crosslink"] {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-crosslink"]:hover,
+div[data-tool="dns-sightline"] [data-type="sg-crosslink"]:focus-visible {
+  text-decoration: underline;
+}

@@ -24,6 +24,8 @@
  */
 
 import { ANSWER_STR, VALID_STR } from './words'
+import { quintleDayNumber } from '../../../lib/quintle-daily'
+import { recordDailyPlay } from '../../../lib/daily-streak'
 
 /* ── word data ───────────────────────────────────────────────── */
 
@@ -35,19 +37,14 @@ for (const w of VALID_STR.split(' ')) Q_VALID.add(w)
 const Q_LEN = 5
 const Q_ROWS = 6
 const Q_LS_KEY = 'quintle:v1'
-// Fixed UTC launch date: every timezone advances to the next puzzle together.
-const Q_EPOCH_DAY = Math.floor(Date.UTC(2025, 0, 1) / 86400000)
+// The daily calendar (epoch + day number) lives in src/lib/quintle-daily.ts,
+// shared with the /games hub's streak strip so the two derive the same "today".
 
 type Q_State = 'correct' | 'present' | 'absent'
 type Q_Mode = 'daily' | 'practice'
 type Q_Status = 'playing' | 'won' | 'lost'
 
 /* ── pure game logic (unit-tested off-mount) ─────────────────── */
-
-/** Which UTC day number is `d`? */
-function q_dayNumber(d: Date): number {
-  return Math.floor(d.getTime() / 86400000) - Q_EPOCH_DAY
-}
 
 /** The deterministic answer for a given day number. */
 function q_dailyAnswer(day: number): string {
@@ -239,7 +236,7 @@ class QuintleGame extends HTMLElement {
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     // Roll the daily puzzle over if the saved one is from an earlier day.
-    const today = q_dayNumber(new Date())
+    const today = quintleDayNumber(new Date())
     if (!this.daily || this.daily.day !== today) {
       this.daily = { answer: q_dailyAnswer(today), guesses: [], status: 'playing', day: today }
     }
@@ -543,6 +540,10 @@ class QuintleGame extends HTMLElement {
         this.stats.curStreak = 0
       }
       this.stats.lastDay = day
+      // Hub strip: a *played* daily (win or lose) keeps the cross-game streak
+      // alive — deliberately looser than curStreak above, which only wins
+      // advance. Idempotent per day inside the shared module.
+      recordDailyPlay('quintle', day)
     }
 
     this.renderResult()

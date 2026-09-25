@@ -74,18 +74,6 @@ const ogImage = ogImageMeta(site, ogCard, toolTitle)
 </html>
 
 <style is:global>
-  body {
-    font-family: var(--font-serif);
-    color: var(--color-text);
-    /* Match Base.astro's global.css body: paint the themed background token so
-       tool pages show the correct dark surface before the fixed starfield canvas
-       mounts (and if JS is disabled), instead of the UA default. The canvas is a
-       fixed child that paints over this, so it's purely a pre-paint fallback. */
-    background-color: var(--color-bg);
-    margin: 0;
-    padding: 0;
-  }
-
   a {
     text-decoration: none;
     color: inherit;

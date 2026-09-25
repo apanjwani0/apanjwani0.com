@@ -40,7 +40,9 @@ const year = new Date().getFullYear()
 <footer data-type="site-footer">
   <div data-type="footer-inner">
     <nav data-type="footer-nav" aria-label="Footer">
-      <a href="/" data-type="footer-wordmark" aria-label={`${site.handle} — ${site.name} home`}>{site.handle}</a>
+      {/* Same accessible name as the header wordmark (Nav.astro) — one home
+          link, one label, wherever it appears. */}
+      <a href="/" data-type="footer-wordmark" aria-label={`${site.name} — home`}>{site.handle}</a>
       {links.map((link) => <a href={link.href}>{link.label}</a>)}
     </nav>
     {social.length > 0 && (

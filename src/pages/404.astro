@@ -1,5 +1,17 @@
 ---
+export const prerender = false
+
 import Base from '../layouts/Base.astro'
+import { getSite, navLinks } from '../lib/config'
+
+// The suggested links are DERIVED from navLinks(), never hand-written: a
+// hand-written list is one more consumer of "which sections exist" that no
+// predicate reaches — this page advertised /blogs on every 404 for five days
+// after the section was gated hidden, because it was the one link list that
+// read no flag. navLinks() already applies isBlogsPublic (and whatever gate
+// comes next), so this page can no longer disagree with the nav and footer.
+const site = await getSite(Astro.locals)
+const links = navLinks(site)
 ---
 
 <!-- noindex: an error page should never enter the index (it can be served for any
@@ -14,11 +26,7 @@ import Base from '../layouts/Base.astro'
     </p>
     <nav data-type="nf-links" aria-label="Suggested pages">
       <a href="/">home</a>
-      <a href="/projects">projects</a>
-      <a href="/tools">tools</a>
-      <a href="/blogs">blogs</a>
-      <a href="/learnings">learnings</a>
-      <a href="/games">games</a>
+      {links.map(l => <a href={l.href}>{l.label}</a>)}
     </nav>
   </section>
 </Base>

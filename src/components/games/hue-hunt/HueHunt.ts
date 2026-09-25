@@ -39,6 +39,7 @@ import {
   parseHex,
   toHex,
 } from '../../../lib/hue-hunt-daily'
+import { recordDailyPlay } from '../../../lib/daily-streak'
 
 type Mode = 'daily' | 'pick' | 'type'
 type DiffId = 'easy' | 'medium' | 'hard'
@@ -568,6 +569,10 @@ class HueHuntGame extends HTMLElement {
       this.dayStreak = this.lastDailyDay === this.daily.day - 1 ? this.dayStreak + 1 : 1
       this.lastDailyDay = this.daily.day
     }
+    // Hub strip: same "finished the five" moment, mirrored into the shared
+    // cross-game store (src/lib/daily-streak.ts). Idempotent per day there,
+    // so a re-scored re-render cannot double-count it either.
+    recordDailyPlay('hue-hunt', this.daily.day)
   }
 
   /** Endless-mode bookkeeping for a typed guess. The daily deliberately feeds

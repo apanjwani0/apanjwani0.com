@@ -22,7 +22,11 @@
   outline-offset: -2px;
 }
 
-/* Seed text inputs (flow-field / maze-weaver / fractal-garden): tighter ring. */
+/* Seed text inputs (flow-field / maze-weaver / deep-shore): tighter ring.
+   `fractal-garden` was named here until 2026-09-21 and had not existed for
+   months — it is the L-system, which lives in Driftfield now. deep-shore names
+   its Julia-seed group `seed` for exactly this rule rather than inventing
+   `seed-entry` and quietly opting out of the lane's focus treatment. */
 [data-game] div[data-group="seed"] input[type="text"]:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;

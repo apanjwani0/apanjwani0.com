@@ -26,6 +26,7 @@ export const EMBED_TAGS: Record<string, string> = {
   'type-trial': 'type-trial-game',
   'hue-hunt': 'hue-hunt-game',
   'poker-trainer': 'poker-trainer-game',
+  'deep-shore': 'deep-shore-game',
   // Simulations — no /games page; they live in articles and/or Driftfield.
   'game-of-life': 'game-of-life-game',
   'flow-field': 'flow-field-game',
@@ -34,7 +35,25 @@ export const EMBED_TAGS: Record<string, string> = {
   'turing-bloom': 'turing-bloom-game',
   'sand-loom': 'sand-loom-game',
   'lsystem-tree': 'lsystem-tree-game',
+  // Figures — neither a game nor a Driftfield mode. These exist only to be
+  // embedded in an article, which is why EMBED_TAGS is the wider list.
+  'diagram-atlas': 'diagram-atlas-figure',
 }
+
+/**
+ * Embeds that write NO title block of their own, so `stripEmbedChrome` has
+ * nothing to wait for and starts no observer.
+ *
+ * Every game and simulation writes an `<h1>` and a blurb into itself, because on
+ * its own page it WAS the page, and the embedding routes strip them with a
+ * MutationObserver that disconnects on its first hit. A figure written only to
+ * be embedded writes neither — so its observer never got a hit, never
+ * disconnected, and re-scanned the container on every mutation for the life of
+ * the page: eight of them on the diagrams article, five of whose figures redraw
+ * on a timer. `security:smoke` derives this set from the components' own sources
+ * in both directions, so it cannot drift from what they actually render.
+ */
+export const EMBED_NO_CHROME: ReadonlySet<string> = new Set(['diagram-atlas'])
 
 /**
  * The tag to mount for a slug, or undefined when nothing is wired.

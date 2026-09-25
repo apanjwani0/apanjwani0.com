@@ -21,23 +21,33 @@ const ldJson = itemListJsonLd(
   'Games by Aman Panjwani',
   games.filter(isPlayableGame).map(g => ({ name: g.title, url: `${site.url}/games/${g.slug}` })),
 )
+
+// Kept under ~155 characters deliberately — same reasoning as /tools: a snippet
+// is truncated past roughly that, so the tail is downloaded by every crawler and
+// read by no one (the previous version ran to 279). The full shelf is in the page
+// intro below and the long-tail terms are in `keywords`. Declared here, not as an
+// inline JSX comment between attributes — that form builds green while breaking
+// `astro check` (see AGENTS.md).
+const metaDescription =
+  'Free browser games, no sign-up: a daily word puzzle, a typing race with ghost ' +
+  'replays, a hex-colour game, a fractal deep-zoom, 2048 and a poker trainer.'
 ---
 
 <Base
   wide
+  starfield={false}
   title="games"
-  description="Free browser games — Quintle (a daily five-letter word puzzle), 2048, a seeded maze generator that solves itself, a daily typing race with a shared leaderboard, Hue Hunt (a daily hex-colour guessing game), and a poker trainer with exact equity and pot odds. No downloads, no sign-up."
-  keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, typing race, daily typing challenge, typing leaderboard, hex color game, color guessing game, guess the hex, daily color game, poker trainer, poker equity calculator, pot odds trainer, poker practice, daily games, daily puzzle, no-download games, playable experiments"
+  seoTitle="Free Browser Games — Daily Word Puzzle, Typing Race & More"
+  description={metaDescription}
+  keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, typing race, daily typing challenge, typing leaderboard, hex color game, color guessing game, guess the hex, daily color game, poker trainer, poker equity calculator, pot odds trainer, poker practice, mandelbrot set explorer, julia set generator, fractal zoom, fractal explorer online, daily games, daily puzzle, no-download games, playable experiments"
 >
   {games.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>games</h1>
   <p data-type="page-intro">
-    Browser games and playable experiments — a daily five-letter word puzzle, a game of 2048, a maze that weaves
-    itself and then solves itself, a daily typing race where everyone on Earth gets the same passage, a colour-guessing
-    game that scores your eye out of 500 each day, and a poker trainer that counts every runout instead of estimating.
-    Everything marked play runs right here, no downloads and no sign-up; the rest are on the way. The generative
-    pieces that used to live here — the flow field, the flock, the falling sand and friends — moved into
-    <a href="/tools/driftfield">Driftfield</a>, where each one still runs live.
+    Browser games and playable experiments — no downloads, no sign-up. Three
+    have a daily round that is the same for everyone, and your streak stays in
+    your browser. The generative pieces moved to{' '}
+    <a href="/tools/driftfield">Driftfield</a>.
   </p>
   {games.length === 0 ? (
     <p>Coming soon.</p>
@@ -55,32 +65,26 @@ const ldJson = itemListJsonLd(
               )}
             </span>
           </div>
-          <div data-type="project-description" set:html={render(g.description)} />
+          {/* First paragraph only. The full description is the product copy
+              for /games/<slug> and runs to three paragraphs (Deep Shore is
+              1,074 characters), which on a card made one column three times
+              the height of its neighbours and buried the eight titles this
+              page exists to let you scan. `intro` is not the answer — only 2
+              of 8 games have one — but every description's first paragraph is
+              already written as its summary. */}
+          <div data-type="project-description" set:html={render(g.description.split(/\n\s*\n/)[0])} />
         </article>
       ))}
     </div>
   )}
 </Base>
 
-<style>
-  /* Status pill on each game card — replaces the previous duplicated inline
-     styles; live vs coming-soon differ only by colour. Tokens only. */
-  [data-type="game-badge"] {
-    font-size: var(--text-xs);
-    border: 1px solid var(--color-border);
-    padding: var(--space-2xs) var(--space-xs);
-    border-radius: var(--radius);
-    white-space: nowrap;
-  }
+{/* Badge CSS lives in global.css (not a scoped <style> here) because the
+    daily-streak strip inserts a third badge state at runtime, and a
+    JS-created element never carries Astro's scoping attribute — a scoped
+    rule cannot style it. */}
 
-  [data-type="game-badge"][data-live] {
-    color: var(--color-success);
-    border-color: var(--color-success);
-  }
-
-  /* Coming-soon reads as secondary: a muted label, distinct from the green live
-     state and from primary body text, so the two badge states are ranked. */
-  [data-type="game-badge"]:not([data-live]) {
-    color: var(--color-muted);
-  }
-</style>
+<script>
+  import { registerDailyStreaks } from '../lib/daily-streak-strip'
+  registerDailyStreaks()
+</script>

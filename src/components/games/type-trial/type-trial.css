@@ -35,6 +35,47 @@ div[data-tool="type-trial"] [data-group="categories"] button[data-active] {
   border-color: var(--color-text);
 }
 
+/* ── Ghost race banner ───────────────────────────────────── */
+p[data-type="tt-ghost"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+}
+
+/* Load-bearing: the flex rule above out-specifies the UA [hidden] rule, so
+   without this the banner would render even while hidden (same shape as the
+   card-grid [hidden] refinement in global.css). */
+p[data-type="tt-ghost"][hidden] {
+  display: none;
+}
+
+p[data-type="tt-ghost"] button {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+p[data-type="tt-ghost"] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
 /* ── Typing stage ────────────────────────────────────────── */
 div[data-type="tt-stage"] {
   position: relative;
@@ -87,6 +128,15 @@ div[data-type="tt-text"] span[data-s="caret"] {
 @keyframes tt-blink {
   0%, 100% { border-left-color: var(--color-accent); }
   50% { border-left-color: transparent; }
+}
+
+/* Ghost caret: a tinted block with an underline, deliberately a different
+   shape from the user's left-border caret so the two can share a character
+   without visual ambiguity. Separate attribute (data-g) for the same reason. */
+div[data-type="tt-text"] span[data-g] {
+  background: color-mix(in srgb, var(--color-accent) 26%, transparent);
+  border-bottom: 2px solid var(--color-accent);
+  border-radius: var(--radius-sm);
 }
 
 /* The real input sits transparent over the stage to capture typing/focus. */
@@ -179,6 +229,14 @@ p[data-type="tt-rank"] {
   font-size: var(--text-sm);
   letter-spacing: 0.04em;
   color: var(--color-success);
+}
+
+p[data-type="tt-ghost-result"] {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
 }
 
 p[data-type="tt-summary"] {

@@ -24,6 +24,8 @@
 @import '../components/games/lsystem/lsystem.css';
 @import '../components/games/quintle/quintle.css';
 @import '../components/games/poker-trainer/poker-trainer.css';
+@import '../components/games/deep-shore/deep-shore.css';
+@import '../components/games/diagram-atlas/diagram-atlas.css';
 
 /* Export bar for every canvas engine — see src/lib/canvas-export.ts. */
 @import './canvas-export.css';

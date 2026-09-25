@@ -23,6 +23,7 @@ KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 - `src/lib/config.ts` — KV-aware accessors (`getSite`, `getProjects`, …). The only sanctioned way to read config.
 - `src/pages/` — routes; `src/pages/admin.astro` (config editor) and `src/pages/api/admin/save.ts` (save allowlist).
 - `src/layouts/` — page shells; `src/components/` (`home/`, `tools/`, `games/`) — UI pieces.
+- `src/lib/caa.ts` — the CAA vocabulary (`issue`/`issuewild`, the CA identifier registry, issuer→identifier mapping, and the renewal outlook) shared by DNS Sightline and Chainsaw. Hoisted like `src/lib/ip.ts`; Sightline re-exports its old `sg*` names.
 - `src/styles/theme.css` — design tokens (single source of truth for palette/fonts/scale/spacing).
 - `astro.config.mjs` — adapter choice **and** the Vite middleware that persists `/admin` saves.
 
@@ -37,6 +38,7 @@ npm run generate-types # wrangler types (regen Cloudflare/KV bindings)
 npm run graph          # graphify update . — refresh the local code-graph
 npm run og             # regenerate the social share cards (see Share cards)
 npm run security:smoke # assert the security invariants (see Security)
+npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
 npm run origin:check   # assert the DEPLOYED edge posture against production
 ```
@@ -53,9 +55,26 @@ five phantom parse errors under `astro check`, because TypeScript reads the
 object literal as the next arrow's parameter list.
 Run both; `check` must stay at 0 errors. For
 UI/route changes, also run `/browser-debug` against the dev server.
+
+**Neither of them ever starts the server**, and that gap has already shipped a
+dead origin: the lockfile resolved astro 7.3.3 against `@astrojs/node` 11.1.0,
+whose `standalone()` calls `app.pipeline.getLogger()` on an `app` that astro 7.3
+no longer gives a `pipeline` (11.1.6 calls `app.getLogger()`), so `node
+dist/server/entry.mjs` — the Dockerfile `CMD` — threw a `TypeError` on boot
+while `build` and `check` were both green. `npm run
+boot:check` (`scripts/boot-check.mjs`) closes it: after a build it starts that
+entry point the way the image does, on a free loopback port, and requires a
+complete 200 HTML page from `/` plus a process still alive a second later. It
+deletes `ASTRO_NODE_LOGGING` from the child's env on purpose — that variable
+switches off exactly the branch that crashed, so inheriting it from a shell
+would pass the check on the regression it exists for.
 The production GitHub deploy builds a Docker image on `main`, restarts the OCI
 container from the self-hosted runner, then fetches `/` inside the container
-before reporting success.
+before reporting success. That probe runs *after* the old container is stopped,
+so it reports a boot failure with the site already down; `boot:check` is the
+same question asked before anything ships. It is not wired into `deploy.yml`,
+because the image is built inside `docker/build-push-action` and there is no
+npm step on the runner to hang it on.
 
 ## Configuration
 
@@ -178,7 +197,10 @@ Product pages do **not** put the site owner's name in `<title>`: `seoTitle` is u
 verbatim by both shells, because a trailing `· Name` only consumes the pixels
 Google allows before truncating and pushes the real keywords out. Section pages
 (`/projects`, `/blogs`) keep the suffix — there the name is what identifies them.
-Authorship still lives in the JSON-LD `author` and the footer.
+The two product **hubs** (`/tools`, `/games`) side with the product pages as of
+2026-08-25: they pass a keyword-front-loaded `seoTitle` ("Free Online Developer
+Tools — …"), because a stranger finds them by searching for what they list, not
+for the name. Authorship still lives in the JSON-LD `author` and the footer.
 
 ## Security
 
@@ -255,6 +277,17 @@ an unbounded map is a memory-exhaustion vector rather than a defence. The host i
 a 1 GB VM; the container is capped (`--memory=768m`) so a leak restarts the
 container instead of taking down SSH and the CI runner with it.
 
+**A route that pairs a per-client bucket with a shared one asks the shared one
+only after the client's has said yes** — `allowClient(key) &&
+allowGlobal('global')`, never both evaluated up front. `createRateLimiter`
+counts a hit even when it refuses, so DNS Sightline, which asked both
+unconditionally, let one address that was already being refused keep spending
+the shared bucket: sixteen requests in a minute from a single client locked every
+other visitor out of the tool. `security:smoke` derives the rule over every
+route in `src/pages/api` (a limiter called with a string literal is the shared
+bucket, anything else is per-client) and floods the DNS Sightline route from one
+address to prove a second one still gets in.
+
 ### Public endpoints must be bounded in every dimension
 
 Body size, per-key count, global bytes, retention, *and* how long a request may
@@ -262,6 +295,25 @@ occupy a socket. The Webhook Inspector is the reference: `WEBHOOK_MAX_*` in
 `src/lib/webhook-store.ts` plus the 2s `?delay=` ceiling. Budget for byte
 accounting being optimistic — `.length` counts UTF-16 code units, not bytes, and
 object overhead is real.
+
+**Per-step bounds multiply, so a sequence of steps needs a bound of its own.**
+DNS Sightline had a 4s timeout on every question and no deadline on the
+inspection, and its SPF walk asks one question after another — forty of them
+held one socket for close to three minutes against a resolver that had stopped
+answering. `SG_INSPECT_DEADLINE_MS` (15s, `src/lib/dns-doh.ts`) is joined to the
+request's own signal with `AbortSignal.any`, and `sgQuery` checks
+`signal.aborted` before it asks anything: an abort listener never fires on a
+signal that has *already* aborted, so without that check every question after
+the deadline still went out and sat through its own timeout — measured at 16s
+for a 300ms deadline. Reaching the deadline is not an error; see *A failed
+lookup is not an absent record* for what the walks report instead.
+
+Name lookups count too. `dns.lookup` runs on libuv's four-slot threadpool with
+the OS resolver's timeout, outside every budget the callers keep, so Link Peek
+and Chainsaw both go through `lookupAllBounded` (`src/lib/dns-lookup.ts`, 3s).
+Chainsaw used to await the bare call while Link Peek raced it — one guard, two
+habits — and `security:smoke` now proves the bound for both with a lookup that
+never answers.
 
 The Type Trial daily leaderboard is the second worked example: `DAILY_*` in
 `src/lib/type-trial-leaderboard.ts` bounds name length, entries per day, retained
@@ -278,6 +330,32 @@ repetition is the point: bounds, separate read/write limiters, debounced flush t
 `data/hue-hunt-daily.json`, rows re-validated on load. It shares Type Trial's
 `sanitizeName` rather than growing a second name-hygiene rule — one board's idea
 of an acceptable display name must not drift from the other's.
+
+Chainsaw (`src/lib/tls-inspect.ts`, `src/pages/api/tools/chainsaw.ts`) is the
+third, and it bounds a dimension the other two do not have: **which port may be
+dialled at all**. Link Peek's rule — default ports only — is unusable for a cert
+inspector, since 8443 and 993 are exactly the cases people debug, and an
+*arbitrary* port would turn the origin into a port scanner. `CS_ALLOWED_PORTS`
+is the middle: a fixed list of ports that speak TLS the instant the socket
+opens. STARTTLS ports are deliberately absent, because half-implementing that
+conversation would report "no TLS" for servers that have it. It reuses Link
+Peek's address classifier rather than growing a second copy, resolves first and
+then **pins the connection to the checked address** with the name carried only
+as SNI — which closes, for this tool, the DNS-rebinding window Link Peek
+documents as its own ceiling. Limits are half Link Peek's per client (6/min,
+24/min global) because each request costs two outbound handshakes, and the
+target is validated *before* a rate-limit token is spent, so a typo does not
+cost a visitor one of six chances a minute.
+
+**Validate before you spend the token** is the rule, not a Chainsaw detail, and
+Link Peek follows it as of 2026-09-20. The budget exists to bound real outbound
+fetching; a URL with no scheme was never going to fetch anything, and charging
+it against both the visitor's allowance and the instance's global bucket spends
+the defence on the one request that cannot cause the harm. The gate has to be
+the cheap syntactic half only (scheme, credentials, port, host presence — no
+DNS, no socket), and the fetch path stays authoritative, since it is the one
+that re-checks every redirect hop. `security:smoke` derives the ordering from
+both routes.
 
 ### Validate a client-submitted value against one the server derives
 
@@ -341,6 +419,200 @@ The verification core lives in `src/lib/jwt.ts` and not in the component, so
 `security:smoke` can run real Web Crypto against the RFC 7515 A.1 vector plus the
 tampered-payload, wrong-key and `alg:none` cases.
 
+### An observation must not be taken through a lens that alters it
+
+Chainsaw (`src/lib/tls-inspect.ts`) exists to answer "what certificates did this
+server send", and the obvious way to ask — `socket.getPeerCertificate(true)` —
+**does not answer it**. When verification succeeds that call reports the chain
+OpenSSL *built*, including the root it supplied out of the local trust store.
+Measured against a fixture server, not assumed: a server sending leaf +
+intermediate reports **three** certificates when the root is trusted and **two**
+when it is not. A tool whose headline finding is "your chain is incomplete"
+cannot read the chain through a lens that completes it, and "the server also
+sends its root" — a real finding — would otherwise be reported for every
+correctly configured host on earth.
+
+So the inspection makes **two** handshakes to the same pinned address: one with
+the real store, which answers *is this trusted*, and one with `ca: []`, which
+trusts nothing and therefore can only report what crossed the wire. The second
+one is required to fail: if it comes back `authorized`, the empty store did not
+take effect, the observation is discarded rather than believed, and the UI says
+so. `CsDialOptions.trustAnchors` exists solely so `security:smoke` can reproduce
+the store-completion effect offline and watch a mutation that drops `ca: []`
+fail; `csInspect` never sets it, and that is asserted.
+
+Two further honesty notes, stated rather than implied away. The walk follows
+`issuerCertificate` links, so it sees the certificates that *link* from the
+leaf, not the wire order, and a certificate the server sent that links to
+nothing is dropped entirely — the tool therefore claims **nothing** about chain
+order or unrelated extra certificates, both of which are real SSL-Labs findings
+and neither of which is observable here. And `socket.authorizationError` is an
+Error on some Node versions and a bare code **string** on others (Node 22 hands
+back the string), so reading `.code ?? .message` off it yielded the literal text
+`"undefined"` and silently disabled the anchor-included finding. `csAuthCode`
+handles both shapes.
+
+Ask it of any new probe: **is the instrument part of what I am measuring?**
+
+### A comparison must exclude what legitimately differs
+
+DNS Sightline's product is "these three resolvers disagree", which makes the
+*normalisation* — not the fetching — the load-bearing part. `sgCanonicalRecord`
+(`dns-sightline/analyze.ts`) throws away two things on purpose:
+
+- **TTL.** Every recursive resolver counts its own copy down from whenever it
+  happened to fetch the record, so two resolvers holding the same record report
+  different numbers. A fingerprint including the TTL disagrees always.
+- **Record order.** Round-robin address sets are rotated deliberately, by the
+  authoritative server and again by the recursor.
+
+Include either and the tool reports that every load-balanced domain on the
+internet is inconsistent. Nothing throws; the page renders; the one signal the
+tool exists for becomes noise. IPv6 goes through the shared `canonicalIp`
+(`src/lib/ip.ts`, hoisted out of Chainsaw for this) for the same reason — two
+spellings of one address are one address. What is deliberately *kept*: TXT case
+(this function cannot tell an SPF record from a DKIM key) and the MX preference
+number.
+
+The mirror-image rule is that a difference must still read as one, so
+`security:smoke` asserts **both** directions, and asserts separately that one
+silent resolver among answering ones is reported as **filtering** rather than as
+propagation — a policy decision at one operator, with a different fix.
+
+Ask it of any new comparison: **what differs here for reasons that are not the
+thing I am looking for?**
+
+### A traversal's loop guard is per-PATH, not global
+
+SPF's ten-lookup budget (RFC 7208 §4.6.4) counts every `include`, `a`, `mx`,
+`ptr`, `exists` and `redirect` term across the *whole recursive evaluation*, not
+the terms written in the record you are looking at — which is why a tidy
+three-mechanism record that includes three providers routinely costs fourteen,
+and why every checker that counts the top level says it is fine.
+
+`sgAnalyzeSpf` walks the tree to count it, and needs a cycle guard to terminate.
+**A single visited set shared across the walk is the wrong guard**: a domain
+reached twice by two different routes is a *diamond*, not a loop, and a receiver
+evaluates it — and charges for it — both times. Suppressing the second visit
+under-counts exactly the diamond-shaped zones that are near the limit. A cycle
+is a name appearing in its own **ancestry**; that is what `sgSpfDescend` refuses.
+
+This was found by the assertion, not by reading: the smoke test holds the walker
+to an **independent oracle** written in `security-smoke.mjs` — a dumb recursive
+string scan, unbounded, unmemoised, sharing no code — over a set of fixture
+zones. Same structure as `evaluateBest`/`scoreBest` and `dsEscapeReference`, and
+the same reason: the output is a number nobody can eyeball. The oracle is valid
+only on acyclic zones and throws otherwise, which is part of writing it.
+
+Two bounds, not one, and each needs its own assertion: **depth** and
+**breadth**. A depth ceiling alone leaves a fan-shaped include tree unbounded,
+and the fixtures for both make the *resolver* refuse to answer past the ceiling
+— so an unbounded walk fails with a named error instead of hanging the suite. A
+test that hangs is a test whose timeout gets raised.
+
+### A finding cites the record it rests on
+
+`SgFinding.evidence` carries the literal record text a finding was derived from,
+and `basis: 'absence'` marks the findings that are *about* a record not
+existing — the only ones allowed to cite nothing. Same family as Token Bench's
+`proof` label, and it learned Token Bench's lesson at the same cost: the rule is
+only as good as its coverage. A mutation dressing a finding as record-based
+while citing nothing **survived the first version of the assertion**, because
+the one producer branch that emitted it had no fixture. So the producer list is
+derived from the function *signatures* (returns `SgFinding[]`, does not take
+one), and the id list is derived from the source, so a finding added later
+either gets a fixture or fails the gate.
+
+Note also what DNS Sightline refuses to claim. "Dangling" means **NXDOMAIN** at
+the CNAME target, never "no address record" — a name that exists carrying only
+a TXT record is an odd zone, not an unclaimed hostname, and telling somebody
+their subdomain can be stolen when it cannot is the most damaging sentence this
+tool could print. DMARC for a subdomain says the organizational-domain fallback
+is *not computed* rather than guessing without a Public Suffix List, and the CAA
+walk stops at two labels for the same reason.
+
+### A failed lookup is not an absent record
+
+`sgAnalyzeCaa` walks up from the FQDN to the registered domain looking for a CAA
+set, and stops at the first name that has one. A walk that reaches the top and
+finds nothing means *no policy governs this name, so any CA may issue* — the most
+reassuring sentence DNS Sightline can print. A walk whose queries **failed** ends
+with the same zero entries. Reporting the second as the first turns a resolver
+timeout into a claim about somebody's zone, produced by the least evidence
+possible, and no screenshot of it looks wrong.
+
+So `SgCaaReport.incomplete` records that any lookup in the walk errored or was
+refused by the query budget or the deadline (NXDOMAIN is an *answer* — the name
+has no CAA because it has nothing at all — while SERVFAIL, REFUSED and a timeout
+are not), `CaaVerdict.incomplete` carries it forward, and `caa-inconclusive` is
+the finding that says so rather than `caa-none`.
+
+**A policy that *was* found is not complete by construction**, which this
+section used to claim. The walk stops at the first name with a CAA set, so
+nothing *above* the stop point can change the answer — but the names *below* it
+were passed over only because they answered "no CAA here", and one that did not
+answer at all might hold a set of its own, which a CA would obey instead. So
+`sub.example.com` timing out beneath a policy at `example.com` is incomplete
+too: `caaVerdict` passes the flag through instead of dropping it whenever
+`foundAt` is set, `caa-inconclusive` cites the parent's records without claiming
+they govern, `caaRenewalOutlook` answers `unavailable` rather than "may renew" or
+"refused", and the page's CAA panel says the same. The confident permit-or-forbid
+sentence was the found-policy twin of turning a timeout into "no policy".
+
+This is the same shape as `sgIsDangling` refusing to call a name unclaimed when
+it merely has no address record: the damaging output is the confident sentence,
+not the crash.
+
+The rule is not CAA's alone, and it took the inspection deadline to show it: a
+deadline turns every question still queued into a failed one at once. SPF read
+a failed include exactly like NXDOMAIN — "no SPF record, a receiver treats that
+as a permerror", plus a void lookup — and DMARC and MX read a failed lookup as no
+record and no address ("mail bounces"). `sgUnanswered` (`analyze.ts`) is now the
+one test of whether a question got an answer, and every finding that reads an
+empty record set asks it first: an unanswered include makes the SPF count a
+floor (`truncated`, titled "At least N"), and an unanswered root, `_dmarc`, MX or
+MX-target lookup yields `spf-inconclusive`, `dmarc-inconclusive`,
+`mx-inconclusive` or `mx-unchecked` in place of the absence finding. The page's
+panels read the same fields, so a panel cannot say "No MX records" beside a
+finding that says the MX lookup failed.
+
+### A conclusion that does not depend on X must not be gated on X
+
+`caaRenewalOutlook` (`src/lib/caa.ts`) is where the two server-backed
+certificate tools meet: DNS Sightline knows which CA a zone's CAA policy
+**permits**, Chainsaw knows which CA actually **issued** the certificate on the
+wire, and neither fact is a finding alone. Two things about the join are
+load-bearing.
+
+**The first is the order.** The obvious implementation identifies the issuer,
+gives up if it cannot, and only then reads the policy — and so goes silent on
+exactly the zones that are most broken. A critical CAA tag no CA understands, and
+`issue ";"`, both block *every* CA; they hold whoever the issuer is, so they are
+reported whoever the issuer is, and `security:smoke` asserts each of them
+survives an unidentifiable issuer. Only after those does the unknown-issuer case
+decline to conclude — and it does decline: the issuer-name → CAA-identifier table
+is the fallible part of the module (nothing on a certificate spells `pki.goog`),
+so a miss returns `null` rather than fuzzy-matching onto the nearest registry
+entry and manufacturing a confident "your policy forbids your CA" out of a gap in
+a table.
+
+**The second is what the tool refuses to say.** A certificate whose issuer the
+*current* policy forbids is **not** mis-issued: a CA consults CAA only in the
+eight hours before it signs (RFC 8659 §3, CA/BF BR 3.2.2.8) and never again, so a
+policy published afterwards says nothing about that certificate. Every message is
+therefore about a *renewal that will fail*, the refusal disclaims mis-issuance in
+so many words, and the assertion holds it there. The alternative accuses a
+correctly-run CA of breaking the rules because somebody edited a DNS record last
+Tuesday.
+
+A narrow `scope=caa` on `/api/tools/dns-sightline` serves Chainsaw's panel, so one
+question does not pay for a 24-query resolver diff. It gets its **own** rate-limit
+buckets, which is only defensible because the resource being bounded — outbound
+DoH queries per minute — still comes out lower: `security:smoke` asserts
+`cap x budget` for the narrow scope stays under `cap x budget` for the full one,
+in both the per-client and the global dimension, so raising any one of the four
+numbers fails the gate rather than a comment going stale.
+
 ### Escaping
 
 - Anything interpolated into HTML gets escaped including `'` — attribute quoting
@@ -350,6 +622,16 @@ tampered-payload, wrong-key and `alg:none` cases.
   `</script>` cannot break out.
 - Markdown goes through `src/lib/markdown.ts` only: raw HTML is escaped and URLs
   pass `safeMarkdownUrl()`. Never hand `marked` output to `set:html` directly.
+- A value a remote server chose that lands in CSS or in an `href` is held to its
+  grammar first, because escaping for HTML says nothing about either. Link Peek's
+  proxied image type becomes part of a `data:` URI inside CSS `url("…")`, so it
+  must match `image/` plus `[a-z0-9.+-]` (`lpImageMediaType`) rather than merely
+  start with `image/`; Chainsaw's CA Issuers URL comes off a stranger's
+  certificate, so it is a link only when it parses as plain http(s) with no
+  credentials (`csLinkableUrl`), and escaped text otherwise.
+- An exception's message never goes into a response: routes answer failures
+  they expect with fixed sentences, and wrap the call that could throw one they
+  do not (`csInspect`) so it answers fixed `no-store` JSON too.
 
 ### Unguessable ids are a security control
 
@@ -363,6 +645,7 @@ it server-side, not just in the UI that mints them.
 npm run security:smoke   # asserts these invariants
 npm run build            # must stay green
 npm run check            # must stay at 0 errors
+npm run boot:check       # the built server must boot and serve / (after build)
 ```
 
 Add an assertion for each new invariant, in whichever of the two homes fits: a
@@ -394,7 +677,9 @@ was a second, mirrored fixture that does.
   asserts something checkable about the world, that logic goes in a sibling
   module the component imports — `webhook-inspector/signature.ts`,
   `cron-whisperer/schedule.ts`, `cron-whisperer/crontab.ts`,
-  `token-bench/diagnose.ts`, and `src/lib/jwt.ts`
+  `token-bench/diagnose.ts`, `chainsaw/analyze.ts`, `deep-shore/escape.ts`,
+  `dns-sightline/analyze.ts`,
+  and `src/lib/jwt.ts`
   before them — so
   `security:smoke` can run it against the real thing rather than against a
   screenshot of it. A claim buried in a DOM handler cannot be tested and will
@@ -506,6 +791,58 @@ was a second, mirrored fixture that does.
     result is index-aligned and swapping them hands hero villain's equity while
     looking entirely plausible.
 
+  **Deep Shore is the third instance, and it shows the rule is about
+  *unverifiable output*, not about speed.** A fractal renderer fails silently by
+  construction: a wrong interior test paints outside points solid, a swapped
+  `c`/`z₀` pair renders a Mandelbrot set inside Julia mode, and a drifting zoom
+  anchor merely stops landing where you pointed — every one of those produces a
+  perfectly attractive picture that is not the thing the page claims. So
+  `deep-shore/escape.ts` keeps `dsEscapeReference` (the bare iteration, no
+  shortcuts) beside `dsEscape` (the fast path, with the closed-form cardioid and
+  period-2 bulb early-out) and `security:smoke` proves them equal over a
+  34,000-point grid. Two choices follow from the same reasoning and should
+  survive a refactor: orbit **periodicity detection is deliberately absent**,
+  because no epsilon can be shown never to mark an outside point inside and the
+  picture is the whole product; and zoom-at-the-cursor is asserted as a **fixed
+  point** (the complex number under the pixel is the same number afterwards, to
+  within ulps of the largest intermediate) rather than eyeballed one frame at a
+  time.
+
+  **A share link's precision is part of its correctness.** `#view=` carries the
+  centre with a digit count *derived from the zoom* (`dsCoordDigits`), not a
+  fixed six places — past a zoom of about 10⁵ six decimals is coarser than the
+  entire viewport, so the naive version of "send someone this spot" lands them
+  somewhere else while both parties believe otherwise. The assertion is
+  geometric, not a chosen constant: the round-trip error must stay inside half a
+  pixel of a 3840px canvas. Past 10¹² the token is lossless and the **double** is
+  the floor, which is what `DS_MAX_ZOOM` states and what the readout warns about
+  — the honest version of "how deep does this go". Ask it of any new permalink
+  that carries a continuous coordinate: *is the encoding finer than the thing it
+  is addressing?*
+
+  **An animation between two zoom levels moves at a constant APPARENT speed**,
+  and that is the fourth Deep Shore property in the same family — invisible when
+  wrong, pretty either way. `deep-shore/tour.ts` interpolates `log(zoom)`
+  linearly (each frame magnifies by the same factor) but must not interpolate the
+  centre linearly with it: the centre's speed *across the screen* then grows with
+  the zoom, so the entire pan lands in the last few frames and the destination
+  whips past the viewport at the exact moment it was supposed to arrive.
+  `dsPanWeight` asks for `dc/du ∝ 1/zoom(u)` instead, which integrates to
+  `(1 − r^−u)/(1 − r^−1)` and front-loads the pan into the cheap, zoomed-out part
+  of the dive. `security:smoke` asserts equal screen-space steps **and requires
+  the naive linear version to FAIL the same check** — a property every
+  implementation passes is not a test. Two more things that survived a mutation
+  round and are worth not re-learning: a dive's first and last frames must be its
+  first and last stops *exactly*, so the interpolator needs literal end-point
+  branches (`a + (b − a)·1` is routinely a hair off `b`) — but only the `t ≥ 1`
+  one, since `a + (b − a)·0` **is** exactly `a`, which makes disabling the start
+  branch a mutation that correctly survives; and `dsTourViewAt`'s own `u = 1`
+  shortcut hides the segment helper's end-point branch from any test that only
+  asks for the last frame, which is why `dsSegmentViewAt` is exported and asked
+  directly. A stop-count ceiling likewise has to be tested with a
+  field-count-consistent token, or the field-count check refuses the fixture and
+  the ceiling's own mutation survives.
+
 - **A cost ceiling is written in the unit that actually costs.** The trainer's
   ceiling is `PT_MAX_RANK_WORK` (five-card reads, via `handsRanked()` in the
   engine) and no longer `PT_MAX_RUNOUTS`, which counted **boards**. Boards are
@@ -529,6 +866,45 @@ was a second, mirrored fixture that does.
   exactly that is what this replaced, and none of them offered a GIF for engines
   whose whole point is that they move. Sizes and the custom-resolution validator
   (`parseCustomSize`, bounded on both edges *and* total pixels) live there too.
+  An attach registers nothing on `document`: every bar joins one registry that a
+  single guarded pair of swap listeners serves (`trackBar`), because a listener
+  per attach outlived its page on every in-site navigation.
+
+  There are now **three** ways in, and the third exists because live capture is
+  the wrong instrument for some engines rather than a worse one. `AnimationSource`
+  takes frames an engine rendered ON PURPOSE. Filming a canvas assumes it is
+  already moving on its own clock; Deep Shore only redraws when you touch it and
+  each of its frames can cost a second of arithmetic, so filming it wrote "a still
+  frame at a video's file size" — a defect the page had to print a caveat about,
+  next to the button. An engine that knows what its own animation *is* renders it
+  through `options.animation` and gets the same encode/preview/save flow, and
+  `liveGif: false` retires the button whose own help text would have to warn you
+  off it. Two properties of that path: the frame count comes from a **measured**
+  frame (`dsTourFrameCount`), because a count fixed in advance is eight seconds on
+  a laptop and four minutes on a phone; and held end frames **re-use** the last
+  ImageData rather than re-rendering it, since re-rendering the most expensive
+  frame in a dive is the last thing a "pause at the destination" should cost. A
+  render whose frames cost that much must also be **stoppable** — a second click
+  on the button is a stop, not a second render.
+- **The "server" badge on `/tools` is derived, and its number is asserted
+  against the prose.** `SERVER_TOOLS` (`src/lib/tools.ts`) names the tools that
+  need the origin to work at all — the quality bar this file sets for a new tool
+  — and the hub badges them in accent. Without it, sixteen cards gave Chainsaw
+  and a Base64 encoder identical visual weight while the intro claimed "four
+  need a real server" and marked none of them. It lives in `src/lib/` and **not**
+  in `src/config/tools.ts` for the same reason as `EMBED_TAGS` and `GAME_TAGS`:
+  the `/admin` Vite middleware regenerates that config wholesale, so an export
+  added there is deleted on the next save. It is not an admin-editable field
+  either, because it is a fact about *code* — does a route exist that this tool
+  calls. `security:smoke` asserts each slug is a `live` tool **and** that
+  something in its component actually calls an `/api/` route, so a badge cannot
+  outlive its server; and it reads the number word out of the intro copy and
+  compares it to the set's size, so a fifth server tool cannot ship while the
+  prose still says "four". Same family as the learnings rule that an article
+  quoting numbers is quoting a component. The `/games` intro gets the same
+  treatment for its dailies: "Three have a daily round that is the same for
+  everyone" is read back, pinned to that phrase, and compared with
+  `DAILY_SLUGS`.
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
 - **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
@@ -543,7 +919,14 @@ was a second, mirrored fixture that does.
   useful copy can go back without a rebuild — but generated how-to/FAQ filler is
   what this field is now known to attract, so anything added here needs to earn
   its place the way a learnings article does.
-- **Decorative StarField**: Keep the home/background star canvas off tool and game detail pages. Lighthouse showed it spending CPU before the game became useful; detail pages should prioritize the interactive app.
+- **Decorative StarField**: Keep the home/background star canvas off tool and
+  game detail pages. Lighthouse showed it spending CPU before the game became
+  useful; detail pages should prioritize the interactive app. As of 2026-09-24
+  it is also off the four card hubs (`/tools`, `/games`, `/projects`,
+  `/learnings`) — there the cost is legibility rather than CPU: the dots land
+  mid-sentence in card copy. `Base.astro` still defaults `starfield={true}`, so
+  **the home hero keeps it** and that is the one place it is load-bearing for
+  the site's identity; a new listing page should pass `starfield={false}`.
 - **Fonts on tools/games**: Tool and game detail pages pass `loadFonts={false}` to `Head`. This avoids mobile CLS and a render-blocking third-party font request on utility pages; fallback system fonts are acceptable there.
 - **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
@@ -556,8 +939,8 @@ was a second, mirrored fixture that does.
   `nodeDimensionsIncludeLabels: true` is **required** on every Cytoscape layout —
   it defaults to off, and without it a graph of word-labelled nodes lays out
   using the box and ignores the text, piling up overlapping in one corner.
-- **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
-- **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed.
+- **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading. The same persistence cuts the other way: the document outlives every page, so **a `document` or `window` listener added per mount must be removed with the same handler, be bound by a `signal`/`once`, or be registered once behind a module-level guard** (`if (wired) return`, as `nav-ui.ts` does). `canvas-export.ts` added an `astro:before-swap` listener on every attach and never removed it — seven engines, again on every reconnect — and Draftboard added a document click listener per connect; `security:smoke` derives the rule over every `.ts` under `src/components` and `src/lib`.
+- **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed. Three modules are Node-only and say so in their own docblocks: `src/lib/link-peek-fetch.ts` (`node:net`), `src/lib/tls-inspect.ts` (`node:tls`, `node:crypto`) and `src/lib/dns-lookup.ts` (`node:dns`, the bounded name lookup the other two share). All three are reached only from the Link Peek and Chainsaw API routes, never from the browser bundle — asserted by the build carrying no `node:` import into any client chunk. A Workers deploy has no raw-socket TLS, so Chainsaw is the one surface that would need a different transport behind the same JSON shape.
 
 ## Design System
 
@@ -600,6 +983,63 @@ was a second, mirrored fixture that does.
   definition of one, and **only a tool-private subtree may size an h1 at all**
   (Draftboard's `md-preview`, a heading inside a rendered markdown document, is the
   one legitimate case and it stays legitimate without being named in a list).
+- **…and one level OUT, for `<body>` itself — the same trap, and the one that
+  actually shipped broken.** The whole `body` rule (font, colour, page
+  background, and the flex column that pins the footer to the bottom) lived in
+  `global.css`, so `ToolBase` carried its **own** copy in an `is:global` block.
+  Two copies of a bare element rule is the two-dialect setup by construction,
+  and they had already drifted: ToolBase's set the font, colour and background
+  but **not** `display: flex` / `flex-direction: column` / `min-height`, so on
+  every tool, game and Driftfield route a page shorter than the viewport left
+  the footer floating in the middle with a slab of bare background beneath it —
+  measured at 820px on `/tools/chainsaw` in an 1800px viewport. The background
+  is what hid it: body's background propagates to the canvas, so the *page* is
+  the right colour either way and only the footer's position gives it away,
+  which is why a colour check finds nothing. `body` now lives in `shared.css`
+  with `main { flex: 1 0 auto }` beside it, and `security:smoke` **derives** the
+  guarantee rather than listing files: whatever `<body>` declarations one shell
+  reaches, the other must reach the same ones, neither shell may declare its own,
+  and the column properties must be present at all (or the comparison passes
+  vacuously on a rule that lost them from both sides).
+- **…and the same rule one level down, for the CARD title.** A design audit on
+  2026-09-24 measured `[data-type="card-title"]` on all five hubs that render a
+  card grid and found **four** treatments: `/tools` at 20.8px/600 from its own
+  `tools.css` override, `/games` and `/projects` at 16px/700 from a `global.css`
+  refinement, and `/learnings` and `/tools/driftfield` at 16px/**400** —
+  matching no weight rule at all, so on two of five hubs the card title was
+  identical in size *and* weight to the description beneath it and the card had
+  no internal hierarchy whatsoever. Same cause as the `h1` case above: the
+  shared base in `shared.css` declared **less** than every consumer needed
+  (`font-weight: inherit`), so each consumer patched locally and the patches
+  disagreed. The base now sets the weight and **nothing else may** —
+  `security:smoke` derives that by parsing every stylesheet under `src/` for a
+  rule whose selector mentions `card-title` and which sets `font-size` or
+  `font-weight`, so a sheet added later cannot reintroduce a dialect. A hub that
+  wants a different *shape* uses a documented variant instead: `/learnings`
+  passes `data-variant="list"` for one column at a 42rem measure, because a
+  reading list with dates and prose summaries is not a product shelf and a 3-up
+  grid left two empty tracks beside a handful of articles.
+- **The whole card is its link, and that rests on two rules.** The card frame
+  lights up on `:hover` and `:focus-within`, which promised an affordance only
+  the ~29px title link actually had — **11%** of a 326×156 card. A stretched
+  `::after` on the title link fixes it and keeps one link and one accessible
+  name per card (a wrapping `<a>` would bury the heading inside a link). Two
+  things about it fail silently and are asserted: the card must stay
+  `position: relative`, or the absolutely-positioned `::after` escapes to the
+  nearest positioned ancestor and **covers the page**, making one card's link
+  swallow every click on the document; and a card's *secondary* links — 5 of
+  the 11 `/projects` cards carry repo/stars/forks — must be raised with
+  `position: relative`, or they stop being clickable while still looking like
+  links, which no screenshot reveals. Cards with no link grow no `::after`, so
+  a coming-soon Driftfield mode needs nothing special.
+- **The spacing scale must have a rung for what the code actually does.** It
+  stopped at `2xs`/`xs`/`page-x`/`section`, which left nothing for ordinary
+  in-component spacing — so `card-grid` hardcoded `1.25rem` and `0.4rem`,
+  `tools.css` `0.6rem`, and `global.css` `1rem`/`0.75rem`/`0.5rem`/`0.25rem`,
+  while this file told authors to "reference `var(--space-*)`" for a scale that
+  did not exist. `--space-sm`/`md`/`lg`/`xl`/`card` were added at exactly the
+  values already in use, so the change was visually a no-op; the point is that
+  the next edit can find the spacing by name instead of inventing a sixth value.
 - **One disabled treatment**: `--opacity-disabled` in `theme.css` is the single
   "this control is dead" value. It is an opacity and not a colour on purpose —
   theme-agnostic, and it dims the border and the label together. Both lane floors
@@ -616,6 +1056,65 @@ was a second, mirrored fixture that does.
   property added later is caught automatically. Note a tool joining the shared
   button chrome now adds its selector to **three** lists in `tools-common.css`
   (toolbar, button, `button:disabled`), not two.
+- **Contrast is asserted, not remembered.** It used to be a number somebody
+  measured once in a session nobody can rerun, and every palette edit since was
+  a bet that the measurement still held. `security:smoke` now parses **both**
+  palettes out of `theme.css` and holds every real text pairing to the WCAG AA
+  floor (4.5:1), so a token nudge that drops body text under it fails the gate
+  instead of shipping. The pairing list is written down (it is a claim about how
+  the tokens are *used*, which CSS cannot tell you) but the values are derived,
+  and the one pairing that is a fact about code — `--color-bg` as ink on an
+  accent-filled button — is read back out of `canvas-export.css`.
+
+  Two things to know before touching the palette. There is **less headroom than
+  it looks**: the tightest pairings are `--color-muted` on `--color-surface` at
+  4.76:1 (dark) and `--color-success` on `--color-surface` at 4.74:1 (light), so
+  a "slightly softer grey" is roughly one step from failing.
+
+  `--color-border` stays out of the **text** pairing list — it is a hairline,
+  never ink — but "not a text colour" had been read as "unmeasured", and it sat
+  at 1.25:1 (dark) / 1.23:1 (light). Every listing card on the site is bounded
+  by it, so all five card hubs read as floating text rather than as cards; the
+  owner's word for the result was "ugly", and this was most of it. It is now
+  `#394255` / `#b7b7b7` — **2.0:1** — with its own floor asserted in both
+  themes beside the text sweep.
+
+  The floor is 2:1 and **not** the 3:1 WCAG 1.4.11 asks for non-text UI
+  boundaries, which is a deliberate partial and the reason it is written down:
+  3:1 needs `#515d71` / `#949494`, which stops being a hairline and boxes every
+  card on the site. 1.4.11 governs a boundary *required* to identify a control,
+  and here the card's own content identifies it — the border is reinforcement.
+  What the assertion prevents is the regression that actually happened: a
+  border quietly tuned back down to invisible. The **hover** border is
+  `--color-muted`, which clears 3:1 and is already covered by the text sweep.
+- **A programmatic focus target still needs a visible ring.** `main` carries
+  `tabindex="-1"` because the skip link jumps to it, and a blanket
+  `main:focus { outline: none }` sat below the `:focus-visible` rule that is the
+  **only** thing drawing a ring anywhere on the site — so activating the skip
+  link moved focus with no perceivable result and the link was decorative
+  (WCAG 2.4.7). The narrow form, `main:focus:not(:focus-visible)`, silences the
+  mouse case and lets the keyboard case through; if an engine declines to match
+  `:focus-visible` on a programmatic focus the outcome is the old behaviour, so
+  it cannot regress. `security:smoke` asserts the blanket form is gone and that
+  both shells still wire the link to a focusable `#main-content`.
+- **An `<svg>` at `width: 100%` scales its own TEXT, so it needs a legibility
+  floor rather than a breakpoint.** A viewBox scales as one object: the Diagram
+  Atlas is 680 user units wide, so at a 375px viewport it fitted perfectly and
+  rendered every label at about **5px**. Nothing overflowed, `scrollWidth`
+  equalled the viewport, and a screenshot taken at desktop width looked correct —
+  the defect existed only on the device, which is why it was found by measuring
+  the rendered size (computed font-size × the SVG's own scale factor) and not by
+  looking. A diagram is also not a paragraph: there is no arrangement of four
+  lifelines that is still a sequence diagram at 300px. So the label size is what
+  gets held — `min-width` on the SVG plus `overflow-x: auto` on its container —
+  and the reader swipes, which is the trade `learnings/[slug].astro` already
+  makes for a wide table. A scrollable container also takes `tabindex="0"`, or
+  the content past the edge is unreachable without a pointer — DNS Sightline's
+  two tables and Link Peek's tag table shipped without it; their wrappers are now
+  named regions (`role="region"` + `aria-label`), ringed by the site's own
+  `:focus-visible`, and asserted. `security:smoke`
+  parses the floor out of the stylesheet, because a lone `min-width` reads like a
+  stray constraint to the next person tidying the file.
 - **Theming**: `theme.css` defines light at `:root` and overrides the palette under `[data-theme="dark"]` (the site runs dark). Add a theme by adding another `[data-theme="…"]` block — palette tokens only.
 
 ## Skills & Commands
@@ -709,9 +1208,17 @@ So each kind has exactly **one** predicate, and every consumer reads it:
   so it is noindex, out of the sitemap, and cardless. `external` and `disabled`
   404 outright.
 - **Learnings** — `isPublishedLearning()` in `src/lib/learnings.ts`: `published
-  && content.trim()`. The second condition is the one the flag cannot express —
-  an entry saved from /admin with the box ticked and the body still empty would
-  otherwise be sitemapped and carry a card while its page rendered nothing.
+  && content.trim()`, under a slug that is not retired. The second condition is
+  the one the flag cannot express — an entry saved from /admin with the box
+  ticked and the body still empty would otherwise be sitemapped and carry a card
+  while its page rendered nothing. The third is `RETIRED_LEARNINGS`: an article
+  that was live on `main` and is withdrawn keeps its URL as a **301** (to the hub
+  unless a replacement answers the same question), because a 404 costs every link
+  already out there its reader. The route answers the redirect before it reads
+  config, and since a redirect is not a page the predicate refuses the slug —
+  so no sitemap, hub or card can list it even if an entry under it is saved
+  again. Add a slug here when you delete an article that ever reached `main`;
+  `security:smoke` refuses a slug that is both retired and in the config.
 - **Driftfield** — `isDriftfieldPublic()` in `src/lib/driftfield.ts`: the
   `driftfield` entry in the tools config is `status === 'live'`. The hub, every
   `/tools/driftfield/<mode>` route, the sitemap and `scripts/generate-og.mjs`
@@ -743,7 +1250,15 @@ when the six generative engines moved out of `/games` into Driftfield
 are still mounted, just not as games. Collapsing them back would either empty
 every article embed or resurrect six pages that no longer exist, and both
 failures are silent. `security:smoke` asserts the subset relation and that no
-Driftfield mode is still a game.
+Driftfield mode is still a game. It also requires every `EMBED_TAGS` entry to
+reach a `mountGame()` dispatch branch **and** a stylesheet in
+`games-embed.css`. That loop read `GAME_TAGS` until 2026-09-25, which is the
+narrow list — so the six Driftfield engines and every article-only figure were
+reaching the guard and being skipped by it, while its own comment claimed to
+cover "any learnings article that embeds it". Both halves fail silently (no
+dispatch renders a blank element, a missing stylesheet an unstyled one), and an
+embed-only component is the worst case, because an article is the ONLY route
+that mounts it.
 
 A cross-link between two kinds is **derived, never stored twice**. Driftfield
 modes used to carry a `learning` slug naming the article about that engine, which
@@ -777,15 +1292,53 @@ were fair. `docs/plans/learnings-voice.md` is the response and is **binding on
 every new article** — its "Hard bans" list is a set of LLM tics, not stylistic
 preferences.
 
+A second round on 2026-09-25, on the diagrams article: *"it's just very bad,
+it's not something I would write myself… you don't have to write some
+philosophical shit."* The first round fixed the prose; it did not fix the
+**shape**. What shipped was a 1,071-word essay whose actual subject — what
+these diagrams *are*, what a class diagram is, which picture is the HLD one —
+was compressed into a single table under three pages of cognitive-science
+citation. The format section at the top of the voice doc is the response and it
+supersedes the old length rule: **350–550 words of prose, a visual beat every
+one to three lines, and a read time on the page.** The rewrite came out at 420
+words and eight figures. A study may appear where it settles a question the
+reader is already asking; it may not be the reason the article exists.
+
 Three mechanisms exist because of that feedback:
 
-- **`{{embed}}` places the figure.** The route used to pin the component between
-  the summary and the prose, which is the worst available position — the reader
-  meets a simulation before being told what it is, and the article then has to
-  open by pointing at "the thing above". That single constraint is most of why
-  all seven read identically. `splitOnEmbed()` (src/lib/markdown.ts) splits the
-  source on a `{{embed}}` line; no marker means the figure goes after the prose,
-  so a typo costs the position and never the simulation.
+- **`{{embed}}` places the figure, and `{{embed:view}}` places the others.** The
+  route used to pin the component between the summary and the prose, which is
+  the worst available position — the reader meets a simulation before being told
+  what it is, and the article then has to open by pointing at "the thing above".
+  That single constraint is most of why all seven read identically.
+  `splitOnEmbeds()` (src/lib/markdown.ts) splits the source on every `{{embed}}`
+  line and returns the article as segments; no marker means the figure goes
+  after the prose, so a typo costs the position and never the simulation.
+
+  A bare `{{embed}}` is the full component. `{{embed:some-view}}` is the same
+  component **pinned** to one of its views with the picker dropped, which is
+  what lets one article carry a figure every few lines — the format the owner
+  asked for on 2026-09-25 (see `docs/plans/learnings-voice.md`), where the prose
+  is connective tissue between figures rather than the other way round. An
+  unknown view name falls back to the full picker instead of throwing, so
+  `security:smoke` checks every shipped marker against the component's own view
+  list: a mistyped pin renders something that looks deliberate and is not.
+
+  **Many figures bring a cost one figure did not.** The diagrams article mounts
+  eight copies of the atlas, five of which animate on a timer, and the component
+  autoplayed on connect — so the first version started five `setInterval`s at
+  once and ran them forever on a page whose job is to be read. That is the same
+  objection that took the StarField off tool and game pages, reached from the
+  other side. Playback now follows an `IntersectionObserver` and a deliberate
+  pause is remembered, both asserted at the source, because a leaked timer is
+  invisible in every screenshot.
+
+- **Read time is derived, never stored.** `readingTime()` (src/lib/learnings.ts)
+  counts the prose and adds a flat 8s per figure — an article in this format is
+  mostly figures, and counting only the words between them reports "1 min" for a
+  page that takes four. Same rule as `learningsAboutEmbed()`: a number typed
+  into config is a second copy of a fact the content already states, and it goes
+  stale on the next edit with nothing to catch it.
 - **Editorial marks**: `==highlight==`, `>> pull quote`, and
   `:::note/:::key/:::aside/:::warn` callouts, all parsed in
   `src/lib/markdown.ts`. They are markdown extensions and **not** raw HTML on
@@ -826,6 +1379,18 @@ already broken once:
   it on a cold load, so no single moment is safe to sweep at. A timing-based
   version passed a hard reload and failed on every in-site click.
 
+  "Disconnects on the first hit" is only a bound for a component that produces
+  one, and three things make it hold for all of them. A figure that writes no
+  chrome at all is declared in `EMBED_NO_CHROME` (`src/lib/embeds.ts`) and gets no
+  observer — the Diagram Atlas never writes an `<h1>`, so the diagrams article ran
+  eight observers that never disconnected, re-scanning on every beat of its
+  animated figures; `security:smoke` derives that set from the components' own
+  sources in both directions. Each container gets ONE observer, because both
+  routes mount at script evaluation *and* on `astro:page-load`, which fires for
+  the first page too — the second observer of a pair never sees a hit once its
+  twin has stripped the chrome. And whatever is still waiting is released at the
+  next `astro:before-swap`.
+
 Unknown or absent `embed` degrades to a prose article rather than throwing — a
 typo in /admin should cost the simulation, not the page. `security:smoke` asserts
 that every shipped article's `embed` is really in `EMBED_TAGS`, because nothing
@@ -843,6 +1408,48 @@ shortest corner-to-corner route, the builder button labels, the status-line
 wording the caption points at, and that switching builder keeps the seed — to the
 constants they were read from. Do the same for the next article that measures
 something.
+
+**…and the number is in more fields than the body.** The Diagram Atlas article
+says the system is "drawn seven ways" in its `content`, in its `summary` (which
+is the hub card AND the share card) and in its `metaDescription` (the search
+snippet). The first version of that assertion read `content` alone, and a
+mutation of the body alone is what revealed the other two were unguarded — an
+eighth notation could have shipped with the page correct and the card and the
+search result both saying seven. The field list is now derived from the entry
+rather than written down, so a count repeated into a new field is covered
+without anybody remembering this paragraph. Same shape as the blogs flag: a fact
+corrected in one signal and stale in another is worse than either alone.
+
+**A figure may also be the article's whole argument, in which case it needs a
+component of its own.** `/learnings/which-diagram-to-draw` argues that an
+arrow can mean seven different things and the question you are asking picks the
+notation — and that is unprovable in prose, because the reader has to watch one
+unchanged scenario become seven pictures and find each one blind to what the
+last one showed. So `diagram-atlas` (`src/components/games/diagram-atlas/`) is the first
+embed that is neither a game nor a Driftfield mode: an article figure, and the
+reason `EMBED_TAGS` is the wider list. It is also the first that is **not** a
+canvas toy — seven notations drawn as inline SVG, because the labels have to be
+selectable and reachable by a screen reader.
+
+Three of its properties are rules rather than details of that file:
+
+- **The claims live in `atlas.ts`, not in the component.** Each view states what
+  a node is, what its arrow means *as a verb*, and which question the picture
+  cannot answer — the article's whole teaching payload. `security:smoke` holds
+  every view to a full legend, with the field list derived by comparing view
+  shapes, so a view added later cannot ship a blank panel row.
+- **A structural diagram must not animate.** The class and ER views carry zero
+  beats deliberately: a schema is true at every instant, so walking a token
+  along one would be a lie about the notation dressed as a feature — and it is
+  precisely the misreading of UML the article names. The component hides its
+  transport instead. Asserted in **both** directions, because a behavioural view
+  that silently stopped moving is the mirror failure.
+- **Every beat must light an element that exists.** A mistyped id renders a
+  flawless diagram in which one beat highlights nothing, and no screenshot of
+  any single frame shows it. Token positions are held inside the viewBox for the
+  same reason, and a second token is allowed only in the activity view, since
+  two tokens are a claim of concurrency that the other six notations cannot
+  make.
 
 **"Recompute it independently" is not enough on its own — recompute it from the
 definition.** The pot-odds article said the equity a call needs is `B / (P + B)`;
@@ -903,10 +1510,13 @@ Three things about it are load-bearing:
   ledger.
 
 The pass commits to `develop` behind the full gate (`build` + `check` +
-`security:smoke` + `poker:check`) and never pushes or touches `main`. `check` is
-in that list because `build` alone does not catch what it catches — see Build /
-Test / Run. The older daily `daily-portfolio-improvement` cowork task targets the
-same working tree — run one or the other, not both.
+`security:smoke` + `poker:check` + `boot:check`) and never pushes or touches
+`main`. `check` is in that list because `build` alone does not catch what it
+catches, and `boot:check` because neither of them starts the server — see Build
+/ Test / Run. It boots the *built* entry point on loopback and stops it again, so
+it needs no dev server and runs unattended. The older daily
+`daily-portfolio-improvement` cowork task targets the same working tree — run
+one or the other, not both.
 
 An unattended run **cannot** start the dev server, so it cannot do the in-site
 click-through that the `astro:page-load` mounting bug requires. It appends the

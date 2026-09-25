@@ -1,3 +1,5 @@
+import { EMBED_NO_CHROME } from './embeds'
+
 /**
  * Mounts the game controller for whichever component is on the page.
  *
@@ -34,8 +36,16 @@ export function mountGame(): Promise<unknown> {
   else if (slug === 'sand-loom') return import('../components/games/sand-loom/SandLoom.ts')
   else if (slug === 'lsystem-tree') return import('../components/games/lsystem/LSystem.ts')
   else if (slug === 'poker-trainer') return import('../components/games/poker-trainer/PokerTrainer.ts')
+  else if (slug === 'deep-shore') return import('../components/games/deep-shore/DeepShore.ts')
+  else if (slug === 'diagram-atlas') return import('../components/games/diagram-atlas/DiagramAtlas.ts')
   return Promise.resolve()
 }
+
+/** Containers already handed to `stripEmbedChrome`, so each gets one observer. */
+const handled = new WeakSet<Element>()
+/** Release functions for the observers still waiting for their component's chrome. */
+const waiting = new Set<() => void>()
+let swapHooked = false
 
 /**
  * Remove the component's own title block from a container that supplies its own.
@@ -51,21 +61,56 @@ export function mountGame(): Promise<unknown> {
  * single moment that is safe to sweep at. A timing-based version of this passed
  * a hard reload and failed on every in-site click. Self-disconnects on the first
  * hit — the block is written once, in connectedCallback.
+ *
+ * Three things bound the observer, because "disconnects on the first hit" is
+ * only a bound for a component that produces one:
+ *
+ *  - A figure that writes no chrome at all (`EMBED_NO_CHROME`) gets no observer.
+ *    Without that the diagrams article ran eight that never disconnected,
+ *    re-scanning on every beat of five animated figures.
+ *  - One observer per container. Both embedding routes mount at script
+ *    evaluation AND on `astro:page-load`, which fires for the first page too, so
+ *    a cold load started two per figure — and the second, whose twin had
+ *    already removed the chrome, never saw a hit and never disconnected.
+ *  - None outlives its page: the next `astro:before-swap` releases whatever is
+ *    still waiting, through one listener registered once for the session.
  */
 export function stripEmbedChrome(container: Element): void {
+  if (handled.has(container)) return
+  handled.add(container)
+  const slug = container.querySelector('[data-game]')?.getAttribute('data-game')
+  if (slug && EMBED_NO_CHROME.has(slug)) return
   const strip = () => {
     const chrome = container.querySelectorAll('[data-type$="-header"], h1')
     chrome.forEach(el => el.remove())
     return chrome.length > 0
   }
   if (strip()) return
-  const observer = new MutationObserver(() => { if (strip()) observer.disconnect() })
+  const observer = new MutationObserver(() => { if (strip()) release() })
+  const release = () => {
+    observer.disconnect()
+    waiting.delete(release)
+  }
+  waiting.add(release)
   observer.observe(container, { childList: true, subtree: true })
+  if (swapHooked) return
+  swapHooked = true
+  document.addEventListener('astro:before-swap', () => {
+    for (const waiter of [...waiting]) waiter()
+  })
 }
 
-/** Strip the component's chrome, then mount it. What both embedding routes do. */
+/**
+ * Strip the component's chrome, then mount it. What both embedding routes do.
+ *
+ * All matching containers, not the first: an article in the house format places
+ * the same component several times (`{{embed:view}}` — see splitOnEmbeds), and
+ * every copy writes its own `<h1>` and blurb into itself. Stripping only the
+ * first leaves the document with one heading per remaining figure. `mountGame()`
+ * still runs once — importing the module upgrades every instance of the custom
+ * element on the page, so the dispatch has nothing per-copy to do.
+ */
 export function mountEmbed(containerSelector: string): void {
-  const container = document.querySelector(containerSelector)
-  if (container) stripEmbedChrome(container)
+  for (const container of document.querySelectorAll(containerSelector)) stripEmbedChrome(container)
   mountGame()
 }
