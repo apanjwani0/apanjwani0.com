@@ -72,9 +72,14 @@ The production GitHub deploy builds a Docker image on `main`, restarts the OCI
 container from the self-hosted runner, then fetches `/` inside the container
 before reporting success. That probe runs *after* the old container is stopped,
 so it reports a boot failure with the site already down; `boot:check` is the
-same question asked before anything ships. It is not wired into `deploy.yml`,
-because the image is built inside `docker/build-push-action` and there is no
-npm step on the runner to hang it on.
+same question asked before anything ships. The image asks it too: the
+Dockerfile's runtime stage copies `scripts/boot-check.mjs` in and runs it after
+`npm ci --omit=dev` and the `USER` switch, so a server that cannot start fails
+the *image build* inside `docker/build-push-action` and the old container keeps
+serving. The final stage and not the builder is deliberate — the builder holds
+devDependencies and runs as root, so a server that breaks only without one, or
+only as the container's user, would boot there and still ship dead.
+`security:smoke` holds the step to that position.
 
 ## Configuration
 
