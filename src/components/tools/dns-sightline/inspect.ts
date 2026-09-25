@@ -190,3 +190,65 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
     elapsedMs: Date.now() - started,
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* the narrow scope: CAA only                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * How many DoH queries one CAA-only inspection may spend.
+ *
+ * A CAA walk on a real name is one to three queries — the walk stops at the
+ * first ancestor with any CAA record. The ceiling exists for the hand-crafted
+ * name: `a.b.c.d.…` up to 253 characters would walk a hundred-odd labels, so
+ * the *shape* of the input, not its plausibility, is what bounds the cost.
+ *
+ * It is also what makes the narrow scope cheap enough to deserve its own, more
+ * generous rate limit — and `security:smoke` holds that trade to an inequality
+ * rather than to a comment: limit x budget for the narrow scope must not exceed
+ * limit x budget for the full one, in BOTH the per-client and the global
+ * dimension. Raise one of the four numbers and the assertion says so.
+ */
+export const SG_CAA_SCOPE_QUERIES = 8
+
+export interface SgCaaInspection {
+  name: string
+  analysedBy: string
+  caa: SgCaaVerdict
+  caaWalked: string[]
+  findings: SgFinding[]
+  queries: number
+  elapsedMs: number
+}
+
+/**
+ * The CAA policy for one name, and nothing else.
+ *
+ * Exists so Chainsaw can ask the question it cannot answer from a handshake —
+ * *will the CA that signed this certificate be allowed to renew it* — without
+ * paying for a full 24-query resolver diff and without burning the visitor's
+ * whole DNS Sightline allowance on a page that is not DNS Sightline. Same walk,
+ * same verdict, same findings module: the answer a Chainsaw visitor sees and the
+ * answer a Sightline visitor sees are computed by one call chain, so the two
+ * pages cannot tell one person the policy permits their CA and the other that it
+ * does not.
+ */
+export async function sgInspectCaa(name: string, opts: SgInspectOptions = {}): Promise<SgCaaInspection> {
+  const started = Date.now()
+  const budget = opts.budget ?? sgNewBudget(SG_CAA_SCOPE_QUERIES)
+  const lookup: SgLookup = sgMakeLookup(SG_PRIMARY_RESOLVER, budget, {
+    signal: opts.signal,
+    timeoutMs: opts.timeoutMs,
+  })
+  const report = await sgAnalyzeCaa(name, lookup)
+  const caa = sgCaaVerdict(report)
+  return {
+    name,
+    analysedBy: SG_PRIMARY_RESOLVER,
+    caa,
+    caaWalked: report.walked,
+    findings: sgSortFindings(sgCaaFindings(caa, name, opts.wantedCa ?? null)),
+    queries: budget.spent,
+    elapsedMs: Date.now() - started,
+  }
+}

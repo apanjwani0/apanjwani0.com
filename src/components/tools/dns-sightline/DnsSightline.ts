@@ -439,10 +439,25 @@ class DnsSightlineTool extends HTMLElement {
          </ul>`
       : `<p data-type="sg-note">No CAA record at <code>${sgEsc(r.name)}</code> or any parent up to the registered domain, so any CA may issue.</p>`
 
+    // The other half of this question is on the wire, not in DNS: a CAA record
+    // says who MAY issue, and only a handshake says who actually DID. Chainsaw
+    // reads that, so the policy panel offers the handoff rather than leaving the
+    // visitor to notice the two tools are about the same outage. The CA the
+    // visitor picked rides across as the `?host=` companion it is — Chainsaw
+    // identifies the issuer itself and will name it back.
+    const cross = `
+      <div data-group="toolbar">
+        <a data-type="sg-crosslink" href="/tools/chainsaw?host=${encodeURIComponent(r.name)}">Check the certificate on the wire →</a>
+      </div>`
+
     return `
       <section data-type="sg-card" aria-labelledby="sg-caa-h">
-        <h2 id="sg-caa-h">Certificate authority policy (CAA)</h2>
+        <div data-group="sg-cardhead">
+          <h2 id="sg-caa-h">Certificate authority policy (CAA)</h2>
+          ${cross}
+        </div>
         ${body}
+        <p data-type="sg-hint">A CAA record is a rule about future issuance, and it is only ever consulted in the hours before a CA signs — so it says nothing about the certificate a server is serving right now. Chainsaw reads that certificate and names the CA that actually issued it, which is the fact this panel cannot supply and the one that tells you whether the next renewal goes through.</p>
       </section>`
   }
 

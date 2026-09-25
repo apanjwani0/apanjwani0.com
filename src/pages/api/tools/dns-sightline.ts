@@ -24,7 +24,7 @@
 import type { APIRoute } from 'astro'
 import { createRateLimiter, rateLimitKey } from '../../../lib/security'
 import { SG_MAX_INPUT_CHARS, SG_KNOWN_CAS, sgValidateName } from '../../../components/tools/dns-sightline/analyze'
-import { sgInspect } from '../../../components/tools/dns-sightline/inspect'
+import { SG_CAA_SCOPE_QUERIES, sgInspect, sgInspectCaa } from '../../../components/tools/dns-sightline/inspect'
 
 export const prerender = false
 
@@ -34,6 +34,21 @@ const allowClient = createRateLimiter(60_000, 4)
 // One shared bucket across ALL clients, bounding the instance's total outbound
 // DoH rate however many clients arrive.
 const allowGlobal = createRateLimiter(60_000, 16)
+
+/**
+ * `scope=caa` — the CAA walk on its own, for Chainsaw's renewal panel.
+ *
+ * Its own buckets rather than the ones above, because the resource being bounded
+ * is outbound DoH queries and this path is capped at `SG_CAA_SCOPE_QUERIES` of
+ * them against the full scope's `SG_MAX_QUERIES`. Sharing the full scope's
+ * allowance would mean a Chainsaw visitor's four cheap questions locked them out
+ * of DNS Sightline for a minute, which is the wrong trade in the wrong
+ * direction. The numbers are chosen so the WORST CASE of this path stays under
+ * the worst case of the full one in both dimensions, and `security:smoke`
+ * asserts that inequality rather than trusting this paragraph.
+ */
+const allowCaaClient = createRateLimiter(60_000, 12)
+const allowCaaGlobal = createRateLimiter(60_000, 48)
 
 function json(body: unknown, status = 200, extra?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
@@ -61,17 +76,35 @@ export const GET: APIRoute = async ({ request }) => {
   const caParam = (url.searchParams.get('ca') ?? '').trim().toLowerCase()
   const wantedCa = SG_KNOWN_CAS.some(c => c.id === caParam) ? caParam : null
 
-  if (!allowClient(rateLimitKey(request)) || !allowGlobal('global')) {
+  // The scope is a closed choice, not a string that reaches anything: an
+  // unrecognised value is refused rather than quietly treated as the expensive
+  // default, so a typo cannot spend 120 queries by accident.
+  const scopeParam = (url.searchParams.get('scope') ?? 'full').trim().toLowerCase()
+  if (scopeParam !== 'full' && scopeParam !== 'caa') {
+    return json({ ok: false, error: 'unknown scope — use "full" or "caa"' }, 400)
+  }
+  const narrow = scopeParam === 'caa'
+
+  const okClient = narrow ? allowCaaClient(rateLimitKey(request)) : allowClient(rateLimitKey(request))
+  const okGlobal = narrow ? allowCaaGlobal('global') : allowGlobal('global')
+  if (!okClient || !okGlobal) {
     return json(
-      { ok: false, error: 'rate limited — one check asks three resolvers dozens of questions, so give it a minute' },
+      {
+        ok: false,
+        error: narrow
+          ? 'rate limited — the CAA check still asks a resolver real questions, so give it a minute'
+          : 'rate limited — one check asks three resolvers dozens of questions, so give it a minute',
+      },
       429,
       { 'Retry-After': '60' },
     )
   }
 
   try {
-    const report = await sgInspect(checked.name, { wantedCa, signal: request.signal })
-    return json({ ok: true, report })
+    const report = narrow
+      ? await sgInspectCaa(checked.name, { wantedCa, signal: request.signal })
+      : await sgInspect(checked.name, { wantedCa, signal: request.signal })
+    return json({ ok: true, scope: scopeParam, budget: narrow ? SG_CAA_SCOPE_QUERIES : undefined, report })
   } catch (err: any) {
     return json({ ok: false, error: typeof err?.message === 'string' ? err.message.slice(0, 160) : 'inspection failed' })
   }

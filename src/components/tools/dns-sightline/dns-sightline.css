@@ -305,3 +305,23 @@ div[data-tool="dns-sightline"] [data-type="sg-explainer"] p {
   font-size: var(--text-xs);
   line-height: 1.7;
 }
+
+/* ---------- the handoff to Chainsaw ---------- */
+
+/* CAA answers "who may issue"; only a handshake answers "who did". The link in
+   the policy card is the one place this tool points at another, so it is styled
+   as a link rather than dressed up as one of the copy buttons beside it. */
+
+div[data-tool="dns-sightline"] [data-type="sg-crosslink"] {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+div[data-tool="dns-sightline"] [data-type="sg-crosslink"]:hover,
+div[data-tool="dns-sightline"] [data-type="sg-crosslink"]:focus-visible {
+  text-decoration: underline;
+}

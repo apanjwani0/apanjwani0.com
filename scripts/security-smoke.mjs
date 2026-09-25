@@ -6425,6 +6425,10 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgCaaFindings(crit, 'ex.com', null),
       sg.sgCaaFindings(none, 'ex.com', 'letsencrypt.org'),
       sg.sgCaaFindings(sg.sgCaaVerdict(empty), 'x.test', null),
+      // An empty walk whose lookups FAILED. Same zero entries as `empty` above
+      // and the opposite conclusion — see the CAA-and-issuer block at the end
+      // of this file for why that distinction is the load-bearing one.
+      sg.sgCaaFindings(sg.sgCaaVerdict({ foundAt: null, walked: ['x.test'], entries: [], incomplete: true }), 'x.test', null),
     ],
     sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, [])],
     sgCnameFindings: [dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com')],
@@ -6872,3 +6876,312 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
   )
 }
 console.log('diagram atlas: seven views, every beat lights an element that exists, the structural notations refuse to animate, and the prose still says seven')
+
+/* ─────  CAA x issuer: the finding neither tool can make alone  ─────────────
+
+   Shipped 2026-09-25. DNS Sightline knows which CA a zone's CAA policy PERMITS;
+   Chainsaw knows which CA actually ISSUED the certificate on the wire. Put the
+   two side by side and you get the answer people currently discover on renewal
+   day: *will the next renewal be refused?*
+
+   Four failure modes here all produce a confident, plausible, wrong sentence,
+   and none of them look like a bug in a screenshot:
+
+     · calling a certificate mis-issued because the CURRENT policy forbids its
+       CA — CAA is consulted only in the eight hours before a CA signs, so a
+       policy published afterwards says nothing about that certificate. The tool
+       would be accusing a correctly-run CA of breaking the rules because
+       somebody edited a DNS record last Tuesday;
+     · reading "no CAA record" off a walk whose LOOKUPS FAILED, which turns a
+       DNS timeout into "any CA may issue" — the most reassuring sentence this
+       tool can print, produced by the least evidence;
+     · going silent on the zones that are most broken, by checking "can I
+       identify the issuer?" before the two conclusions that hold whoever the
+       issuer is (a critical tag nobody understands, and `issue ";"`);
+     · fuzzy-matching an unrecognised issuer onto the nearest registry entry,
+       manufacturing "your policy forbids your CA" out of a gap in a table.
+
+   The table mapping issuer names to CAA identifiers is the fallible part of all
+   this, which is exactly why an unmatched issuer produces null and a state that
+   draws no conclusion. */
+{
+  const caa = await import('../src/lib/caa.ts')
+  const sgc = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const insp = await import('../src/components/tools/dns-sightline/inspect.ts')
+  const { SG_MAX_QUERIES } = await import('../src/lib/dns-doh.ts')
+
+  /* ── 1. One implementation, two spellings. ───────────────────────────────
+
+     The CAA vocabulary moved out of dns-sightline/analyze.ts into src/lib/caa.ts
+     so Chainsaw could reuse it, exactly as `canonicalIp` moved the other way.
+     Sightline re-exports its old names; this pins them to the same objects, so a
+     later "tidy-up" cannot fork them and leave the two tools telling the same
+     visitor opposite things about whose CA is permitted. */
+  assert.equal(sgc.sgCaaAllows, caa.caaAllows, 'one issue/issuewild rule, not two')
+  assert.equal(sgc.sgParseCaa, caa.parseCaa, 'one CAA record parser, not two')
+  assert.equal(sgc.SG_KNOWN_CAS, caa.CA_REGISTRY, 'one CA identifier registry, not two')
+  const chainsawSrc = await readFile(new URL('../src/components/tools/chainsaw/Chainsaw.ts', import.meta.url), 'utf-8')
+  // Comments stripped, the way the endpointOverride assertion strips them:
+  // naming the rule in a docblock is how the next reader finds it, re-deriving it
+  // in code is the thing being forbidden.
+  const chainsawCode = chainsawSrc.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+  assert.equal(/issuewild|allowedWild|forbidsAll/.test(chainsawCode), false,
+    'Chainsaw must call the shared rule, not carry its own copy of the issuewild logic')
+
+  /* ── 2. The identity table does not drift from the registry. ───────────── */
+
+  for (const p of caa.CA_ISSUER_PATTERNS) {
+    assert.ok(caa.CA_REGISTRY.some(c => c.id === p.caId),
+      `the issuer pattern for ${p.caId} names an identifier that is not in CA_REGISTRY — the label lookup would come back null and the sentence would read "null may renew this"`)
+  }
+  for (const c of caa.CA_REGISTRY) {
+    assert.ok(/^[a-z0-9.-]+\.[a-z]{2,}$/.test(c.id), `${c.id} is not a domain-shaped CAA identifier`)
+    assert.ok(c.label && c.label.trim(), `${c.id} has no label`)
+  }
+  assert.equal(new Set(caa.CA_REGISTRY.map(c => c.id)).size, caa.CA_REGISTRY.length, 'no duplicate identifiers')
+
+  /* ── 3. caIdentify: recognise, or say nothing. ───────────────────────────
+
+     The identifier is a domain the CA CHOSE; nothing on the certificate spells
+     it. "Google Trust Services LLC" renews against `pki.goog`, and no string
+     processing gets you from one to the other — which is the whole reason this
+     is a table and the whole reason a miss must return null. */
+  assert.equal(caa.caIdentify({ issuerO: "Let's Encrypt", issuerCN: 'R11' }).caId, 'letsencrypt.org')
+  assert.equal(caa.caIdentify({ issuerO: 'Google Trust Services LLC', issuerCN: 'WR3' }).caId, 'pki.goog')
+  assert.equal(caa.caIdentify({ issuerO: 'DigiCert Inc', issuerCN: 'DigiCert TLS RSA SHA256 2020 CA1' }).caId, 'digicert.com')
+  // Brands, which are not cosmetic: all three renew against digicert.com, and a
+  // table that only knew the current corporate names would report them unknown.
+  assert.equal(caa.caIdentify({ issuerO: 'GeoTrust Inc.', issuerCN: 'GeoTrust TLS CA' }).caId, 'digicert.com')
+  assert.equal(caa.caIdentify({ issuerO: 'Thawte, Inc.', issuerCN: 'Thawte TLS CA' }).caId, 'digicert.com')
+  // Sectigo still signs some chains as COMODO, and ZeroSSL runs on its hierarchy.
+  assert.equal(caa.caIdentify({ issuerO: 'COMODO CA Limited', issuerCN: 'COMODO RSA CA' }).caId, 'sectigo.com')
+  assert.equal(caa.caIdentify({ issuerO: 'ZeroSSL', issuerCN: 'ZeroSSL RSA Domain Secure Site CA' }).caId, 'sectigo.com')
+  assert.equal(caa.caIdentify({ issuerO: 'Amazon', issuerCN: 'Amazon RSA 2048 M01' }).caId, 'amazon.com')
+
+  // The CN rules are a FALLBACK for issuers that ship no organisation at all.
+  assert.equal(caa.caIdentify({ issuerO: null, issuerCN: 'E6' }).caId, 'letsencrypt.org')
+  assert.equal(caa.caIdentify({ issuerO: null, issuerCN: 'E6' }).matchedOn, 'common name')
+  // …and must never outrank another CA's exact organisation match. `^(r|e)\d+$`
+  // is two characters and a digit: matched in table order alongside the org
+  // rules it would win ties it has no business winning.
+  const branded = caa.caIdentify({ issuerO: 'DigiCert Inc', issuerCN: 'R11' })
+  assert.equal(branded.caId, 'digicert.com', 'an organisation match outranks every CN fallback')
+  assert.equal(branded.matchedOn, 'organisation')
+
+  // A miss is a miss. No nearest-neighbour, no partial credit.
+  const unknown = caa.caIdentify({ issuerO: 'Acme Local CA', issuerCN: 'internal-ca-1' })
+  assert.equal(unknown.caId, null, 'an unrecognised issuer must not be guessed at')
+  assert.equal(unknown.label, null)
+  assert.equal(unknown.matchedOn, null)
+  assert.equal(unknown.issuerText, 'internal-ca-1 (Acme Local CA)', 'the issuer is still quoted back verbatim')
+  assert.equal(caa.caIdentify({ issuerO: null, issuerCN: null }).issuerText, '')
+
+  /* ── 4. incomplete is not the same as absent. ────────────────────────────
+
+     Both end with zero entries. One means "no policy governs this name, so any
+     CA may issue"; the other means "nobody read the policy". */
+  const failing = async (name, type) => ({
+    resolver: 'fixture', type, name, rcode: 'SERVFAIL', records: [], elapsedMs: 0, error: 'timeout',
+  })
+  const nx = async (name, type) => ({ resolver: 'fixture', type, name, rcode: 'NXDOMAIN', records: [], elapsedMs: 0 })
+
+  const brokenWalk = await sgc.sgAnalyzeCaa('a.b.example.com', failing)
+  assert.equal(brokenWalk.incomplete, true, 'a SERVFAIL anywhere in the walk makes the empty result inconclusive')
+  const cleanWalk = await sgc.sgAnalyzeCaa('a.b.example.com', nx)
+  assert.equal(cleanWalk.incomplete, false, 'NXDOMAIN IS an answer: the name has no CAA because it has nothing')
+  assert.equal(sgc.sgCaaVerdict(brokenWalk).incomplete, true)
+  assert.equal(sgc.sgCaaVerdict(cleanWalk).incomplete, false)
+
+  // A policy that WAS found is complete by construction — the walk stops at the
+  // first name with any CAA record, so nothing below it can change the answer.
+  const foundDespite = caa.caaVerdict([caa.parseCaa('0 issue "letsencrypt.org"')], 'example.com', true)
+  assert.equal(foundDespite.incomplete, false, 'a found policy cannot be inconclusive')
+
+  // The finding side of the same distinction: opposite ids off the same zero.
+  const inconclusive = sgc.sgCaaFindings(sgc.sgCaaVerdict(brokenWalk), 'a.b.example.com', null)
+  assert.deepEqual(inconclusive.map(f => f.id), ['caa-inconclusive'])
+  assert.equal(inconclusive[0].level, 'warn')
+  assert.deepEqual(sgc.sgCaaFindings(sgc.sgCaaVerdict(cleanWalk), 'a.b.example.com', null).map(f => f.id), ['caa-none'])
+
+  /* ── 5. The join, state by state. ────────────────────────────────────────
+
+     `leafHasWildcard` is the certificate's own SAN set, not a guess: it is what
+     puts `issuewild` in play, and `issuewild` REPLACES `issue` for wildcards
+     rather than adding to it. */
+  const le = { issuerO: "Let's Encrypt", issuerCN: 'R11' }
+  const outlook = (verdict, over = {}) => caa.caaRenewalOutlook({
+    verdict, issuer: le, leafHasWildcard: false, selfSigned: false, host: 'www.example.com', ...over,
+  })
+  const v = (lines, at = 'example.com', incomplete = false) =>
+    caa.caaVerdict(lines.map(l => caa.parseCaa(l)).filter(Boolean), at, incomplete)
+
+  // No policy at all: a fact, not a warning, and it cites nothing.
+  const noPolicy = outlook(caa.caaVerdict([], null))
+  assert.equal(noPolicy.state, 'no-policy')
+  assert.equal(noPolicy.problem, false)
+  assert.deepEqual(noPolicy.evidence, [], 'a conclusion about an absent record must cite nothing')
+
+  // Permitted.
+  const permitted = outlook(v(['0 issue "letsencrypt.org"']))
+  assert.equal(permitted.state, 'permitted')
+  assert.equal(permitted.problem, false)
+  assert.deepEqual(permitted.evidence, ['0 issue "letsencrypt.org"'], 'a conclusion about a record cites it literally')
+  assert.equal(permitted.policyAt, 'example.com')
+
+  // Refused — and the sentence is about the RENEWAL, never about the served
+  // certificate being invalid. This is the assertion that stops the tool
+  // accusing a CA of mis-issuance because a DNS record changed afterwards.
+  const refused = outlook(v(['0 issue "digicert.com"']))
+  assert.equal(refused.state, 'refused')
+  assert.equal(refused.problem, true)
+  assert.ok(/not a mis-issuance/i.test(refused.detail), 'the refusal must disclaim mis-issuance explicitly')
+  assert.ok(/renewal/i.test(refused.detail), 'the refusal must be framed as a future renewal failing')
+  assert.equal(/invalid|untrusted|revoke/i.test(refused.detail), false,
+    'a CAA mismatch says nothing about the validity of the certificate on the wire')
+
+  // A policy with no `issue` term at all restricts nobody.
+  assert.equal(outlook(v(['0 iodef "mailto:sec@example.com"'])).state, 'permitted')
+
+  // The wildcard rule, both ways round. `issuewild ";"` forbids every wildcard
+  // while `issue` still permits Let's Encrypt the plain names.
+  const wildBlocked = ['0 issue "letsencrypt.org"', '0 issuewild ";"']
+  assert.equal(outlook(v(wildBlocked), { leafHasWildcard: true }).state, 'refused-wildcard')
+  assert.equal(outlook(v(wildBlocked), { leafHasWildcard: true }).problem, true)
+  // …and a certificate carrying no wildcard name is simply not affected by it.
+  assert.equal(outlook(v(wildBlocked), { leafHasWildcard: false }).state, 'permitted')
+  // Reading issuewild as an ADDITION to issue would make this permitted.
+  assert.equal(
+    outlook(v(['0 issue "letsencrypt.org"', '0 issuewild "digicert.com"']), { leafHasWildcard: true }).state,
+    'refused-wildcard',
+  )
+
+  // Self-signed: no CA issued it, so CAA has nothing to say about it.
+  assert.equal(outlook(v(['0 issue "letsencrypt.org"']), { selfSigned: true }).state, 'self-signed')
+  assert.equal(outlook(v(['0 issue "letsencrypt.org"']), { selfSigned: true }).problem, false)
+
+  // An unidentifiable issuer draws no verdict — and says so rather than nothing.
+  const mystery = outlook(v(['0 issue "letsencrypt.org"']), { issuer: { issuerO: 'Acme Local CA', issuerCN: 'ca-1' } })
+  assert.equal(mystery.state, 'issuer-unknown')
+  assert.equal(mystery.problem, false)
+  assert.ok(mystery.detail.includes('Acme Local CA'), 'the unidentified issuer is quoted back')
+
+  /* ── 6. The two issuer-INDEPENDENT conclusions survive an unknown issuer. ──
+
+     This is the precedence rule, and it is the one an "obvious" implementation
+     gets wrong: check the issuer first, bail out to issuer-unknown, and the tool
+     goes quiet on exactly the zones where a renewal is already failing for
+     everybody. A critical tag nobody understands and `issue ";"` hold whoever
+     the CA is, so they are reported whoever the CA is. */
+  const stranger = { issuer: { issuerO: 'Acme Local CA', issuerCN: 'ca-1' } }
+  for (const [lines, state] of [
+    [['128 weirdtag "x"', '0 issue "letsencrypt.org"'], 'blocked-critical'],
+    [['0 issue ";"'], 'forbidden-all'],
+  ]) {
+    assert.equal(outlook(v(lines)).state, state, `${state} with a known issuer`)
+    assert.equal(outlook(v(lines), stranger).state, state,
+      `${state} must still be reported when the issuer cannot be identified — it does not depend on the issuer`)
+    assert.equal(outlook(v(lines)).problem, true, `${state} is something the owner must act on`)
+    assert.ok(outlook(v(lines)).evidence.length > 0, `${state} must cite the records it rests on`)
+  }
+  // Both also outrank self-signed, for the same reason: they are facts about the
+  // zone, and a self-signed certificate does not make a broken policy fine.
+  assert.equal(outlook(v(['0 issue ";"']), { selfSigned: true }).state, 'forbidden-all')
+
+  // An unknown tag WITHOUT the critical bit blocks nobody.
+  assert.equal(outlook(v(['0 weirdtag "x"', '0 issue "letsencrypt.org"'])).state, 'permitted')
+
+  // An inconclusive walk outranks everything: there is nothing to reason from.
+  const unavailable = outlook(caa.caaVerdict([], null, true))
+  assert.equal(unavailable.state, 'unavailable')
+  assert.equal(unavailable.problem, false, 'a failed lookup is not a finding about somebody else\'s zone')
+  assert.deepEqual(unavailable.evidence, [])
+  assert.equal(/any CA may issue/i.test(unavailable.detail), false,
+    'the inconclusive message must not contain the sentence the absent-policy message exists to say')
+
+  // Every state the type declares is reachable from a fixture above, so a state
+  // added later without one fails here rather than shipping unexercised.
+  const declaredStates = [...(await readFile(new URL('../src/lib/caa.ts', import.meta.url), 'utf-8'))
+    .matchAll(/^\s+\| '([a-z-]+)'$/gm)].map(m => m[1])
+  const reached = new Set([
+    'no-policy', 'permitted', 'refused', 'refused-wildcard',
+    'forbidden-all', 'blocked-critical', 'issuer-unknown', 'self-signed', 'unavailable',
+  ])
+  for (const st of declaredStates) {
+    assert.ok(reached.has(st), `the outlook state "${st}" has no fixture in this block`)
+  }
+  assert.ok(declaredStates.length >= 8, `expected the states to be discoverable in the source (found ${declaredStates.length})`)
+  // Every fixture above produced a headline and a detail — an empty one renders
+  // a blank panel, which reads as a layout bug rather than as a missing claim.
+  for (const o of [noPolicy, permitted, refused, mystery, unavailable]) {
+    assert.ok(o.headline.trim() && o.detail.trim(), `${o.state} needs both a headline and a detail`)
+  }
+
+  /* ── 7. The narrow scope is cheaper than the allowance it was given. ─────
+
+     `scope=caa` exists so Chainsaw can ask one question without paying for a
+     24-query resolver diff, and it gets its OWN rate-limit buckets — otherwise a
+     Chainsaw visitor's cheap questions would lock them out of DNS Sightline. A
+     separate, more generous limiter is only defensible if the thing being bounded
+     — outbound DoH queries per minute — still comes out lower. Held as an
+     inequality over the four numbers rather than as a comment, so raising any one
+     of them fails here. */
+  const routeSrc2 = await readFile(new URL('../src/pages/api/tools/dns-sightline.ts', import.meta.url), 'utf-8')
+  const limiters = Object.fromEntries(
+    [...routeSrc2.matchAll(/const (allow\w+) = createRateLimiter\((\d[\d_]*), (\d+)\)/g)]
+      .map(m => [m[1], { window: Number(m[2].replace(/_/g, '')), cap: Number(m[3]) }]),
+  )
+  for (const name of ['allowClient', 'allowGlobal', 'allowCaaClient', 'allowCaaGlobal']) {
+    assert.ok(limiters[name], `${name} is not declared in the route the way this assertion reads it`)
+    assert.equal(limiters[name].window, 60_000, `${name} must be a per-minute bucket for the comparison below to mean anything`)
+  }
+  assert.ok(insp.SG_CAA_SCOPE_QUERIES > 0 && insp.SG_CAA_SCOPE_QUERIES < SG_MAX_QUERIES,
+    'the narrow scope must have a smaller query budget than the full one, or it is not a narrow scope')
+  assert.ok(
+    limiters.allowCaaClient.cap * insp.SG_CAA_SCOPE_QUERIES <= limiters.allowClient.cap * SG_MAX_QUERIES,
+    `the CAA scope allows ${limiters.allowCaaClient.cap * insp.SG_CAA_SCOPE_QUERIES} outbound queries per client per minute against the full scope's ${limiters.allowClient.cap * SG_MAX_QUERIES} — its looser limit is no longer paid for by its smaller budget`,
+  )
+  assert.ok(
+    limiters.allowCaaGlobal.cap * insp.SG_CAA_SCOPE_QUERIES <= limiters.allowGlobal.cap * SG_MAX_QUERIES,
+    'the same inequality must hold for the shared global bucket, which is what bounds the instance',
+  )
+  // The scope is a closed choice. An unrecognised value must be refused, not
+  // quietly treated as the expensive default.
+  assert.ok(/scopeParam !== 'full' && scopeParam !== 'caa'/.test(routeSrc2),
+    'the scope parameter must be matched against a closed set, never used as given')
+  assert.ok(/unknown scope/.test(routeSrc2), 'an unknown scope is refused with a 400, not defaulted')
+  // …and the cheap path must actually take the cheap budget: `sgInspectCaa`
+  // defaults to SG_CAA_SCOPE_QUERIES rather than to the full allowance.
+  const inspSrc2 = await readFile(new URL('../src/components/tools/dns-sightline/inspect.ts', import.meta.url), 'utf-8')
+  assert.ok(/opts\.budget \?\? sgNewBudget\(SG_CAA_SCOPE_QUERIES\)/.test(inspSrc2),
+    'the CAA-only inspection must default to its own budget, not to SG_MAX_QUERIES')
+
+  /* ── 8. The two tools now link to each other, and to the same question. ── */
+
+  assert.ok(/scope=caa&name=\$\{encodeURIComponent\(report\.host\)\}/.test(chainsawSrc),
+    'Chainsaw asks the narrow scope, not the full inspection')
+  assert.ok(/\/tools\/dns-sightline\?name=\$\{encodeURIComponent\(report\.host\)\}/.test(chainsawSrc),
+    'the Chainsaw cross-link carries the host across')
+  assert.ok(/ca=\$\{encodeURIComponent\(outlook\.ca\.caId\)\}/.test(chainsawSrc),
+    "…and hands the identified CA to DNS Sightline's own renewal picker, which is the handoff neither tool could make alone")
+  const sightlineSrc = await readFile(new URL('../src/components/tools/dns-sightline/DnsSightline.ts', import.meta.url), 'utf-8')
+  assert.ok(/\/tools\/chainsaw\?host=\$\{encodeURIComponent\(r\.name\)\}/.test(sightlineSrc),
+    'the DNS Sightline cross-link carries the name to Chainsaw')
+
+  // The panel's prose is added to ESCAPED text, never to raw text: `csTicks`
+  // escapes first and only then introduces <code>, so by the time the regex runs
+  // every `<` the sentence contained is already `&lt;`. Order is the whole
+  // control, and it is one line, so it is asserted rather than trusted.
+  assert.ok(/function csTicks\(text: string\): string \{\s*return csEsc\(text\)\.replace\(/.test(chainsawSrc),
+    'csTicks must escape before it adds markup')
+  // An IP has no CAA policy and no parent to inherit one from, so Chainsaw must
+  // not spend a query to be told nothing.
+  assert.ok(/if \(csCanonicalIp\(report\.host\)\)/.test(chainsawSrc),
+    'an address-dialled host skips the CAA lookup entirely')
+  // A failed CAA lookup must cost the panel and nothing else: the certificate
+  // report above is already rendered by the time this fetch is made.
+  assert.ok(/void this\.loadCaa\(report, match\)/.test(chainsawSrc),
+    'the CAA lookup is fired after the certificate report is rendered, not before it')
+  assert.ok(/this\.caaInflight\?\.abort\(\)/.test(chainsawSrc),
+    'the CAA fetch is aborted on unmount and on a new inspection — ClientRouter keeps the document')
+}
+console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unrecognised issuer draws no verdict, a failed lookup is not an absent policy, the issuer-independent refusals survive an unknown CA, and the narrow scope\'s looser rate limit is paid for by its smaller query budget')

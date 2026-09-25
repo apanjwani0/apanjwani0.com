@@ -29,6 +29,14 @@
  * share one script namespace (`cs` is Chainsaw's, `lp` is Link Peek's, `sl` is
  * Sand Loom's).
  */
+import {
+  CA_REGISTRY,
+  caaAllows,
+  caaVerdict,
+  parseCaa,
+  type CaaEntry,
+  type CaaVerdict,
+} from '../../../lib/caa'
 import { canonicalIp } from '../../../lib/ip'
 import type { SgAnswer, SgLookup, SgRecord, SgType } from '../../../lib/dns-types'
 
@@ -768,43 +776,34 @@ export function sgDmarcFindings(d: SgDmarcReport, domain: string): SgFinding[] {
 /* CAA                                                                 */
 /* ------------------------------------------------------------------ */
 
-/** CAA identifiers for the CAs people actually renew with. */
-export const SG_KNOWN_CAS: ReadonlyArray<{ id: string; label: string }> = [
-  { id: 'letsencrypt.org', label: "Let's Encrypt" },
-  { id: 'pki.goog', label: 'Google Trust Services' },
-  { id: 'digicert.com', label: 'DigiCert' },
-  { id: 'sectigo.com', label: 'Sectigo' },
-  { id: 'amazon.com', label: 'Amazon (ACM)' },
-  { id: 'amazonaws.com', label: 'Amazon (ACM, alternate id)' },
-  { id: 'globalsign.com', label: 'GlobalSign' },
-  { id: 'ssl.com', label: 'SSL.com' },
-  { id: 'buypass.com', label: 'Buypass' },
-  { id: 'certainly.com', label: 'Certainly (Fastly)' },
-  { id: 'actalis.it', label: 'Actalis' },
-]
-
-export interface SgCaaEntry {
-  flags: number
-  tag: string
-  value: string
-  raw: string
-}
+/**
+ * CAA lives in `src/lib/caa.ts` now.
+ *
+ * Hoisted the way `canonicalIp` was, and for the same reason: Chainsaw needs the
+ * `issue`/`issuewild` rule to answer "will this certificate's CA be allowed to
+ * renew it", and two copies of a rule where `issuewild` REPLACES `issue` would
+ * not survive one tidy-up. The `sg*` names below are the same functions under
+ * their old spelling, so the assertions and the page keep importing from here
+ * and are pinned to one implementation — `security:smoke` asserts the identity.
+ */
+export const SG_KNOWN_CAS = CA_REGISTRY
+export const sgParseCaa = parseCaa
+export const sgCaaAllows = caaAllows
+export type SgCaaEntry = CaaEntry
+export type SgCaaVerdict = CaaVerdict
 
 export interface SgCaaReport {
   /** The name the policy was found at — CAA is inherited from the closest ancestor that has one. */
   foundAt: string | null
-  entries: SgCaaEntry[]
+  entries: CaaEntry[]
   /** Names checked on the way up, in order. */
   walked: string[]
-}
-
-export function sgParseCaa(data: string): SgCaaEntry | null {
-  // Resolvers render CAA as `0 issue "letsencrypt.org"`; some hand back the
-  // wire form. Only the textual form is parsed, and anything else is refused
-  // rather than guessed at.
-  const m = data.trim().match(/^(\d+)\s+([a-z0-9]+)\s+"?([^"]*)"?\s*$/i)
-  if (!m) return null
-  return { flags: Number(m[1]), tag: m[2].toLowerCase(), value: m[3].trim(), raw: data.trim() }
+  /**
+   * A lookup in the walk failed (or the query budget refused it), so an empty
+   * result is "no answer" rather than "no policy". See `CaaVerdict.incomplete`:
+   * the two end with the same zero entries and mean opposite things.
+   */
+  incomplete?: boolean
 }
 
 /**
@@ -823,75 +822,44 @@ export function sgParseCaa(data: string): SgCaaEntry | null {
 export async function sgAnalyzeCaa(name: string, lookup: SgLookup): Promise<SgCaaReport> {
   const labels = name.split('.')
   const walked: string[] = []
+  // A failed lookup anywhere in the walk is recorded rather than skipped past.
+  // Without this the tool's most reassuring sentence — "no CAA record, so any
+  // CA may issue" — is also what a DNS timeout produces, and a reader has no
+  // way to tell the fact from the outage.
+  let failed = false
   for (let i = 0; i + 2 <= labels.length; i += 1) {
     const candidate = labels.slice(i).join('.')
     walked.push(candidate)
     const answer = await lookup(candidate, 'CAA')
-    const entries = answer.records.map(r => sgParseCaa(r.data)).filter((e): e is SgCaaEntry => e !== null)
+    // NXDOMAIN is an answer: the name has no CAA because it has nothing at all.
+    // SERVFAIL, a refusal, a timeout or an exhausted budget are not answers.
+    if (answer.error || (answer.rcode !== 'NOERROR' && answer.rcode !== 'NXDOMAIN')) failed = true
+    const entries = answer.records.map(r => sgParseCaa(r.data)).filter((e): e is CaaEntry => e !== null)
     if (entries.length) return { foundAt: candidate, entries, walked }
   }
-  return { foundAt: null, entries: [], walked }
-}
-
-export interface SgCaaVerdict {
-  /** null when no policy governs the name — every CA may issue. */
-  policyAt: string | null
-  allowed: string[]
-  allowedWild: string[]
-  /** `issue ";"` — a deliberate instruction that NO CA may issue. */
-  forbidsAll: boolean
-  forbidsAllWild: boolean
-  iodef: string[]
-  /** Critical-flagged tags this tool does not understand — a CA must refuse. */
-  unknownCritical: string[]
+  return { foundAt: null, entries: [], walked, incomplete: failed }
 }
 
 export function sgCaaVerdict(report: SgCaaReport): SgCaaVerdict {
-  const issue = report.entries.filter(e => e.tag === 'issue')
-  const issuewild = report.entries.filter(e => e.tag === 'issuewild')
-  const known = new Set(['issue', 'issuewild', 'iodef', 'issuemail', 'issuevmc', 'contactemail', 'contactphone'])
-  return {
-    policyAt: report.foundAt,
-    allowed: issue.filter(e => e.value && e.value !== ';').map(e => e.value.split(';')[0].trim().toLowerCase()),
-    allowedWild: issuewild.filter(e => e.value && e.value !== ';').map(e => e.value.split(';')[0].trim().toLowerCase()),
-    forbidsAll: issue.length > 0 && issue.every(e => !e.value || e.value === ';'),
-    forbidsAllWild: issuewild.length > 0 && issuewild.every(e => !e.value || e.value === ';'),
-    iodef: report.entries.filter(e => e.tag === 'iodef').map(e => e.value),
-    // The critical bit is 128, and its meaning is "refuse to issue if you do
-    // not understand this tag" — so an unrecognised critical tag blocks every
-    // CA, which is a spectacular way to break a renewal silently.
-    unknownCritical: report.entries.filter(e => (e.flags & 128) !== 0 && !known.has(e.tag)).map(e => e.tag),
-  }
-}
-
-/**
- * Can this CA issue for this name? `wildcard` asks the other question, and the
- * two rules are not the same rule:
- *
- *   `issuewild` present  → it **replaces** `issue` for wildcards entirely.
- *   `issuewild` absent   → `issue` governs wildcards too.
- *
- * So `issue "letsencrypt.org"` plus `issuewild ";"` means Let's Encrypt may
- * issue `www.example.com` and no CA on earth may issue `*.example.com`. Reading
- * `issuewild` as an addition to `issue` rather than a replacement gets that
- * exactly backwards, which is why this is one function and not an `if` in the
- * component.
- */
-export function sgCaaAllows(v: SgCaaVerdict, caId: string, wildcard: boolean): boolean {
-  if (!v.policyAt) return true
-  if (v.unknownCritical.length) return false
-  const id = caId.trim().toLowerCase()
-  if (wildcard) {
-    if (v.allowedWild.length || v.forbidsAllWild) return v.allowedWild.includes(id)
-    // No issuewild at all: fall through to the issue property.
-  }
-  if (v.forbidsAll) return false
-  if (!v.allowed.length) return true
-  return v.allowed.includes(id)
+  return caaVerdict(report.entries, report.foundAt, report.incomplete ?? false)
 }
 
 export function sgCaaFindings(v: SgCaaVerdict, name: string, wantedCa: string | null): SgFinding[] {
   const out: SgFinding[] = []
+  if (!v.policyAt && v.incomplete) {
+    // The opposite sentence to `caa-none`, off the same empty result. Claiming
+    // "any CA may issue" because the lookup fell over is the one CAA mistake
+    // that reassures somebody about a zone nobody actually read.
+    out.push({
+      id: 'caa-inconclusive',
+      level: 'warn',
+      title: 'CAA policy could not be determined',
+      detail: `At least one CAA lookup for ${name} failed or was refused, so the absence of a policy here is not a finding — it is a missing answer. Re-run the inspection before concluding that any CA may issue.`,
+      evidence: [],
+      basis: 'absence',
+    })
+    return out
+  }
   if (!v.policyAt) {
     out.push({
       id: 'caa-none',

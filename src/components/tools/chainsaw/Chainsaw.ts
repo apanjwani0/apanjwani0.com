@@ -16,6 +16,11 @@
 import { escapeHtml as csEsc } from '../../../lib/escape'
 import { flashLabel } from '../../../lib/flash'
 import {
+  caaRenewalOutlook,
+  type CaaOutlook,
+  type CaaVerdict,
+} from '../../../lib/caa'
+import {
   CS_ALLOWED_PORTS,
   csChainLinks,
   csChainState,
@@ -29,6 +34,7 @@ import {
   csServeChainPem,
   csTrustVerdict,
   csValidityVerdict,
+  csCanonicalIp,
   type CsCert,
   type CsFinding,
   type CsReport,
@@ -56,6 +62,26 @@ function csKeyLabel(cert: CsCert): string {
   return cert.keyBits ? `${cert.keyType.toUpperCase()} ${cert.keyBits}-bit` : cert.keyType.toUpperCase()
 }
 
+/**
+ * Render the backticked spans in a prose string as `<code>`, after escaping.
+ *
+ * The sentences in `src/lib/caa.ts` are shared with the assertions and must stay
+ * plain text there — a module that returned HTML could not be compared to a
+ * string in a test without the test learning the markup. So the markup is added
+ * here, and only ever AFTER `csEsc` has run: the replacement can introduce
+ * `<code>` and nothing else, because by then every `<` the source contained is
+ * already `&lt;`.
+ */
+function csTicks(text: string): string {
+  return csEsc(text).replace(/`([^`]+)`/g, (_m, inner) => `<code>${inner}</code>`)
+}
+
+interface CsCaaResponse {
+  ok: boolean
+  error?: string
+  report?: { name: string; caa: CaaVerdict; caaWalked: string[]; queries: number }
+}
+
 function csDayLabel(days: number): string {
   if (!Number.isFinite(days)) return 'unknown'
   if (days < 0) return `expired ${Math.abs(Math.floor(days))}d ago`
@@ -69,6 +95,7 @@ class ChainsawTool extends HTMLElement {
   private statusEl!: HTMLElement
   private resultsEl!: HTMLElement
   private inflight: AbortController | null = null
+  private caaInflight: AbortController | null = null
   private report: CsReport | null = null
 
   connectedCallback() {
@@ -154,6 +181,7 @@ class ChainsawTool extends HTMLElement {
 
   disconnectedCallback() {
     this.inflight?.abort()
+    this.caaInflight?.abort()
   }
 
   private copyFor(what: string, btn: HTMLButtonElement) {
@@ -198,6 +226,7 @@ class ChainsawTool extends HTMLElement {
     try { localStorage.setItem(CS_LS_TARGET, raw) } catch { /* private mode */ }
 
     this.inflight?.abort()
+    this.caaInflight?.abort()
     const controller = new AbortController()
     this.inflight = controller
     this.runButton.disabled = true
@@ -262,10 +291,116 @@ class ChainsawTool extends HTMLElement {
       ${this.renderVerdicts(report, match, now)}
       ${this.renderHandshake(report, chain.detail)}
       ${this.renderFindings(findings)}
+      ${this.renderRenewal(report, match)}
       ${this.renderChain(report)}
       ${this.renderNames(match)}
       ${this.renderExport(chain.state)}
     `
+    void this.loadCaa(report, match)
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* the half of the question a handshake cannot answer               */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * CAA is a DNS record, and a handshake cannot see one.
+   *
+   * So the panel starts as a shell and is filled by a second request — to DNS
+   * Sightline's endpoint, narrow scope, which walks the CAA tree and hands back
+   * the same verdict object that tool renders. Two things about that are
+   * deliberate. The first is that Chainsaw does not get its own CAA reader: the
+   * `issue`/`issuewild` rule lives in `src/lib/caa.ts` and is called from one
+   * place, so the two tools cannot disagree about whose CA is permitted. The
+   * second is that this failing is not a failure — the certificate report above
+   * is already complete and rendered, and a DNS timeout must cost this panel and
+   * nothing else.
+   */
+  private async loadCaa(report: CsReport, match: ReturnType<typeof csMatchHost>) {
+    const slot = this.resultsEl.querySelector('[data-for="renewal"]') as HTMLElement | null
+    if (!slot) return
+    // An address has no CAA policy, and no parent to inherit one from. Asking
+    // would spend a query to be told nothing.
+    if (csCanonicalIp(report.host)) {
+      slot.innerHTML = `<p data-type="cs-hint">This host was dialled as an address rather than a name, and CAA is a property of a name — there is no policy to read and no renewal to predict.</p>`
+      return
+    }
+
+    const controller = new AbortController()
+    this.caaInflight = controller
+    let data: CsCaaResponse
+    try {
+      const res = await fetch(`/api/tools/dns-sightline?scope=caa&name=${encodeURIComponent(report.host)}`, { signal: controller.signal })
+      data = await res.json() as CsCaaResponse
+    } catch {
+      if (controller.signal.aborted) return
+      slot.innerHTML = `<p data-type="cs-hint">The CAA lookup did not come back. That says nothing about the policy — re-run the check, or read it in DNS Sightline.</p>`
+      return
+    } finally {
+      if (this.caaInflight === controller) this.caaInflight = null
+    }
+    if (controller.signal.aborted || this.report !== report) return
+
+    if (!data.ok || !data.report) {
+      slot.innerHTML = `<p data-type="cs-hint">${csEsc(data.error ?? 'The CAA policy could not be read.')} No conclusion is drawn from that — a failed lookup is not an absent record.</p>`
+      return
+    }
+
+    const leaf = report.presented[0]
+    const outlook = caaRenewalOutlook({
+      verdict: data.report.caa,
+      issuer: { issuerO: leaf.issuerO, issuerCN: leaf.issuerCN },
+      leafHasWildcard: match.dnsNames.some(n => n.startsWith('*.')),
+      selfSigned: leaf.selfSigned,
+      host: report.host,
+    })
+    slot.innerHTML = this.renderOutlook(outlook, data.report.caaWalked)
+    const link = this.resultsEl.querySelector('[data-type="cs-crosslink"]') as HTMLAnchorElement | null
+    if (link && outlook.ca.caId) {
+      // Hand the CA across as well as the name: DNS Sightline's own renewal
+      // picker is an allowlist select over the same identifiers, so the link can
+      // land it pre-set on the CA that actually signed this certificate rather
+      // than on "any CA". Neither tool could have worked that out alone.
+      link.href = `/tools/dns-sightline?name=${encodeURIComponent(report.host)}&ca=${encodeURIComponent(outlook.ca.caId)}`
+      link.textContent = `See the whole zone in DNS Sightline →`
+    }
+  }
+
+  private renderRenewal(report: CsReport, match: ReturnType<typeof csMatchHost>): string {
+    const wild = match.dnsNames.some(n => n.startsWith('*.'))
+    return `
+      <section data-type="cs-card" data-card="renewal" aria-labelledby="cs-renew-h">
+        <div data-group="cs-cardhead">
+          <h2 id="cs-renew-h">Will the next renewal be allowed?</h2>
+          <div data-group="toolbar">
+            <a data-type="cs-crosslink" href="/tools/dns-sightline?name=${encodeURIComponent(report.host)}">Check this domain's DNS →</a>
+          </div>
+        </div>
+        <div data-for="renewal" role="status" aria-live="polite">
+          <p data-type="cs-hint">Reading the CAA policy for <code>${csEsc(report.host)}</code>…</p>
+        </div>
+        <p data-type="cs-hint">Two facts, and neither tool has both: the certificate above names the CA that signed it, and the zone's CAA record names the CAs allowed to sign${wild ? ' — separately for wildcards, which this certificate carries' : ''}. A mismatch is not a mis-issuance; it is next month's renewal failing with an error that reads like an ACME bug.</p>
+      </section>`
+  }
+
+  private renderOutlook(o: CaaOutlook, walked: string[]): string {
+    const facts: [string, string][] = [
+      ['Issued by', o.ca.issuerText || 'not stated on the certificate'],
+      ['Renews against', o.ca.caId ? `${o.ca.label ?? o.ca.caId} (${o.ca.caId})` : 'could not be identified'],
+      ['Policy found at', o.policyAt ?? (o.state === 'unavailable' ? 'not determined' : 'no CAA policy anywhere up the tree')],
+      ['Names checked', walked.length ? walked.join(' → ') : 'none'],
+    ]
+    return `
+      <div data-type="cs-outlook" data-state="${csEsc(o.state)}" data-problem="${o.problem ? '1' : '0'}">
+        <p data-type="cs-outlook-head">${csEsc(o.headline)}</p>
+        <p data-type="cs-outlook-detail">${csTicks(o.detail)}</p>
+        ${o.evidence.length
+          ? `<ul data-type="cs-evidence">${o.evidence.map(e => `<li><code>${csEsc(e)}</code></li>`).join('')}</ul>`
+          : ''}
+        <dl data-type="cs-facts">
+          ${facts.map(([k, v]) => `<div><dt>${csEsc(k)}</dt><dd>${csEsc(v)}</dd></div>`).join('')}
+        </dl>
+      </div>`
   }
 
   private renderVerdicts(report: CsReport, match: ReturnType<typeof csMatchHost>, now: number): string {

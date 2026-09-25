@@ -23,6 +23,7 @@ KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 - `src/lib/config.ts` — KV-aware accessors (`getSite`, `getProjects`, …). The only sanctioned way to read config.
 - `src/pages/` — routes; `src/pages/admin.astro` (config editor) and `src/pages/api/admin/save.ts` (save allowlist).
 - `src/layouts/` — page shells; `src/components/` (`home/`, `tools/`, `games/`) — UI pieces.
+- `src/lib/caa.ts` — the CAA vocabulary (`issue`/`issuewild`, the CA identifier registry, issuer→identifier mapping, and the renewal outlook) shared by DNS Sightline and Chainsaw. Hoisted like `src/lib/ip.ts`; Sightline re-exports its old `sg*` names.
 - `src/styles/theme.css` — design tokens (single source of truth for palette/fonts/scale/spacing).
 - `astro.config.mjs` — adapter choice **and** the Vite middleware that persists `/admin` saves.
 
@@ -481,6 +482,64 @@ their subdomain can be stolen when it cannot is the most damaging sentence this
 tool could print. DMARC for a subdomain says the organizational-domain fallback
 is *not computed* rather than guessing without a Public Suffix List, and the CAA
 walk stops at two labels for the same reason.
+
+### A failed lookup is not an absent record
+
+`sgAnalyzeCaa` walks up from the FQDN to the registered domain looking for a CAA
+set, and stops at the first name that has one. A walk that reaches the top and
+finds nothing means *no policy governs this name, so any CA may issue* — the most
+reassuring sentence DNS Sightline can print. A walk whose queries **failed** ends
+with the same zero entries. Reporting the second as the first turns a resolver
+timeout into a claim about somebody's zone, produced by the least evidence
+possible, and no screenshot of it looks wrong.
+
+So `SgCaaReport.incomplete` records that any lookup in the walk errored or was
+refused by the query budget (NXDOMAIN is an *answer* — the name has no CAA
+because it has nothing at all — while SERVFAIL, REFUSED and a timeout are not),
+`CaaVerdict.incomplete` carries it forward, and `caa-inconclusive` is the finding
+that says so rather than `caa-none`. A policy that *was* found is complete by
+construction, since nothing below the stop point can change the answer.
+
+This is the same shape as `sgIsDangling` refusing to call a name unclaimed when
+it merely has no address record: the damaging output is the confident sentence,
+not the crash.
+
+### A conclusion that does not depend on X must not be gated on X
+
+`caaRenewalOutlook` (`src/lib/caa.ts`) is where the two server-backed
+certificate tools meet: DNS Sightline knows which CA a zone's CAA policy
+**permits**, Chainsaw knows which CA actually **issued** the certificate on the
+wire, and neither fact is a finding alone. Two things about the join are
+load-bearing.
+
+**The first is the order.** The obvious implementation identifies the issuer,
+gives up if it cannot, and only then reads the policy — and so goes silent on
+exactly the zones that are most broken. A critical CAA tag no CA understands, and
+`issue ";"`, both block *every* CA; they hold whoever the issuer is, so they are
+reported whoever the issuer is, and `security:smoke` asserts each of them
+survives an unidentifiable issuer. Only after those does the unknown-issuer case
+decline to conclude — and it does decline: the issuer-name → CAA-identifier table
+is the fallible part of the module (nothing on a certificate spells `pki.goog`),
+so a miss returns `null` rather than fuzzy-matching onto the nearest registry
+entry and manufacturing a confident "your policy forbids your CA" out of a gap in
+a table.
+
+**The second is what the tool refuses to say.** A certificate whose issuer the
+*current* policy forbids is **not** mis-issued: a CA consults CAA only in the
+eight hours before it signs (RFC 8659 §3, CA/BF BR 3.2.2.8) and never again, so a
+policy published afterwards says nothing about that certificate. Every message is
+therefore about a *renewal that will fail*, the refusal disclaims mis-issuance in
+so many words, and the assertion holds it there. The alternative accuses a
+correctly-run CA of breaking the rules because somebody edited a DNS record last
+Tuesday.
+
+A narrow `scope=caa` on `/api/tools/dns-sightline` serves Chainsaw's panel, so one
+question does not pay for a 24-query resolver diff. It gets its **own** rate-limit
+buckets, which is only defensible because the resource being bounded — outbound
+DoH queries per minute — still comes out lower: `security:smoke` asserts
+`cap x budget` for the narrow scope stays under `cap x budget` for the full one,
+in both the per-client and the global dimension, so raising any one of the four
+numbers fails the gate rather than a comment going stale.
 
 ### Escaping
 

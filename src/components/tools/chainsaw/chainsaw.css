@@ -332,3 +332,88 @@ div[data-tool="chainsaw"] [data-type="cs-explainer"] p {
   font-size: var(--text-sm);
   line-height: 1.65;
 }
+
+/* ---------- the renewal outlook (CAA x issuer) ---------- */
+
+/* The card that joins this tool to DNS Sightline. Its state attribute carries
+   nine values from `caaRenewalOutlook`, but only ONE thing is drawn from them —
+   `data-problem` — because the states that are not problems must not be tinted
+   as if they were: "no CAA policy governs this name" is a fact, not a warning,
+   and "the issuer could not be identified" is this tool declining to guess. A
+   colour per state would have made both of those look like failures. */
+
+div[data-tool="chainsaw"] [data-type="cs-crosslink"] {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+div[data-tool="chainsaw"] [data-type="cs-crosslink"]:hover,
+div[data-tool="chainsaw"] [data-type="cs-crosslink"]:focus-visible {
+  text-decoration: underline;
+}
+
+div[data-tool="chainsaw"] [data-type="cs-outlook"] {
+  padding: var(--space-lg) 0.85rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-success);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+div[data-tool="chainsaw"] [data-type="cs-outlook"][data-problem="1"] {
+  border-left-color: var(--color-error);
+}
+
+div[data-tool="chainsaw"] [data-type="cs-outlook"][data-state="issuer-unknown"],
+div[data-tool="chainsaw"] [data-type="cs-outlook"][data-state="unavailable"] {
+  border-left-color: var(--color-muted);
+}
+
+div[data-tool="chainsaw"] [data-type="cs-outlook-head"] {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-success);
+  font-size: var(--text-base);
+}
+
+div[data-tool="chainsaw"] [data-type="cs-outlook"][data-problem="1"] [data-type="cs-outlook-head"] {
+  color: var(--color-error);
+}
+
+div[data-tool="chainsaw"] [data-type="cs-outlook"][data-state="issuer-unknown"] [data-type="cs-outlook-head"],
+div[data-tool="chainsaw"] [data-type="cs-outlook"][data-state="unavailable"] [data-type="cs-outlook-head"] {
+  color: var(--color-text);
+}
+
+div[data-tool="chainsaw"] [data-type="cs-outlook-detail"] {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+}
+
+div[data-tool="chainsaw"] [data-type="cs-outlook-detail"] code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="chainsaw"] [data-type="cs-evidence"] {
+  margin: var(--space-md) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+div[data-tool="chainsaw"] [data-type="cs-evidence"] li {
+  margin-top: var(--space-2xs);
+  overflow-x: auto;
+}
+
+div[data-tool="chainsaw"] [data-type="cs-evidence"] code {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre;
+}
