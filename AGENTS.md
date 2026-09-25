@@ -542,11 +542,22 @@ timeout into a claim about somebody's zone, produced by the least evidence
 possible, and no screenshot of it looks wrong.
 
 So `SgCaaReport.incomplete` records that any lookup in the walk errored or was
-refused by the query budget (NXDOMAIN is an *answer* — the name has no CAA
-because it has nothing at all — while SERVFAIL, REFUSED and a timeout are not),
-`CaaVerdict.incomplete` carries it forward, and `caa-inconclusive` is the finding
-that says so rather than `caa-none`. A policy that *was* found is complete by
-construction, since nothing below the stop point can change the answer.
+refused by the query budget or the deadline (NXDOMAIN is an *answer* — the name
+has no CAA because it has nothing at all — while SERVFAIL, REFUSED and a timeout
+are not), `CaaVerdict.incomplete` carries it forward, and `caa-inconclusive` is
+the finding that says so rather than `caa-none`.
+
+**A policy that *was* found is not complete by construction**, which this
+section used to claim. The walk stops at the first name with a CAA set, so
+nothing *above* the stop point can change the answer — but the names *below* it
+were passed over only because they answered "no CAA here", and one that did not
+answer at all might hold a set of its own, which a CA would obey instead. So
+`sub.example.com` timing out beneath a policy at `example.com` is incomplete
+too: `caaVerdict` passes the flag through instead of dropping it whenever
+`foundAt` is set, `caa-inconclusive` cites the parent's records without claiming
+they govern, `caaRenewalOutlook` answers `unavailable` rather than "may renew" or
+"refused", and the page's CAA panel says the same. The confident permit-or-forbid
+sentence was the found-policy twin of turning a timeout into "no policy".
 
 This is the same shape as `sgIsDangling` refusing to call a name unclaimed when
 it merely has no address record: the damaging output is the confident sentence,

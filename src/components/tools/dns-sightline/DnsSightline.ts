@@ -51,7 +51,7 @@ interface SgReport {
     all: string | null
   }
   dmarc: { record: string | null; recordCount: number; tags: Record<string, string>; atApex: boolean; unanswered: boolean }
-  caa: { policyAt: string | null; allowed: string[]; allowedWild: string[]; forbidsAll: boolean; forbidsAllWild: boolean; unknownCritical: string[] }
+  caa: { policyAt: string | null; allowed: string[]; allowedWild: string[]; forbidsAll: boolean; forbidsAllWild: boolean; unknownCritical: string[]; incomplete: boolean }
   caaWalked: string[]
   mxTargets: Array<{ preference: number; host: string; isCname: boolean; cnameTo: string | null; addresses: string[]; resolves: boolean; unanswered: boolean }>
   cname: { target: string | null; dangling: boolean; service: string | null; coexisting: string[]; atApex: boolean }
@@ -442,8 +442,19 @@ class DnsSightlineTool extends HTMLElement {
 
   private renderCaa(r: SgReport): string {
     const c = r.caa
+    const walked = r.caaWalked.map(w => `<code>${sgEsc(w)}</code>`).join(' → ')
+    // The panel reads `incomplete` BEFORE `policyAt`, for the same reason the
+    // findings do: an unanswered lookup below the policy means it may not be
+    // the one that governs, and an unanswered walk that found nothing means
+    // "unknown", never "any CA may issue". Without this the panel printed that
+    // sentence directly under the finding that said the lookup had failed.
+    const caveat = c.incomplete
+      ? c.policyAt
+        ? `<p data-type="sg-note">A policy is published at <code>${sgEsc(c.policyAt)}</code>, but a CAA lookup for a more specific name on the way there got no answer (checked ${walked}). A record at that name would take precedence, so this is not known to be the policy that governs <code>${sgEsc(r.name)}</code>.</p>`
+        : `<p data-type="sg-note">At least one CAA lookup got no answer (checked ${walked}), so whether any policy governs <code>${sgEsc(r.name)}</code> is unknown — which is not the same as knowing that none does.</p>`
+      : ''
     const body = c.policyAt
-      ? `<p data-type="sg-note">Policy found at <code>${sgEsc(c.policyAt)}</code> after checking ${r.caaWalked.map(w => `<code>${sgEsc(w)}</code>`).join(' → ')}.</p>
+      ? `${caveat || `<p data-type="sg-note">Policy found at <code>${sgEsc(c.policyAt)}</code> after checking ${walked}.</p>`}
          <ul data-type="sg-tags">
            <li>Certificates: ${c.forbidsAll ? '<span data-bad="1">no CA may issue</span>' : c.allowed.length ? c.allowed.map(a => `<code>${sgEsc(a)}</code>`).join(', ') : 'any CA'}</li>
            <li>Wildcards: ${
@@ -455,7 +466,7 @@ class DnsSightlineTool extends HTMLElement {
            }</li>
            ${c.unknownCritical.length ? `<li><span data-bad="1">critical tag no CA understands: ${sgEsc(c.unknownCritical.join(', '))}</span></li>` : ''}
          </ul>`
-      : `<p data-type="sg-note">No CAA record at <code>${sgEsc(r.name)}</code> or any parent up to the registered domain, so any CA may issue.</p>`
+      : caveat || `<p data-type="sg-note">No CAA record at <code>${sgEsc(r.name)}</code> or any parent up to the registered domain, so any CA may issue.</p>`
 
     // The other half of this question is on the wire, not in DNS: a CAA record
     // says who MAY issue, and only a handshake says who actually DID. Chainsaw

@@ -6600,6 +6600,8 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       // and the opposite conclusion — see the CAA-and-issuer block at the end
       // of this file for why that distinction is the load-bearing one.
       sg.sgCaaFindings(sg.sgCaaVerdict({ foundAt: null, walked: ['x.test'], entries: [], incomplete: true }), 'x.test', null),
+      // …and a policy FOUND above a lookup that failed, which cites what it found.
+      sg.sgCaaFindings(sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['www.ex.com', 'ex.com'], entries: [sg.sgParseCaa('0 issue "letsencrypt.org"')], incomplete: true }), 'www.ex.com', 'digicert.com'),
     ],
     sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, []), unreadMxFindings, stalledMxFindings],
     sgCnameFindings: [dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com')],
@@ -7249,10 +7251,13 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
   assert.equal(sgc.sgCaaVerdict(brokenWalk).incomplete, true)
   assert.equal(sgc.sgCaaVerdict(cleanWalk).incomplete, false)
 
-  // A policy that WAS found is complete by construction — the walk stops at the
-  // first name with any CAA record, so nothing below it can change the answer.
+  // A policy that WAS found is NOT complete by construction — this line used to
+  // assert that it was. The walk stops at the first name with a policy, so
+  // nothing ABOVE it matters; a name BELOW it that never answered might hold a
+  // CAA set of its own. The verdict must carry the flag through; section 6b
+  // below holds the walk, the findings and the outlook to it.
   const foundDespite = caa.caaVerdict([caa.parseCaa('0 issue "letsencrypt.org"')], 'example.com', true)
-  assert.equal(foundDespite.incomplete, false, 'a found policy cannot be inconclusive')
+  assert.equal(foundDespite.incomplete, true, 'the verdict passes incomplete through even when a policy was found')
 
   // The finding side of the same distinction: opposite ids off the same zero.
   const inconclusive = sgc.sgCaaFindings(sgc.sgCaaVerdict(brokenWalk), 'a.b.example.com', null)
@@ -7355,6 +7360,86 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
   assert.equal(/any CA may issue/i.test(unavailable.detail), false,
     'the inconclusive message must not contain the sentence the absent-policy message exists to say')
 
+  /* ── 6b. A failed lookup BELOW a found policy leaves the answer open. ─────
+
+     `sub.example.com` did not answer and `example.com` publishes a policy. A CA
+     checks the exact name first and stops at the first name with any CAA set,
+     so if sub.example.com holds one, THAT governs and example.com's is
+     irrelevant — and nobody knows whether it does. The walk used to return the
+     parent's policy with no flag, and every sentence built on it (who may
+     issue, "CAA blocks your CA", "may renew this") was a confident answer to a
+     question nobody got answered. */
+  const caaAt = (fail = {}, zone = { 'example.com': ['0 issue "letsencrypt.org"'] }) => async (name, type) => {
+    if (fail[name]) return { resolver: 'fixture', type, name, records: [], elapsedMs: 0, ...fail[name] }
+    const data = zone[name] ?? []
+    return { resolver: 'fixture', type, name, rcode: 'NOERROR', records: data.map(d => ({ type: 257, name, data: d, ttl: 60 })), elapsedMs: 0 }
+  }
+  const digicert = { issuer: { issuerO: 'DigiCert Inc', issuerCN: 'DigiCert TLS RSA SHA256 2020 CA1' } }
+  for (const [why, failure] of [
+    ['SERVFAIL', { rcode: 'SERVFAIL' }],
+    ['a timeout', { rcode: 'ERROR', error: 'no answer within 4000ms' }],
+    ['the query budget', { rcode: 'ERROR', error: 'query budget exhausted' }],
+    ['the deadline', { rcode: 'ERROR', error: 'inspection deadline reached' }],
+  ]) {
+    const walk = await sgc.sgAnalyzeCaa('sub.example.com', caaAt({ 'sub.example.com': failure }))
+    assert.equal(walk.foundAt, 'example.com', `(${why}) the walk still reaches the parent's policy`)
+    assert.equal(walk.incomplete, true, `(${why}) a failed lookup below the stop point makes the answer incomplete`)
+    const verdict = sgc.sgCaaVerdict(walk)
+    assert.equal(verdict.incomplete, true, `(${why}) and the verdict carries it rather than dropping it because a policy was found`)
+    const found = sgc.sgCaaFindings(verdict, 'sub.example.com', 'digicert.com')
+    assert.deepEqual(found.map(f => f.id), ['caa-inconclusive'],
+      `(${why}) no caa-policy and no caa-blocks-ca off a policy that may not be the one that governs`)
+    assert.ok(/take precedence/.test(found[0].detail) && found[0].detail.includes('example.com'), 'it names the policy it found and why that is not the answer')
+    assert.equal(found[0].basis, 'record')
+    assert.deepEqual(found[0].evidence, ['example.com  0 issue "letsencrypt.org"'], 'and cites the records it found, literally')
+    for (const [issuer, label] of [[{}, "Let's Encrypt, whom the parent permits"], [digicert, 'DigiCert, whom the parent forbids']]) {
+      const o = outlook(verdict, issuer)
+      assert.equal(o.state, 'unavailable', `(${why}) ${label}: neither "may renew" nor "refused" — the governing policy is unknown`)
+      assert.equal(o.problem, false)
+      assert.equal(o.policyAt, null, 'the facts row must not present the parent as the policy that governs')
+      assert.deepEqual(o.evidence, [])
+      assert.ok(o.detail.includes('example.com') && /take precedence/.test(o.detail))
+      assert.equal(/any CA may issue/i.test(o.detail), false)
+    }
+  }
+  // NXDOMAIN at the full name IS an answer — the name holds nothing, so it holds
+  // no CAA — and the parent's policy governs, completely.
+  const nxBelow = await sgc.sgAnalyzeCaa('sub.example.com', caaAt({ 'sub.example.com': { rcode: 'NXDOMAIN' } }))
+  assert.equal(nxBelow.foundAt, 'example.com')
+  assert.equal(nxBelow.incomplete, false, 'NXDOMAIN below the policy is an answer, not a failure')
+  const nxVerdict = sgc.sgCaaVerdict(nxBelow)
+  assert.deepEqual(sgc.sgCaaFindings(nxVerdict, 'sub.example.com', null).map(f => f.id), ['caa-policy'])
+  assert.equal(outlook(nxVerdict).state, 'permitted')
+  assert.equal(outlook(nxVerdict, digicert).state, 'refused')
+  // …and so is the ordinary case, an empty NOERROR on the way up.
+  assert.equal((await sgc.sgAnalyzeCaa('sub.example.com', caaAt())).incomplete, false)
+  // A failure ABOVE the stop point cannot matter, and the walk never asks it.
+  const above = await sgc.sgAnalyzeCaa('a.b.example.com',
+    caaAt({ 'example.com': { rcode: 'SERVFAIL' } }, { 'b.example.com': ['0 issue "letsencrypt.org"'] }))
+  assert.deepEqual(above.walked, ['a.b.example.com', 'b.example.com'], 'the walk stops at the first name with a policy')
+  assert.equal(above.incomplete, false, 'nothing above the stop point can change the answer')
+
+  /* ── 6c. An empty issuer authorises nobody, whatever follows the `;`. ────
+
+     RFC 8659 §4.2: the issuer-domain-name is optional, and an `issue` value
+     without one grants no issuance. Parameters may still follow the semicolon,
+     so `"; accounturi=…"` is `";"` with extra words — and testing the whole
+     value against `";"` read it as an allowed CA called "", which no CA ever
+     matches: every renewal refused while `forbidsAll` said false. */
+  const paramsOnly = v(['0 issue "; accounturi=https://acme.example/acct/1"'])
+  assert.equal(paramsOnly.forbidsAll, true, 'an empty issuer-domain-name forbids issuance, parameters or not')
+  assert.deepEqual(paramsOnly.allowed, [], 'and is not a permitted CA with an empty name')
+  assert.equal(caa.caaAllows(paramsOnly, 'letsencrypt.org', false), false)
+  assert.equal(outlook(paramsOnly).state, 'forbidden-all')
+  assert.equal(v(['0 issue "letsencrypt.org"', '0 issuewild " ; validationmethods=dns-01"']).forbidsAllWild, true,
+    'the same rule for issuewild, whitespace and all')
+  assert.deepEqual(v(['0 issue "LetsEncrypt.org; validationmethods=dns-01"']).allowed, ['letsencrypt.org'],
+    'a named issuer keeps its name and drops its parameters')
+  const mixed = v(['0 issue ";"', '0 issue "letsencrypt.org"'])
+  assert.equal(mixed.forbidsAll, false, 'one empty issue entry beside a named one forbids nobody the named one permits')
+  assert.equal(caa.caaAllows(mixed, 'letsencrypt.org', false), true)
+  assert.equal(caa.caaAllows(mixed, 'digicert.com', false), false)
+
   // Every state the type declares is reachable from a fixture above, so a state
   // added later without one fails here rather than shipping unexercised.
   const declaredStates = [...(await readFile(new URL('../src/lib/caa.ts', import.meta.url), 'utf-8'))
@@ -7441,7 +7526,7 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
   assert.ok(/this\.caaInflight\?\.abort\(\)/.test(chainsawSrc),
     'the CAA fetch is aborted on unmount and on a new inspection — ClientRouter keeps the document')
 }
-console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unrecognised issuer draws no verdict, a failed lookup is not an absent policy, the issuer-independent refusals survive an unknown CA, and the narrow scope\'s looser rate limit is paid for by its smaller query budget')
+console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unrecognised issuer draws no verdict, a failed lookup is neither an absent policy nor licence to trust the one found above it, an empty issuer forbids all, the issuer-independent refusals survive an unknown CA, and the narrow scope\'s looser rate limit is paid for by its smaller query budget')
 
 /* ─────  the boot check boots what the image runs, and the shell cannot pass it  ─────
    `npm run boot:check` exists because build and check were both green on a

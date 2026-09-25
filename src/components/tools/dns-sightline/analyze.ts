@@ -888,9 +888,12 @@ export interface SgCaaReport {
   /** Names checked on the way up, in order. */
   walked: string[]
   /**
-   * A lookup in the walk failed (or the query budget refused it), so an empty
-   * result is "no answer" rather than "no policy". See `CaaVerdict.incomplete`:
-   * the two end with the same zero entries and mean opposite things.
+   * A lookup at or below the stop point got no answer (`sgUnanswered`: it
+   * failed, or the budget or the deadline refused it). With nothing found that
+   * makes the empty result "no answer" rather than "no policy"; with a policy
+   * found above it, the policy is not known to be the one that governs — a CAA
+   * set at the unanswered, more specific name would take precedence. See
+   * `CaaVerdict.incomplete`.
    */
   incomplete?: boolean
 }
@@ -907,6 +910,16 @@ export interface SgCaaReport {
  *
  * The walk stops at two labels, which is the pragmatic floor — going further
  * would need the Public Suffix List to know that `co.uk` is not a domain.
+ *
+ * **A failed lookup below the stop point makes the answer incomplete even when
+ * a policy was found.** The walk goes up only past names that answered "no CAA
+ * here"; a name that did not answer at all might hold a CAA set of its own, and
+ * a CA would stop THERE. So `sub.example.com` timing out while `example.com`
+ * publishes a policy does not mean example.com's policy governs sub — it means
+ * nobody knows which does. Reporting the parent's policy as the answer is the
+ * found-policy twin of turning a timeout into "no policy": a confident
+ * permit-or-forbid sentence, produced by a question nobody got answered. Only a
+ * lookup ABOVE the stop point cannot matter, and the walk never asks one.
  */
 export async function sgAnalyzeCaa(name: string, lookup: SgLookup): Promise<SgCaaReport> {
   const labels = name.split('.')
@@ -920,11 +933,12 @@ export async function sgAnalyzeCaa(name: string, lookup: SgLookup): Promise<SgCa
     const candidate = labels.slice(i).join('.')
     walked.push(candidate)
     const answer = await lookup(candidate, 'CAA')
-    // NXDOMAIN is an answer: the name has no CAA because it has nothing at all.
-    // SERVFAIL, a refusal, a timeout or an exhausted budget are not answers.
-    if (answer.error || (answer.rcode !== 'NOERROR' && answer.rcode !== 'NXDOMAIN')) failed = true
     const entries = answer.records.map(r => sgParseCaa(r.data)).filter((e): e is CaaEntry => e !== null)
-    if (entries.length) return { foundAt: candidate, entries, walked }
+    // Every name below this one answered or failed; `failed` is theirs.
+    if (entries.length) return { foundAt: candidate, entries, walked, incomplete: failed }
+    // NXDOMAIN is an answer: the name has no CAA because it has nothing at all.
+    // SERVFAIL, a refusal, a timeout, the budget and the deadline are not.
+    if (sgUnanswered(answer)) failed = true
   }
   return { foundAt: null, entries: [], walked, incomplete: failed }
 }
@@ -935,7 +949,22 @@ export function sgCaaVerdict(report: SgCaaReport): SgCaaVerdict {
 
 export function sgCaaFindings(v: SgCaaVerdict, name: string, wantedCa: string | null): SgFinding[] {
   const out: SgFinding[] = []
-  if (!v.policyAt && v.incomplete) {
+  if (v.incomplete && v.policyAt) {
+    // A policy WAS found, above a name whose lookup failed. Every sentence
+    // below this block — who may issue, whether the named CA is blocked, even
+    // a critical tag — holds only if that policy governs, and a CAA set at the
+    // unanswered name would take precedence over it. So none of them is said.
+    out.push({
+      id: 'caa-inconclusive',
+      level: 'warn',
+      title: 'CAA policy could not be determined',
+      detail: `A CAA policy is published at ${v.policyAt}, but the lookup for a more specific name on the way there failed or was refused. A CAA record at that name would take precedence, so this is not known to be the policy that governs ${name} — re-run the inspection before relying on it either way.`,
+      evidence: v.raws.map(r => `${v.policyAt}  ${r}`),
+      basis: 'record',
+    })
+    return out
+  }
+  if (v.incomplete) {
     // The opposite sentence to `caa-none`, off the same empty result. Claiming
     // "any CA may issue" because the lookup fell over is the one CAA mistake
     // that reassures somebody about a zone nobody actually read.

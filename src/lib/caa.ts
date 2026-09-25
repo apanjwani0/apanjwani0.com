@@ -85,16 +85,33 @@ export interface CaaVerdict {
   /** The literal record lines the verdict rests on, for a finding to cite. */
   raws: string[]
   /**
-   * A lookup on the way up the tree failed or was refused by the query budget.
+   * A lookup at or below `policyAt` — or anywhere, when nothing was found —
+   * failed or was refused by the query budget or the deadline.
    *
-   * Load-bearing, and it is the difference between two opposite sentences. A
-   * walk that reached the apex and found nothing means "no policy governs this
-   * name, so any CA may issue" — a fact. A walk whose queries FAILED also ends
-   * with no entries, and reporting that as "no policy" turns a network error
-   * into a reassuring claim about somebody's zone. The absence of evidence is
-   * not evidence of absence, so an incomplete walk refuses to conclude.
+   * Load-bearing, and it is the difference between opposite sentences. A walk
+   * that reached the apex and found nothing means "no policy governs this name,
+   * so any CA may issue" — a fact. A walk whose queries FAILED also ends with no
+   * entries, and reporting that as "no policy" turns a network error into a
+   * reassuring claim about somebody's zone. And a policy found at a parent is
+   * the answer only if every more specific name really answered "no CAA here":
+   * one that did not answer might publish a set of its own, which a CA would
+   * obey instead. The absence of evidence is not evidence of absence, so an
+   * incomplete verdict refuses to conclude either way.
    */
   incomplete: boolean
+}
+
+/**
+ * The issuer-domain-name of an `issue`/`issuewild` value: everything before the
+ * first `;`, which is where the parameters begin (RFC 8659 §4.2). It may be
+ * empty, and an empty issuer authorises NOBODY — so `"; accounturi=…"` is the
+ * same instruction as `";"`, however much it carries after the semicolon.
+ * Testing the whole value against `";"` read that record as a permitted issuer
+ * with an empty name, which no CA ever matches: every renewal refused, with
+ * `forbidsAll` still false and the finding naming an allowed CA of "".
+ */
+function caaIssuerOf(entry: CaaEntry): string {
+  return entry.value.split(';')[0].trim().toLowerCase()
 }
 
 export function caaVerdict(
@@ -105,22 +122,26 @@ export function caaVerdict(
   const issue = entries.filter(e => e.tag === 'issue')
   const issuewild = entries.filter(e => e.tag === 'issuewild')
   const known = new Set(['issue', 'issuewild', 'iodef', 'issuemail', 'issuevmc', 'contactemail', 'contactphone'])
+  const allowed = issue.map(caaIssuerOf).filter(Boolean)
+  const allowedWild = issuewild.map(caaIssuerOf).filter(Boolean)
   return {
     policyAt: foundAt,
-    allowed: issue.filter(e => e.value && e.value !== ';').map(e => e.value.split(';')[0].trim().toLowerCase()),
-    allowedWild: issuewild.filter(e => e.value && e.value !== ';').map(e => e.value.split(';')[0].trim().toLowerCase()),
-    forbidsAll: issue.length > 0 && issue.every(e => !e.value || e.value === ';'),
-    forbidsAllWild: issuewild.length > 0 && issuewild.every(e => !e.value || e.value === ';'),
+    allowed,
+    allowedWild,
+    forbidsAll: issue.length > 0 && allowed.length === 0,
+    forbidsAllWild: issuewild.length > 0 && allowedWild.length === 0,
     iodef: entries.filter(e => e.tag === 'iodef').map(e => e.value),
     // The critical bit is 128, and its meaning is "refuse to issue if you do
     // not understand this tag" — so an unrecognised critical tag blocks every
     // CA, which is a spectacular way to break a renewal silently.
     unknownCritical: entries.filter(e => (e.flags & 128) !== 0 && !known.has(e.tag)).map(e => e.tag),
     raws: entries.map(e => e.raw),
-    // A policy that was FOUND is complete by construction: the walk stops at
-    // the first name with any CAA record, so nothing below it can change the
-    // answer. Only a walk that ended empty can be inconclusive.
-    incomplete: incomplete && !foundAt,
+    // Passed through whether or not a policy was found. It used to be dropped
+    // whenever `foundAt` was set, on the reasoning that a walk stops at the
+    // first name with a policy so nothing below can change the answer — but
+    // "below" includes the names that never answered, and one of them may hold
+    // the policy that actually governs.
+    incomplete,
   }
 }
 
@@ -293,13 +314,18 @@ export function caaRenewalOutlook(input: CaaOutlookInput): CaaOutlook {
   const at = v.policyAt ?? host
 
   if (v.incomplete) {
+    // Outranks everything, found policy or not: every state below reasons from
+    // the policy that governs this name, and that is exactly what is unknown.
     return {
       ...base,
       evidence: [],
+      policyAt: null,
       state: 'unavailable',
       problem: false,
       headline: 'CAA policy could not be read',
-      detail: `At least one CAA lookup for ${host} failed, so this is not evidence that no policy exists — it is no answer at all. Re-run the check, or read the policy directly in DNS Sightline.`,
+      detail: v.policyAt
+        ? `A CAA policy is published at ${v.policyAt}, but the lookup for a more specific name on the way there failed, and a CAA record at that name would take precedence. Which policy the next renewal for ${host} will meet is therefore unknown — re-run the check, or read the policy directly in DNS Sightline.`
+        : `At least one CAA lookup for ${host} failed, so this is not evidence that no policy exists — it is no answer at all. Re-run the check, or read the policy directly in DNS Sightline.`,
     }
   }
 
