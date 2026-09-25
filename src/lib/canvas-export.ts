@@ -284,6 +284,52 @@ export interface LiveExportOptions {
 }
 
 /**
+ * The export bars on the page, each with the function that drops its unsaved
+ * preview.
+ *
+ * ONE pair of document listeners serves all of them, registered the first time
+ * a bar is attached and never again — the module is evaluated once per session,
+ * because the client router keeps the module cache. `attachCanvasExport` used to
+ * add its own `astro:before-swap` listener on every call and never remove it,
+ * and seven engines call it, again on every reconnect: each in-site navigation
+ * to a page with a canvas left one more document listener behind, holding its
+ * bar, its preview image and everything its closure reached, for the rest of the
+ * session. The registry is bounded by the bars actually on the page — a bar
+ * whose host has gone leaves it at the next swap or the next attach.
+ */
+const liveBars = new Map<HTMLElement, () => void>()
+let swapHooked = false
+
+function trackBar(bar: HTMLElement, clearPending: () => void): void {
+  // A bar whose engine unmounted without a navigation (an embed removed in
+  // place) is let go here, preview revoked, rather than waiting for a swap.
+  for (const [b, clear] of liveBars) {
+    if (!b.isConnected) {
+      clear()
+      liveBars.delete(b)
+    }
+  }
+  liveBars.set(bar, clearPending)
+  if (swapHooked) return
+  swapHooked = true
+  // A preview the visitor never saved or discarded holds an object URL until
+  // the document goes away — and on the /learnings lane the document does NOT
+  // go away, because those pages run the client router and navigate by swapping
+  // it. Generate a GIF, click through to another article, and the blob was
+  // pinned for the rest of the session. The tools and games lanes pass
+  // `clientRouter={false}` and so always got a full reload, which is why this
+  // only ever leaked in one place. Revoking on the swap costs nothing when
+  // there is no pending preview.
+  document.addEventListener('astro:before-swap', () => {
+    for (const clear of liveBars.values()) clear()
+  })
+  // The swap has replaced the page: every bar it did not carry across is gone.
+  document.addEventListener('astro:after-swap', () => {
+    for (const b of liveBars.keys()) if (!b.isConnected) liveBars.delete(b)
+  })
+}
+
+/**
  * Give any live canvas an export bar: PNG now, GIF recorded from what is
  * actually on screen, both previewed before saving.
  *
@@ -371,15 +417,9 @@ export function attachCanvasExport(
     previewImg.removeAttribute('src')
   }
 
-  // A preview the visitor never saved or discarded holds an object URL until
-  // the document goes away — and on the /learnings lane the document does NOT
-  // go away, because those pages run the client router and navigate by swapping
-  // it. Generate a GIF, click through to another article, and the blob was
-  // pinned for the rest of the session. The tools and games lanes pass
-  // `clientRouter={false}` and so always got a full reload, which is why this
-  // only ever leaked in one place. Revoking on the swap costs nothing when
-  // there is no pending preview.
-  document.addEventListener('astro:before-swap', clearPending)
+  // Swapping the page revokes an unsaved preview — through the one shared pair
+  // of listeners, never a new one per bar (see `trackBar`).
+  trackBar(bar, clearPending)
 
   const show = (blob: Blob, filename: string, note: string) => {
     clearPending()

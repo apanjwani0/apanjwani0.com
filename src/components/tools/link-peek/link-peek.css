@@ -314,6 +314,9 @@ div[data-tool="link-peek"] [data-group="lp-tagshead"] [data-group="toolbar"] {
   margin: 0;
 }
 
+/* Keyboard-reachable for the same reason as DNS Sightline's tables: the
+   wrapper renders `tabindex="0"` as a named region, and the site's own
+   :focus-visible ring marks it. */
 div[data-tool="link-peek"] [data-type="lp-tablewrap"] {
   overflow-x: auto;
 }

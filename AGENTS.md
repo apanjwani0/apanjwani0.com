@@ -856,6 +856,9 @@ was a second, mirrored fixture that does.
   exactly that is what this replaced, and none of them offered a GIF for engines
   whose whole point is that they move. Sizes and the custom-resolution validator
   (`parseCustomSize`, bounded on both edges *and* total pixels) live there too.
+  An attach registers nothing on `document`: every bar joins one registry that a
+  single guarded pair of swap listeners serves (`trackBar`), because a listener
+  per attach outlived its page on every in-site navigation.
 
   There are now **three** ways in, and the third exists because live capture is
   the wrong instrument for some engines rather than a worse one. `AnimationSource`
@@ -923,7 +926,7 @@ was a second, mirrored fixture that does.
   `nodeDimensionsIncludeLabels: true` is **required** on every Cytoscape layout —
   it defaults to off, and without it a graph of word-labelled nodes lays out
   using the box and ignores the text, piling up overlapping in one corner.
-- **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading.
+- **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading. The same persistence cuts the other way: the document outlives every page, so **a `document` or `window` listener added per mount must be removed with the same handler, be bound by a `signal`/`once`, or be registered once behind a module-level guard** (`if (wired) return`, as `nav-ui.ts` does). `canvas-export.ts` added an `astro:before-swap` listener on every attach and never removed it — seven engines, again on every reconnect — and Draftboard added a document click listener per connect; `security:smoke` derives the rule over every `.ts` under `src/components` and `src/lib`.
 - **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed. Three modules are Node-only and say so in their own docblocks: `src/lib/link-peek-fetch.ts` (`node:net`), `src/lib/tls-inspect.ts` (`node:tls`, `node:crypto`) and `src/lib/dns-lookup.ts` (`node:dns`, the bounded name lookup the other two share). All three are reached only from the Link Peek and Chainsaw API routes, never from the browser bundle — asserted by the build carrying no `node:` import into any client chunk. A Workers deploy has no raw-socket TLS, so Chainsaw is the one surface that would need a different transport behind the same JSON shape.
 
 ## Design System
@@ -1093,7 +1096,10 @@ was a second, mirrored fixture that does.
   gets held — `min-width` on the SVG plus `overflow-x: auto` on its container —
   and the reader swipes, which is the trade `learnings/[slug].astro` already
   makes for a wide table. A scrollable container also takes `tabindex="0"`, or
-  the content past the edge is unreachable without a pointer. `security:smoke`
+  the content past the edge is unreachable without a pointer — DNS Sightline's
+  two tables and Link Peek's tag table shipped without it; their wrappers are now
+  named regions (`role="region"` + `aria-label`), ringed by the site's own
+  `:focus-visible`, and asserted. `security:smoke`
   parses the floor out of the stylesheet, because a lone `min-width` reads like a
   stray constraint to the next person tidying the file.
 - **Theming**: `theme.css` defines light at `:root` and overrides the palette under `[data-theme="dark"]` (the site runs dark). Add a theme by adding another `[data-theme="…"]` block — palette tokens only.
@@ -1351,6 +1357,18 @@ already broken once:
   already in the session's module cache (every in-site navigation) and *after*
   it on a cold load, so no single moment is safe to sweep at. A timing-based
   version passed a hard reload and failed on every in-site click.
+
+  "Disconnects on the first hit" is only a bound for a component that produces
+  one, and three things make it hold for all of them. A figure that writes no
+  chrome at all is declared in `EMBED_NO_CHROME` (`src/lib/embeds.ts`) and gets no
+  observer — the Diagram Atlas never writes an `<h1>`, so the diagrams article ran
+  eight observers that never disconnected, re-scanning on every beat of its
+  animated figures; `security:smoke` derives that set from the components' own
+  sources in both directions. Each container gets ONE observer, because both
+  routes mount at script evaluation *and* on `astro:page-load`, which fires for
+  the first page too — the second observer of a pair never sees a hit once its
+  twin has stripped the chrome. And whatever is still waiting is released at the
+  next `astro:before-swap`.
 
 Unknown or absent `embed` degrades to a prose article rather than throwing — a
 typo in /admin should cost the simulation, not the page. `security:smoke` asserts

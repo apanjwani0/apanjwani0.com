@@ -343,7 +343,7 @@ class DnsSightlineTool extends HTMLElement {
           <div data-group="toolbar"><button data-copy="dig" type="button">Copy dig commands</button></div>
         </div>
         <p data-type="sg-note">${r.resolvers.map(x => `<code>${sgEsc(x.label)}</code> ${sgEsc(x.operator)}`).join(' · ')}. TTL and record order are excluded from the comparison.</p>
-        <div data-type="sg-scroll">
+        <div data-type="sg-scroll" tabindex="0" role="region" aria-label="Resolver agreement table">
           <table data-type="sg-table">
             <thead><tr><th scope="col">Type</th><th scope="col">Verdict</th><th scope="col">Answer</th></tr></thead>
             <tbody>${rows}</tbody>
@@ -360,7 +360,7 @@ class DnsSightlineTool extends HTMLElement {
           <h2 id="sg-records-h">Records</h2>
           <div data-group="toolbar"><button data-copy="zone" type="button">Copy as zone file</button></div>
         </div>
-        <div data-type="sg-scroll">
+        <div data-type="sg-scroll" tabindex="0" role="region" aria-label="Records table">
           <table data-type="sg-table">
             <thead><tr><th scope="col">Type</th><th scope="col">Value</th><th scope="col">TTL</th></tr></thead>
             <tbody>${rows || '<tr><td colspan="3">No records of any queried type.</td></tr>'}</tbody>

@@ -352,7 +352,7 @@ class LinkPeekTool extends HTMLElement {
     row('canonical', meta.canonical)
     for (const t of meta.og) row(t.key, t.value)
     for (const t of meta.twitter) row(t.key, t.value)
-    return `<div data-type="lp-tablewrap"><table data-type="lp-tags"><thead><tr><th scope="col">tag</th><th scope="col">value</th><th scope="col"></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
+    return `<div data-type="lp-tablewrap" tabindex="0" role="region" aria-label="Meta tags table"><table data-type="lp-tags"><thead><tr><th scope="col">tag</th><th scope="col">value</th><th scope="col"></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
   }
 
   /* ---------------------------------------------------------------- */

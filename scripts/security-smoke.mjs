@@ -7719,3 +7719,159 @@ console.log('boot check: starts the entry the Dockerfile runs, and no inherited 
   }
 }
 console.log('pr 19 review: a refused client never spends the shared bucket (derived over every route), one inspection stops at its deadline without claiming absence, and both dialers share one bounded name lookup')
+
+/* ─────  PR 19 review: what a page leaves behind, and what a keyboard can reach  ─────
+
+   ClientRouter keeps one document for the whole session on the lanes that use
+   it, so anything registered against `document` or `window` per mount outlives
+   the page that registered it. Two such leaks were in the review, and both were
+   invisible in every screenshot: the canvas export bar added an
+   `astro:before-swap` listener on every attach and never removed it, and the
+   embed chrome observer only disconnected on a hit that one figure never
+   produces. The third item is the keyboard: a table that scrolls sideways is
+   reachable only if its wrapper can take focus. */
+{
+  /* ── 1. No document or window listener outlives what added it. ────────────
+
+     Derived from every .ts file under src/components and src/lib, not listed:
+     each `document|window.addEventListener` must be removed with the SAME
+     handler in the same file, be bound by a `signal` or `once`, or sit behind a
+     module-level once-guard (`if (flag) return` … `flag = true`, with
+     `let flag = false` at module scope) — the singleton shape nav-ui,
+     analytics-client and the daily-streak strip already use. Whole comment
+     lines are dropped first, so a docblock quoting a call is not a call. */
+  const clientTs = []
+  const walkTs = async dir => {
+    for (const entry of await readdir(new URL(`${dir}/`, import.meta.url), { withFileTypes: true })) {
+      const child = `${dir}/${entry.name}`
+      if (entry.isDirectory()) await walkTs(child)
+      else if (entry.name.endsWith('.ts')) clientTs.push(child)
+    }
+  }
+  await walkTs('../src/components')
+  await walkTs('../src/lib')
+  const scanArgs = (code, from) => {
+    let depth = 0
+    let quote = null
+    for (let i = from; i < code.length; i += 1) {
+      const c = code[i]
+      if (quote) { if (c === '\\') i += 1; else if (c === quote) quote = null; continue }
+      if (c === "'" || c === '"' || c === '`') { quote = c; continue }
+      if ('([{'.includes(c)) depth += 1
+      else if (')]}'.includes(c)) { if (depth === 0) return code.slice(from, i); depth -= 1 }
+    }
+    return code.slice(from)
+  }
+  const splitFirstArg = text => {
+    let depth = 0
+    let quote = null
+    for (let i = 0; i < text.length; i += 1) {
+      const c = text[i]
+      if (quote) { if (c === '\\') i += 1; else if (c === quote) quote = null; continue }
+      if (c === "'" || c === '"' || c === '`') { quote = c; continue }
+      if ('([{'.includes(c)) depth += 1
+      else if (')]}'.includes(c)) depth -= 1
+      else if (c === ',' && depth === 0) return [text.slice(0, i), text.slice(i + 1)]
+    }
+    return [text, '']
+  }
+  const unbounded = []
+  let listenerSites = 0
+  for (const file of clientTs) {
+    const code = (await readFile(new URL(file, import.meta.url), 'utf-8'))
+      .split('\n').filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n')
+    for (const m of code.matchAll(/\b(document|window)\.addEventListener\(\s*(['"])([^'"]+)\2\s*,/g)) {
+      listenerSites += 1
+      const [target, , event] = [m[1], m[2], m[3]]
+      const [handlerRaw, options] = splitFirstArg(scanArgs(code, m.index + m[0].length))
+      const handler = handlerRaw.trim()
+      if (/\bsignal\b|\bonce\s*:\s*true/.test(options)) continue
+      const escaped = handler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (new RegExp(`\\b${target}\\.removeEventListener\\(\\s*['"]${event}['"]\\s*,\\s*${escaped}\\s*[,)]`).test(code)) continue
+      const before = code.slice(0, m.index)
+      const guard = [...before.matchAll(/\bif \((\w+)\) return\b/g)].pop()
+      if (guard) {
+        const since = before.slice(guard.index)
+        if (new RegExp(`^let ${guard[1]} = false\\b`, 'm').test(code)
+          && new RegExp(`\\b${guard[1]} = true\\b`).test(since)
+          && !/\n\}/.test(since)) continue
+      }
+      unbounded.push(`${file.replace('../', '')}: ${target}.addEventListener('${event}', ${handler.slice(0, 48)})`)
+    }
+  }
+  assert.ok(listenerSites >= 20, `expected to discover the document/window listeners (found ${listenerSites}) — has the tree moved?`)
+  assert.deepEqual(unbounded, [],
+    'a document/window listener added per mount must be removed with the same handler, be signal/once-bound, or be registered once behind a module-level guard — otherwise every in-site navigation leaves one more behind, holding whatever its closure reached')
+  // The export bar specifically: nothing registered per attach.
+  const cxSrc = await readFile(new URL('../src/lib/canvas-export.ts', import.meta.url), 'utf-8')
+  const attachBody = cxSrc.slice(cxSrc.indexOf('export function attachCanvasExport'))
+  assert.equal(/\b(document|window)\.addEventListener\(/.test(attachBody), false,
+    'attachCanvasExport registers no document listener of its own — the shared pair in trackBar serves every bar')
+  assert.ok(/trackBar\(bar, clearPending\)/.test(attachBody), '…and every bar joins that registry, or its preview is never revoked on a swap')
+
+  /* ── 2. The chrome observer is bounded for every embed. ───────────────────
+
+     `EMBED_NO_CHROME` is a claim about what components render, so it is held to
+     the components' sources in BOTH directions: a figure that writes no h1 and
+     no *-header must be listed (or its observer never disconnects), and one that
+     does must not be (or its h1 survives into the article). The dispatch in
+     game-mount.ts says which directory each slug renders from. */
+  const { EMBED_NO_CHROME } = await import('../src/lib/embeds.ts')
+  const mountSrc = await readFile(new URL('../src/lib/game-mount.ts', import.meta.url), 'utf-8')
+  const dispatch = [...mountSrc.matchAll(/slug === '([^']+)'\) return import\('\.\.\/components\/games\/([^/']+)\//g)]
+  assert.equal(dispatch.length, Object.keys(EMBED_TAGS).length, 'every embed has exactly one dispatch branch to read its source from')
+  const chromeMarker = /<h1[\s>]|['"]h1['"]|data-type="[a-z0-9-]+-header"|'data-type': '[a-z0-9-]+-header'/
+  for (const [, slug, dir] of dispatch) {
+    const sources = []
+    const collect = async d => {
+      for (const entry of await readdir(new URL(`${d}/`, import.meta.url), { withFileTypes: true })) {
+        if (entry.isDirectory()) await collect(`${d}/${entry.name}`)
+        else if (entry.name.endsWith('.ts')) sources.push(await readFile(new URL(`${d}/${entry.name}`, import.meta.url), 'utf-8'))
+      }
+    }
+    await collect(`../src/components/games/${dir}`)
+    const writesChrome = sources.some(src => chromeMarker.test(src))
+    assert.equal(EMBED_NO_CHROME.has(slug), !writesChrome, writesChrome
+      ? `${slug} writes its own title block, so EMBED_NO_CHROME must not list it — its h1 would survive into the article`
+      : `${slug} writes no h1 and no *-header, so its chrome observer would never get a hit — list it in EMBED_NO_CHROME`)
+  }
+  assert.ok(EMBED_NO_CHROME.has('diagram-atlas'), 'the figure the review found is one of them')
+  const stripBody = mountSrc.slice(mountSrc.indexOf('export function stripEmbedChrome'), mountSrc.indexOf('export function mountEmbed'))
+  const at = needle => stripBody.indexOf(needle)
+  assert.ok(at('new MutationObserver(') !== -1, 'still an observer, not a timed sweep — cold and warm module caches land the markup on opposite sides of page-load')
+  assert.ok(at('if (handled.has(container)) return') !== -1 && at('if (handled.has(container)) return') < at('new MutationObserver('),
+    'one observer per container: both routes mount twice on a cold load, and the second observer would never see a hit')
+  assert.ok(at('EMBED_NO_CHROME.has(slug)) return') !== -1 && at('EMBED_NO_CHROME.has(slug)) return') < at('new MutationObserver('),
+    'a figure that writes no chrome gets no observer at all')
+  assert.ok(/addEventListener\('astro:before-swap', \(\) => \{\s*for \(const waiter of \[\.\.\.waiting\]\) waiter\(\)/.test(stripBody),
+    'whatever is still waiting is released at the next swap, so no observer outlives its page')
+  assert.ok(/waiting\.add\(release\)/.test(stripBody) && /waiting\.delete\(release\)/.test(stripBody),
+    'an observer that got its hit leaves the waiting set, so the set is bounded by what is on the page')
+
+  /* ── 3. A table that scrolls sideways can be reached from the keyboard. ───
+
+     A scroll container nobody can focus is unreachable without a pointer. The
+     two wrappers the review found are asserted directly — which element a
+     tool stylesheet scrolls cannot be mapped onto rendered markup robustly
+     from here — and each must be a NAMED region, so the extra tab stop
+     announces what it is, and ringed by the site's own :focus-visible rule. */
+  for (const [component, sheet, dt] of [
+    ['../src/components/tools/dns-sightline/DnsSightline.ts', '../src/components/tools/dns-sightline/dns-sightline.css', 'sg-scroll'],
+    ['../src/components/tools/link-peek/LinkPeek.ts', '../src/components/tools/link-peek/link-peek.css', 'lp-tablewrap'],
+  ]) {
+    const css = await readFile(new URL(sheet, import.meta.url), 'utf-8')
+    assert.ok(new RegExp(`\\[data-type="${dt}"\\] \\{\\s*overflow-x: auto;`).test(css), `${dt} is the element that scrolls`)
+    assert.equal(/outline:\s*(none|0)\b/.test(css), false, `${sheet} must not switch the focus ring off`)
+    const src = await readFile(new URL(component, import.meta.url), 'utf-8')
+    const wrappers = [...src.matchAll(new RegExp(`<div data-type="${dt}"([^>]*)>`, 'g'))]
+    assert.ok(wrappers.length > 0, `${component} renders ${dt}`)
+    for (const w of wrappers) {
+      assert.ok(/\btabindex="0"/.test(w[1]), `every ${dt} wrapper takes focus (tabindex="0") — the columns past the edge are otherwise out of a keyboard's reach`)
+      assert.ok(/\brole="region"/.test(w[1]) && /\baria-label="[^"]+"/.test(w[1]), `every ${dt} wrapper is a named region, so the tab stop says what it is`)
+    }
+  }
+  const sharedCssSrc = await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')
+  assert.ok(/(^|\n):focus-visible \{\s*outline: 2px solid var\(--color-accent\);/.test(sharedCssSrc),
+    'the site-wide ring that shows where keyboard focus went applies to any focusable element, a scroll region included')
+}
+console.log('pr 19 review: no document/window listener outlives what added it (derived over every client module), the chrome observer is bounded for every embed, and the scrolling tables take keyboard focus')
