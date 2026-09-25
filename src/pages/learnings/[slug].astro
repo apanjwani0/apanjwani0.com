@@ -156,8 +156,21 @@ const breadcrumbLd = breadcrumbListJsonLd([
 
      Everything below is size, weight and space. Tokens only. */
 
+  /* One column, one left edge. The breadcrumb fills `main` (728px at the site's
+     prose width) while the article sat at 40rem inside it, so the trail started
+     44px to the LEFT of the title it belongs to — two alignments on a page that
+     has exactly one column, and on a wide display the gap is the first thing you
+     see. The article's measure IS this page's column, so main carries it and
+     everything inside lines up on it. 42rem is the measure shared.css already
+     uses for a page lede (~68 characters here), between the 40rem this had and
+     the 45.5rem it would inherit unconstrained. */
+  :global(main) {
+    --measure: 42rem;
+    max-width: calc(var(--measure) + 2 * var(--space-page-x));
+  }
+
   article {
-    max-width: 40rem;
+    max-width: var(--measure);
     margin-inline: auto;
   }
 

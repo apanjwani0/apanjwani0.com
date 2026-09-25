@@ -894,6 +894,24 @@ was a second, mirrored fixture that does.
   definition of one, and **only a tool-private subtree may size an h1 at all**
   (Draftboard's `md-preview`, a heading inside a rendered markdown document, is the
   one legitimate case and it stays legitimate without being named in a list).
+- **…and one level OUT, for `<body>` itself — the same trap, and the one that
+  actually shipped broken.** The whole `body` rule (font, colour, page
+  background, and the flex column that pins the footer to the bottom) lived in
+  `global.css`, so `ToolBase` carried its **own** copy in an `is:global` block.
+  Two copies of a bare element rule is the two-dialect setup by construction,
+  and they had already drifted: ToolBase's set the font, colour and background
+  but **not** `display: flex` / `flex-direction: column` / `min-height`, so on
+  every tool, game and Driftfield route a page shorter than the viewport left
+  the footer floating in the middle with a slab of bare background beneath it —
+  measured at 820px on `/tools/chainsaw` in an 1800px viewport. The background
+  is what hid it: body's background propagates to the canvas, so the *page* is
+  the right colour either way and only the footer's position gives it away,
+  which is why a colour check finds nothing. `body` now lives in `shared.css`
+  with `main { flex: 1 0 auto }` beside it, and `security:smoke` **derives** the
+  guarantee rather than listing files: whatever `<body>` declarations one shell
+  reaches, the other must reach the same ones, neither shell may declare its own,
+  and the column properties must be present at all (or the comparison passes
+  vacuously on a rule that lost them from both sides).
 - **…and the same rule one level down, for the CARD title.** A design audit on
   2026-09-24 measured `[data-type="card-title"]` on all five hubs that render a
   card grid and found **four** treatments: `/tools` at 20.8px/600 from its own

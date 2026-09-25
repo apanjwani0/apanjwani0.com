@@ -9,6 +9,24 @@ html {
   scroll-padding-top: var(--nav-h, var(--space-header-offset));
 }
 
+/* The page shell. BOTH layouts render <body>, so it is owned here and not in
+   global.css, which only Base.astro loads — the same bare-element trap the page
+   title fell into one level up. ToolBase carried its own copy in an `is:global`
+   block, and the two had drifted: it set the font, colour and background but not
+   the column, so on every tool, game and Driftfield route a page shorter than
+   the viewport left the footer floating with a slab of bare background beneath
+   it. The column (flex + min-height here, `flex: 1 0 auto` on main below) is
+   what pins the footer to the bottom, and both lanes need all four. */
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  font-family: var(--font-serif);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
 /* Make the `hidden` attribute reliable. Some elements set an explicit display
    (e.g. flex) whose specificity beats the UA `[hidden] { display: none }`, so
    toggling `.hidden` in JS leaves them visible. This guarantees hidden wins. */
@@ -222,6 +240,7 @@ nav[data-type="hero-nav"] a[data-active] {
 main {
   position: relative;
   z-index: 1;
+  flex: 1 0 auto;
   padding-top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-section));
 }
 

@@ -2478,12 +2478,22 @@ console.log('cron whisperer crontab ok')
       `project "${p.title}" links to ${projectUrl.pathname} on this site, which is not a shape /projects is allowed to advertise — add it to projectPathShapes deliberately, once something asserts that page is indexable`,
     )
   }
-  /* The floor was 4 until 2026-09-25, when /projects stopped re-listing this
-     site's own tools and games — the owner's note was that they already have
-     two hubs of their own — and became a shelf of GitHub work plus the site
-     itself. One on-site entry is now the expected steady state, so the floor is
-     1: enough to prove the loop above ran, which is all it was ever for. */
-  assert.ok(projectsOnSite >= 1, `expected the on-site project entries to be checked, matched ${projectsOnSite}`)
+  /* The floor was 4, then 1, and is now 0 — on 2026-09-25 /projects stopped
+     re-listing this site's own tools and games (the owner already has two hubs
+     of their own), and then dropped the entry for the site itself too, leaving
+     a shelf of GitHub work only.
+
+     A floor of 0 cannot prove the loop ran, so it is NOT the assertion: the
+     corpus itself is. Every project is still walked and held to https above,
+     which is the check that needs real data, and `projectPathShapes` is held to
+     synthetic paths below — so the on-site branch keeps its teeth with no
+     on-site entry shipped. What is gone is only the expectation that one
+     EXISTS. Re-add an apanjwani0.com project and it is checked exactly as
+     before; nothing here needs touching for that. */
+  assert.ok(
+    smokeProjects.length > 0,
+    'expected projects to check — an empty config would pass every assertion in this block vacuously',
+  )
 
   /* With only the root link left in the config, `projectPathShapes` itself is
      barely exercised by real data — the tools and games branches would now be
@@ -3107,9 +3117,91 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
       `src/pages/${rel} sizes the page title differently from Base.astro — one <h1>, one size, one declaration`,
     )
   }
+
+  /* ── …and one level further out again: the <body> shell itself ───────────
+     Same trap as the page title, one selector up. The whole `body` rule —
+     font, colour, page background, and the flex column that pins the footer to
+     the bottom — lived in global.css, which only Base loads, so ToolBase
+     carried its OWN copy in an `is:global` block. Two copies of a bare element
+     rule is the two-dialect setup by construction, and they had already
+     drifted: ToolBase's copy set the font, colour and background but NOT
+     `display: flex` / `flex-direction: column` / `min-height`, so on every
+     tool, game and Driftfield route a page shorter than the viewport left the
+     footer floating in the middle with a slab of bare background beneath it.
+     Measured, not inferred: /tools/chainsaw in an 1800px viewport ended its
+     body at 980px.
+
+     The background made it invisible to a colour check — body's background
+     propagates to the canvas, so the PAGE is the right colour either way and
+     only the footer's position gives it away.
+
+     So this is derived rather than listed: whatever <body> declarations one
+     shell reaches, the other must reach the same ones. A re-added copy in
+     either place fails the moment the two disagree, which is the only moment
+     it matters. */
+  const cssOf = async url => (await readSheets(url)).map(([, css]) => css).join('\n')
+  const sharedSheetUrl = new URL('../src/styles/shared.css', import.meta.url)
+  const bodyDecls = css => {
+    const out = new Map()
+    for (const m of stripComments(css).matchAll(/(?:^|\})\s*body\s*\{([^}]*)\}/g)) {
+      for (const decl of m[1].split(';')) {
+        const i = decl.indexOf(':')
+        if (i < 0) continue
+        out.set(decl.slice(0, i).trim(), decl.slice(i + 1).trim())
+      }
+    }
+    return Object.fromEntries([...out].sort(([a], [b]) => a < b ? -1 : 1))
+  }
+  const layoutCssOf = async name => {
+    const url = new URL(`../src/layouts/${name}`, import.meta.url)
+    const src = await readFile(url, 'utf-8')
+    const imported = await Promise.all(
+      [...src.matchAll(/^import\s+['"]([^'"]+\.css)['"]/gm)].map(m => cssOf(new URL(m[1], url))),
+    )
+    return { own: astroStyles(src), all: imported.join('\n') + '\n' + astroStyles(src) }
+  }
+
+  const baseShell = await layoutCssOf('Base.astro')
+  const toolShell = await layoutCssOf('ToolBase.astro')
+  const baseBody = bodyDecls(baseShell.all)
+  const toolBody = bodyDecls(toolShell.all)
+
+  // The column, and the two halves of it. Without min-height the body is only
+  // as tall as its content; without flex-grow on main the footer sits directly
+  // under it. Either one missing strands the footer.
+  for (const prop of ['display', 'flex-direction', 'min-height', 'background-color', 'color', 'margin']) {
+    assert.ok(
+      prop in baseBody,
+      `no shell declares body { ${prop} } — this comparison would then pass vacuously`,
+    )
+  }
+  assert.deepEqual(
+    toolBody, baseBody,
+    'ToolBase and Base reach different <body> rules. body is a bare element rule BOTH shells render, '
+    + 'so it belongs in src/styles/shared.css (both load it) and must not be declared in global.css '
+    + '(Base-only) or in a layout\'s own <style is:global> block.',
+  )
+
+  // …and the rule must live in the shared sheet rather than being duplicated
+  // into both shells, which would satisfy the equality above while keeping two
+  // copies to drift.
+  assert.ok(
+    Object.keys(bodyDecls(await cssOf(sharedSheetUrl))).length > 0,
+    'shared.css must own the body rule — both layouts load it, and it is the only home that cannot drift',
+  )
+  for (const [name, css] of [['Base.astro', baseShell.own], ['ToolBase.astro', toolShell.own]]) {
+    assert.deepEqual(
+      bodyDecls(css), {},
+      `${name} declares its own body rule — that is the second copy this guard exists to prevent`,
+    )
+  }
+  assert.ok(
+    /(?:^|\})\s*main\s*\{[^}]*flex:\s*1 0 auto/.test(stripComments(await cssOf(sharedSheetUrl))),
+    'shared.css must give main `flex: 1 0 auto` — the other half of the column that pins the footer down',
+  )
 }
 
-console.log('one page-title size site-wide, and no tools-lane idiom declared inside a single tool')
+console.log('one page-title size site-wide, no tools-lane idiom declared inside a single tool, and both shells reach the same <body> column')
 
 /* ══════  role: audit — one card title, and the card IS the link  ══════
 

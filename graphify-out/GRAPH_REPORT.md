@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-09-25)
 
 ## Corpus Check
-- 172 files · ~339,136 words
+- 172 files · ~339,660 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2872 nodes · 6410 edges · 124 communities (104 shown, 20 thin omitted)
+- 2872 nodes · 6410 edges · 123 communities (103 shown, 20 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 27 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `bc1197d8`
+- Built from commit: `6541a65d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -118,7 +118,6 @@
 - [[_COMMUNITY_Community 103|Community 103]]
 - [[_COMMUNITY_Community 104|Community 104]]
 - [[_COMMUNITY_Community 105|Community 105]]
-- [[_COMMUNITY_Community 106|Community 106]]
 - [[_COMMUNITY_Community 107|Community 107]]
 - [[_COMMUNITY_Community 108|Community 108]]
 - [[_COMMUNITY_Community 109|Community 109]]
@@ -171,7 +170,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (124 total, 20 thin omitted)
+## Communities (123 total, 20 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.08
@@ -266,8 +265,8 @@ Cohesion: 0.20
 Nodes (6): csCanonicalIp, csMatchHost(), CsReport, ChainsawTool, csTicks(), CaaOutlook
 
 ### Community 31 - "Community 31"
-Cohesion: 0.17
-Nodes (29): GET(), allowAttempt, POST(), POST(), POST(), getAnalyticsKV(), readAnalyticsAggregates(), summarizeAnalytics() (+21 more)
+Cohesion: 0.18
+Nodes (27): GET(), allowAttempt, POST(), POST(), POST(), getAnalyticsKV(), readAnalyticsAggregates(), summarizeAnalytics() (+19 more)
 
 ### Community 32 - "Community 32"
 Cohesion: 0.09
@@ -282,8 +281,8 @@ Cohesion: 0.12
 Nodes (22): AVATAR_COLORS, avatarSvg(), BTN, ButtonKind, buttonSvg(), CHIP, CHIP_VALUES, chipLabel() (+14 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.17
-Nodes (21): CONFIG_TYPES, ConfigType, isRecord(), isString(), optionalSafeExternalUrl(), optionalString(), safeBlogHref(), TOOL_STATUSES (+13 more)
+Cohesion: 0.15
+Nodes (23): CONFIG_TYPES, ConfigType, isRecord(), isString(), optionalSafeExternalUrl(), optionalString(), safeBlogHref(), TOOL_STATUSES (+15 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.11
@@ -466,8 +465,8 @@ Cohesion: 0.40
 Nodes (5): Admin Config Management, Hiding a section: `sections.blogs`, Indexing: one predicate decides whether a page is real, Learnings: articles that mount a live component, Learnings: writing, not just rendering
 
 ### Community 91 - "Community 91"
-Cohesion: 0.15
-Nodes (3): DeepShoreGame, dsAutoIter(), dsEffectiveIter()
+Cohesion: 0.13
+Nodes (6): DeepShoreGame, dsReadStored(), dsAutoIter(), dsEffectiveIter(), dsTokenFromHash(), DsStop
 
 ### Community 93 - "Community 93"
 Cohesion: 0.17
@@ -502,8 +501,8 @@ Cohesion: 0.21
 Nodes (19): sgAnalyzeCaa(), sgCaaFindings(), sgCnameFindings(), sgDiffFindings(), sgDmarcFindings(), sgIsDangling(), sgNsFindings(), sgReachabilityFindings() (+11 more)
 
 ### Community 101 - "Community 101"
-Cohesion: 0.14
-Nodes (13): DS_PALETTES, DS_PASS_WORK, DS_PASSES, DS_PLACES, DS_SEEDS, DsPalette, DsPlace, DsSeed (+5 more)
+Cohesion: 0.13
+Nodes (14): DS_PALETTES, DS_PASS_WORK, DS_PASSES, DS_PLACES, DS_SEEDS, DsPalette, DsPlace, DsSeed (+6 more)
 
 ### Community 102 - "Community 102"
 Cohesion: 0.20
@@ -517,13 +516,9 @@ Nodes (3): dsPixelScale(), dsScreenToComplex(), dsZoomAt()
 Cohesion: 0.22
 Nodes (6): CwCrontabEntry, cwLocalZoneName(), cwWallFormatter(), cwFiringCount(), cwIsFixedTime(), CwParsed
 
-### Community 106 - "Community 106"
-Cohesion: 0.27
-Nodes (8): dsReadStored(), dsDecodeView(), dsDecodeZoomCode(), dsParseCoord(), dsTokenFromHash(), dsDecodeTour(), DsStop, dsTourTokenFromHash()
-
 ### Community 107 - "Community 107"
-Cohesion: 0.24
-Nodes (10): DS_DEFAULT_VIEW, DS_LOG_BAILOUT, DS_PALETTE_IDS, DS_ZOOM_CODE_MAX, DS_ZOOM_CODE_MIN, dsEscape, dsEscapeReference(), dsInInterior() (+2 more)
+Cohesion: 0.20
+Nodes (14): DS_DEFAULT_VIEW, DS_LOG_BAILOUT, DS_PALETTE_IDS, DS_ZOOM_CODE_MAX, DS_ZOOM_CODE_MIN, dsDecodeView(), dsDecodeZoomCode(), dsEscape (+6 more)
 
 ### Community 108 - "Community 108"
 Cohesion: 0.31
