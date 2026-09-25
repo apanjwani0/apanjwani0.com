@@ -901,7 +901,10 @@ was a second, mirrored fixture that does.
   outlive its server; and it reads the number word out of the intro copy and
   compares it to the set's size, so a fifth server tool cannot ship while the
   prose still says "four". Same family as the learnings rule that an article
-  quoting numbers is quoting a component.
+  quoting numbers is quoting a component. The `/games` intro gets the same
+  treatment for its dailies: "Three have a daily round that is the same for
+  everyone" is read back, pinned to that phrase, and compared with
+  `DAILY_SLUGS`.
 - **Oat UI semantics**: Oat styles standard HTML tags and attributes automatically — avoid adding custom CSS classes where a semantic HTML element or attribute achieves the same result. Fixes to Oat behavior go in the fork, not in portfolio-level CSS overrides.
 - **SSR everywhere**: Pages use `export const prerender = false` — required for KV reads to work at request time and for runtime middleware headers to apply. `src/pages/tools/index.astro` also uses the runtime `getTools()` accessor now; do not reintroduce a prerendered/static tools hub unless equivalent security/cache headers are configured at the hosting layer.
 - **Config via `src/lib/config.ts`**: All personal data goes through the KV-aware accessors, never imported directly from `src/config/`.
@@ -1205,9 +1208,17 @@ So each kind has exactly **one** predicate, and every consumer reads it:
   so it is noindex, out of the sitemap, and cardless. `external` and `disabled`
   404 outright.
 - **Learnings** — `isPublishedLearning()` in `src/lib/learnings.ts`: `published
-  && content.trim()`. The second condition is the one the flag cannot express —
-  an entry saved from /admin with the box ticked and the body still empty would
-  otherwise be sitemapped and carry a card while its page rendered nothing.
+  && content.trim()`, under a slug that is not retired. The second condition is
+  the one the flag cannot express — an entry saved from /admin with the box
+  ticked and the body still empty would otherwise be sitemapped and carry a card
+  while its page rendered nothing. The third is `RETIRED_LEARNINGS`: an article
+  that was live on `main` and is withdrawn keeps its URL as a **301** (to the hub
+  unless a replacement answers the same question), because a 404 costs every link
+  already out there its reader. The route answers the redirect before it reads
+  config, and since a redirect is not a page the predicate refuses the slug —
+  so no sitemap, hub or card can list it even if an entry under it is saved
+  again. Add a slug here when you delete an article that ever reached `main`;
+  `security:smoke` refuses a slug that is both retired and in the config.
 - **Driftfield** — `isDriftfieldPublic()` in `src/lib/driftfield.ts`: the
   `driftfield` entry in the tools config is `status === 'live'`. The hub, every
   `/tools/driftfield/<mode>` route, the sitemap and `scripts/generate-og.mjs`
@@ -1410,11 +1421,11 @@ without anybody remembering this paragraph. Same shape as the blogs flag: a fact
 corrected in one signal and stale in another is worse than either alone.
 
 **A figure may also be the article's whole argument, in which case it needs a
-component of its own.** `/learnings/how-to-think-on-paper` argues Larkin &
-Simon's point — a picture is cheap only for the question its layout groups for —
-and that is unprovable in prose, because the reader has to watch one unchanged
-scenario become seven pictures and find each one blind to what the last one
-showed. So `diagram-atlas` (`src/components/games/diagram-atlas/`) is the first
+component of its own.** `/learnings/which-diagram-to-draw` argues that an
+arrow can mean seven different things and the question you are asking picks the
+notation — and that is unprovable in prose, because the reader has to watch one
+unchanged scenario become seven pictures and find each one blind to what the
+last one showed. So `diagram-atlas` (`src/components/games/diagram-atlas/`) is the first
 embed that is neither a game nor a Driftfield mode: an article figure, and the
 reason `EMBED_TAGS` is the wider list. It is also the first that is **not** a
 canvas toy — seven notations drawn as inline SVG, because the labels have to be

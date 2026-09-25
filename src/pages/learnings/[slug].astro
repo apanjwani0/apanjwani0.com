@@ -6,13 +6,28 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import RelatedLinks from '../../components/RelatedLinks.astro'
 import { getSite, getLearnings } from '../../lib/config'
 import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
-import { isPublishedLearning, learningEmbedTag, readingTime } from '../../lib/learnings'
+import { isPublishedLearning, learningEmbedTag, readingTime, retiredLearningTarget } from '../../lib/learnings'
 import { existingOgCardPath, learningHasOgCard } from '../../lib/og'
 import { render, splitOnEmbeds } from '../../lib/markdown'
 import { formatDisplayDate } from '../../lib/date'
 import '../../styles/games-embed.css'
 
 const { slug } = Astro.params
+
+// A withdrawn article that was once live answers 301 rather than 404 — see
+// RETIRED_LEARNINGS for why, and for why the destination is the hub. It needs
+// nothing else from the request, so it is answered before config is read. The
+// middleware's cache fallback covers 200 and 404 only, so the redirect carries
+// its own policy: max-age=0 for the reason every page here does (AGENTS.md →
+// Caching) — a permanent redirect a browser has cached cannot be taken back.
+const retiredTo = retiredLearningTarget(slug)
+if (retiredTo) {
+  return new Response(null, {
+    status: 301,
+    headers: { Location: retiredTo, 'Cache-Control': 'public, max-age=0, s-maxage=3600' },
+  })
+}
+
 const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
 const cspNonce = (Astro.locals as any).cspNonce
 
@@ -276,14 +291,18 @@ const breadcrumbLd = breadcrumbListJsonLd([
      draws nine lines to carry four columns of text.
 
      `display: block` + `overflow-x: auto` on the wrapper keeps a wide table from
-     forcing the whole article column sideways on a phone. */
+     forcing the whole article column sideways on a phone.
+
+     Sized and spaced from tokens: the body-text rung (17px, a step under the
+     19px prose it sits in) and the block rhythm the full figures use, since a
+     table is a block in the column rather than a line of prose. */
   section[data-type="post-content"] :global(table) {
     display: block;
     overflow-x: auto;
     width: 100%;
-    margin: 0 0 1.6em;
+    margin: 0 0 var(--space-section);
     border-collapse: collapse;
-    font-size: 0.92em;
+    font-size: var(--text-base);
     line-height: 1.45;
   }
 

@@ -1,12 +1,11 @@
 /**
  * Diagram Atlas — one system, drawn seven ways.
  *
- * The figure for `/learnings/how-to-think-on-paper`. The article's claim is
- * Larkin & Simon's: a diagram and a paragraph can carry identical information
- * and still cost different amounts to USE, because a picture is cheap only for
- * the question its layout already groups for. That claim is unprovable in prose
- * — the reader has to watch one unchanged scenario become seven pictures and
- * find that each one has gone blind to what the last one showed.
+ * The figure for `/learnings/which-diagram-to-draw`. The article's claim is that
+ * an arrow can mean seven different things, and the question you are asking —
+ * said out loud as a verb — picks the notation. That claim is unprovable in
+ * prose: the reader has to watch one unchanged scenario become seven pictures
+ * and find that each one has gone blind to what the last one showed.
  *
  * The scenario never changes: an order is placed, stock is reserved, the card is
  * charged, a receipt goes out, and the charge can fail. Every view below draws

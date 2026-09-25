@@ -5234,6 +5234,15 @@ console.log('link peek refuses every private address (each redirect hop re-check
   assert.ok(/badge\?\.remove\(\)/.test(stripSrc), 'a lapsed streak repaints away instead of lingering')
   const gamesSrc = await readFile(new URL('../src/pages/games.astro', import.meta.url), 'utf8')
   assert.ok(gamesSrc.includes('registerDailyStreaks()'), 'the /games hub registers the strip')
+  // The hub's intro counts the dailies in words. Pinned to the claim itself,
+  // not to the first number word in the paragraph (the lesson of the /tools
+  // intro assertion), and compared with the list the strip actually records.
+  const gamesIntro = gamesSrc.slice(gamesSrc.indexOf('data-type="page-intro"'), gamesSrc.indexOf('</p>', gamesSrc.indexOf('data-type="page-intro"')))
+  const dailyClaim = gamesIntro.match(/\b([A-Za-z]+)\s+have\s+a\s+daily\s+round\s+that\s+is\s+the\s+same\s+for\s+everyone\b/)
+  assert.ok(dailyClaim, 'the /games intro still says, in words, how many games "have a daily round that is the same for everyone"')
+  const DAILY_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 }
+  assert.equal(DAILY_WORDS[dailyClaim[1].toLowerCase()], DAILY_SLUGS.length,
+    `the /games intro says "${dailyClaim[1]}" games have a daily round, but DAILY_SLUGS records ${DAILY_SLUGS.length} — update the copy and the list together`)
 
   // ── the slug allowlist is exactly the games the site ships as dailies ──
   assert.deepEqual([...DAILY_SLUGS], ['quintle', 'type-trial', 'hue-hunt'], 'DAILY_SLUGS is the fixed store-key allowlist')
@@ -7950,3 +7959,62 @@ console.log('pr 19 review: no document/window listener outlives what added it (d
   assert.ok(/'Cache-Control': 'no-store'/.test(csRoute.slice(csRoute.indexOf('function json('))), '…through the same no-store json() every answer uses')
 }
 console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a certificate\'s URL is a link only when plainly http(s), and no exception text reaches a response')
+
+/* ─────  PR 19 review: a retired article keeps its readers  ─────
+
+   `/learnings/the-test-that-shared-the-bug` is live on `main`, and the merge
+   that retires it would have turned every link to it — shares, bookmarks, the
+   search result — into a 404. RETIRED_LEARNINGS answers those with a 301 to the
+   hub, and a redirect is not a page: the one publish predicate refuses a retired
+   slug, so the sitemap and every listing follow without a second list. */
+{
+  const { RETIRED_LEARNINGS, retiredLearningTarget } = await import('../src/lib/learnings.ts')
+
+  assert.equal(retiredLearningTarget('the-test-that-shared-the-bug'), '/learnings',
+    'the article this merge retires redirects to the hub — its replacement is about a different question')
+  assert.equal(retiredLearningTarget('constructor'), null, 'an inherited property is not a retired slug')
+  assert.equal(retiredLearningTarget(undefined), null)
+  for (const [slug, to] of Object.entries(RETIRED_LEARNINGS)) {
+    assert.ok(/^\/learnings(\/[a-z0-9-]+)?$/.test(to), `${slug} redirects to ${to}, which is not a learnings URL`)
+    const targetSlug = to.slice('/learnings/'.length)
+    assert.ok(to === '/learnings' || learnings.some(l => l.slug === targetSlug && isPublishedLearning(l)),
+      `${slug} redirects to ${to}, which this site does not serve`)
+    assert.equal(retiredLearningTarget(targetSlug || undefined), null, `${slug} redirects to another retired slug — a chain, not a destination`)
+    assert.equal(learnings.some(l => l.slug === slug), false,
+      `${slug} is retired AND in the learnings config — its route redirects before the article can render; drop one of the two`)
+  }
+
+  // A redirect is not a page, whatever the flags say.
+  assert.equal(isPublishedLearning({ slug: 'the-test-that-shared-the-bug', published: true, content: 'a body' }), false,
+    'a retired slug is not a page, even saved again as published with a body — the sitemap, hub and cards all read this predicate')
+  assert.equal(isPublishedLearning({ slug: 'which-diagram-to-draw', published: true, content: 'a body' }), true,
+    'a live slug is unaffected')
+  assert.equal(isPublishedLearning({ published: true, content: 'a body' }), true, 'flags without a slug read as they always did')
+
+  // The REAL sitemap route, fed a config that saves an entry under the retired
+  // slug again (as an /admin save could). The canary proves the stub config was
+  // used at all — getConfig falls back to the bundled config on invalid data,
+  // and the bundled config has no retired slug in it, so without the canary
+  // this would pass by never reading the fixture.
+  const { GET: sitemapRoute } = await import('../src/pages/sitemap.xml.ts')
+  const resaved = [
+    { slug: 'the-test-that-shared-the-bug', title: 'Back again', summary: 's', date: '2026-09-25', content: 'a body', published: true },
+    { slug: 'retirement-canary', title: 'Canary', summary: 's', date: '2026-09-24', content: 'a body', published: true },
+  ]
+  const stubLocals = { runtime: { env: { SITE_CONFIG: { get: async key => (key === 'learnings' ? resaved : key === 'site' ? site : null) } } } }
+  const xml = await (await sitemapRoute({ locals: stubLocals })).text()
+  assert.ok(xml.includes('/learnings/retirement-canary'), 'the sitemap read the fixture config (canary present)')
+  assert.equal(xml.includes('the-test-that-shared-the-bug'), false, 'a retired slug is never in the sitemap — its URL answers 301')
+
+  // The route answers the redirect FIRST — before config, before the 404 — with
+  // the map's own target, and a policy that keeps browsers from pinning it.
+  const slugRouteSrc = await readFile(new URL('../src/pages/learnings/[slug].astro', import.meta.url), 'utf-8')
+  const frontmatter = slugRouteSrc.slice(0, slugRouteSrc.indexOf('\n---', 4))
+  const retiredAt = frontmatter.indexOf('const retiredTo = retiredLearningTarget(slug)')
+  assert.ok(retiredAt !== -1, 'the article route consults RETIRED_LEARNINGS')
+  assert.ok(retiredAt < frontmatter.indexOf('getLearnings(') && retiredAt < frontmatter.indexOf('status: 404'),
+    'the redirect is answered before config is read and before the 404 — a retired slug is not in config, so a later check would never run')
+  assert.ok(/if \(retiredTo\) \{\s*return new Response\(null, \{\s*status: 301,\s*headers: \{ Location: retiredTo, 'Cache-Control': 'public, max-age=0, s-maxage=\d+' \},/.test(frontmatter),
+    'a permanent redirect to the mapped target, edge-cacheable but not pinned in the browser')
+}
+console.log('pr 19 review: a retired learning answers 301 to the hub, the publish predicate refuses it so no sitemap can list it, and the /games intro counts its dailies')

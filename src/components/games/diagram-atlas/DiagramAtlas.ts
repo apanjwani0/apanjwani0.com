@@ -1,5 +1,5 @@
 /**
- * Diagram Atlas — the figure for /learnings/how-to-think-on-paper.
+ * Diagram Atlas — the figure for /learnings/which-diagram-to-draw.
  *
  * One scenario, seven notations, and a legend that names what each picture
  * cannot answer. The view data — including every claim about what a node and an
