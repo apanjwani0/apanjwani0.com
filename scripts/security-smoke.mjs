@@ -7371,3 +7371,29 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
     'the CAA fetch is aborted on unmount and on a new inspection — ClientRouter keeps the document')
 }
 console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unrecognised issuer draws no verdict, a failed lookup is not an absent policy, the issuer-independent refusals survive an unknown CA, and the narrow scope\'s looser rate limit is paid for by its smaller query budget')
+
+/* ─────  the boot check boots what the image runs, and the shell cannot pass it  ─────
+   `npm run boot:check` exists because build and check were both green on a
+   server that crashed on its first line (AGENTS.md → Build / Test / Run). Two
+   things make it meaningful and both read like details. It must start the SAME
+   entry point the Dockerfile's CMD starts, so that path is derived from the
+   Dockerfile rather than trusted to agree. And it must scrub
+   ASTRO_NODE_LOGGING from the child's env: the crash lived in the adapter's
+   startup-logging branch, which that variable switches off, so a check that
+   inherited it from the caller's shell passed on the broken build — measured,
+   not assumed, by deleting the scrub and running it against 11.1.0.
+   ──────────────────────────────────────────────────────────────────────────── */
+{
+  const bootSrc = await readFile(new URL('./boot-check.mjs', import.meta.url), 'utf-8')
+  const dockerfile = await readFile(new URL('../Dockerfile', import.meta.url), 'utf-8')
+  const cmd = /^CMD \["node", "([^"]+)"\]$/m.exec(dockerfile)
+  assert.ok(cmd, 'the Dockerfile CMD is `node <entry>` — the boot check derives its entry point from it')
+  assert.ok(bootSrc.includes(`new URL('../${cmd[1]}', import.meta.url)`),
+    `the boot check must start ${cmd[1]}, the file the image's CMD runs`)
+  assert.ok(/spawn\(process\.execPath, \[entry\]/.test(bootSrc), 'the boot check runs the entry under node itself')
+  assert.ok(/^delete env\.ASTRO_NODE_LOGGING$/m.test(bootSrc),
+    'the boot check must scrub ASTRO_NODE_LOGGING — inherited, it disables the branch that crashed')
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf-8'))
+  assert.equal(pkg.scripts['boot:check'], 'node scripts/boot-check.mjs', 'npm run boot:check is the documented entry')
+}
+console.log('boot check: starts the entry the Dockerfile runs, and no inherited env var can switch off the branch that crashed')

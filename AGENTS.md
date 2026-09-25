@@ -38,6 +38,7 @@ npm run generate-types # wrangler types (regen Cloudflare/KV bindings)
 npm run graph          # graphify update . — refresh the local code-graph
 npm run og             # regenerate the social share cards (see Share cards)
 npm run security:smoke # assert the security invariants (see Security)
+npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
 npm run origin:check   # assert the DEPLOYED edge posture against production
 ```
@@ -54,9 +55,26 @@ five phantom parse errors under `astro check`, because TypeScript reads the
 object literal as the next arrow's parameter list.
 Run both; `check` must stay at 0 errors. For
 UI/route changes, also run `/browser-debug` against the dev server.
+
+**Neither of them ever starts the server**, and that gap has already shipped a
+dead origin: the lockfile resolved astro 7.3.3 against `@astrojs/node` 11.1.0,
+whose `standalone()` calls `app.pipeline.getLogger()` on an `app` that astro 7.3
+no longer gives a `pipeline` (11.1.6 calls `app.getLogger()`), so `node
+dist/server/entry.mjs` — the Dockerfile `CMD` — threw a `TypeError` on boot
+while `build` and `check` were both green. `npm run
+boot:check` (`scripts/boot-check.mjs`) closes it: after a build it starts that
+entry point the way the image does, on a free loopback port, and requires a
+complete 200 HTML page from `/` plus a process still alive a second later. It
+deletes `ASTRO_NODE_LOGGING` from the child's env on purpose — that variable
+switches off exactly the branch that crashed, so inheriting it from a shell
+would pass the check on the regression it exists for.
 The production GitHub deploy builds a Docker image on `main`, restarts the OCI
 container from the self-hosted runner, then fetches `/` inside the container
-before reporting success.
+before reporting success. That probe runs *after* the old container is stopped,
+so it reports a boot failure with the site already down; `boot:check` is the
+same question asked before anything ships. It is not wired into `deploy.yml`,
+because the image is built inside `docker/build-push-action` and there is no
+npm step on the runner to hang it on.
 
 ## Configuration
 
@@ -563,6 +581,7 @@ it server-side, not just in the UI that mints them.
 npm run security:smoke   # asserts these invariants
 npm run build            # must stay green
 npm run check            # must stay at 0 errors
+npm run boot:check       # the built server must boot and serve / (after build)
 ```
 
 Add an assertion for each new invariant, in whichever of the two homes fits: a
@@ -1398,10 +1417,13 @@ Three things about it are load-bearing:
   ledger.
 
 The pass commits to `develop` behind the full gate (`build` + `check` +
-`security:smoke` + `poker:check`) and never pushes or touches `main`. `check` is
-in that list because `build` alone does not catch what it catches — see Build /
-Test / Run. The older daily `daily-portfolio-improvement` cowork task targets the
-same working tree — run one or the other, not both.
+`security:smoke` + `poker:check` + `boot:check`) and never pushes or touches
+`main`. `check` is in that list because `build` alone does not catch what it
+catches, and `boot:check` because neither of them starts the server — see Build
+/ Test / Run. It boots the *built* entry point on loopback and stops it again, so
+it needs no dev server and runs unattended. The older daily
+`daily-portfolio-improvement` cowork task targets the same working tree — run
+one or the other, not both.
 
 An unattended run **cannot** start the dev server, so it cannot do the in-site
 click-through that the `astro:page-load` mounting bug requires. It appends the

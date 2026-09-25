@@ -19,10 +19,11 @@
     "pb": "bash pocketbase/run.sh",
     "analytics:smoke": "tsx scripts/analytics-smoke.mjs",
     "security:smoke": "tsx scripts/security-smoke.mjs",
+    "boot:check": "node scripts/boot-check.mjs",
     "origin:check": "bash scripts/origin-check.sh"
   },
   "dependencies": {
-    "@astrojs/node": "^11.1.0",
+    "@astrojs/node": "^11.1.6",
     "@types/cytoscape": "^3.21.9",
     "astro": "^7.2.0",
     "cytoscape": "^3.34.1",
