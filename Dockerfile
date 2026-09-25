@@ -33,4 +33,11 @@ ENV NODE_ENV=production
 
 USER portfolio
 
+# Boot this image's own server once before it can ship (AGENTS.md → Build /
+# Test / Run). Here, not in the builder, so it runs the production-only
+# dependency tree as the user the container runs as; a server that cannot
+# start fails the image build while the old container keeps serving.
+COPY --chown=portfolio:portfolio scripts/boot-check.mjs ./scripts/boot-check.mjs
+RUN node scripts/boot-check.mjs
+
 CMD ["node", "dist/server/entry.mjs"]
