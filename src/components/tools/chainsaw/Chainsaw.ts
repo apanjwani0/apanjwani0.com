@@ -27,6 +27,7 @@ import {
   csDaysLeft,
   csFindings,
   csHostnameVerdict,
+  csLinkableUrl,
   csMatchHost,
   csNameMatches,
   csOpensslCommand,
@@ -74,6 +75,18 @@ function csKeyLabel(cert: CsCert): string {
  */
 function csTicks(text: string): string {
   return csEsc(text).replace(/`([^`]+)`/g, (_m, inner) => `<code>${inner}</code>`)
+}
+
+/**
+ * The CA Issuers URL: a link when `csLinkableUrl` says it is a plain http(s)
+ * URL, escaped text otherwise. It came off somebody else's certificate, so it
+ * opens in a new tab with no opener and no referrer.
+ */
+function csIssuerLink(raw: string): string {
+  const href = csLinkableUrl(raw)
+  return href
+    ? `<a href="${csEsc(href)}" rel="noopener noreferrer" target="_blank">${csEsc(raw)}</a>`
+    : csEsc(raw)
 }
 
 interface CsCaaResponse {
@@ -490,7 +503,7 @@ class ChainsawTool extends HTMLElement {
             <div><dt>Serial</dt><dd>${csEsc(cert.serial)}</dd></div>
             <div><dt>SHA-256</dt><dd>${csEsc(cert.fingerprint256)}</dd></div>
             ${cert.eku.length ? `<div><dt>Usage</dt><dd>${csEsc(cert.eku.join(', '))}</dd></div>` : ''}
-            ${cert.caIssuerUrls.length ? `<div><dt>Issuer URL</dt><dd>${csEsc(cert.caIssuerUrls[0])}</dd></div>` : ''}
+            ${cert.caIssuerUrls.length ? `<div><dt>Issuer URL</dt><dd>${csIssuerLink(cert.caIssuerUrls[0])}</dd></div>` : ''}
           </dl>
         </li>`
     }).join('')

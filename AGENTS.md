@@ -622,6 +622,16 @@ numbers fails the gate rather than a comment going stale.
   `</script>` cannot break out.
 - Markdown goes through `src/lib/markdown.ts` only: raw HTML is escaped and URLs
   pass `safeMarkdownUrl()`. Never hand `marked` output to `set:html` directly.
+- A value a remote server chose that lands in CSS or in an `href` is held to its
+  grammar first, because escaping for HTML says nothing about either. Link Peek's
+  proxied image type becomes part of a `data:` URI inside CSS `url("…")`, so it
+  must match `image/` plus `[a-z0-9.+-]` (`lpImageMediaType`) rather than merely
+  start with `image/`; Chainsaw's CA Issuers URL comes off a stranger's
+  certificate, so it is a link only when it parses as plain http(s) with no
+  credentials (`csLinkableUrl`), and escaped text otherwise.
+- An exception's message never goes into a response: routes answer failures
+  they expect with fixed sentences, and wrap the call that could throw one they
+  do not (`csInspect`) so it answers fixed `no-store` JSON too.
 
 ### Unguessable ids are a security control
 

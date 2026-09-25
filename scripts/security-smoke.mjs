@@ -5010,6 +5010,13 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
     '::1', '::', 'fc00::1', 'fd12:3456::1', 'fe80::1', 'fec0::1',
     '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:169.254.169.254',
     '64:ff9b::a00:1', '2001:db8::1', 'ff02::1', 'not-an-ip',
+    // 6to4 (2002::/16) is routed to the v4 address in its next 32 bits, so it is
+    // classified AS that address: loopback, RFC 1918 and the metadata service.
+    '2002:7f00:0001::', '2002:0a00:0001::1', '2002:a9fe:a9fe::1',
+    // Teredo (2001::/32) tunnels to wherever the relay says; discard-only 100::/64.
+    '2001::1', '2001:0:4136:e378:8000:63bf:3fff:fdd2', '100::1', '100::ffff:ffff:ffff:ffff',
+    // The 6to4 relay anycast block, deprecated by RFC 7526.
+    '192.88.99.1', '192.88.99.255',
   ]) {
     assert.ok(lpIsForbiddenIp(ip), `classifier must forbid ${ip}`)
   }
@@ -5017,6 +5024,11 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
     '1.1.1.1', '8.8.8.8', '93.184.216.34', '172.15.0.1', '172.32.0.1',
     '100.63.255.255', '100.128.0.1', '198.17.0.1', '223.255.255.255',
     '2606:4700:4700::1111', '2600::1', '::ffff:8.8.8.8',
+    // The v6 rules are prefixes, not "starts with 2001": Google's public
+    // resolver lives in 2001:4860::/32, one hextet away from Teredo. And a
+    // 6to4 address embedding a PUBLIC v4 is that public address.
+    '2001:4860:4860::8888', '2002:0808:0808::1',
+    '192.88.98.1', '192.88.100.1',
   ]) {
     assert.equal(lpIsForbiddenIp(ip), false, `classifier must allow public ${ip}`)
   }
@@ -5059,7 +5071,8 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
   assert.equal((lpRouteSrc.match(/createRateLimiter\(/g) || []).length, 2, 'per-client AND global outbound limiters — each hit costs the origin an outbound fetch')
   assert.ok(lpRouteSrc.includes("'Cache-Control': 'no-store'"), 'preview responses are never edge-cached')
   assert.ok(lpRouteSrc.includes('hasOwnProperty.call(LP_USER_AGENTS'), 'the UA is an allowlist KEY — free text here is header injection')
-  assert.ok(lpRouteSrc.includes("startsWith('image/')"), 'the image proxy only relays image/* bodies')
+  assert.ok(/const type = lpImageMediaType\(fetched\.contentType\)/.test(lpRouteSrc) && !lpRouteSrc.includes("startsWith('image/')"),
+    'the image proxy relays only an allowlisted image media type — see the PR 19 nits block for the grammar')
 
   // ── charset decode: header wins, sniff second, junk falls back ──
   const enc = new TextEncoder()
@@ -7875,3 +7888,65 @@ console.log('pr 19 review: a refused client never spends the shared bucket (deri
     'the site-wide ring that shows where keyboard focus went applies to any focusable element, a scroll region included')
 }
 console.log('pr 19 review: no document/window listener outlives what added it (derived over every client module), the chrome observer is bounded for every embed, and the scrolling tables take keyboard focus')
+
+/* ─────  PR 19 review: the small trust boundaries  ─────
+
+   Each of these is one line wide and sits where text from somebody else's
+   server meets this site's output: a Content-Type header that becomes part of
+   CSS, a URL off a stranger's certificate that becomes a link, and an
+   exception's message that became part of a JSON answer. */
+{
+  const { lpImageMediaType } = await import('../src/lib/link-peek-fetch.ts')
+  const { csLinkableUrl } = await import('../src/components/tools/chainsaw/analyze.ts')
+
+  /* ── 1. The proxied image's media type is allowlisted, not prefix-matched. ──
+     It becomes part of a `data:` URI the page drops into CSS `url("…")`. */
+  for (const [header, type] of [
+    ['image/png', 'image/png'],
+    ['IMAGE/PNG; charset=binary', 'image/png'],
+    ['image/svg+xml', 'image/svg+xml'],
+    ['image/vnd.microsoft.icon', 'image/vnd.microsoft.icon'],
+    ['  image/webp  ', 'image/webp'],
+  ]) {
+    assert.equal(lpImageMediaType(header), type, `${JSON.stringify(header)} is the image type ${type}`)
+  }
+  for (const hostile of [
+    'image/png"); background:url(https://x.test/steal', "image/png'", 'image/png )', 'image/pn g',
+    'image/', 'image', 'text/html', 'image/png\u0000', 'image/*', '', null,
+  ]) {
+    assert.equal(lpImageMediaType(hostile), null, `${JSON.stringify(hostile)} is refused, not relayed`)
+  }
+  const lpRoute = await readFile(new URL('../src/pages/api/tools/link-peek.ts', import.meta.url), 'utf-8')
+  const typeAt = lpRoute.indexOf('const type = lpImageMediaType(fetched.contentType)')
+  const uriAt = lpRoute.indexOf('dataUri: `data:${type};base64,')
+  assert.ok(typeAt !== -1 && uriAt > typeAt, 'the data URI is built from the allowlisted type and nothing else')
+
+  /* ── 2. A URL off a certificate is a link only when it is plainly http(s). ── */
+  assert.equal(csLinkableUrl('http://r11.i.lencr.org/'), 'http://r11.i.lencr.org/', 'AIA is usually plain http, and that is still a link')
+  assert.equal(csLinkableUrl('https://pki.goog/repo/certs/gts1c3.der'), 'https://pki.goog/repo/certs/gts1c3.der')
+  for (const hostile of [
+    'javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:x',
+    'http://user:pw@ca.example/x', 'http://ca.example/a b', 'http://ca.example/\u0000', 'ldap://ca.example/cn=x',
+    'not a url', '',
+  ]) {
+    assert.equal(csLinkableUrl(hostile), null, `${JSON.stringify(hostile)} stays text`)
+  }
+  const csComponent = await readFile(new URL('../src/components/tools/chainsaw/Chainsaw.ts', import.meta.url), 'utf-8')
+  assert.ok(/<dd>\$\{csIssuerLink\(cert\.caIssuerUrls\[0\]\)\}<\/dd>/.test(csComponent), 'the Issuer URL row goes through csIssuerLink')
+  assert.ok(/const href = csLinkableUrl\(raw\)\s*return href\s*\? `<a href="\$\{csEsc\(href\)\}" rel="noopener noreferrer" target="_blank">\$\{csEsc\(raw\)\}<\/a>`\s*: csEsc\(raw\)/.test(csComponent),
+    'the link is escaped, opens with no opener and no referrer, and anything csLinkableUrl refuses is escaped text')
+
+  /* ── 3. An exception's message is not an answer. ────────────────────────
+     Every failure these routes expect comes back as a fixed sentence; the text
+     of one they did not expect — a runtime's wording about this server's own
+     connection — is not something to hand a stranger. */
+  for (const file of ['../src/pages/api/tools/dns-sightline.ts', '../src/pages/api/tools/chainsaw.ts', '../src/lib/dns-doh.ts']) {
+    const code = (await readFile(new URL(file, import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\/|^\s*\/\/[^\n]*/gm, '')
+    assert.equal(/\berr(or)?\??\.message\b/.test(code), false, `${file} must not put an exception's message into a response`)
+  }
+  const csRoute = await readFile(new URL('../src/pages/api/tools/chainsaw.ts', import.meta.url), 'utf-8')
+  assert.ok(/try \{\s*result = await csInspect\([^)]*\)\s*\} catch \{\s*return json\(\{ ok: false, error: '[^']+' \}, 500\)/.test(csRoute),
+    'csInspect is wrapped, so a throw answers a fixed JSON error rather than Astro\'s error page')
+  assert.ok(/'Cache-Control': 'no-store'/.test(csRoute.slice(csRoute.indexOf('function json('))), '…through the same no-store json() every answer uses')
+}
+console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a certificate\'s URL is a link only when plainly http(s), and no exception text reaches a response')

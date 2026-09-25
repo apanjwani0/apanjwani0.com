@@ -99,6 +99,7 @@ function lpForbiddenV4(ip: string): boolean {
   if (a === 172 && b >= 16 && b <= 31) return true               // private 172.16/12
   if (a === 192 && b === 168) return true                        // private
   if (a === 192 && b === 0 && (c === 0 || c === 2)) return true  // IETF, TEST-NET-1
+  if (a === 192 && b === 88 && c === 99) return true             // 6to4 relay anycast (deprecated)
   if (a === 198 && (b === 18 || b === 19)) return true           // benchmarking
   if (a === 198 && b === 51 && c === 100) return true            // TEST-NET-2
   if (a === 203 && b === 0 && c === 113) return true             // TEST-NET-3
@@ -142,6 +143,13 @@ function lpForbiddenV6(ip: string): boolean {
   if (h[0] === 0 && h[1] === 0 && h[2] === 0 && h[3] === 0 && h[4] === 0 && h[5] === 0xffff) {
     return lpForbiddenV4(`${h[6] >> 8}.${h[6] & 0xff}.${h[7] >> 8}.${h[7] & 0xff}`)
   }
+  // 6to4 (2002::/16) carries a v4 address in its next 32 bits and is routed to
+  // it, so 2002:7f00:1:: is 127.0.0.1 wearing a v6 prefix — classify as that v4.
+  if (h[0] === 0x2002) {
+    return lpForbiddenV4(`${h[1] >> 8}.${h[1] & 0xff}.${h[2] >> 8}.${h[2] & 0xff}`)
+  }
+  if (h[0] === 0x2001 && h[1] === 0) return true                // Teredo 2001::/32 — a tunnel to wherever
+  if (h[0] === 0x100 && h[1] === 0 && h[2] === 0 && h[3] === 0) return true // discard-only 100::/64
   if (h[0] === 0) return true                                   // ::, ::1, v4-compatible
   if ((h[0] & 0xfe00) === 0xfc00) return true                   // ULA fc00::/7
   if ((h[0] & 0xffc0) === 0xfe80) return true                   // link-local fe80::/10
@@ -158,6 +166,22 @@ export function lpIsForbiddenIp(ip: string): boolean {
   if (kind === 4) return lpForbiddenV4(ip)
   if (kind === 6) return lpForbiddenV6(ip)
   return true // not an IP at all — the caller passed the wrong thing
+}
+
+/**
+ * The media type of a proxied image, or null when it is not one this tool will
+ * pass on.
+ *
+ * The route writes it into a `data:` URI that the page drops into CSS
+ * `url("…")`, and the header it comes from is chosen by whoever serves the
+ * image. "Starts with `image/`" let that header carry a quote, a parenthesis or
+ * whitespace into the string, so the type is held to the grammar of an image
+ * media type once its parameters are stripped: `image/`, then letters, digits
+ * and `.+-` only. Anything else is refused rather than passed along.
+ */
+export function lpImageMediaType(contentType: string | null): string | null {
+  const type = (contentType ?? '').split(';')[0].trim().toLowerCase()
+  return /^image\/[a-z0-9.+-]+$/.test(type) ? type : null
 }
 
 /**

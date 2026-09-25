@@ -30,6 +30,7 @@ import {
   lpDecodeHtml,
   lpFetchImage,
   lpFetchPage,
+  lpImageMediaType,
   lpValidateUrl,
 } from '../../../lib/link-peek-fetch'
 import { lpExtractMeta } from '../../../components/tools/link-peek/unfurl'
@@ -81,9 +82,13 @@ export const GET: APIRoute = async ({ request }) => {
     const declaredTooBig = (n: number) => `image is ${Math.round(n / 1024)} KB — over this preview's ${Math.round(LP_MAX_IMAGE_BYTES / 1024)} KB cap`
     const fetched = await lpFetchImage(target, uaKey)
     if (!fetched.ok) return json({ ok: false, error: fetched.reason })
-    const type = (fetched.contentType ?? '').split(';')[0].trim().toLowerCase()
-    if (!type.startsWith('image/')) {
-      return json({ ok: false, error: `the URL answered with ${type || 'no content-type'}, not an image` })
+    // Allowlisted, not prefix-matched: this string becomes part of a `data:`
+    // URI inside CSS `url("…")` on the page (see lpImageMediaType).
+    const type = lpImageMediaType(fetched.contentType)
+    if (!type) {
+      const said = (fetched.contentType ?? '').split(';')[0].trim().toLowerCase()
+      const shown = /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(said) ? said : said ? 'a content-type that is not an image' : 'no content-type'
+      return json({ ok: false, error: `the URL answered with ${shown}, not an image` })
     }
     if (fetched.truncated) {
       return json({ ok: false, error: declaredTooBig(fetched.declaredBytes ?? fetched.bytes) })
