@@ -8,8 +8,8 @@
  * what order.
  *
  * Reached only from `src/pages/api/tools/dns-sightline.ts`. The browser bundle
- * imports `./analyze.ts` for the types and the rendering helpers and never this
- * file, so no `fetch`-to-a-resolver code ships to a page.
+ * imports `./analyze.ts` and `./panels.ts`, and this file only for the report's
+ * TYPE — erased at build — so no `fetch`-to-a-resolver code ships to a page.
  *
  * ── Two halves, deliberately separated ────────────────────────────────────
  * 1. **The diff.** Eight record types asked of all three resolvers — 24
@@ -19,8 +19,12 @@
  *    resolution. These run against ONE resolver (`SG_PRIMARY_RESOLVER`),
  *    because asking three resolvers to walk the same include tree triples the
  *    outbound cost to answer a question none of them would answer differently.
- *    The page says which resolver did the walking rather than implying the
- *    analysis is a consensus.
+ *    The report records which one (`analysedBy`) rather than implying the
+ *    analysis is a consensus. The walks START from what the diff already has: a
+ *    question about the inspected name itself is answered with the diff's own
+ *    pick (`sgPickAnswer`) instead of being asked again, so the SPF record the
+ *    walk counts, the CAA set it stops at and the answer the Records table
+ *    shows are one answer — not two taken a moment apart that can disagree.
  *
  * ── One deadline over both ────────────────────────────────────────────────
  * Every question in an inspection runs under ONE signal: the visitor's request
@@ -58,7 +62,10 @@ import {
   sgDmarcFindings,
   sgIsDangling,
   sgMxFindings,
+  sgMxStatus,
   sgNsFindings,
+  sgOutageOf,
+  sgPickAnswer,
   sgReachabilityFindings,
   sgReadDmarc,
   sgResolveMxTargets,
@@ -70,6 +77,7 @@ import {
   type SgDiff,
   type SgDmarcReport,
   type SgFinding,
+  type SgMxStatus,
   type SgMxTarget,
   type SgSpfReport,
 } from './analyze'
@@ -86,6 +94,12 @@ export interface SgInspection {
   caa: SgCaaVerdict
   caaWalked: string[]
   mxTargets: SgMxTarget[]
+  /**
+   * What the MX answer the findings read says (`sgMxStatus`). The Mail panel
+   * reads THIS rather than deciding absence for itself, so it cannot print
+   * "No MX records." beside a finding that says the lookup failed.
+   */
+  mxStatus: SgMxStatus
   cname: SgCnameReport
   findings: SgFinding[]
   queries: number
@@ -140,18 +154,26 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
   })
 
   const primaryOf = (type: SgType): SgAnswer =>
-    (answers[type] ?? []).find(a => a.resolver === SG_PRIMARY_RESOLVER && !a.error) ??
-    (answers[type] ?? []).find(a => !a.error) ??
+    sgPickAnswer(answers[type] ?? [], SG_PRIMARY_RESOLVER) ??
     { resolver: SG_PRIMARY_RESOLVER, type, name, rcode: 'ERROR', records: [], elapsedMs: 0, error: 'no answer' }
+
+  // The walks' first questions are ones the diff has just put to every
+  // resolver. Asking the primary again spent a query to get a second answer
+  // that could disagree with the first — the walk reading a SERVFAIL while the
+  // Records table showed Google's record — so they are served from the pick.
+  const walkLookup: SgLookup = (n, t) =>
+    n.trim().toLowerCase().replace(/\.+$/, '') === name && (SG_TYPES as readonly string[]).includes(t)
+      ? Promise.resolve(primaryOf(t))
+      : lookup(n, t)
 
   const mxAnswer = primaryOf('MX')
   const cnameAnswer = primaryOf('CNAME')
 
   const [spf, dmarcAnswer, caaReport, mxTargets] = await Promise.all([
-    sgAnalyzeSpf(name, lookup),
+    sgAnalyzeSpf(name, walkLookup),
     lookup(`_dmarc.${name}`, 'TXT'),
-    sgAnalyzeCaa(name, lookup),
-    sgResolveMxTargets(mxAnswer, lookup),
+    sgAnalyzeCaa(name, walkLookup),
+    sgResolveMxTargets(mxAnswer, walkLookup),
   ])
 
   const dmarc = sgReadDmarc(dmarcAnswer, primaryOf('TXT'), name.split('.').length)
@@ -182,14 +204,17 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
     atApex: name.split('.').length === 2,
   }
 
+  // What every resolver failed with SERVFAIL: the difference between "re-run"
+  // and "the zone is failing" for each record that could not be read.
+  const outage = sgOutageOf(diffs)
   const findings = sgSortFindings([
-    ...sgReachabilityFindings(diffs),
+    ...sgReachabilityFindings(diffs, name),
     ...sgDiffFindings(diffs),
     ...sgCnameFindings(cname, name),
-    ...sgSpfFindings(spf, name),
-    ...sgDmarcFindings(dmarc, name),
-    ...sgCaaFindings(caa, name, opts.wantedCa ?? null),
-    ...sgMxFindings(mxAnswer, mxTargets),
+    ...sgSpfFindings(spf, name, outage),
+    ...sgDmarcFindings(dmarc, name, outage),
+    ...sgCaaFindings(caa, name, opts.wantedCa ?? null, outage),
+    ...sgMxFindings(mxAnswer, mxTargets, outage),
     ...sgNsFindings(primaryOf('NS'), primaryOf('SOA'), name),
   ])
 
@@ -204,6 +229,7 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
     caa,
     caaWalked: caaReport.walked,
     mxTargets,
+    mxStatus: sgMxStatus(mxAnswer),
     cname,
     findings,
     queries: budget.spent,
