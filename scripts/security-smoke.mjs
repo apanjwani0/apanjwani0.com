@@ -6626,7 +6626,11 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgCaaFindings(sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['www.ex.com', 'ex.com'], entries: [sg.sgParseCaa('0 issue "letsencrypt.org"')], incomplete: true }), 'www.ex.com', 'digicert.com'),
     ],
     sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, []), unreadMxFindings, stalledMxFindings],
-    sgCnameFindings: [dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com')],
+    sgCnameFindings: [
+      dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com'),
+      // A target whose lookups got no answer: neither dangling nor hosted is claimed.
+      sg.sgCnameFindings({ target: 'proj.github.io', dangling: false, unchecked: true, service: 'GitHub Pages', coexisting: [], atApex: false }, 'blog.ex.com'),
+    ],
     sgDiffFindings: [sg.sgDiffFindings([realDiff, filtered])],
     sgReachabilityFindings: [
       blackoutFindings,
@@ -8055,6 +8059,35 @@ console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a
 }
 console.log('pr 19 review: a retired learning answers 301 to the hub, the publish predicate refuses it so no sitemap can list it, and the /games intro counts its dailies')
 
+/* The real DNS Sightline inspection over a stubbed resolver, shared by the two
+   follow-up blocks below. sgInspect takes no endpoint override (asserted in the
+   DNS Sightline block), so the stub replaces `fetch` itself and the real
+   transport, the real pick and the real walks run. `fault(resolver, name,
+   type)` says what one resolver does with one question — a DNS status number
+   (0 is an empty NOERROR, 2 SERVFAIL, 3 NXDOMAIN) or 'unreachable' — and a name
+   missing from the zone is NXDOMAIN. */
+const SG_STUB_TYPES = { A: 1, NS: 2, CNAME: 5, SOA: 6, MX: 15, TXT: 16, AAAA: 28, CAA: 257 }
+const sgStubDoh = (zone, fault) => async input => {
+  const u = new URL(String(input))
+  const resolver = u.hostname.includes('cloudflare') ? 'cloudflare' : u.hostname.includes('google') ? 'google' : 'quad9'
+  const name = (u.searchParams.get('name') ?? '').toLowerCase().replace(/\.+$/, '')
+  const type = u.searchParams.get('type') ?? ''
+  const f = fault?.(resolver, name, type)
+  if (f === 'unreachable') throw new TypeError('stubbed resolver unreachable')
+  const body = typeof f === 'number'
+    ? { Status: f, Answer: [] }
+    : name in zone
+      ? { Status: 0, Answer: (zone[name][type] ?? []).map(data => ({ name: `${name}.`, type: SG_STUB_TYPES[type], TTL: 300, data })) }
+      : { Status: 3, Answer: [] }
+  return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/dns-json' } })
+}
+const sgInspectOver = async (zone, fault, name = 'example.test') => {
+  const { sgInspect } = await import('../src/components/tools/dns-sightline/inspect.ts')
+  const realFetch = globalThis.fetch
+  globalThis.fetch = sgStubDoh(zone, fault)
+  try { return await sgInspect(name) } finally { globalThis.fetch = realFetch }
+}
+
 /* ─────  DNS Sightline follow-ups: one test for "did it answer", and whose failure it was  ─────
 
    The tool had two definitions of "answered". `sgUnanswered` — NOERROR and
@@ -8077,7 +8110,6 @@ console.log('pr 19 review: a retired learning answers 301 to the hub, the publis
    every resolver returned SERVFAIL — that is the zone failing. */
 {
   const sg = await import('../src/components/tools/dns-sightline/analyze.ts')
-  const insp = await import('../src/components/tools/dns-sightline/inspect.ts')
   const panels = await import('../src/components/tools/dns-sightline/panels.ts')
 
   /* ── 1. The only test, derived over every module in the tool's folder. ────
@@ -8190,31 +8222,8 @@ console.log('pr 19 review: a retired learning answers 301 to the hub, the publis
   assert.equal(lone.looksFiltered, false)
   assert.deepEqual(sg.sgDiffFindings([lone]), [], 'one resolver that could not answer is not a disagreement about the zone')
 
-  /* ── 3. The real inspection, over a stubbed resolver. ─────────────────────
-     sgInspect takes no endpoint override (asserted in the DNS Sightline block),
-     so the stub replaces `fetch` itself and the real transport, the real pick
-     and the real walks run. `fault` says what one resolver does with one
-     question; a name missing from the zone is NXDOMAIN. */
-  const TYPE_NUM = { A: 1, NS: 2, CNAME: 5, SOA: 6, MX: 15, TXT: 16, AAAA: 28, CAA: 257 }
-  const stubDoh = (zone, fault) => async input => {
-    const u = new URL(String(input))
-    const resolver = u.hostname.includes('cloudflare') ? 'cloudflare' : u.hostname.includes('google') ? 'google' : 'quad9'
-    const name = (u.searchParams.get('name') ?? '').toLowerCase().replace(/\.+$/, '')
-    const type = u.searchParams.get('type') ?? ''
-    const f = fault?.(resolver, name, type)
-    if (f === 'unreachable') throw new TypeError('stubbed resolver unreachable')
-    const body = typeof f === 'number'
-      ? { Status: f, Answer: [] }
-      : name in zone
-        ? { Status: 0, Answer: (zone[name][type] ?? []).map(data => ({ name: `${name}.`, type: TYPE_NUM[type], TTL: 300, data })) }
-        : { Status: 3, Answer: [] }
-    return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/dns-json' } })
-  }
-  const inspectOver = async (zone, fault, name = 'example.test') => {
-    const realFetch = globalThis.fetch
-    globalThis.fetch = stubDoh(zone, fault)
-    try { return await insp.sgInspect(name) } finally { globalThis.fetch = realFetch }
-  }
+  /* ── 3. The real inspection, over a stubbed resolver (`sgInspectOver`). ─── */
+  const inspectOver = sgInspectOver
   const SERVFAIL = 2
   const zone = {
     'example.test': {
@@ -8309,3 +8318,154 @@ console.log('pr 19 review: a retired learning answers 301 to the hub, the publis
   assert.equal(zoneFinding.evidence.length, sg.SG_TYPES.length, 'one line of evidence per question the diff asked')
 }
 console.log('dns sightline follow-ups: sgUnanswered is the only test of an answer (derived from the source and over all 343 mixes), a lone SERVFAIL changes no finding or panel, and the zone failing is not called "re-run"')
+
+/* ─────  DNS Sightline follow-ups: no finding rests on a lookup that got no answer  ─────
+
+   Three findings still drew a conclusion from a question nobody got answered,
+   and one gated a conclusion on a question it did not depend on:
+
+     - `dmarc-at-apex` ("read by nobody") read `recordCount === 0` without
+       asking whether `_dmarc` answered, so a timed-out `_dmarc` beside a stray
+       apex `v=DMARC1` produced an error-level claim beside dmarc-inconclusive.
+     - An MX target whose A lookup said NXDOMAIN and whose AAAA timed out was
+       "could not be checked" — but NXDOMAIN is about the NAME: nothing lives
+       there, so there is no address of either family.
+     - `cname-hosted` said "resolves, so this is not dangling" off three failed
+       lookups: the presence twin of reading a failure as an absence.
+     - `spf-no-all` was suppressed on ANY truncation. With no `redirect=` in
+       the chain an unlisted sender's result is neutral whatever the includes
+       hold — an include can only match a sender — so the finding holds; and a
+       record that redirects to one with `-all` has an `all` after all.
+
+   The general form is asserted without a list of findings: for every question
+   the real inspection asks (read off the stubbed resolver), a finding that
+   appears when that record is present but not when it is absent — or the
+   other way round — rests on that answer, and must not appear when the answer
+   never came. */
+{
+  const sg = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const noAnswer = (name, type) => ({ resolver: 'f', type, name, rcode: 'ERROR', records: [], elapsedMs: 0, error: 'no answer within 4000ms' })
+  const answer = (name, type, datas, rcode = datas.length ? 'NOERROR' : 'NXDOMAIN') =>
+    ({ resolver: 'f', type, name, rcode, records: datas.map(d => ({ type: 16, name, data: d, ttl: 60 })), elapsedMs: 0 })
+
+  /* ── 1. The DMARC record "at the wrong name" needs an answer from the right one. ── */
+  const apexDmarc = answer('ex.com', 'TXT', ['"v=spf1 -all"', '"v=DMARC1; p=reject"'])
+  assert.deepEqual(sg.sgDmarcFindings(sg.sgReadDmarc(noAnswer('_dmarc.ex.com', 'TXT'), apexDmarc, 2), 'ex.com').map(f => f.id), ['dmarc-inconclusive'],
+    'an unread _dmarc might hold the real record, so the apex one is not known to be read by nobody')
+  assert.ok(sg.sgDmarcFindings(sg.sgReadDmarc(answer('_dmarc.ex.com', 'TXT', []), apexDmarc, 2), 'ex.com').some(f => f.id === 'dmarc-at-apex'),
+    'an answered, empty _dmarc still makes the apex record the wrong-name one')
+
+  /* ── 2. NXDOMAIN at an MX target settles "no address" for both families. ── */
+  const oneMx = { resolver: 'f', type: 'MX', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 15, name: 'ex.com', data: '10 mail.ex.com.', ttl: 60 }] }
+  const mxWith = async (a, aaaa) => sg.sgMxFindings(oneMx, await sg.sgResolveMxTargets(oneMx, async (n, t) =>
+    t === 'A' ? a(n, t) : t === 'AAAA' ? aaaa(n, t) : answer(n, t, [], 'NOERROR')))
+  const nx = (n, t) => answer(n, t, [])
+  const emptyNoerror = (n, t) => answer(n, t, [], 'NOERROR')
+  assert.deepEqual((await mxWith(nx, noAnswer)).map(f => f.id), ['mx-unresolvable'], 'A NXDOMAIN + AAAA unanswered: the name holds nothing')
+  assert.deepEqual((await mxWith(noAnswer, nx)).map(f => f.id), ['mx-unresolvable'], '…whichever of the two said NXDOMAIN')
+  assert.deepEqual((await mxWith(emptyNoerror, noAnswer)).map(f => f.id), ['mx-unchecked'],
+    'an EMPTY NOERROR says only "no A here" — the unanswered AAAA could still exist')
+
+  /* ── 3. spf-no-all is suppressed only when the missing record could change it. ── */
+  const spfZone = {
+    'inc.test': ['"v=spf1 include:stalled.test"'],
+    'redir-stalled.test': ['"v=spf1 redirect=stalled.test"'],
+    'redir-strict.test': ['"v=spf1 redirect=strict.test"'],
+    'strict.test': ['"v=spf1 ip4:192.0.2.1 -all"'],
+    'redir-open.test': ['"v=spf1 redirect=plain.test"'],
+    'plain.test': ['"v=spf1 ip4:192.0.2.1"'],
+    'redir-gone.test': ['"v=spf1 redirect=gone.test"'],
+    'loop-a.test': ['"v=spf1 redirect=loop-b.test"'],
+    'loop-b.test': ['"v=spf1 redirect=loop-a.test"'],
+    'first-all.test': ['"v=spf1 -all +all"'],
+  }
+  const spfLookup = async (name, type) => (name === 'stalled.test' ? noAnswer(name, type) : answer(name, type, spfZone[name] ?? []))
+  const spfOf = async domain => {
+    const report = await sg.sgAnalyzeSpf(domain, spfLookup)
+    return { report, ids: sg.sgSpfFindings(report, domain).map(f => f.id) }
+  }
+  const inc = await spfOf('inc.test')
+  assert.ok(inc.report.truncated && inc.ids.includes('spf-no-all'),
+    `an unanswered include cannot give an unlisted sender anything but neutral — spf-no-all still holds (got ${inc.ids.join(', ')})`)
+  assert.equal((await spfOf('redir-stalled.test')).ids.includes('spf-no-all'), false, 'an unread redirect target decides the result, so nobody knows')
+  const strict = await spfOf('redir-strict.test')
+  assert.equal(strict.report.fallthrough, '-')
+  assert.equal(strict.ids.includes('spf-no-all'), false, 'a redirect to a record with -all has an all — it used to be reported as having none')
+  const open = await spfOf('redir-open.test')
+  assert.ok(open.report.fallthrough === 'none' && open.ids.includes('spf-no-all'), 'a redirect chain that ends with no all is neutral')
+  assert.ok(open.report.terms.some(t => t.kind === 'redirect'), 'and the finding cites the redirect it followed')
+  assert.equal((await spfOf('redir-gone.test')).report.fallthrough, 'error', 'a redirect to no SPF record is a permerror, not a missing all')
+  assert.equal((await spfOf('loop-a.test')).report.fallthrough, 'error')
+  const firstAll = await spfOf('first-all.test')
+  assert.equal(firstAll.report.all, '-', 'mechanisms after the first all are never tested (RFC 7208 §5.1)')
+  assert.equal(firstAll.ids.includes('spf-all-pass'), false)
+
+  /* ── 4. The general form, over the real inspection. ─────────────────────────
+
+     For each inspected name, the questions come from the stubbed resolver's own
+     log, and each is answered four more ways besides the baseline: absent (an
+     empty NOERROR, and NXDOMAIN) and unanswered (SERVFAIL from every resolver,
+     and every resolver unreachable). Then per NAME, all its questions at once,
+     which is the only way three lookups can be absent together (a dangling
+     CNAME). A finding in exactly one of present/absent depends on that
+     question, so it must not be drawn when the question went unanswered. No id
+     is listed; the dependence is read off the module's own behaviour. */
+  const world = {
+    'example.test': {
+      A: ['93.184.216.34'], MX: ['10 mail.example.test.'], NS: ['a.ns.test.', 'b.ns.test.'],
+      // The stray apex DMARC record is what dmarc-at-apex would report.
+      TXT: ['"v=spf1 include:_spf.provider.test -all"', '"v=DMARC1; p=reject"'],
+      CAA: ['0 issue "letsencrypt.org"'], SOA: ['a.ns.test. hostmaster.example.test. 1 7200 3600 1209600 300'],
+    },
+    '_dmarc.example.test': { TXT: ['"v=DMARC1; p=reject; rua=mailto:d@example.test"'] },
+    '_spf.provider.test': { TXT: ['"v=spf1 ip4:192.0.2.0/24 -all"'] },
+    'mail.example.test': { A: ['93.184.216.35'] },
+    // An alias onto a hosted service, for the dangling/hosted pair.
+    'www.example.test': { CNAME: ['proj.github.io.'] },
+    'proj.github.io': { A: ['185.199.108.153'] },
+  }
+  const idsOf = r => new Set(r.findings.map(f => f.id))
+  const dependsOn = new Set()
+  let compared = 0
+  const absentBasis = new Set()
+  for (const inspected of ['example.test', 'www.example.test']) {
+    const asked = new Set()
+    const present = idsOf(await sgInspectOver(world, (r, n, t) => { asked.add(`${n} ${t}`) }, inspected))
+    const questions = [...asked].map(q => q.split(' '))
+    assert.ok(questions.length >= 12, `${inspected}: the inspection asked the questions it walks (${questions.length})`)
+    const names = [...new Set(questions.map(([n]) => n))]
+    const perturbations = [
+      ...questions.map(([n, t]) => ({ label: `${t} ${n}`, hits: (qn, qt) => qn === n && qt === t })),
+      ...names.map(n => ({ label: `every question about ${n}`, hits: qn => qn === n })),
+    ]
+    for (const p of perturbations) {
+      const run = async with_ => sgInspectOver(world, (r, n, t) => (p.hits(n, t) ? with_ : undefined), inspected)
+      const absents = await Promise.all([run(0), run(3)])
+      for (const a of absents) for (const f of a.findings) if (f.basis === 'absence') absentBasis.add(f.id)
+      for (const unanswered of [2, 'unreachable']) {
+        const u = idsOf(await run(unanswered))
+        for (const absent of absents.map(idsOf)) {
+          const rests = [...present].filter(id => !absent.has(id)).concat([...absent].filter(id => !present.has(id)))
+          for (const id of rests) {
+            dependsOn.add(id)
+            assert.equal(u.has(id), false,
+              `${inspected}, ${p.label} unanswered (${unanswered}): "${id}" appears only when that record is ${present.has(id) ? 'present' : 'absent'}, so it rests on an answer that never came`)
+          }
+          compared += 1
+        }
+      }
+    }
+  }
+  assert.ok(compared >= 100, `the property was checked across the perturbations (${compared})`)
+  // Not vacuous: every absence-based finding the absent worlds produced was
+  // itself shown to depend on some question — so each was held to the rule.
+  // (Those worlds are fully answered, so no "could not be read" notice is here.)
+  assert.ok(absentBasis.size >= 5, `the absent worlds produced absence findings to check (${[...absentBasis].join(', ')})`)
+  for (const id of absentBasis) {
+    assert.ok(dependsOn.has(id), `the absence finding "${id}" never showed up as depending on a question, so the property never tested it`)
+  }
+  for (const id of ['dmarc-at-apex', 'mx-unresolvable', 'cname-hosted', 'cname-dangling']) {
+    assert.ok(dependsOn.has(id), `the fixture world reaches ${id} (the findings this block was written for)`)
+  }
+}
+console.log('dns sightline follow-ups: no finding rests on a lookup that got no answer (derived over every question the inspection asks), NXDOMAIN settles an MX target, and spf-no-all survives an unanswered include')

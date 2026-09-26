@@ -618,6 +618,31 @@ answered. `resolvers-unreachable` in turn tells the deadline apart from a
 resolver this server could not reach, from `SgAnswer.stopped`, which the
 transport sets on every question it cut off itself.
 
+**A finding may lean on an absence without being *about* one**, and that is
+where the rule kept escaping. `dmarc-at-apex` is record-based — it cites the
+stray `v=DMARC1` at the apex — but "read by nobody" is a claim that `_dmarc`
+holds nothing, so an unanswered `_dmarc` beside that apex record produced an
+error-level finding beside `dmarc-inconclusive`; it now needs `_dmarc` to have
+answered. The presence twin is the same mistake: `cname-hosted` said "resolves,
+so this is not dangling" off three failed target lookups, and "not dangling"
+needs an answer saying the name is *there* — `sgCnameTargetUnchecked` reports
+`cname-unchecked` instead. And NXDOMAIN settles more than one question: it is
+about the name, so an MX target whose A lookup said NXDOMAIN has no address of
+either family however its AAAA lookup went (`mx-unresolvable`, not
+`mx-unchecked`).
+
+So `security:smoke` asserts the general form without a list of findings. For
+every question the real inspection asks — read off the stubbed resolver's own
+log — and for every name, all its questions at once, it runs the zone with that
+record present, absent (an empty NOERROR, and NXDOMAIN) and unanswered (SERVFAIL
+everywhere, and unreachable). A finding in exactly one of present/absent depends
+on that question, so it must not appear when the question went unanswered. The
+dependence is read off the module's behaviour, so a finding added later is held
+to it the day it ships. What that property cannot check is the opposite
+direction — a conclusion wrongly *withheld* — because one present world does not
+stand for every present world; the NXDOMAIN case and the one below have direct
+assertions instead.
+
 ### A conclusion that does not depend on X must not be gated on X
 
 `caaRenewalOutlook` (`src/lib/caa.ts`) is where the two server-backed
@@ -646,6 +671,15 @@ therefore about a *renewal that will fail*, the refusal disclaims mis-issuance i
 so many words, and the assertion holds it there. The alternative accuses a
 correctly-run CA of breaking the rules because somebody edited a DNS record last
 Tuesday.
+
+`spf-no-all` is the small instance of the same rule. It was suppressed whenever
+the SPF walk stopped early, including at an include that got no answer — but an
+include can only ever *match* a sender, so without a `redirect=` an unlisted
+sender's result is neutral whatever the includes hold. `SgSpfReport.fallthrough`
+now follows only what decides that result: the record's first `all` (§5.1), or,
+when it has none, its `redirect=` chain to the end (§6.1). The finding is
+suppressed only when a record in that chain went unread, and a redirect to a
+record with `-all` is no longer reported as having no `all` at all.
 
 A narrow `scope=caa` on `/api/tools/dns-sightline` serves Chainsaw's panel, so one
 question does not pay for a 24-query resolver diff. It gets its **own** rate-limit

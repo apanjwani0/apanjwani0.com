@@ -57,6 +57,7 @@ import {
   sgCaaFindings,
   sgCaaVerdict,
   sgCnameFindings,
+  sgCnameTargetUnchecked,
   sgDiffAnswers,
   sgDiffFindings,
   sgDmarcFindings,
@@ -182,6 +183,7 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
   // ── 3. the CNAME picture ─────────────────────────────────────────────────
   const cnameTarget = cnameAnswer.records[0]?.data.toLowerCase().replace(/\.+$/, '') ?? null
   let dangling = false
+  let unchecked = false
   if (cnameTarget) {
     const [ta, taaaa, tcname] = await Promise.all([
       lookup(cnameTarget, 'A'),
@@ -191,10 +193,12 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
     // The rule lives in `analyze.ts` (`sgIsDangling`) rather than here, because
     // it is a claim — see its docblock for why NXDOMAIN and not "no address".
     dangling = sgIsDangling(ta, taaaa, tcname)
+    unchecked = sgCnameTargetUnchecked(ta, taaaa, tcname)
   }
   const cname: SgCnameReport = {
     target: cnameTarget,
     dangling,
+    unchecked,
     service: cnameTarget ? sgTakeoverService(cnameTarget) : null,
     // A CNAME may not coexist with anything. Reported only for types actually
     // observed at this exact name in the same inspection.

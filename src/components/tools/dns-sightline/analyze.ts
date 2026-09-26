@@ -473,8 +473,23 @@ export interface SgSpfReport {
    * said nothing at all.
    */
   unanswered: string[]
-  /** Has the record an `all` mechanism, and with what qualifier? */
+  /**
+   * Has the record an `all` mechanism, and with what qualifier? The FIRST one:
+   * RFC 7208 §5.1 — mechanisms after `all` are never tested.
+   */
   all: '+' | '-' | '~' | '?' | null
+  /**
+   * What a sender matched by no mechanism gets — which is what `all` is for.
+   * The record's own `all`; or, when it has none and names a `redirect=`, the
+   * redirect target's, followed down the chain (§6.1). `'none'` means the chain
+   * ends at a record with neither, so the result is neutral; `'error'` that it
+   * breaks on a permerror (a target with no SPF record, a loop, two records);
+   * `'unknown'` that a record in the chain was never read — its lookup got no
+   * answer, or the walk stopped first. Includes play no part: they can only
+   * match a sender, never change what an unmatched one gets. Meaningless when
+   * `recordCount` is 0.
+   */
+  fallthrough: '+' | '-' | '~' | '?' | 'none' | 'error' | 'unknown'
   queries: number
 }
 
@@ -534,6 +549,8 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
     truncated: false,
     unanswered,
     all: null,
+    // Two records at the root is a permerror before any mechanism is read.
+    fallthrough: found.length > 1 ? 'error' : 'unknown',
     queries,
   }
   if (!found.length) {
@@ -553,14 +570,21 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
    *  otherwise cost a great deal of walking to refine a number nobody needs. */
   const SG_SPF_OVERSHOOT = SG_SPF_LOOKUP_LIMIT * 3
 
-  interface SgSpfNode { record: string; domain: string; depth: number; ancestry: string[] }
+  /**
+   * `decides`: this record's `all` — or, lacking one, its redirect — is what an
+   * unlisted sender gets. The root decides, and so does the target of a
+   * redirect from a record that decides; an included record never does.
+   */
+  interface SgSpfNode { record: string; domain: string; depth: number; ancestry: string[]; decides: boolean; several?: boolean }
+  type SgSpfStop = 'loop' | 'ceiling' | 'unanswered' | 'missing'
   const rootKey = domain.toLowerCase().replace(/\.+$/, '')
-  const queue: SgSpfNode[] = [{ record: found[0], domain, depth: 0, ancestry: [rootKey] }]
+  const queue: SgSpfNode[] = [{ record: found[0], domain, depth: 0, ancestry: [rootKey], decides: found.length === 1 }]
 
   while (queue.length) {
     const node = queue.shift() as SgSpfNode
     const tokens = node.record.trim().split(/\s+/).slice(1) // drop `v=spf1`
     let hasAll = false
+    let first: '+' | '-' | '~' | '?' | null = null
     let redirect: string | null = null
 
     for (const token of tokens) {
@@ -569,9 +593,10 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
 
       if (/^[+\-~?]?all$/.test(lower)) {
         hasAll = true
-        if (node.depth === 0) {
+        if (!first) {
           const q = lower[0]
-          report.all = q === '-' || q === '~' || q === '?' || q === '+' ? (q as '+' | '-' | '~' | '?') : '+'
+          first = q === '-' || q === '~' || q === '?' || q === '+' ? (q as '+' | '-' | '~' | '?') : '+'
+          if (node.depth === 0) report.all = first
         }
         continue
       }
@@ -594,36 +619,48 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
 
       if (kind === 'include') {
         const child = await sgSpfDescend(target, node, 'include')
-        if (child) queue.push(child)
+        if (typeof child !== 'string') queue.push(child)
       }
     }
 
     // §6.1: a `redirect=` is ignored entirely when the record also has `all`.
+    let next: SgSpfNode | SgSpfStop | null = null
     if (redirect && !hasAll) {
       report.terms.push({ kind: 'redirect', domain: redirect, depth: node.depth, parent: node.domain, raw: `redirect=${redirect}` })
       report.lookups += 1
-      const child = await sgSpfDescend(redirect, node, 'redirect')
-      if (child) queue.push(child)
+      next = await sgSpfDescend(redirect, node, 'redirect')
+      if (typeof next !== 'string') queue.push(next)
+    }
+    if (node.decides) {
+      // The one place an unanswered lookup can change what an unlisted sender
+      // gets is the redirect chain — so it is the one place that makes the
+      // answer unknown. An include that went unanswered cannot: it can only
+      // ever match a sender, and "no `all`" is neutral whatever it holds.
+      report.fallthrough = node.several ? 'error'
+        : first ?? (next === null ? 'none'
+          : next === 'loop' || next === 'missing' ? 'error'
+            : typeof next === 'string' ? 'unknown'
+              : report.fallthrough)
     }
   }
 
   /** Follow one include/redirect, or explain in `problems` why it was not followed. */
-  async function sgSpfDescend(target: string, node: SgSpfNode, via: 'include' | 'redirect'): Promise<SgSpfNode | null> {
+  async function sgSpfDescend(target: string, node: SgSpfNode, via: 'include' | 'redirect'): Promise<SgSpfNode | SgSpfStop> {
     const key = target.toLowerCase().replace(/\.+$/, '')
     // A cycle is a name inside its OWN ancestry. A name reached twice by two
     // different routes is a diamond, and a receiver pays for it twice.
     if (node.ancestry.includes(key)) {
       problems.push(`${via} loop: ${node.domain} ${via === 'include' ? 'includes' : 'redirects to'} ${target}, which is already on the path from ${domain}`)
-      return null
+      return 'loop'
     }
     if (node.depth + 1 > SG_SPF_MAX_DEPTH) {
       truncated = true
       problems.push(`stopped at ${SG_SPF_MAX_DEPTH} levels — the tree below ${target} was not walked`)
-      return null
+      return 'ceiling'
     }
     if (queries >= SG_SPF_MAX_QUERIES || report.lookups > SG_SPF_OVERSHOOT) {
       truncated = true
-      return null
+      return 'ceiling'
     }
     const answer = await lookup(target, 'TXT')
     queries += 1
@@ -636,17 +673,20 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
       truncated = true
       unanswered.push(target)
       problems.push(`${via === 'include' ? `include:${target}` : `redirect=${target}`} got no answer (${answer.error ?? answer.rcode}) — nothing below it was counted`)
-      return null
+      return 'unanswered'
     }
     if (answer.rcode === 'NXDOMAIN' || !answer.records.length) voidLookups += 1
     if (!records.length) {
       problems.push(`${via === 'include' ? `include:${target}` : `redirect=${target}`} has no SPF record — a receiver treats that as a permerror`)
-      return null
+      return 'missing'
     }
     if (records.length > 1) {
       problems.push(`${target} publishes ${records.length} SPF records, which is a permerror on its own`)
     }
-    return { record: records[0], domain: target, depth: node.depth + 1, ancestry: [...node.ancestry, key] }
+    return {
+      record: records[0], domain: target, depth: node.depth + 1, ancestry: [...node.ancestry, key],
+      decides: node.decides && via === 'redirect', several: records.length > 1,
+    }
   }
 
   report.queries = queries
@@ -749,13 +789,16 @@ export function sgSpfFindings(spf: SgSpfReport, domain: string, outage: SgOutage
       evidence: [spf.record ?? ''],
       basis: 'record',
     })
-  } else if (spf.all === null && spf.recordCount > 0 && !spf.truncated) {
+  } else if (spf.recordCount > 0 && spf.fallthrough === 'none') {
+    // Suppressed only when what is missing could change the answer — a redirect
+    // chain that was not read to its end — and not merely because the walk was
+    // cut short: an include that got no answer can only ever match a sender.
     out.push({
       id: 'spf-no-all',
       level: 'warn',
       title: 'No `all` mechanism',
       detail: 'Without a final `all`, the result for an unlisted sender is neutral — the same outcome as having no policy at all. `~all` (softfail) or `-all` (fail) is what makes the record mean something.',
-      evidence: [spf.record ?? ''],
+      evidence: [spf.record ?? '', ...spf.terms.filter(t => t.kind === 'redirect').map(t => `${t.raw}  (in ${t.parent})`)],
       basis: 'record',
     })
   }
@@ -819,7 +862,9 @@ export function sgReadDmarc(dmarcAnswer: SgAnswer, apexTxt: SgAnswer, labels: nu
 export function sgDmarcFindings(d: SgDmarcReport, domain: string, outage: SgOutage = SG_NO_OUTAGE): SgFinding[] {
   const out: SgFinding[] = []
 
-  if (d.atApex && d.recordCount === 0) {
+  // "Read by nobody" is a claim that `_dmarc` holds nothing, so it needs an
+  // answer from `_dmarc` saying so — an unread one might hold the real record.
+  if (d.atApex && d.recordCount === 0 && !d.unanswered) {
     out.push({
       id: 'dmarc-at-apex',
       level: 'error',
@@ -1187,6 +1232,10 @@ export async function sgResolveMxTargets(mx: SgAnswer, lookup: SgLookup, max = 8
       lookup(entry.host, 'AAAA'),
     ])
     const addresses = [...a.records, ...aaaa.records].map(r => r.data)
+    // NXDOMAIN is about the NAME, not the type: it says nothing lives there, so
+    // one of them settles "no address" for both families, and a missing answer
+    // to the other question cannot change that.
+    const gone = [a, aaaa].some(x => !sgUnanswered(x) && x.rcode === 'NXDOMAIN')
     out.push({
       preference: entry.preference,
       host: entry.host,
@@ -1194,7 +1243,7 @@ export async function sgResolveMxTargets(mx: SgAnswer, lookup: SgLookup, max = 8
       cnameTo: cname.records[0]?.data.toLowerCase().replace(/\.+$/, '') ?? null,
       addresses,
       resolves: addresses.length > 0,
-      unanswered: addresses.length === 0 && (sgUnanswered(a) || sgUnanswered(aaaa)),
+      unanswered: addresses.length === 0 && !gone && (sgUnanswered(a) || sgUnanswered(aaaa)),
     })
   }
   return out
@@ -1340,10 +1389,30 @@ export function sgIsDangling(a: SgAnswer, aaaa: SgAnswer, cname: SgAnswer): bool
   return true
 }
 
+/**
+ * Could the CNAME target's existence be settled either way?
+ *
+ * "Dangling" needs NXDOMAIN from all three questions; "not dangling" needs one
+ * answer saying the name is THERE — a NOERROR. When neither holds, some of the
+ * three got no answer, and `cname-hosted` used to say "resolves, so this is not
+ * dangling" off them: the presence twin of reading a failed lookup as an
+ * absence, and on the one finding whose other outcome is a takeover.
+ */
+export function sgCnameTargetUnchecked(a: SgAnswer, aaaa: SgAnswer, cname: SgAnswer): boolean {
+  const there = [a, aaaa, cname].some(x => !sgUnanswered(x) && x.rcode !== 'NXDOMAIN')
+  return !there && !sgIsDangling(a, aaaa, cname)
+}
+
 export interface SgCnameReport {
   target: string | null
   /** The target name returned NXDOMAIN — nothing is there at all. */
   dangling: boolean
+  /**
+   * The target's lookups settled neither way — no NXDOMAIN from all three, and
+   * no answer saying the name is there — so neither "dangling" nor "not
+   * dangling" is claimed (`sgCnameTargetUnchecked`).
+   */
+  unchecked?: boolean
   /** A hosted-service suffix recognised in the target name. */
   service: string | null
   /** Records of other types at the same name — illegal alongside a CNAME. */
@@ -1378,7 +1447,16 @@ export function sgCnameFindings(c: SgCnameReport, name: string): SgFinding[] {
     })
   }
 
-  if (c.dangling) {
+  if (c.unchecked) {
+    out.push({
+      id: 'cname-unchecked',
+      level: 'warn',
+      title: `CNAME target ${c.target} could not be checked`,
+      detail: `${name} points at \`${c.target}\`, and the lookups for it got no answer, so whether it still exists is unknown${c.service ? ` — and a ${c.service} name that no longer exists is one somebody else can claim` : ''}. A missing answer is not a missing name; re-run the inspection.`,
+      evidence: [`CNAME ${name} → ${c.target}`],
+      basis: 'record',
+    })
+  } else if (c.dangling) {
     out.push({
       id: 'cname-dangling',
       level: 'error',
