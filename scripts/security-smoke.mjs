@@ -5017,6 +5017,12 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
     '2001::1', '2001:0:4136:e378:8000:63bf:3fff:fdd2', '100::1', '100::ffff:ffff:ffff:ffff',
     // The 6to4 relay anycast block, deprecated by RFC 7526.
     '192.88.99.1', '192.88.99.255',
+    // v6 benchmarking (2001:2::/48, RFC 5180), the twin of 198.18/15 above, and
+    // ORCHID/ORCHIDv2 (2001:10::/28, 2001:20::/28): identifiers, never hosts.
+    // First and last address of each, so the prefix lengths are held too.
+    '2001:2::1', '2001:2:0:ffff:ffff:ffff:ffff:ffff',
+    '2001:10::1', '2001:1f:ffff:ffff:ffff:ffff:ffff:ffff',
+    '2001:20::', '2001:2f:ffff:ffff:ffff:ffff:ffff:ffff',
   ]) {
     assert.ok(lpIsForbiddenIp(ip), `classifier must forbid ${ip}`)
   }
@@ -5029,6 +5035,10 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
     // 6to4 address embedding a PUBLIC v4 is that public address.
     '2001:4860:4860::8888', '2002:0808:0808::1',
     '192.88.98.1', '192.88.100.1',
+    // …and the globally reachable IETF assignments packed around the blocked
+    // ones in 2001::/23 stay reachable: PCP anycast, AMT, AS112-v6, and Drone
+    // Remote ID one prefix past ORCHIDv2.
+    '2001:1::1', '2001:3::1', '2001:4:112::1', '2001:30::1',
   ]) {
     assert.equal(lpIsForbiddenIp(ip), false, `classifier must allow public ${ip}`)
   }
@@ -7970,20 +7980,41 @@ console.log('pr 19 review: no document/window listener outlives what added it (d
   const uriAt = lpRoute.indexOf('dataUri: `data:${type};base64,')
   assert.ok(typeAt !== -1 && uriAt > typeAt, 'the data URI is built from the allowlisted type and nothing else')
 
-  /* ── 2. A URL off a certificate is a link only when it is plainly http(s). ── */
-  assert.equal(csLinkableUrl('http://r11.i.lencr.org/'), 'http://r11.i.lencr.org/', 'AIA is usually plain http, and that is still a link')
-  assert.equal(csLinkableUrl('https://pki.goog/repo/certs/gts1c3.der'), 'https://pki.goog/repo/certs/gts1c3.der')
-  for (const hostile of [
+  /* ── 2. A URL off a certificate is a link only when it is plainly http(s),
+     and only when it reads exactly as it goes. URL parsing rewrites a string
+     before it navigates — a backslash becomes a slash, an ideographic full stop
+     a dot, fullwidth letters fold, numeric hosts are normalised — so a link
+     whose text was the certificate's and whose href was the parser's could say
+     pki.goog and go to evil.test. ── */
+  const plain = ['http://r11.i.lencr.org/', 'https://pki.goog/repo/certs/gts1c3.der', 'http://crt.sectigo.com/SectigoRSADomainValidationSecureServerCA.crt', 'https://ca.example:8443/a']
+  for (const url of plain) assert.equal(csLinkableUrl(url), url, `${url} is plain http(s), and still a link`)
+  const misleading = [
+    'http://evil.test\\@pki.goog/r1.crt',      // reads as pki.goog; the backslash is a slash, so the host is evil.test
+    'http://pki.goog\u3002evil.test/r1.crt',     // an ideographic full stop becomes a dot
+    'http://pki.goog.\uff45vil.test/',           // a fullwidth letter folds
+    'http://0x7f.1/', 'http://2130706433/',     // numeric hosts are normalised to 127.0.0.1
+    'HTTP://CA.EXAMPLE/', 'http://ca.example',  // case and a missing path — harmless, and still not the same string
+  ]
+  for (const raw of misleading) {
+    assert.notEqual(new URL(raw).href, raw, `${JSON.stringify(raw)} is a fixture the parser rewrites`)
+    assert.equal(csLinkableUrl(raw), null, `${JSON.stringify(raw)} is rewritten by the parser, so it stays text`)
+  }
+  assert.equal(new URL(misleading[0]).hostname, 'evil.test', 'the repro really does go somewhere other than where it reads')
+  const hostileUrls = [
     'javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:x',
     'http://user:pw@ca.example/x', 'http://ca.example/a b', 'http://ca.example/\u0000', 'ldap://ca.example/cn=x',
-    'not a url', '',
-  ]) {
-    assert.equal(csLinkableUrl(hostile), null, `${JSON.stringify(hostile)} stays text`)
+    'not a url', '', ' http://ca.example/', 'http://ca.example/x"onmouseover=alert(1)',
+  ]
+  for (const hostile of hostileUrls) assert.equal(csLinkableUrl(hostile), null, `${JSON.stringify(hostile)} stays text`)
+  // The property itself: whatever becomes a link is byte-for-byte what the certificate said.
+  for (const raw of [...plain, ...misleading, ...hostileUrls]) {
+    const href = csLinkableUrl(raw)
+    assert.ok(href === null || href === raw, `${JSON.stringify(raw)} became a link to something else: ${href}`)
   }
   const csComponent = await readFile(new URL('../src/components/tools/chainsaw/Chainsaw.ts', import.meta.url), 'utf-8')
   assert.ok(/<dd>\$\{csIssuerLink\(cert\.caIssuerUrls\[0\]\)\}<\/dd>/.test(csComponent), 'the Issuer URL row goes through csIssuerLink')
-  assert.ok(/const href = csLinkableUrl\(raw\)\s*return href\s*\? `<a href="\$\{csEsc\(href\)\}" rel="noopener noreferrer" target="_blank">\$\{csEsc\(raw\)\}<\/a>`\s*: csEsc\(raw\)/.test(csComponent),
-    'the link is escaped, opens with no opener and no referrer, and anything csLinkableUrl refuses is escaped text')
+  assert.ok(/const href = csLinkableUrl\(raw\)\s*return href\s*\? `<a href="\$\{csEsc\(href\)\}" rel="noopener noreferrer" target="_blank">\$\{csEsc\(href\)\}<\/a>`\s*: csEsc\(raw\)/.test(csComponent),
+    'the link is escaped, its visible text is its own href, it opens with no opener and no referrer, and anything csLinkableUrl refuses is escaped text')
 
   /* ── 3. An exception's message is not an answer. ────────────────────────
      Every failure these routes expect comes back as a fixed sentence; the text
@@ -7998,7 +8029,7 @@ console.log('pr 19 review: no document/window listener outlives what added it (d
     'csInspect is wrapped, so a throw answers a fixed JSON error rather than Astro\'s error page')
   assert.ok(/'Cache-Control': 'no-store'/.test(csRoute.slice(csRoute.indexOf('function json('))), '…through the same no-store json() every answer uses')
 }
-console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a certificate\'s URL is a link only when plainly http(s), and no exception text reaches a response')
+console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a certificate\'s URL is a link only when plainly http(s) and exactly as it goes, and no exception text reaches a response')
 
 /* ─────  PR 19 review: a retired article keeps its readers  ─────
 

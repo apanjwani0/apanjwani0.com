@@ -704,7 +704,13 @@ numbers fails the gate rather than a comment going stale.
   must match `image/` plus `[a-z0-9.+-]` (`lpImageMediaType`) rather than merely
   start with `image/`; Chainsaw's CA Issuers URL comes off a stranger's
   certificate, so it is a link only when it parses as plain http(s) with no
-  credentials (`csLinkableUrl`), and escaped text otherwise.
+  credentials **and the certificate's text is already exactly the URL the
+  parser produces** (`csLinkableUrl`), and escaped text otherwise. The second
+  half is what makes the link honest: parsing rewrites before it navigates (`\`
+  becomes `/`, an ideographic full stop a dot, `0x7f.1` becomes `127.0.0.1`), so
+  a link showing the certificate's string over the parser's href read
+  `http://evil.test\@pki.goog/r1.crt` as pki.goog and went to evil.test. The
+  link's text is now its own href.
 - An exception's message never goes into a response: routes answer failures
   they expect with fixed sentences, and wrap the call that could throw one they
   do not (`csInspect`) so it answers fixed `no-store` JSON too.
