@@ -203,9 +203,11 @@ export function sgDeadlineReached(signal: AbortSignal): boolean {
   return signal.aborted && signal.reason?.name === 'TimeoutError'
 }
 
-/** Why a question went unasked or unfinished, as the answer's `error` says it. */
-function sgStopped(signal: AbortSignal): string {
-  return sgDeadlineReached(signal) ? 'inspection deadline reached' : 'inspection cancelled'
+/** Why this tool stopped a question it had not finished: the deadline, or the visitor leaving. */
+function sgStopped(signal: AbortSignal): { error: string; stopped: 'deadline' | 'cancelled' } {
+  return sgDeadlineReached(signal)
+    ? { error: 'inspection deadline reached', stopped: 'deadline' }
+    : { error: 'inspection cancelled', stopped: 'cancelled' }
 }
 
 /**
@@ -224,7 +226,7 @@ export async function sgQuery(
 ): Promise<SgAnswer> {
   const started = Date.now()
   const info = sgResolverInfo(resolverKey)
-  const fail = (error: string): SgAnswer => ({
+  const fail = (error: string, stopped?: SgAnswer['stopped']): SgAnswer => ({
     resolver: resolverKey,
     type,
     name,
@@ -232,7 +234,12 @@ export async function sgQuery(
     records: [],
     elapsedMs: Date.now() - started,
     error,
+    ...(stopped ? { stopped } : {}),
   })
+  const stop = (signal: AbortSignal): SgAnswer => {
+    const why = sgStopped(signal)
+    return fail(why.error, why.stopped)
+  }
 
   if (!info) return fail('unknown resolver')
   if (!(type in SG_TYPE_NUMBERS)) return fail('unsupported record type')
@@ -241,8 +248,8 @@ export async function sgQuery(
   // out and sit through its own full timeout — and a sequential walk would pay
   // that once per remaining step. Nobody will read the answer, so it is neither
   // sent nor charged to the budget.
-  if (opts.signal?.aborted) return fail(sgStopped(opts.signal))
-  if (opts.budget && !sgSpend(opts.budget)) return fail('query budget exhausted')
+  if (opts.signal?.aborted) return stop(opts.signal)
+  if (opts.budget && !sgSpend(opts.budget)) return fail('query budget exhausted', 'budget')
 
   let base = info.endpoint
   if (opts.endpointOverride) {
@@ -304,7 +311,7 @@ export async function sgQuery(
   } catch (err: any) {
     // The inspection stopping and this question's own timer abort the same
     // controller; only the outer signal can say which of the two it was.
-    if (opts.signal?.aborted) return fail(sgStopped(opts.signal))
+    if (opts.signal?.aborted) return stop(opts.signal)
     if (err?.name === 'AbortError') return fail(`no answer within ${opts.timeoutMs ?? SG_TIMEOUT_MS}ms`)
     // A fixed sentence, not the exception's text: this string reaches the page,
     // and a network error's message describes this server's own connection

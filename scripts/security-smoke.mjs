@@ -6118,7 +6118,7 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   const withDead = sg.sgDiffAnswers('A', [mkAnswer('a', 'A', ['1.2.3.4']), dead('x')])
   assert.equal(withDead.agree, true)
   assert.equal(withDead.answered, 1)
-  assert.deepEqual(withDead.failed, ['x'])
+  assert.deepEqual(withDead.failed.map(a => a.resolver), ['x'], 'the failed answer is kept whole, so the page can say what went wrong')
 
   /* …and when NOBODY answered, "they agree" is a sentence nobody earned. This
      one was found by running the endpoint with outbound network blocked: all
@@ -6131,17 +6131,17 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
     assert.equal(d.answered, 0, `${d.type}: nothing was observed`)
     assert.equal(d.groups.length, 0)
   }
-  const blackoutFindings = sg.sgReachabilityFindings(blackout)
+  const blackoutFindings = sg.sgReachabilityFindings(blackout, 'ex.com')
   assert.equal(blackoutFindings.length, 1, 'said once, not once per record type')
   assert.equal(blackoutFindings[0].id, 'resolvers-unreachable')
   assert.equal(blackoutFindings[0].level, 'error')
   assert.ok(/could not ask/.test(blackoutFindings[0].detail), 'it has to say this is not a fact about the zone')
   // One working resolver and the blackout finding must go away, or it fires on
   // every partial outage and stops meaning anything.
-  assert.deepEqual(sg.sgReachabilityFindings([...blackout, withDead]), [])
-  assert.deepEqual(sg.sgReachabilityFindings([]), [])
-  // The component must read `answered`, not `agree`, for that row.
-  const uiSrc = await readFile(new URL('../src/components/tools/dns-sightline/DnsSightline.ts', import.meta.url), 'utf-8')
+  assert.deepEqual(sg.sgReachabilityFindings([...blackout, withDead], 'ex.com'), [])
+  assert.deepEqual(sg.sgReachabilityFindings([], 'ex.com'), [])
+  // The results panel must read `answered`, not `agree`, for that row.
+  const uiSrc = await readFile(new URL('../src/components/tools/dns-sightline/panels.ts', import.meta.url), 'utf-8')
   const answeredAt = uiSrc.indexOf('d.answered === 0')
   const agreeAt = uiSrc.indexOf('if (d.agree)')
   assert.notEqual(answeredAt, -1, 'the diff table handles the nobody-answered case')
@@ -6628,7 +6628,12 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
     sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, []), unreadMxFindings, stalledMxFindings],
     sgCnameFindings: [dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com')],
     sgDiffFindings: [sg.sgDiffFindings([realDiff, filtered])],
-    sgReachabilityFindings: [blackoutFindings],
+    sgReachabilityFindings: [
+      blackoutFindings,
+      // Every resolver answered — with SERVFAIL — every question: the zone failing, not the tool.
+      sg.sgReachabilityFindings(['A', 'MX'].map(t => sg.sgDiffAnswers(t, ['cloudflare', 'google', 'quad9']
+        .map(r => ({ resolver: r, type: t, name: 'ex.com', rcode: 'SERVFAIL', records: [], elapsedMs: 1 })))), 'ex.com'),
+    ],
     sgNsFindings: [
       sg.sgNsFindings({ resolver: 'f', type: 'NS', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 2, name: 'ex.com', data: 'a.ns.ex.com', ttl: 60 }] }, { resolver: 'f', type: 'SOA', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [] }, 'ex.com'),
       sg.sgNsFindings({ resolver: 'f', type: 'NS', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [] }, { resolver: 'f', type: 'SOA', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 6, name: 'ex.com', data: 'a b 1', ttl: 1 }, { type: 6, name: 'ex.com', data: 'c d 2', ttl: 1 }] }, 'ex.com'),
@@ -7527,7 +7532,7 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
     'the Chainsaw cross-link carries the host across')
   assert.ok(/ca=\$\{encodeURIComponent\(outlook\.ca\.caId\)\}/.test(chainsawSrc),
     "…and hands the identified CA to DNS Sightline's own renewal picker, which is the handoff neither tool could make alone")
-  const sightlineSrc = await readFile(new URL('../src/components/tools/dns-sightline/DnsSightline.ts', import.meta.url), 'utf-8')
+  const sightlineSrc = await readFile(new URL('../src/components/tools/dns-sightline/panels.ts', import.meta.url), 'utf-8')
   assert.ok(/\/tools\/chainsaw\?host=\$\{encodeURIComponent\(r\.name\)\}/.test(sightlineSrc),
     'the DNS Sightline cross-link carries the name to Chainsaw')
 
@@ -7699,6 +7704,19 @@ console.log('boot check: starts the entry the Dockerfile runs, no inherited env 
     }
     for (const id of ['spf-missing', 'dmarc-missing', 'mx-none', 'caa-none']) {
       assert.equal(ids.includes(id), false, `${id} is a claim about the zone, and a deadline is not evidence for it`)
+    }
+    // …and it says the TIME LIMIT stopped it. "Could not be reached" is a claim
+    // about the resolvers, and nothing was wrong with them: this tool stopped
+    // asking. The transport marks each answer it cut off, which is what the
+    // finding reads.
+    assert.ok(Object.values(full.answers).flat().every(a => a.stopped === 'deadline'),
+      'every diff question the deadline cut off is marked as stopped by it')
+    const stoppedFinding = full.findings.find(f => f.id === 'resolvers-unreachable')
+    assert.ok(/time limit/.test(stoppedFinding.detail) && !/could not reach/.test(stoppedFinding.detail),
+      `a deadline is not an unreachable resolver: ${stoppedFinding.detail}`)
+    for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
+      const f = full.findings.find(x => x.id === id)
+      assert.ok(/re-run the inspection/i.test(f.detail) && !/zone itself is failing/.test(f.detail), `${id}: the deadline is this tool's miss, so re-running is the advice`)
     }
     assert.equal(full.spf.truncated, true)
     assert.equal(full.caa.incomplete, true)
@@ -7896,7 +7914,7 @@ console.log('pr 19 review: a refused client never spends the shared bucket (deri
      from here — and each must be a NAMED region, so the extra tab stop
      announces what it is, and ringed by the site's own :focus-visible rule. */
   for (const [component, sheet, dt] of [
-    ['../src/components/tools/dns-sightline/DnsSightline.ts', '../src/components/tools/dns-sightline/dns-sightline.css', 'sg-scroll'],
+    ['../src/components/tools/dns-sightline/panels.ts', '../src/components/tools/dns-sightline/dns-sightline.css', 'sg-scroll'],
     ['../src/components/tools/link-peek/LinkPeek.ts', '../src/components/tools/link-peek/link-peek.css', 'lp-tablewrap'],
   ]) {
     const css = await readFile(new URL(sheet, import.meta.url), 'utf-8')
@@ -8036,3 +8054,258 @@ console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a
     'a permanent redirect to the mapped target, edge-cacheable but not pinned in the browser')
 }
 console.log('pr 19 review: a retired learning answers 301 to the hub, the publish predicate refuses it so no sitemap can list it, and the /games intro counts its dailies')
+
+/* ─────  DNS Sightline follow-ups: one test for "did it answer", and whose failure it was  ─────
+
+   The tool had two definitions of "answered". `sgUnanswered` — NOERROR and
+   NXDOMAIN are answers, everything else is not — decided the findings, while
+   the diff and the choice of which resolver the analysis reads asked only "has
+   no `error`", and a SERVFAIL passes that: the transport reached the resolver
+   and the resolver said it could not answer. So Cloudflare's SERVFAIL for MX won
+   the pick over Google and Quad9 both holding the record, the targets were never
+   resolved, `mx-inconclusive` and a FILTERING finding fired, and the Mail panel —
+   which decided absence by a third test, "did any resolver reply" — printed
+   "No MX records." beside a diff table showing one.
+
+   The fix is one definition, and it is asserted three ways: derived from the
+   source (nothing in the tool's folder may read `.error` or compare an rcode
+   with NOERROR outside `sgUnanswered`), exhaustively against the definition
+   (every mix of answers through the pick, the diff and the MX status), and as
+   behaviour (the real inspection over a stubbed resolver, with the rendered
+   panels held to the findings). The second half of the block is the wording:
+   "re-run" is honest for a timeout, the deadline or the budget, and wrong when
+   every resolver returned SERVFAIL — that is the zone failing. */
+{
+  const sg = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const insp = await import('../src/components/tools/dns-sightline/inspect.ts')
+  const panels = await import('../src/components/tools/dns-sightline/panels.ts')
+
+  /* ── 1. The only test, derived over every module in the tool's folder. ────
+     Resolved by the TypeScript checker rather than by a regex, because the
+     question is which INTERFACE a property belongs to: `counts.error` is a
+     number of error-level findings, `a.error` is an answer's, and only the
+     second is a way to decide whether a question was answered. Two rules, over
+     every .ts in the folder: a read of `SgAnswer.error` outside sgUnanswered
+     may only say WHY a question failed (`a.error ?? a.rcode`), and the literal
+     'NOERROR' — the other half of the definition — appears nowhere else. */
+  const ts = (await import('typescript')).default
+  const sgDir = new URL('../src/components/tools/dns-sightline/', import.meta.url)
+  const sgFiles = (await readdir(sgDir)).filter(f => f.endsWith('.ts')).map(f => new URL(f, sgDir).pathname)
+  for (const f of ['analyze.ts', 'inspect.ts', 'panels.ts', 'DnsSightline.ts']) assert.ok(sgFiles.some(p => p.endsWith(`/${f}`)), `${f} is scanned`)
+  const program = ts.createProgram(sgFiles, {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true, noEmit: true, skipLibCheck: true, allowImportingTsExtensions: true, lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
+  })
+  const checker = program.getTypeChecker()
+  const answerField = sym => (sym?.declarations ?? []).some(d =>
+    ts.isPropertySignature(d) && ts.isInterfaceDeclaration(d.parent) && d.parent.name.text === 'SgAnswer')
+  const enclosingFn = node => {
+    for (let n = node.parent; n; n = n.parent) if (ts.isFunctionDeclaration(n) && n.name) return n.name.text
+    return null
+  }
+  const where = (sf, node) => `${sf.fileName.split('/').pop()}:${sf.getLineAndCharacterOfPosition(node.getStart()).line + 1}`
+  const seen = { definition: 0, why: 0, noerror: 0 }
+  for (const file of sgFiles) {
+    const sf = program.getSourceFile(file)
+    const visit = node => {
+      const read =
+        ts.isPropertyAccessExpression(node) && node.name.text === 'error' ? checker.getSymbolAtLocation(node.name)
+          : ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression) && node.argumentExpression.text === 'error'
+            ? checker.getTypeAtLocation(node.expression).getProperty('error')
+            : ts.isBindingElement(node) && (node.propertyName ?? node.name).getText() === 'error'
+              ? checker.getTypeAtLocation(node.parent).getProperty('error')
+              : null
+      if (read && answerField(read)) {
+        if (enclosingFn(node) === 'sgUnanswered') seen.definition += 1
+        else {
+          const p = node.parent
+          const why = ts.isBinaryExpression(p) && p.left === node && p.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+          assert.ok(why, `${where(sf, node)}: reads an answer's \`error\` outside sgUnanswered to decide something — sgUnanswered is the one test of whether a question got an answer, and \`error\` may only say WHY it did not (\`a.error ?? a.rcode\`)`)
+          seen.why += 1
+        }
+      }
+      if (ts.isStringLiteral(node) && node.text === 'NOERROR') {
+        assert.equal(enclosingFn(node), 'sgUnanswered', `${where(sf, node)}: tests for NOERROR outside sgUnanswered — a second definition of "answered"`)
+        seen.noerror += 1
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sf)
+  }
+  // Not vacuous: the checker resolved the definition's own read, the "why"
+  // reads, and the literal — a scan that resolves nothing passes everything.
+  assert.ok(seen.definition >= 1 && seen.why >= 3 && seen.noerror >= 1, `the scan resolved the answer reads it exists to police (${JSON.stringify(seen)})`)
+  const analyzeCode = await readFile(new URL('analyze.ts', sgDir), 'utf-8')
+  const bodyOf = (src, fn) => src.slice(src.indexOf(`export function ${fn}(`), src.indexOf('\n}\n', src.indexOf(`export function ${fn}(`)))
+  for (const fn of ['sgPickAnswer', 'sgDiffAnswers', 'sgMxStatus']) {
+    assert.ok(bodyOf(analyzeCode, fn).includes('sgUnanswered('), `${fn} decides by sgUnanswered`)
+  }
+  const inspectCode = await readFile(new URL('inspect.ts', sgDir), 'utf-8')
+  assert.ok(/const primaryOf = \(type: SgType\): SgAnswer =>\s*sgPickAnswer\(/.test(inspectCode), 'the analysis reads the pick, not a second rule for it')
+  assert.ok(/mxStatus: sgMxStatus\(mxAnswer\)/.test(inspectCode), 'the report carries the MX status the findings switched on, off the same answer')
+  const panelCode = await readFile(new URL('panels.ts', sgDir), 'utf-8')
+  assert.ok(/r\.mxStatus === 'unanswered'/.test(panelCode) && !/d\.type === 'MX'/.test(panelCode),
+    'the Mail panel reads mxStatus, not the diff, to decide what the MX section says')
+
+  /* ── 2. Exhaustively against the definition. ──────────────────────────────
+     Seven kinds of answer at each of three resolvers is 343 mixes; each goes
+     through the pick, the diff and the MX status, and each must agree with
+     sgUnanswered about what was answered. */
+  const kinds = {
+    records: { rcode: 'NOERROR', records: ['10 mail.ex.test.'] },
+    empty: { rcode: 'NOERROR', records: [] },
+    nxdomain: { rcode: 'NXDOMAIN', records: [] },
+    servfail: { rcode: 'SERVFAIL', records: [] },
+    refused: { rcode: 'REFUSED', records: [] },
+    unreachable: { rcode: 'ERROR', records: [], error: 'resolver unreachable' },
+    deadline: { rcode: 'ERROR', records: [], error: 'inspection deadline reached', stopped: 'deadline' },
+  }
+  const resolvers = ['cloudflare', 'google', 'quad9']
+  const mk = (resolver, kind) => ({
+    resolver, type: 'MX', name: 'ex.test', elapsedMs: 0, ...kinds[kind],
+    records: kinds[kind].records.map(data => ({ type: 15, name: 'ex.test', data, ttl: 60 })),
+  })
+  let mixes = 0
+  for (const k0 of Object.keys(kinds)) for (const k1 of Object.keys(kinds)) for (const k2 of Object.keys(kinds)) {
+    const answers = [mk('cloudflare', k0), mk('google', k1), mk('quad9', k2)]
+    const answered = answers.filter(a => !sg.sgUnanswered(a))
+    const pick = sg.sgPickAnswer(answers, 'cloudflare')
+    const label = `${k0}/${k1}/${k2}`
+    assert.equal(sg.sgUnanswered(pick), answered.length === 0, `${label}: the pick is an answer whenever any resolver answered`)
+    if (!sg.sgUnanswered(answers[0])) assert.equal(pick, answers[0], `${label}: the primary's answer wins when it answered`)
+    if (!answered.length) assert.equal(pick, answers[0], `${label}: with no answer anywhere, the primary's own failure is kept`)
+    const diff = sg.sgDiffAnswers('MX', answers)
+    assert.equal(diff.answered, answered.length, `${label}: the diff counts answers by sgUnanswered`)
+    assert.deepEqual(diff.failed, answers.filter(a => sg.sgUnanswered(a)), `${label}: every non-answer is excluded, and kept whole`)
+    assert.ok(diff.groups.every(g => !sg.sgUnanswered(g.answer)), `${label}: no group is built from a non-answer`)
+    const status = sg.sgMxStatus(pick)
+    assert.equal(status === 'unanswered', answered.length === 0, `${label}: MX is unreadable exactly when nobody answered`)
+    assert.equal(sg.sgServfailEverywhere(diff), [k0, k1, k2].every(k => k === 'servfail'), `${label}: "the zone is failing" needs every resolver's SERVFAIL`)
+    mixes += 1
+  }
+  assert.equal(mixes, 343)
+  // The shape that shipped: a lone SERVFAIL is not a resolver withholding the
+  // record. That is what `filtered-*` says, and it sends people to the wrong fix.
+  const lone = sg.sgDiffAnswers('MX', [mk('cloudflare', 'servfail'), mk('google', 'records'), mk('quad9', 'records')])
+  assert.equal(lone.looksFiltered, false)
+  assert.deepEqual(sg.sgDiffFindings([lone]), [], 'one resolver that could not answer is not a disagreement about the zone')
+
+  /* ── 3. The real inspection, over a stubbed resolver. ─────────────────────
+     sgInspect takes no endpoint override (asserted in the DNS Sightline block),
+     so the stub replaces `fetch` itself and the real transport, the real pick
+     and the real walks run. `fault` says what one resolver does with one
+     question; a name missing from the zone is NXDOMAIN. */
+  const TYPE_NUM = { A: 1, NS: 2, CNAME: 5, SOA: 6, MX: 15, TXT: 16, AAAA: 28, CAA: 257 }
+  const stubDoh = (zone, fault) => async input => {
+    const u = new URL(String(input))
+    const resolver = u.hostname.includes('cloudflare') ? 'cloudflare' : u.hostname.includes('google') ? 'google' : 'quad9'
+    const name = (u.searchParams.get('name') ?? '').toLowerCase().replace(/\.+$/, '')
+    const type = u.searchParams.get('type') ?? ''
+    const f = fault?.(resolver, name, type)
+    if (f === 'unreachable') throw new TypeError('stubbed resolver unreachable')
+    const body = typeof f === 'number'
+      ? { Status: f, Answer: [] }
+      : name in zone
+        ? { Status: 0, Answer: (zone[name][type] ?? []).map(data => ({ name: `${name}.`, type: TYPE_NUM[type], TTL: 300, data })) }
+        : { Status: 3, Answer: [] }
+    return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/dns-json' } })
+  }
+  const inspectOver = async (zone, fault, name = 'example.test') => {
+    const realFetch = globalThis.fetch
+    globalThis.fetch = stubDoh(zone, fault)
+    try { return await insp.sgInspect(name) } finally { globalThis.fetch = realFetch }
+  }
+  const SERVFAIL = 2
+  const zone = {
+    'example.test': {
+      A: ['93.184.216.34'], MX: ['10 mail.example.test.'], NS: ['a.ns.test.', 'b.ns.test.'],
+      TXT: ['"v=spf1 include:_spf.provider.test -all"'], CAA: ['0 issue "letsencrypt.org"'],
+      SOA: ['a.ns.test. hostmaster.example.test. 1 7200 3600 1209600 300'],
+    },
+    '_dmarc.example.test': { TXT: ['"v=DMARC1; p=reject; rua=mailto:d@example.test"'] },
+    '_spf.provider.test': { TXT: ['"v=spf1 ip4:192.0.2.0/24 -all"'] },
+    'mail.example.test': { A: ['93.184.216.35'] },
+  }
+  // Every name that exists, with nothing in it: the world where each absence is real.
+  const bare = Object.fromEntries(Object.keys(zone).filter(n => !n.startsWith('_dmarc.')).map(n => [n, {}]))
+  const text = html => html.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+  const notes = r => [...(panels.sgRenderMail(r) + panels.sgRenderCaa(r)).matchAll(/<p data-type="sg-note">([\s\S]*?)<\/p>/g)].map(m => text(m[1]).replace(/\s+/g, ' ').trim())
+  const ids = r => r.findings.map(f => f.id)
+
+  const healthy = await inspectOver(zone)
+  const absent = await inspectOver(bare)
+  // The absence sentences are read off the panels themselves, in the world
+  // where every record is really missing — not written down here.
+  const absenceNotes = notes(absent).filter(n => !notes(healthy).includes(n))
+  for (const expected of ['No MX records.', 'No v=spf1 record.', 'No record at _dmarc.example.test.']) {
+    assert.ok(absenceNotes.includes(expected), `the absent world renders "${expected}" (got ${JSON.stringify(absenceNotes)})`)
+  }
+  assert.ok(absenceNotes.some(n => /so any CA may issue/.test(n)), 'and the CAA panel says any CA may issue')
+  for (const id of ['mx-none', 'spf-missing', 'dmarc-missing', 'caa-none']) assert.ok(ids(absent).includes(id), `the absent world reports ${id}`)
+
+  // (a) One resolver failing a question the others answered changes nothing a
+  //     finding or a panel says — for EVERY type the diff asks, because the
+  //     walks start from the diff's pick too: a Cloudflare SERVFAIL for TXT
+  //     used to make the SPF walk re-ask Cloudflare and report the record
+  //     unreadable beside a Records table showing it.
+  for (const t of sg.SG_TYPES) {
+    const lone = await inspectOver(zone, (r, n, q) => (r === 'cloudflare' && n === 'example.test' && q === t ? SERVFAIL : undefined))
+    assert.deepEqual(ids(lone), ids(healthy), `a lone SERVFAIL for ${t} changes no finding (got ${ids(lone).join(', ')})`)
+    assert.equal(panels.sgRenderMail(lone) + panels.sgRenderCaa(lone), panels.sgRenderMail(healthy) + panels.sgRenderCaa(healthy),
+      `a lone SERVFAIL for ${t} changes nothing the Mail or CAA panel says`)
+  }
+  // The shipped repro itself: Cloudflare SERVFAILs MX, Google and Quad9 answer.
+  const mixed = await inspectOver(zone, (r, n, t) => (r === 'cloudflare' && n === 'example.test' && t === 'MX' ? SERVFAIL : undefined))
+  assert.equal(mixed.mxStatus, 'hosts', 'the MX the other two resolvers hold is the MX the analysis reads')
+  assert.deepEqual(mixed.mxTargets.map(t => t.host), ['mail.example.test'], 'and its targets are resolved')
+  assert.deepEqual(ids(mixed), ids(healthy), 'one resolver failing a question the others answered changes no finding — neither mx-inconclusive nor filtering')
+  assert.equal(panels.sgRenderMail(mixed), panels.sgRenderMail(healthy), 'nor anything the Mail panel says')
+  assert.ok(text(panels.sgRenderRecords(mixed)).includes('10 mail.example.test'), 'the Records table shows the record the findings were drawn from')
+  assert.ok(/cloudflare: SERVFAIL/.test(text(panels.sgRenderDiff(mixed))), 'and the diff says what Cloudflare said, rather than calling it unreachable')
+
+  // (b) Every resolver SERVFAILs MX, and nothing else: the MX RRset is failing.
+  const mxDown = await inspectOver(zone, (r, n, t) => (n === 'example.test' && t === 'MX' ? SERVFAIL : undefined))
+  assert.equal(mxDown.mxStatus, 'unanswered')
+  assert.ok(ids(mxDown).includes('mx-inconclusive') && !ids(mxDown).includes('mx-none'))
+  const mxDownFinding = mxDown.findings.find(f => f.id === 'mx-inconclusive')
+  assert.ok(/SERVFAIL/.test(mxDownFinding.detail) && /zone itself is failing/.test(mxDownFinding.detail) && !/re-run the inspection/i.test(mxDownFinding.detail),
+    'every resolver failing MX is the zone failing it — "re-run" would not change it')
+  assert.ok(notes(mxDown).includes('The MX lookup got no answer, so the mail servers could not be read.'))
+
+  // (c) Every question about the name SERVFAILs everywhere: broken DNSSEC.
+  const inZone = n => n === 'example.test' || n.endsWith('.example.test')
+  const broken = await inspectOver(zone, (r, n) => (inZone(n) ? SERVFAIL : undefined))
+  assert.ok(ids(broken).includes('zone-servfail'), `a name every resolver fails is reported as the zone failing (got ${ids(broken).join(', ')})`)
+  assert.equal(ids(broken).includes('resolvers-unreachable'), false, 'the resolvers answered, with SERVFAIL — they were not unreachable')
+  for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
+    const f = broken.findings.find(x => x.id === id)
+    assert.ok(f, `${id} is reported for the failing zone`)
+    assert.ok(/zone itself is failing/.test(f.detail) && !/re-run the inspection/i.test(f.detail), `${id} says the zone is failing, not "re-run"`)
+  }
+  // …and none of the unreadable worlds prints a sentence only a real absence prints.
+  for (const [world, r] of [['mixed', mixed], ['MX down', mxDown], ['broken DNSSEC', broken]]) {
+    const said = notes(r).filter(n => absenceNotes.includes(n))
+    assert.deepEqual(said, [], `${world}: a panel printed an absence nobody observed: ${JSON.stringify(said)}`)
+  }
+
+  // A null MX is a record, and the panel used to call it "No MX records." beside
+  // the finding that says the domain accepts no mail.
+  const nullMx = await inspectOver({ ...zone, 'example.test': { ...zone['example.test'], MX: ['0 .'] } })
+  assert.equal(nullMx.mxStatus, 'null')
+  assert.ok(ids(nullMx).includes('mx-null'))
+  assert.equal(notes(nullMx).some(n => absenceNotes.includes(n)), false, 'a null MX is not an absent one')
+
+  // (d) Nothing reachable: the offline shape, which is the tool's failure.
+  const offline = await inspectOver(zone, () => 'unreachable')
+  const cut = offline.findings.find(f => f.id === 'resolvers-unreachable')
+  assert.ok(cut && /could not reach/.test(cut.detail) && /could not ask/.test(cut.detail) && !/time limit/.test(cut.detail),
+    'unreachable resolvers are the tool\'s failure, said as such')
+  for (const id of ['spf-inconclusive', 'mx-inconclusive']) {
+    assert.ok(/re-run the inspection/i.test(offline.findings.find(f => f.id === id).detail), `${id}: a miss that is this tool's is re-run advice`)
+  }
+  // The zone-servfail finding cites what it rests on, like every record-based one.
+  const zoneFinding = broken.findings.find(f => f.id === 'zone-servfail')
+  assert.equal(zoneFinding.basis, 'record')
+  assert.equal(zoneFinding.evidence.length, sg.SG_TYPES.length, 'one line of evidence per question the diff asked')
+}
+console.log('dns sightline follow-ups: sgUnanswered is the only test of an answer (derived from the source and over all 343 mixes), a lone SERVFAIL changes no finding or panel, and the zone failing is not called "re-run"')

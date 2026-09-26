@@ -484,6 +484,12 @@ The mirror-image rule is that a difference must still read as one, so
 silent resolver among answering ones is reported as **filtering** rather than as
 propagation — a policy decision at one operator, with a different fix.
 
+A resolver that could not answer is not a third opinion, and **a SERVFAIL is not
+an answer**: it is excluded from the verdict exactly like one that could not be
+reached, and the diff table says what it returned. It used to be compared as an
+empty answer, which is the filtering shape — so one resolver's SERVFAIL for MX
+was reported as that resolver *withholding* the record.
+
 Ask it of any new comparison: **what differs here for reasons that are not the
 thing I am looking for?**
 
@@ -572,14 +578,45 @@ The rule is not CAA's alone, and it took the inspection deadline to show it: a
 deadline turns every question still queued into a failed one at once. SPF read
 a failed include exactly like NXDOMAIN — "no SPF record, a receiver treats that
 as a permerror", plus a void lookup — and DMARC and MX read a failed lookup as no
-record and no address ("mail bounces"). `sgUnanswered` (`analyze.ts`) is now the
-one test of whether a question got an answer, and every finding that reads an
-empty record set asks it first: an unanswered include makes the SPF count a
-floor (`truncated`, titled "At least N"), and an unanswered root, `_dmarc`, MX or
+record and no address ("mail bounces"). `sgUnanswered` (`analyze.ts`) is the one
+test of whether a question got an answer, and every finding that reads an empty
+record set asks it first: an unanswered include makes the SPF count a floor
+(`truncated`, titled "At least N"), and an unanswered root, `_dmarc`, MX or
 MX-target lookup yields `spf-inconclusive`, `dmarc-inconclusive`,
-`mx-inconclusive` or `mx-unchecked` in place of the absence finding. The page's
-panels read the same fields, so a panel cannot say "No MX records" beside a
-finding that says the MX lookup failed.
+`mx-inconclusive` or `mx-unchecked` in place of the absence finding.
+
+**One test means one**, and for a while it did not. The diff, and the choice of
+which resolver's answer the analysis reads, asked a second question — "has no
+`error`" — which a SERVFAIL passes, because the transport reached the resolver
+and the resolver said it could not answer. So Cloudflare's SERVFAIL for MX won
+over Google and Quad9 both holding the record, the targets were never resolved,
+and the Mail panel, deciding absence by a *third* test, printed "No MX records."
+beside `mx-inconclusive`. Now `sgPickAnswer` is the one rule for which answer is
+read (the primary's when it answered, else any that did, else the primary's own
+failure), the Records table and the walks read it too — a question about the
+inspected name is served from the diff's pick rather than asked again — and the
+report carries `mxStatus`, which the panel switches on instead of deciding for
+itself. The panels live in `dns-sightline/panels.ts`, pure functions of the
+report, so they can be rendered from a real inspection. `security:smoke` holds
+this three ways: a TypeScript-checker scan of every module in the folder (an
+answer's `error` may be read outside `sgUnanswered` only to say *why* it failed,
+and `'NOERROR'` appears nowhere else — the checker, not a regex, because
+`counts.error` is not an answer's), every mix of seven answer kinds across three
+resolvers through the pick, the diff and the MX status, and the real `sgInspect`
+over a stubbed resolver, where a lone SERVFAIL for any type must change no
+finding and no panel, and no unreadable world may print a sentence the panels
+only print when a record is really absent.
+
+**Whose failure it was decides the advice.** "Re-run the inspection" is honest
+after a timeout, the deadline or the budget — this tool's miss. It is wrong when
+every resolver returned SERVFAIL for the question (`sgOutageOf`): independent
+validating resolvers failing the same way is the zone failing, a broken DNSSEC
+chain or nameservers that do not answer, and re-running changes nothing. The
+unreadable-record findings say which, and when every question fails that way the
+headline is `zone-servfail` rather than `resolvers-unreachable` — the resolvers
+answered. `resolvers-unreachable` in turn tells the deadline apart from a
+resolver this server could not reach, from `SgAnswer.stopped`, which the
+transport sets on every question it cut off itself.
 
 ### A conclusion that does not depend on X must not be gated on X
 

@@ -27,12 +27,23 @@ export interface SgAnswer {
   resolver: string
   type: SgType
   name: string
-  /** Textual RCODE — NOERROR, NXDOMAIN, SERVFAIL, REFUSED, … */
+  /**
+   * Textual RCODE — NOERROR, NXDOMAIN, SERVFAIL, REFUSED, … — or `ERROR` when
+   * no DNS reply arrived at all, which is always the case when `error` is set.
+   */
   rcode: string
   records: SgRecord[]
   elapsedMs: number
   /** Set when the resolver could not be reached or spoke nonsense. */
   error?: string
+  /**
+   * Set, beside `error`, when THIS TOOL stopped the question rather than the
+   * resolver failing it: the inspection's deadline arrived, the visitor left,
+   * or the query budget ran out. Both come back with no records, and they are
+   * different things to tell somebody — "the inspection ran out of time" is not
+   * "the resolvers could not be reached".
+   */
+  stopped?: 'deadline' | 'cancelled' | 'budget'
 }
 
 /**
