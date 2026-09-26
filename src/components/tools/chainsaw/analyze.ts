@@ -647,19 +647,23 @@ export function csServeChainPem(presented: CsCert[]): string {
  *
  * The value comes off a certificate a stranger's server sent, so it is a link
  * only when it parses as plain `http:` or `https:` (AIA is usually `http:`:
- * the file it names is signed, so it needs no TLS) with no credentials and no
- * control characters or whitespace. `javascript:`, `data:` and anything
- * malformed stay text. The href is the parser's own serialisation, and the
- * caller still escapes it for the attribute.
+ * the file it names is signed, so it needs no TLS) with no credentials, AND
+ * the certificate's text is already exactly the URL the parser produces. The
+ * second condition is what keeps a link honest. URL parsing rewrites a string
+ * before anything navigates to it — `\` becomes `/`, an ideographic full stop
+ * becomes `.`, fullwidth letters fold, `0x7f.1` becomes `127.0.0.1` — so
+ * `http://evil.test\@pki.goog/r1.crt` reads as pki.goog and goes to
+ * evil.test. When the parser changes anything the value stays text, and when
+ * it changes nothing the visible text and the destination are one string.
+ * `javascript:`, `data:` and anything malformed stay text too. The caller
+ * still escapes the href for the attribute.
  */
 export function csLinkableUrl(raw: string): string | null {
-  const value = raw.trim()
-  if (!value || /[\u0000-\u001F\u007F\s]/.test(value)) return null
   try {
-    const url = new URL(value)
+    const url = new URL(raw)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
     if (url.username || url.password) return null
-    return url.href
+    return url.href === raw ? url.href : null
   } catch {
     return null
   }
