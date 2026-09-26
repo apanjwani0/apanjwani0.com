@@ -1,5 +1,6 @@
 ---
 import { ClientRouter } from 'astro:transitions'
+import { ROOT_BOOT_JS, THEME_COLOR, type Theme } from '../lib/theme'
 
 interface Props {
   pageTitle: string
@@ -27,6 +28,8 @@ interface Props {
   publishedTime?: string
   loadFonts?: boolean
   clientRouter?: boolean
+  /** The site config's theme — what the server renders before the visitor's own choice is applied. */
+  theme?: Theme
 }
 
 const {
@@ -47,15 +50,25 @@ const {
   handle,
   loadFonts = true,
   clientRouter = true,
+  theme = 'dark',
 } = Astro.props
 // X/Twitter wants an @-prefixed handle for creator/site attribution.
 const twitterHandle = handle ? `@${handle.replace(/^@/, '')}` : undefined
+// The head bootstrap (src/lib/theme.ts) applies the visitor's stored theme
+// before first paint, so it sits ahead of every stylesheet — an inline script
+// after a stylesheet waits for it to load — and after the two metas it keeps
+// in step with the theme. It is the ONLY inline executable script on the site
+// and must stay byte-identical on every page: ClientRouter re-inserts a changed
+// inline script with the new page's nonce, which the live CSP refuses. Hence a
+// constant through set:html, never an expression in the template.
+const cspNonce = (Astro.locals as { cspNonce?: string }).cspNonce
 ---
 
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="color-scheme" content="dark" />
-<meta name="theme-color" content="#05070c" />
+<meta name="color-scheme" content={theme} />
+<meta name="theme-color" content={THEME_COLOR[theme]} />
+<script is:inline nonce={cspNonce} set:html={ROOT_BOOT_JS} />
 <meta name="description" content={description} />
 <meta name="author" content={siteName} />
 {keywords && <meta name="keywords" content={keywords} />}

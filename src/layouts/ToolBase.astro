@@ -34,7 +34,7 @@ const ogImage = ogImageMeta(site, ogCard, toolTitle)
 ---
 
 <!doctype html>
-<html lang="en" data-theme={site.theme}>
+<html lang="en" data-theme={site.theme} data-theme-default={site.theme}>
   <head>
     <Head
       pageTitle={pageTitle}
@@ -52,6 +52,7 @@ const ogImage = ogImageMeta(site, ogCard, toolTitle)
       handle={site.handle}
       loadFonts={false}
       clientRouter={false}
+      theme={site.theme}
     />
   </head>
   <body>
@@ -65,10 +66,13 @@ const ogImage = ogImageMeta(site, ogCard, toolTitle)
     <script>
       // Nav height sync, hide-on-scroll, and StarField mount — shared verbatim
       // with Base.astro, so it lives in one module (src/lib/nav-ui.ts).
+      // initSiteUI (src/lib/site-ui.ts) is the site chrome both shells share.
       import { initNav } from '../lib/nav-ui.ts'
       import { initAnalytics } from '../lib/analytics-client.ts'
+      import { initSiteUI } from '../lib/site-ui.ts'
       initNav()
       initAnalytics()
+      initSiteUI()
     </script>
   </body>
 </html>

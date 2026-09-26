@@ -26,6 +26,9 @@ interface Props {
   publishedTime?: string
   /** Generated share card from ogCardPath(); falls back to the avatar if absent. */
   ogCard?: string
+  /** The page's canonical path when it is not the requested one — a page that
+   *  renders any query string (the kit permalink) names the page it stands for. */
+  canonicalPath?: string
 }
 
 const site = await getSite(Astro.locals)
@@ -44,13 +47,14 @@ const {
   ogType = 'website',
   publishedTime,
   ogCard,
+  canonicalPath,
 } = Astro.props
 // A supplied seoTitle is already complete and is used as-is. Otherwise a section
 // title gets the site-name suffix (it is what identifies "projects" as this
 // site's), and home (no title at all) gets a descriptive title with the role line
 // so the most-linked page's <title>/og:title isn't just a bare name.
 const pageTitle = seoTitle || (title ? `${title} · ${site.name}` : `${site.name} · ${site.tagline}`)
-const canonicalURL = new URL(Astro.url.pathname, site.url).href
+const canonicalURL = new URL(canonicalPath ?? Astro.url.pathname, site.url).href
 // Absolute URL + dimensions for the social-share preview image (link cards on
 // Slack, X, etc.). Shared with ToolBase.astro via one helper so the share-image
 // dimensions have a single source of truth.
@@ -58,7 +62,7 @@ const ogImage = ogImageMeta(site, ogCard, title)
 ---
 
 <!doctype html>
-<html lang="en" data-theme={site.theme}>
+<html lang="en" data-theme={site.theme} data-theme-default={site.theme}>
   <head>
     <Head
       pageTitle={pageTitle}
@@ -78,6 +82,7 @@ const ogImage = ogImageMeta(site, ogCard, title)
       handle={site.handle}
       loadFonts={loadFonts}
       clientRouter={clientRouter}
+      theme={site.theme}
     />
   </head>
   <body>
@@ -100,10 +105,15 @@ const ogImage = ogImageMeta(site, ogCard, title)
     <script>
       // Nav height sync, hide-on-scroll, and StarField mount — shared verbatim
       // with ToolBase.astro, so it lives in one module (src/lib/nav-ui.ts).
+      // initSiteUI (src/lib/site-ui.ts) is the site chrome: the swap patch that
+      // keeps the visitor's theme across ClientRouter navigations, plus the
+      // theme, find, kit and motion entry points.
       import { initNav } from '../lib/nav-ui.ts'
       import { initAnalytics } from '../lib/analytics-client.ts'
+      import { initSiteUI } from '../lib/site-ui.ts'
       initNav()
       initAnalytics()
+      initSiteUI()
     </script>
   </body>
 </html>

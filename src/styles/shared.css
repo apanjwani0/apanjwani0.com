@@ -34,6 +34,15 @@ body {
   display: none !important;
 }
 
+/* JS-only controls. The nav's palette, theme and shortcut buttons do nothing
+   without scripts, so they keep their space but stay invisible until the head
+   bootstrap (ROOT_BOOT_JS, src/lib/theme.ts) marks the document `data-js` —
+   which it does before first paint, so a scripted visit never sees them
+   appear. Visibility, not display, so the row does not reflow when they do. */
+html:not([data-js]) button:is([data-action="palette"], [data-action="theme"], [data-action="shortcuts"]) {
+  visibility: hidden;
+}
+
 /* Accessible keyboard focus ring — visible only for keyboard/AT users (not on
    mouse click), so it never disrupts the hover-driven visual language above.
    Uses the navy accent token so it re-themes with everything else. */
