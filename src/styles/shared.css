@@ -203,7 +203,7 @@ nav[data-type="hero-nav"] a[data-active] {
   nav[data-type="hero-nav"] {
     grid-template-columns: 1fr;
     justify-items: center;
-    row-gap: var(--space-xs);
+    row-gap: var(--space-sm);
     padding: 0.75rem var(--space-page-x);
   }
 
@@ -337,7 +337,7 @@ p[data-type="page-intro"] {
 [data-type="card-grid"] > * {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   margin: 0;
   padding: var(--space-card);
   border: 1px solid var(--color-border);

@@ -12,22 +12,68 @@
    font, or type size.
 
    Load order: theme.css → shared.css (base + header) → global.css (content pages)
-   / home.css (home hero) / component CSS. Light is the :root default; the dark
-   theme overrides the palette only.
+   / home.css (home hero) / component CSS. Light is the root default; the dark
+   theme overrides the palette, the elevation and the colour scheme only.
+
+   Which theme a page renders is decided before first paint by the head
+   bootstrap (ROOT_BOOT_JS, src/lib/theme.ts) from the visitor's stored
+   preference, falling back to the site config's theme. The server never varies
+   its output by theme, so every cached page is the same for every visitor.
    ============================================================================= */
 
 :root {
+  /* The scheme the UA and Oat resolve against. Oat declares
+     `color-scheme: light dark` on the root inside @layer theme, which let every
+     light-dark() token it ships (dialogs, tablists, toasts, default inputs) and
+     every native control follow the OS instead of data-theme: on a light-mode
+     OS, JSON Tidy's two checkboxes rendered as white squares on the dark site.
+     An unlayered declaration here outranks the layered one, and the dark block
+     below pins its own. */
+  color-scheme: light;
+
   /* ── Palette ─────────────────────────────────────────────── */
   --color-bg: #ffffff;       /* page background                 */
   --color-surface: #f6f6f6;  /* raised surface (menus, cards)   */
+  /* A second step up, for chrome that sits ON a surface (a palette over the
+     page, a sheet, a shelf). Text, muted, accent, error and success ink are all
+     held to AA on it in both themes. */
+  --color-surface-2: #f0f0f3;
   --color-text: #111111;     /* primary text                    */
   --color-muted: #666666;    /* secondary text                  */
   --color-border: #b7b7b7;   /* hairlines / dividers            */
   --color-bg-blur: rgba(255, 255, 255, 0.82); /* translucent bg for the sticky header */
   --color-accent: #6a5bd0;   /* violet — links, markers, trail  */
+  /* A tinted fill for "yours / selected" (a starred tool, the active palette
+     row). ONLY --color-text may sit on it: muted ink on a tint reads as
+     disabled whatever its ratio says. */
+  --color-accent-soft: #efedfb;
   --color-error: #c0392b;    /* errors, incorrect input         */
-  --color-success: #1e7d4f;  /* success, correct input          */
+  /* Nudged from #1e7d4f (2026-09-25) when --color-surface-2 arrived: the old
+     value cleared AA on the new surface by 0.002 (4.502:1). #1e7a4c holds
+     4.68:1 there and 4.93:1 on --color-surface — the same green to the eye. */
+  --color-success: #1e7a4c;  /* success, correct input          */
   --color-shadow: rgba(0, 0, 0, 0.5); /* drop-shadow / elevation ink */
+
+  /* ── Elevation ───────────────────────────────────────────────
+     Three steps, smallest first: a resting control, a lifted card, a surface
+     floating over the page (palette, sheet). Redefined for dark, where a
+     shadow has to be much denser to read against a near-black page at all. */
+  --shadow-1: 0 1px 2px rgba(17, 17, 17, 0.06), 0 1px 1px rgba(17, 17, 17, 0.04);
+  --shadow-2: 0 4px 14px rgba(17, 17, 17, 0.08), 0 1px 3px rgba(17, 17, 17, 0.06);
+  --shadow-3: 0 18px 48px rgba(17, 17, 17, 0.14), 0 4px 14px rgba(17, 17, 17, 0.08);
+  /* Derived from the accent, so it follows the theme without a second copy. */
+  --glow-accent: 0 0 0 1px color-mix(in srgb, var(--color-accent) 40%, transparent),
+    0 8px 28px -8px color-mix(in srgb, var(--color-accent) 45%, transparent);
+  --lift: -2px;              /* hover lift (translateY)         */
+
+  /* ── Motion ──────────────────────────────────────────────────
+     Tasteful and short. shared.css's prefers-reduced-motion block is the off
+     switch for all of it, so a duration here never needs its own opt-out. */
+  --motion-fast: 120ms;      /* hover, press, colour changes    */
+  --motion-base: 180ms;      /* reveals, lifts, small moves     */
+  --motion-page: 240ms;      /* page-level transitions          */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* ── Fonts ───────────────────────────────────────────────── */
   --font-serif: 'Source Serif 4', Georgia, serif;
@@ -45,6 +91,7 @@
   --text-xs: 0.85rem;     /* tags, stats, fine print            */
   --text-sm: 0.95rem;     /* meta: dates, roles, captions       */
   --text-base: 1.0625rem; /* body + section headings (17px)     */
+  --text-card: 1.125rem;  /* listing card title (18px)          */
   --text-lg: 1.3rem;      /* large heading                      */
   --text-title: 2.1rem;   /* page title (h1)                    */
   /* Long-form article body only (learnings, blogs). Deliberately larger than
@@ -58,22 +105,26 @@
   --text-wordmark: clamp(1.05rem, 1rem + 0.6vw, 1.2rem);  /* header wordmark — fluid 1.05→1.2 */
 
   /* ── Spacing ───────────────────────────────────────────────
-     The scale used to stop at 2xs/xs/page-x/section, which left no rung for
-     ordinary in-component spacing — so `card-grid` hardcoded 1.25rem and
-     0.4rem, tools.css 0.6rem, and global.css 1rem/0.75rem/0.5rem/0.25rem,
-     while AGENTS.md told authors to "reference var(--space-*)" for a scale
-     that did not exist. Each rung below is the value the code was already
-     using, so adding them changed nothing visually — it just gave the
-     existing spacing a name that a later edit can find. */
+     The rungs, strictly smallest first: 2xs < xs < sm < md < lg < xl < card <
+     section. `security:smoke` holds that order, because it was once false:
+     xs (0.45rem) sat ABOVE sm (0.4rem), so "a little more room" meant going
+     down a size. The two names were swapped at every call site on 2026-09-25,
+     which left every rendered pixel where it was.
+
+     Each rung is a value the code was already using when it was named: the
+     scale exists so an edit can find the spacing by name instead of inventing
+     a sixth value. */
   --space-2xs: 0.15rem;     /* inline padding (badge y)          */
-  --space-xs: 0.45rem;      /* inline padding (badge x)          */
-  --space-sm: 0.4rem;       /* gap inside a card (title/body)    */
+  --space-xs: 0.4rem;       /* gap inside a card (title/body)    */
+  --space-sm: 0.45rem;      /* inline padding (badge x)          */
   --space-md: 0.6rem;       /* gap in a card's head row          */
   --space-lg: 0.75rem;      /* gap between inline meta items     */
   --space-xl: 1rem;         /* gap across a card header          */
   --space-card: 1.25rem;    /* card padding AND card-grid gap    */
-  --space-page-x: 1.25rem;  /* page side gutter                 */
   --space-section: 2.5rem;  /* vertical rhythm between blocks    */
+  /* Layout measurements, not rungs: a gutter and a header height are fixed by
+     what they measure, so they sit outside the ordered scale above. */
+  --space-page-x: 1.25rem;  /* page side gutter                 */
   --space-header-offset: 4.75rem; /* height of the sticky header — scroll-padding for anchors */
 
   /* ── State ───────────────────────────────────────────────── */
@@ -88,6 +139,37 @@
      border and the label together. */
   --opacity-disabled: 0.45;
 
+  /* ── Controls ────────────────────────────────────────────────
+     One control kit. The defaults are the tools lane's mono outline, the
+     dialect most of the site already speaks; the lane floors and the site
+     chrome read these instead of restating values. */
+  --control-font: var(--font-mono);
+  --control-fs: var(--text-xs);
+  --control-pad-y: 0.32rem;
+  --control-pad-x: 0.85rem;
+  --control-radius: var(--radius-md);
+  --control-ink: var(--color-muted);
+  --control-ink-hover: var(--color-text);
+  --control-border: var(--color-border);
+  --control-border-hover: var(--color-muted);
+  /* Tabs are the underline style: no box, a rule under the selected one. */
+  --tab-font: var(--control-font);
+  --tab-fs: var(--control-fs);
+  --tab-pad-y: 0.4rem;
+  --tab-pad-x: 0.9rem;
+  --tab-radius: 0;
+  --tab-ink: var(--color-muted);
+  --tab-ink-active: var(--color-text);
+  --tab-rule: 2px;                         /* underline thickness          */
+  --tab-rule-active: var(--color-accent);  /* underline under the chosen tab */
+  /* Badges: the status pills on hub cards (live, server, wip, streak). */
+  --badge-font: var(--font-mono);
+  --badge-fs: var(--text-xs);
+  --badge-pad-y: var(--space-2xs);
+  --badge-pad-x: var(--space-sm);
+  --badge-radius: var(--radius);
+  --badge-tracking: 0.03em;
+
   /* ── Layout ──────────────────────────────────────────────── */
   /* Radius scale — corner rounding from fine UI up to panels. Component CSS
      references these rungs; never hardcode a px radius. */
@@ -100,16 +182,47 @@
   --max-width: 768px;       /* readable content column (prose)  */
   --content-width: 1200px;  /* wide column for listing/index pages (card grids) */
   --tool-width: clamp(1120px, 70vw, 1800px); /* ~70% of viewport on wide screens; floored so it never gets narrower than a laptop, capped so ultrawides stay readable */
+  --thumb-ratio: 1200 / 630; /* card thumbnails share the share card's shape */
+
+  /* ── Oat bridge ──────────────────────────────────────────────
+     Oat styles every element it recognises from its own tokens (@layer theme),
+     so anything the site does not restyle — a default checkbox, a dialog, a
+     tooltip, a toast — spoke Oat's zinc palette instead of this one. These
+     unlayered declarations outrank Oat's and point its tokens at the site's,
+     so a stock Oat component lands in the site palette in both themes. Oat's
+     remaining light-dark() tokens (secondary, faint, danger, …) resolve
+     correctly because color-scheme above is pinned per theme. */
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-accent);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-bg);   /* bg ink on accent: AA in both themes */
+  --muted: var(--color-surface-2);
+  --muted-foreground: var(--color-muted);  /* muted ink on surface-2: AA in both themes */
+  --font-sans: var(--font-serif);
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --color-bg: #05070c;
   --color-surface: #0b0f18;
+  --color-surface-2: #141a26;
   --color-text: #dde6f2;
-  --color-muted: #73808f;
+  /* Nudged from #73808f (2026-09-25): that value held 4.76:1 on --color-surface
+     but only 4.33:1 on --color-surface-2, under AA. #7a8796 restores 4.76:1 on
+     the new surface and gains headroom everywhere else (5.23:1 on surface). */
+  --color-muted: #7a8796;
   --color-border: #394255;
   --color-bg-blur: rgba(5, 7, 12, 0.82);
   --color-accent: #9b8cff;
+  --color-accent-soft: #1a1733;
   --color-error: #ff6b6b;
   --color-success: #4ade80;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6), 0 4px 14px rgba(0, 0, 0, 0.45);
 }

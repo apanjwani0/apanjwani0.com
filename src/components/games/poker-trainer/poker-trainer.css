@@ -9,12 +9,12 @@
 [data-type='pt-titlebar'] {
   display: flex;
   align-items: baseline;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
 [data-type='pt-badge'] {
-  padding: var(--space-2xs) var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   color: var(--color-muted);
@@ -26,14 +26,14 @@
 [data-type='pt-spot'] {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 [data-type='pt-slot'] {
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);
-  padding: var(--space-xs);
+  padding: var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm, 4px);
   min-width: 8rem;
@@ -105,14 +105,14 @@ button[data-type='pt-pick'][data-used] {
 [data-type='pt-picker-actions'] {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 /* ── results ── */
 
 [data-type='pt-result'] {
   display: block;
-  padding: var(--space-xs);
+  padding: var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm, 4px);
   color: var(--color-muted);
@@ -138,7 +138,7 @@ table[data-type='pt-lines'] td {
 table[data-type='pt-lines'] th {
   color: var(--color-muted);
   font-weight: 400;
-  padding-right: var(--space-xs);
+  padding-right: var(--space-sm);
 }
 
 table[data-type='pt-lines'] td {
@@ -164,8 +164,8 @@ table[data-type='pt-lines'] td {
 [data-type='pt-odds-inputs'] {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
-  margin-bottom: var(--space-xs);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
 }
 
 [data-type='pt-odds-inputs'] label {

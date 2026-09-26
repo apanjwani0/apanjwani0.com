@@ -29,7 +29,7 @@
 [data-type="at-ask"] button {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  padding: var(--space-xs) var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   background: transparent;
@@ -226,7 +226,7 @@
 [data-type="at-panel"] {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: var(--space-sm) var(--space-xl);
+  gap: var(--space-xs) var(--space-xl);
   margin: 0;
   padding-top: var(--space-xl);
   border-top: 1px solid var(--color-border);
