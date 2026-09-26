@@ -25,6 +25,9 @@ KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 - `src/layouts/` — page shells; `src/components/` (`home/`, `tools/`, `games/`) — UI pieces.
 - `src/lib/caa.ts` — the CAA vocabulary (`issue`/`issuewild`, the CA identifier registry, issuer→identifier mapping, and the renewal outlook) shared by DNS Sightline and Chainsaw. Hoisted like `src/lib/ip.ts`; Sightline re-exports its old `sg*` names.
 - `src/styles/theme.css` — design tokens (single source of truth for palette/fonts/scale/spacing).
+- `src/lib/theme.ts` — the visitor's theme preference, `ROOT_BOOT_JS` (the head bootstrap) and the ClientRouter swap patch; `src/lib/site-ui.ts` — `initSiteUI()`, the chrome both shells start. See **UI refresh** below.
+- `src/lib/site-index.ts` — the site's real pages, derived once: the sitemap serialises it, and the command palette and the 404 read it.
+- `src/lib/kit.ts` (starred tools, the `?t=` parser, the bookmarks export), `src/lib/fuzzy.ts` (palette scoring, 404 suggestions), `src/lib/shortcuts.ts` (global shortcut rules, page-shortcut registry).
 - `astro.config.mjs` — adapter choice **and** the Vite middleware that persists `/admin` saves.
 
 ## Build / Test / Run
@@ -271,8 +274,10 @@ click reverts it silently.
 plain unauthenticated HTTP requests to production and asserts what a stranger
 sees — site 200 through Cloudflare, origin IP not serving the app, `max-age=0`
 (Browser Cache TTL not overriding), `s-maxage` present, response actually
-proxied. Exits non-zero on regression, and prints the current Cloudflare CIDR
-list while mitigation (1) is outstanding. Run it after any Cloudflare change.
+proxied, and the header and body nonce of three 404 shapes agreeing (see *A
+rerouted error page carries the nonce its CSP names*). Exits non-zero on
+regression, and prints the current Cloudflare CIDR list while mitigation (1) is
+outstanding. Run it after any Cloudflare change.
 
 ### Rate limits must be bounded
 
@@ -638,6 +643,39 @@ numbers fails the gate rather than a comment going stale.
   they expect with fixed sentences, and wrap the call that could throw one they
   do not (`csInspect`) so it answers fixed `no-store` JSON too.
 
+### A rerouted error page carries the nonce its CSP names
+
+The CSP is `script-src 'self' 'nonce-…'` with a fresh nonce per response, and
+exactly **one** inline executable script ships: the head bootstrap
+(`ROOT_BOOT_JS`, `src/lib/theme.ts`), rendered by `Head.astro` with the page
+nonce. Two Astro 7.3.3 behaviours make both halves of that sentence
+load-bearing:
+
+- **A bodyless 404 or 500 is rendered twice.** A route that returns `new
+  Response(null, { status: 404 })` (every dynamic route's miss: `/zz`,
+  `/tools/zz`) is re-rendered through `404.astro` with the middleware run a
+  second time and a second nonce, and `mergeResponses` keeps the FIRST pass's
+  headers. So the header named one nonce and the body carried the other, and
+  the bootstrap was refused on every such page. The middleware now leaves CSP
+  to the re-render for exactly the statuses Astro reroutes
+  (`isReroutedByAstro`); `security:smoke` holds that list to Astro's own
+  `REROUTABLE_STATUS_CODES`, so an upgrade that reroutes another status fails
+  the gate, and `origin:check` compares the header and body nonce of `/zz`,
+  `/tools/zz` and `/a/b/c` in production, where the edge caches a 404 for
+  everyone. In the rare fallback where Astro re-renders *without* middleware
+  (the 404 page itself threw), that response carries no CSP at all — the page
+  is our static markup, and the security headers set on the first pass still
+  apply.
+- **ClientRouter re-inserts a changed inline script under the new page's
+  nonce, which the live document's CSP refuses.** It recognises an inline
+  script by its text, so only a script that is byte-identical on every page is
+  safe — it is then treated as already run. The bootstrap is a constant
+  rendered through `set:html`; nothing per page or per request is interpolated
+  into it, and `security:smoke` asserts it is the only inline executable
+  script in the templates. Do not add a second one: data belongs in a JSON-LD
+  block or a fetched file (the palette index is `/search.json`), and behaviour
+  in a bundled module.
+
 ### Unguessable ids are a security control
 
 Where knowing an id is the only thing protecting data (webhook bins), the id must
@@ -944,7 +982,7 @@ was a second, mirrored fixture that does.
   `nodeDimensionsIncludeLabels: true` is **required** on every Cytoscape layout —
   it defaults to off, and without it a graph of word-labelled nodes lays out
   using the box and ignores the text, piling up overlapping in one corner.
-- **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading. The same persistence cuts the other way: the document outlives every page, so **a `document` or `window` listener added per mount must be removed with the same handler, be bound by a `signal`/`once`, or be registered once behind a module-level guard** (`if (wired) return`, as `nav-ui.ts` does). `canvas-export.ts` added an `astro:before-swap` listener on every attach and never removed it — seven engines, again on every reconnect — and Draftboard added a document click listener per connect; `security:smoke` derives the rule over every `.ts` under `src/components` and `src/lib`.
+- **Client mounting + View Transitions**: `<ClientRouter />` is enabled, so bundled `<script>` tags run only once per session and do NOT re-run on in-site (client-side) navigation. Any script that mounts a WebComponent/canvas (tool controllers, the home star canvas) must do its work inside `document.addEventListener('astro:page-load', …)`, or the component renders blank when the page is reached via nav (only a hard reload fixes it). Always test such pages by clicking an in-site link, not by reloading. The same persistence cuts the other way: the document outlives every page, so **a `document` or `window` listener added per mount must be removed with the same handler, be bound by a `signal`/`once`, or be registered once behind a module-level guard** (`if (wired) return`, as `nav-ui.ts` does). `canvas-export.ts` added an `astro:before-swap` listener on every attach and never removed it — seven engines, again on every reconnect — and Draftboard added a document click listener per connect; `security:smoke` derives the rule over every `.ts` under `src/components` and `src/lib`. And the router replaces **every attribute on `<html>`** with the incoming page's (`swapRootAttributes`), so client state kept on the root — `data-theme`, `data-theme-pref`, `data-js`, `data-kit` and the theme-color meta — survives an in-site click only because `initSiteUI()` copies it onto the incoming document on `astro:before-swap` (`patchIncomingDocument`, `src/lib/theme.ts`). A new root attribute that must outlive a navigation joins `ROOT_STATE_ATTRS`.
 - **Adapter is the only deployment-specific code**: `astro.config.mjs` is the single swap point for infrastructure changes. No adapter-specific APIs anywhere else — abstract behind `src/lib/` if needed. Three modules are Node-only and say so in their own docblocks: `src/lib/link-peek-fetch.ts` (`node:net`), `src/lib/tls-inspect.ts` (`node:tls`, `node:crypto`) and `src/lib/dns-lookup.ts` (`node:dns`, the bounded name lookup the other two share). All three are reached only from the Link Peek and Chainsaw API routes, never from the browser bundle — asserted by the build carrying no `node:` import into any client chunk. A Workers deploy has no raw-socket TLS, so Chainsaw is the one surface that would need a different transport behind the same JSON shape.
 
 ## Design System
@@ -1045,6 +1083,16 @@ was a second, mirrored fixture that does.
   did not exist. `--space-sm`/`md`/`lg`/`xl`/`card` were added at exactly the
   values already in use, so the change was visually a no-op; the point is that
   the next edit can find the spacing by name instead of inventing a sixth value.
+
+  **…and the rungs increase in the order their names promise.** Adding them at
+  the values in use left `--space-xs` (0.45rem) *above* `--space-sm` (0.4rem),
+  so reaching for "a little more room" meant going down a size. On 2026-09-25
+  the two names were swapped at every call site — ten files, every rendered
+  pixel unchanged, confirmed by a screenshot diff — and `security:smoke` now
+  holds the documented order `2xs < xs < sm < md < lg < xl < card < section`,
+  requiring every `--space-*` token to be one of those rungs (declared smallest
+  first) or a named layout measurement (`page-x`, `header-offset`). A new rung
+  therefore has to be placed in the order deliberately.
 - **One disabled treatment**: `--opacity-disabled` in `theme.css` is the single
   "this control is dead" value. It is an opacity and not a colour on purpose —
   theme-agnostic, and it dims the border and the label together. Both lane floors
@@ -1072,9 +1120,14 @@ was a second, mirrored fixture that does.
   accent-filled button — is read back out of `canvas-export.css`.
 
   Two things to know before touching the palette. There is **less headroom than
-  it looks**: the tightest pairings are `--color-muted` on `--color-surface` at
-  4.76:1 (dark) and `--color-success` on `--color-surface` at 4.74:1 (light), so
-  a "slightly softer grey" is roughly one step from failing.
+  it looks**: the tightest pairings are all on `--color-surface-2`, the raised
+  surface the refresh's chrome sits on — `--color-accent` at 4.59:1 and
+  `--color-success` at 4.68:1 (light), `--color-muted` at 4.76:1 (dark) — so a
+  "slightly softer grey" is roughly one step from failing. Adding that surface
+  is what forced two nudges on 2026-09-25, both recorded in `theme.css`: dark
+  muted `#73808f` → `#7a8796` (it held 4.33:1 there) and light success
+  `#1e7d4f` → `#1e7a4c` (4.502:1). The accent tint `--color-accent-soft` takes
+  `--color-text` only, by rule rather than by ratio.
 
   `--color-border` stays out of the **text** pairing list — it is a hairline,
   never ink — but "not a text colour" had been read as "unmeasured", and it sat
@@ -1120,7 +1173,148 @@ was a second, mirrored fixture that does.
   `:focus-visible`, and asserted. `security:smoke`
   parses the floor out of the stylesheet, because a lone `min-width` reads like a
   stray constraint to the next person tidying the file.
-- **Theming**: `theme.css` defines light at `:root` and overrides the palette under `[data-theme="dark"]` (the site runs dark). Add a theme by adding another `[data-theme="…"]` block — palette tokens only.
+- **Theming**: `theme.css` defines light at `:root` and overrides the palette,
+  the elevation and `color-scheme` under `[data-theme="dark"]` (the site runs
+  dark). Add a theme by adding another `[data-theme="…"]` block — palette,
+  shadows and its own `color-scheme`, nothing else. The `color-scheme` line is
+  required and asserted: Oat declares `light dark` on the root inside a cascade
+  layer, and without an unlayered pin its `light-dark()` tokens and every native
+  control follow the **OS** instead of `data-theme` (JSON Tidy's checkboxes
+  rendered as white squares on the dark site under a light-mode OS). The **Oat
+  bridge** at the end of `:root` points Oat's own tokens (`--background`,
+  `--foreground`, `--card`, `--border`, `--input`, `--ring`, `--primary`,
+  `--muted`, their foregrounds, `--font-sans`) at the site's, so a stock Oat
+  component lands in the site palette; every ink-on-fill pair it creates must be
+  a pairing the contrast sweep holds (asserted).
+
+  **Which theme renders is the visitor's choice**, stored as `theme:v1`
+  (`light` | `dark` | `system`) in localStorage. No stored preference means the
+  site config's theme, never the OS. The head bootstrap applies it before first
+  paint and `initSiteUI()` carries it across ClientRouter swaps (see *UI
+  refresh* below). There is deliberately **no theme cookie**: the server never
+  varies by theme, so each cached page is the same for every visitor.
+
+## UI refresh (2026-09)
+
+The refresh is seven items. **A** (foundation) shipped first and defines the
+contract below; **B–G** build on it in parallel worktrees and document
+themselves in their own stubs at the end of this section — each item edits only
+its own stub, so their merges do not collide. Owner decisions that stand: refine
+the dark look (not a rebrand); tasteful motion, with `prefers-reduced-motion` as
+the off switch; the home hero is chosen separately (item E's seam).
+
+**Modules.** Each has no DOM access at module scope.
+
+- `src/lib/theme.ts` — `ThemePref`, `Theme`, `THEME_KEY` (`theme:v1`),
+  `THEME_EVENT` (`site:theme`, a `CustomEvent<{ theme, pref }>` on `document`),
+  `THEME_COLOR`, `ROOT_STATE_ATTRS`, `resolveTheme(pref | null, ssrDefault,
+  prefersDark)` (pure), `nextThemePref` (dark → light → system), `readThemePref`,
+  `setThemePref`, `currentTheme`, `onThemeChange(cb) → unsubscribe`,
+  `watchThemePref`, `patchIncomingDocument(doc)` and `ROOT_BOOT_JS`.
+- `src/lib/kit.ts` — `KIT_KEY` (`kit:v1`, `{ v: 1, slugs }`), `KIT_EVENT`
+  (`site:kit`), `KIT_MAX` 24, `KIT_PARAM` `t`, `KIT_RAW_MAX` 1024, `KIT_SLUG`,
+  `KIT_PATH`, `sanitizeKit`, `parseKitParam(raw, liveSlugs)` (the ONLY `?t=`
+  parser, for the route and the client alike), `kitHref`, `readKit`, `writeKit`,
+  `toggleKit`, `onKitChange`, `bookmarksFile(items, { folder, now })`. Only
+  **live** tools can be starred, the Driftfield hub included.
+- `src/lib/site-index.ts` (server-only) — `IndexEntry { k, t, u, d?, w?, s? }`,
+  `loadSiteConfigs`, `indexablePaths` (what the sitemap serialises),
+  `buildSiteIndex` (the same pages as search entries, plus one per project card
+  at `/projects#<id>`), `projectAnchors`, `summarize`. Every kind reads its
+  existing predicate; `security:smoke` holds the index and the sitemap to the
+  same pages, and the sitemap byte for byte to the route it replaced.
+- `src/lib/fuzzy.ts` — `fuzzyScore(q, text) → { score, hits } | null`,
+  `suggestPaths(path, entries, limit = 3)`, `isScannerPath` (dotfiles, file
+  extensions and anything over 200 characters get no suggestions).
+- `src/lib/shortcuts.ts` — `GLOBAL_SHORTCUTS`, `matchGlobalShortcut`,
+  `shouldHandleGlobalKey`, `isTypingTarget`, `registerPageShortcuts(owner, list)
+  → unregister`, `listPageShortcuts`. `/` and `?` never fire from a typing
+  target; ⌘K/Ctrl+K works everywhere except inside `[data-keys="own"]`;
+  composing, repeating and `defaultPrevented` events are ignored.
+- `src/lib/site-ui.ts` — `initSiteUI()`, called once by both shells' module
+  script: wires `astro:before-swap → patchIncomingDocument`, starts
+  `watchThemePref`, then calls the four feature entry points, each an empty stub
+  owned by one item: `initThemeUI` (`theme-ui.ts`, B), `initFindUI`
+  (`find-ui.ts`, C), `initKitUI` (`kit-ui.ts`, D), `initMotion` (`motion.ts`, E).
+  None of them may import `astro:transitions/client` (asserted): they load on
+  ToolBase pages too, and that import would put the router there.
+
+**The head bootstrap** (`ROOT_BOOT_JS`) is the one inline script on the site
+(see Security, *A rerouted error page carries the nonce its CSP names*). It
+resolves the stored preference, sets `data-theme`, `data-theme-pref` (only a
+valid stored value), `data-js` and `data-kit="<n>"` (the count `sanitizeKit`
+keeps), and updates the theme-color and color-scheme metas — every storage
+access in a `try`. It restates `resolveTheme` because it cannot import it, so
+`security:smoke` runs it in a sandbox over the full truth table.
+
+**DOM contract.** `html[data-js]`, `html[data-kit]`, `html[data-theme-default]`
+(the SSR theme, rendered by both shells beside `data-theme`). Nav buttons
+`button[data-action="palette" | "theme" | "shortcuts"]` stay `visibility:
+hidden` until `data-js` (the rule is in `shared.css`).
+`button[data-type="kit-star"][data-slug][aria-pressed]`,
+`section[data-type="kit-shelf"]`, `div[data-type="detail-actions"][data-dock]`.
+Base takes a `canonicalPath` prop for pages that render any query string.
+
+**View-transition names.** `vt-title` is the page h1 (a static rule in
+`shared.css`) and, during a navigation, the clicked card's
+`[data-type="card-title"]`; while a card holds it, `html[data-vt-source]` clears
+the source page's own h1, because two elements with one name abort the
+transition. `vt-nav` is the fixed nav; `vt-thumb` is optional. No other
+stylesheet declares `view-transition-name`.
+
+**Tokens** (`theme.css`): `--color-surface-2`, `--color-accent-soft`,
+`--shadow-1/2/3`, `--glow-accent`, `--lift`, `--motion-fast/base/page`,
+`--ease-out`, `--ease-in-out`, `--control-*`, `--tab-*`, `--badge-*`,
+`--text-card`, `--thumb-ratio`. Badges are `[data-type="badge"][data-tone=
+"success | accent | muted"]` (plus `data-streak`), defined only in
+`src/styles/controls.css` (item G).
+
+<!-- Each stub below belongs to one item. Edit only your own; leave the three
+     `·` lines between stubs untouched so parallel merges stay clean. -->
+
+### B. Theme — live switching everywhere
+
+*Stub — item B fills this in.*
+
+·
+·
+·
+
+### C. Command palette & shortcuts
+
+*Stub — item C fills this in (plus Security bullets for the 404 and `/search.json`).*
+
+·
+·
+·
+
+### D. Toolkit
+
+*Stub — item D fills this in (plus Security bullets for `/tools/kit`).*
+
+·
+·
+·
+
+### E. Shells, nav, motion and the home seam
+
+*Stub — item E fills this in (the width contract, the actions dock, view transitions vs ClientRouter, the hero seam).*
+
+·
+·
+·
+
+### F. Hubs, thumbnails and share cards
+
+*Stub — item F fills this in (and updates Share cards: the site card, thumbnails, `npm run thumbs`).*
+
+·
+·
+·
+
+### G. One control kit
+
+*Stub — item G fills this in (and replaces the "One disabled treatment" bullet in Design System).*
 
 ## Skills & Commands
 
@@ -1131,7 +1325,7 @@ Spins up a subagent that fetches the dev server, validates all nav routes, check
 Delegates small, well-scoped tasks to a faster subagent (boilerplate, config entries, isolated edits, repetitive content, routine CSS tweaks). Keep architecture decisions, multi-file changes, debugging, and anything touching `astro.config.mjs` in Claude.
 
 ### `/frontent-design`
-Generates production-grade UI. For this project, the Portfolio Override applies: no custom classes, no custom fonts, no animations, no Tailwind — use semantic HTML + Oat `data-*` attributes. Fix Oat gaps in the fork, not with portfolio-level CSS.
+Generates production-grade UI. For this project, the Portfolio Override applies: no custom classes, no custom fonts, no Tailwind — use semantic HTML + Oat `data-*` attributes. Fix Oat gaps in the fork, not with portfolio-level CSS. Motion is allowed as of the 2026-09 refresh, and only in the tasteful sense: short transitions from the `--motion-*` / `--ease-*` tokens (hover lift, reveals, view transitions), never decoration that loops. `prefers-reduced-motion: reduce` is the off switch for all of it — `shared.css` neutralises every transition and animation under it, so a new motion needs no opt-out of its own, and anything driven from script must check the query itself.
 
 ### `/update-project-memory`
 Saves new learnings about the project or its frameworks to persistent memory files in `.claude/projects/`. Use after discovering non-obvious constraints, bugs, or architectural decisions.
@@ -1234,6 +1428,13 @@ So each kind has exactly **one** predicate, and every consumer reads it:
   WebApplication JSON-LD — above a breadcrumb pointing at a hub serving 404.
   Deliberately stricter than `/tools/[slug]`, where `wip` renders publicly
   behind a noindex; the Driftfield hub has always 404'd on anything but `live`.
+
+The sitemap, the command palette's index and the 404's suggestions all reach
+these predicates through **one** derivation, `src/lib/site-index.ts`: the
+sitemap is `indexablePaths` serialised, and the index is `buildSiteIndex`.
+`security:smoke` holds the two to the same set of pages, so a kind added to one
+and forgotten in the other fails the gate instead of a search result pointing
+at a `noindex` page.
 
 A project entry is the one place an on-site URL is **hand-written** rather than
 derived from a slug, so `security:smoke` holds any `apanjwani0.com` link in
