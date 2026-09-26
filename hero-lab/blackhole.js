@@ -126,7 +126,7 @@
       intervalId: 0, fontsWatched: false
     };
 
-    if (!reduced) attachPointer(S);
+    attachPointer(S);
     attachWheel(S);
     attachKeyboard(S);
 
@@ -135,6 +135,16 @@
       S.gl = gl; S.glOk = initGL(S);
     }
     if (!S.glOk) buildPoster(S);
+
+    try {
+      if (doc.fonts && doc.fonts.ready) {
+        doc.fonts.ready.then(function () {
+          if (S.destroyed) return;
+          if (S.glOk) buildBackgroundTexture(S);
+          if (S.reduced) renderOnce(S);
+        });
+      }
+    } catch (e) {}
 
     tickStatus(S);
     S.intervalId = win.setInterval(function () { tickStatus(S); }, 1000);
@@ -167,6 +177,10 @@
       '.bh-chip span{opacity:.78;}' +
       '.bh-chip span::after{content:" \\2192 open";opacity:.7;}' +
       '.bh-chip:focus-visible{outline:2px solid var(--night);outline-offset:2px;}' +
+      '.bh-chip[hidden]{display:none;}' +
+      '.bh-root.is-poster canvas,.bh-root.is-poster .bh-fx{display:none;}' +
+      '.bh-poster-name{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);margin:0;text-align:center;font:600 clamp(2.4rem,8vw,6.4rem) "Source Serif 4",Georgia,serif;color:#eef2fb;text-shadow:0 0 40px rgba(120,105,220,.55),0 2px 20px rgba(0,0,0,.6);z-index:2;width:92%;}' +
+      '.bh-poster-tag{position:absolute;left:50%;top:44%;transform:translate(-50%,60%);margin:0;text-align:center;font:400 clamp(.85rem,1.8vw,1.15rem) "Source Serif 4",Georgia,serif;color:rgba(221,230,242,.82);z-index:2;width:70%;}' +
       '.bh-poster{position:absolute;inset:0;background:' +
         'radial-gradient(38% 46% at 62% 38%, rgba(255,179,92,.24), transparent 60%),' +
         'radial-gradient(46% 56% at 34% 66%, rgba(155,140,255,.28), transparent 62%),' +
@@ -189,9 +203,7 @@
     '  float dist = length(rel);',
     '  vec2 dir = dist > 0.0001 ? rel/dist : vec2(0.0,1.0);',
     '  float shadowR = uRs*2.6;',
-    '  float defl = (1.05*uRs*uRs) / max(dist, uRs*0.35);',
-    '  float fade = smoothstep(shadowR*0.6, shadowR*1.9, dist);',
-    '  defl *= fade;',
+    '  float defl = (6.0*uRs*uRs) / max(dist, uRs*0.3);',
     '  vec2 sampPos = frag - dir*defl;',
     '  vec2 uv = clamp(sampPos/uResolution, 0.0, 1.0);',
     '  vec3 col = texture2D(uTex, uv).rgb;',
@@ -225,7 +237,7 @@
     '  float ringW = max(1.6, uRs*0.02);',
     '  float ring = exp(-pow((dist-shadowR)/ringW, 2.0));',
     '  col += ring*vec3(1.0,0.97,0.92)*1.4;',
-    '  float inside = smoothstep(shadowR, shadowR-2.0, dist);',
+    '  float inside = 1.0 - smoothstep(shadowR-2.0, shadowR, dist);',
     '  col = mix(col, vec3(0.0), inside);',
     '  gl_FragColor = vec4(col, 1.0);',
     '}'
@@ -308,7 +320,84 @@
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, S.texCanvas);
     } catch (e) { console.error('blackhole texture upload failed', e); }
   }
-  function buildPoster(S) { S.poster = true; }
+  function buildPoster(S) {
+    S.poster = true;
+    S.root.classList.add('is-poster');
+    var bg = S.doc.createElement('div');
+    bg.className = 'bh-poster';
+    S.root.insertBefore(bg, S.root.firstChild);
+    S.h1El = S.root.querySelector('h1');
+    if (S.h1El) S.h1El.className = 'bh-poster-name';
+    var tag = S.root.querySelectorAll('.bh-sr')[0];
+    if (tag) tag.className = 'bh-poster-tag';
+  }
+  function layoutPoster(S) {}
+
+  // ==== comets ====
+  function spawnComet(S, x, y) {
+    if (S.comets.length >= 12) S.comets.shift();
+    var ang = S.rng() * Math.PI * 2;
+    var speed = 70 + S.rng() * 110;
+    S.comets.push({ x: x, y: y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, age: 0, trail: [], flash: 0 });
+  }
+
+  function stepComets(S, dt) {
+    var GM = S.rs * S.rs * 2600;
+    var GM2 = S.rs * S.rs * S.rs * 90000;
+    for (var i = S.comets.length - 1; i >= 0; i--) {
+      var c = S.comets[i];
+      if (c.flash > 0) {
+        c.flash -= dt * 2.2;
+        if (c.flash <= 0) S.comets.splice(i, 1);
+        continue;
+      }
+      var dx = S.holeX - c.x, dy = S.holeY - c.y;
+      var r = Math.sqrt(dx * dx + dy * dy) + 0.0001;
+      var nx = dx / r, ny = dy / r;
+      var a = GM / (r * r);
+      var a2 = GM2 / (r * r * r);
+      var ax = nx * a + (-ny) * a2, ay = ny * a + nx * a2;
+      c.vx += ax * dt; c.vy += ay * dt;
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      c.age += dt;
+      c.trail.push({ x: c.x, y: c.y });
+      if (c.trail.length > 16) c.trail.shift();
+      if (r < S.rs * 1.05) { c.flash = 1; c.vx = 0; c.vy = 0; continue; }
+      if (c.age > 26 || c.x < -240 || c.x > S.w + 240 || c.y < -240 || c.y > S.h + 240) S.comets.splice(i, 1);
+    }
+  }
+
+  function drawComets(S) {
+    var ctx = S.octx;
+    if (!ctx) return;
+    var dpr2 = S.overlay.width / Math.max(1, S.w);
+    ctx.setTransform(dpr2, 0, 0, dpr2, 0, 0);
+    ctx.clearRect(0, 0, S.w, S.h);
+    for (var i = 0; i < S.comets.length; i++) {
+      var c = S.comets[i];
+      if (c.flash > 0) {
+        var rad = (1 - c.flash) * S.rs * 1.6 + 3;
+        ctx.globalAlpha = clamp(c.flash, 0, 1);
+        var g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rad);
+        g.addColorStop(0, 'rgba(255,240,220,0.95)');
+        g.addColorStop(1, 'rgba(255,240,220,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(c.x, c.y, rad, 0, Math.PI * 2); ctx.fill();
+        continue;
+      }
+      var tr = c.trail;
+      for (var j = 0; j < tr.length; j++) {
+        var a = (j / tr.length);
+        ctx.globalAlpha = a * 0.5;
+        ctx.fillStyle = '#ffe9c8';
+        ctx.beginPath(); ctx.arc(tr[j].x, tr[j].y, 1.6 * a + 0.3, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff8ec';
+      ctx.beginPath(); ctx.arc(c.x, c.y, 2.1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
 
   // ==== background texture: stars, galactic band, name + tagline, dim work labels ====
   function titleRect(texW, texH) {
@@ -425,9 +514,137 @@
     }
     return out;
   }
-  function attachPointer(S) {}
-  function attachWheel(S) {}
-  function attachKeyboard(S) {}
+  function ptrPos(S, e) {
+    var r = S.canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function spagTargetAt(S, x, y) {
+    var rootRect = S.root.getBoundingClientRect();
+    for (var i = 0; i < S.sectionEls.length; i++) {
+      var s = S.sectionEls[i];
+      var r = s.el.getBoundingClientRect();
+      var cx = r.left + r.width / 2 - rootRect.left, cy = r.top + r.height / 2 - rootRect.top;
+      var d = Math.hypot(x - cx, y - cy);
+      if (d < Math.max(S.rs * 1.1, r.width / 2 + 18)) return { el: s.el, path: s.path, cx: cx, cy: cy };
+    }
+    return null;
+  }
+
+  function doSpaghetti(S, target) {
+    if (S.spagTimer) { S.win.clearTimeout(S.spagTimer); S.spagTimer = 0; }
+    var dx = S.holeX - target.cx, dy = S.holeY - target.cy;
+    target.el.style.transformOrigin = 'center';
+    target.el.style.transform = 'translate(' + (dx * 0.9) + 'px,' + (dy * 0.9) + 'px) scale(0.15,1.7)';
+    target.el.style.opacity = '0';
+    var el = target.el, path = target.path;
+    S.spagTimer = S.win.setTimeout(function () {
+      S.env.openLink(path, 'section');
+      S.spagTimer = S.win.setTimeout(function () {
+        el.style.transform = ''; el.style.opacity = '';
+      }, 550);
+    }, 480);
+  }
+
+  function attachPointer(S) {
+    var canvas = S.canvas;
+    var touches = {};
+    function onDown(e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      var pt = ptrPos(S, e);
+      if (e.pointerType === 'touch') {
+        touches[e.pointerId] = pt;
+        if (Object.keys(touches).length === 2) {
+          var pts = values(touches);
+          S.pinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+          S.dragging = false;
+        }
+      }
+      var dh = pt.x - S.holeX, dv = pt.y - S.holeY;
+      var grabR = Math.max(S.rs * 1.3, 34);
+      S.downX = pt.x; S.downY = pt.y; S.moved = 0;
+      if (Math.hypot(dh, dv) <= grabR && Object.keys(touches).length < 2) {
+        S.dragging = true; S.pointerId = e.pointerId; S.dragDX = dh; S.dragDY = dv;
+        S.holeVX = 0; S.holeVY = 0; S.keyTarget = null;
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+      } else if (Object.keys(touches).length < 2) {
+        S.pointerId = e.pointerId;
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+      }
+    }
+    function onMove(e) {
+      if (e.pointerType === 'touch' && touches[e.pointerId]) {
+        touches[e.pointerId] = ptrPos(S, e);
+        var ids = Object.keys(touches);
+        if (ids.length === 2) {
+          var pts = values(touches);
+          var d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+          if (S.pinchDist) {
+            S.massMul = clamp(S.massMul * (d / S.pinchDist), 0.5, 1.8);
+          }
+          S.pinchDist = d;
+          if (S.reduced) renderOnce(S);
+          return;
+        }
+      }
+      if (e.pointerId !== S.pointerId || !S.dragging) return;
+      var pt = ptrPos(S, e);
+      S.moved += Math.abs(pt.x - S.downX) + Math.abs(pt.y - S.downY);
+      var px = S.holeX, py = S.holeY;
+      S.holeX = clamp(pt.x - S.dragDX, 0, S.w);
+      S.holeY = clamp(pt.y - S.dragDY, 0, S.h);
+      S.holeVX = (S.holeX - px) / 0.016; S.holeVY = (S.holeY - py) / 0.016;
+      if (S.reduced) renderOnce(S);
+    }
+    function onUp(e) {
+      if (e.pointerType === 'touch') { delete touches[e.pointerId]; if (Object.keys(touches).length < 2) S.pinchDist = 0; }
+      if (e.pointerId !== S.pointerId) return;
+      if (S.dragging) {
+        S.dragging = false;
+        var target = spagTargetAt(S, S.holeX, S.holeY);
+        if (target) { doSpaghetti(S, target); S.holeVX = 0; S.holeVY = 0; }
+      } else if (S.moved < 6 && !S.reduced) {
+        spawnComet(S, S.downX, S.downY);
+      }
+      S.pointerId = null;
+    }
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
+    S._ptr = { onDown: onDown, onMove: onMove, onUp: onUp };
+  }
+  function values(o) { return Object.keys(o).map(function (k) { return o[k]; }); }
+
+  function attachWheel(S) {
+    function onWheel(e) {
+      e.preventDefault();
+      var factor = Math.exp(-(e.deltaY || 0) * 0.0016);
+      S.massMul = clamp(S.massMul * factor, 0.5, 1.8);
+      if (S.reduced) renderOnce(S);
+    }
+    S.canvas.addEventListener('wheel', onWheel, { passive: false });
+    S._wheel = onWheel;
+  }
+
+  function attachKeyboard(S) {
+    S.chip.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (S.chipFor >= 0) { var w = S.work[S.chipFor]; S.env.openLink(S.D.paths(w.kind, w.slug), w.kind); }
+    });
+    S.workBtns.forEach(function (btn, i) {
+      btn.addEventListener('focus', function () {
+        var lab = S.labels[i]; if (!lab) return;
+        S.keyTarget = { x: lab.tx * S.w, y: lab.ty * S.h };
+        if (S.reduced) { S.holeX = S.keyTarget.x; S.holeY = S.keyTarget.y; renderOnce(S); }
+      });
+      btn.addEventListener('blur', function () { S.keyTarget = null; });
+      btn.addEventListener('click', function () {
+        var w = S.work[i];
+        S.env.openLink(S.D.paths(w.kind, w.slug), w.kind);
+      });
+    });
+  }
   function tickStatus(S) {
     var D = S.D;
     var ms = D.msToNextDaily();
@@ -438,12 +655,164 @@
     S.status.textContent = D.counts.tools + ' tools · ' + D.counts.games + ' games · ' +
       D.counts.writing + ' article · next daily in ' + hh + ':' + mm + ':' + ss;
   }
-  function startLoop(S) {}
-  function stopLoop(S) {}
-  function doResize(S, w, h) { S.w = w; S.h = h; }
+  // ==== resize / render sizing ====
+  function updateRenderSize(S) {
+    var mul = S.dpr * S.scale;
+    var rw = Math.round(S.w * mul), rh = Math.round(S.h * mul);
+    var long = Math.max(rw, rh);
+    if (long > 2048) { var f = 2048 / long; rw = Math.round(rw * f); rh = Math.round(rh * f); mul *= f; }
+    rw = Math.max(2, rw); rh = Math.max(2, rh);
+    S.rw = rw; S.rh = rh; S.renderMul = mul;
+    if (S.glOk) {
+      S.canvas.width = rw; S.canvas.height = rh;
+      S.gl.viewport(0, 0, rw, rh);
+    }
+  }
+
+  function doResize(S, w, h) {
+    S.w = Math.max(1, w); S.h = Math.max(1, h);
+    if (!S.holeX && !S.holeY) { S.holeX = S.w / 2; S.holeY = S.h / 2; }
+    S.holeX = clamp(S.holeX, 0, S.w); S.holeY = clamp(S.holeY, 0, S.h);
+    S.rsBase = Math.min(S.w, S.h) * 0.06;
+    S.rs = S.rsBase * S.massMul;
+    var dpr2 = clamp(S.win.devicePixelRatio || 1, 1, 2);
+    S.overlay.width = Math.round(S.w * dpr2); S.overlay.height = Math.round(S.h * dpr2);
+    S.octx = S.overlay.getContext('2d');
+    if (S.glOk) {
+      updateRenderSize(S);
+      buildBackgroundTexture(S);
+    }
+    if (S.poster) layoutPoster(S);
+    if (S.reduced) renderOnce(S);
+  }
+
+  // ==== idle path + main render ====
+  function lissajous(S, t) {
+    if (S.keyTarget) return S.keyTarget;
+    var cx = S.w * 0.5, cy = S.h * 0.46;
+    var ax = S.w * 0.34, ay = S.h * 0.24;
+    return { x: cx + ax * Math.sin(t * 0.132 + 0.6), y: cy + ay * Math.sin(t * 0.089) };
+  }
+
+  function stepHole(S, dt, t) {
+    if (S.dragging) return;
+    var target = lissajous(S, t);
+    var springK = S.keyTarget ? 5.5 : 1.4, damp = S.keyTarget ? 6.5 : 2.3;
+    S.holeVX += ((target.x - S.holeX) * springK - S.holeVX * damp) * dt;
+    S.holeVY += ((target.y - S.holeY) * springK - S.holeVY * damp) * dt;
+    S.holeX += S.holeVX * dt; S.holeY += S.holeVY * dt;
+    S.holeX = clamp(S.holeX, -S.rs, S.w + S.rs);
+    S.holeY = clamp(S.holeY, -S.rs, S.h + S.rs);
+  }
+
+  function drawGL(S, t) {
+    var gl = S.gl, u = S.u;
+    gl.uniform2f(u.res, S.rw, S.rh);
+    gl.uniform2f(u.hole, S.holeX * S.renderMul, S.holeY * S.renderMul);
+    gl.uniform1f(u.rs, S.rs * S.renderMul);
+    gl.uniform1f(u.time, t);
+    gl.uniform3f(u.day, DAY.r / 255, DAY.g / 255, DAY.b / 255);
+    gl.uniform3f(u.dayHot, DAY_HOT.r / 255, DAY_HOT.g / 255, DAY_HOT.b / 255);
+    gl.uniform3f(u.night, NIGHT.r / 255, NIGHT.g / 255, NIGHT.b / 255);
+    gl.uniform3f(u.nightDeep, NIGHT_DEEP.r / 255, NIGHT_DEEP.g / 255, NIGHT_DEEP.b / 255);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, S.tex);
+    gl.uniform1i(u.tex, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  function updateChip(S) {
+    var best = -1, bestD = Infinity;
+    var thresh = S.rs * 3;
+    for (var i = 0; i < S.labels.length; i++) {
+      var l = S.labels[i];
+      var dx = l.tx * S.w - S.holeX, dy = l.ty * S.h - S.holeY;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d < thresh && d < bestD) { bestD = d; best = i; }
+    }
+    if (best === S.chipFor) {
+      if (best >= 0) positionChip(S, S.labels[best]);
+      return;
+    }
+    S.chipFor = best;
+    if (best < 0) { S.chip.hidden = true; return; }
+    var lab = S.labels[best];
+    S.chipTitle.textContent = lab.name;
+    S.chipLine.textContent = lab.line;
+    S.chip.hidden = false;
+    positionChip(S, lab);
+  }
+  function positionChip(S, lab) {
+    var x = lab.tx * S.w, y = lab.ty * S.h;
+    S.chip.style.left = x + 'px';
+    S.chip.style.top = y + 'px';
+    var rr = S.chip.getBoundingClientRect();
+    var rootR = S.root.getBoundingClientRect();
+    var localLeft = rr.left - rootR.left, localRight = rr.right - rootR.left, localTop = rr.top - rootR.top;
+    var dx = 0, dy = 0;
+    if (localLeft < 4) dx = 4 - localLeft;
+    else if (localRight > S.w - 4) dx = (S.w - 4) - localRight;
+    if (localTop < 4) dy = 4 - localTop;
+    if (dx || dy) { S.chip.style.left = (x + dx) + 'px'; S.chip.style.top = (y + dy) + 'px'; }
+  }
+
+  function renderOnce(S) {
+    S.rs = S.rsBase * S.massMul;
+    if (S.glOk) drawGL(S, 0);
+    updateChip(S);
+  }
+
+  function frame(S, now) {
+    if (!S.running) return;
+    var dt = S.lastT ? Math.min(0.05, (now - S.lastT) / 1000) : 0.016;
+    S.lastT = now;
+    var t = (now - S.t0) / 1000;
+    S.frameTimes.push(now);
+    while (S.frameTimes.length > 40) S.frameTimes.shift();
+    if (S.frameTimes.length === 40) {
+      var span = S.frameTimes[39] - S.frameTimes[0];
+      var avg = span / 39;
+      if (avg > 22 && S.scale > 0.35) { S.scale = Math.max(0.35, S.scale * 0.88); updateRenderSize(S); }
+      S.frameTimes.length = 0;
+    }
+    stepHole(S, dt, t);
+    S.rs = S.rsBase * S.massMul;
+    if (S.glOk) drawGL(S, t);
+    stepComets(S, dt);
+    drawComets(S);
+    updateChip(S);
+    S.rafId = S.win.requestAnimationFrame(function (n) { frame(S, n); });
+  }
+
+  function startLoop(S) {
+    if (S.reduced || S.running) return;
+    S.running = true;
+    if (!S._t0set) { S.t0 = S.win.performance.now(); S._t0set = true; }
+    S.lastT = 0;
+    S.rafId = S.win.requestAnimationFrame(function (n) { frame(S, n); });
+  }
+  function stopLoop(S) {
+    S.running = false;
+    if (S.rafId) S.win.cancelAnimationFrame(S.rafId);
+    S.rafId = 0;
+  }
   function doDestroy(S) {
+    S.destroyed = true;
+    stopLoop(S);
     S.win.clearInterval(S.intervalId);
-    S.root.parentNode && S.root.parentNode.removeChild(S.root);
+    if (S.spagTimer) S.win.clearTimeout(S.spagTimer);
+    if (S._ptr) {
+      S.canvas.removeEventListener('pointerdown', S._ptr.onDown);
+      S.canvas.removeEventListener('pointermove', S._ptr.onMove);
+      S.canvas.removeEventListener('pointerup', S._ptr.onUp);
+      S.canvas.removeEventListener('pointercancel', S._ptr.onUp);
+    }
+    if (S._wheel) S.canvas.removeEventListener('wheel', S._wheel);
+    if (S.glOk && S.gl) {
+      var ext = S.gl.getExtension('WEBGL_lose_context');
+      if (ext) ext.loseContext();
+    }
+    if (S.root.parentNode) S.root.parentNode.removeChild(S.root);
   }
 
   window.HeroLab.register({

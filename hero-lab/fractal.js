@@ -358,7 +358,7 @@
     var dragging = false;
     var lastViewInputAt = -Infinity; // wheel/drag: pauses auto-advance for IDLE_RESUME_MS
 
-    var lastFrameT = 0, avgFrameMs = 16, rafId = 0, statTimer = 0;
+    var lastFrameT = 0, avgFrameMs = 16, rafId = 0, lastHudT = 0;
 
     function smoothstep(e0, e1, x) {
       var t = clamp((x - e0) / (e1 - e0), 0, 1);
@@ -434,6 +434,10 @@
       gl.uniform1f(U.uSurface, surfaceVal);
       gl.uniform1f(U.uHold, holdT);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    function updateHud() {
+      var maxIter = autoIter(zoom, iterCap);
       hud.textContent = 'zoom ' + zoom.toExponential(1) + ' · c = ' + centerRe.toFixed(7) +
         (centerIm >= 0 ? ' + ' : ' − ') + Math.abs(centerIm).toFixed(7) + 'i · ' +
         maxIter + ' iter · rendered live on your GPU';
@@ -444,6 +448,7 @@
       zoom = t.maxZoom; logZoom = Math.log10(zoom);
       centerRe = t.re; centerIm = t.im; phase = 'dive';
       render((performance.now() - t0) / 1000);
+      updateHud();
     }
 
     function tick(nowMs) {
@@ -459,6 +464,7 @@
       avgFrameMs = avgFrameMs * 0.9 + frameMs * 0.1;
       if (avgFrameMs > 22 && renderScale > 0.35) { renderScale = Math.max(0.35, renderScale - 0.05); applySize(); }
       else if (avgFrameMs < 14 && renderScale < maxScale) { renderScale = Math.min(maxScale, renderScale + 0.02); applySize(); }
+      if (nowMs - lastHudT > 200) { lastHudT = nowMs; updateHud(); }
     }
 
     // ---- interaction: steer (click), hold (fall faster), drag (pan),
@@ -529,6 +535,7 @@
           var c = screenToComplex(p.x, p.y);
           centerRe = c.re; centerIm = c.im;
           render((performance.now() - t0) / 1000);
+          updateHud();
         } else {
           startSteer(p.x, p.y);
         }
@@ -541,7 +548,7 @@
       markInput(); steering = false;
       var dy = clamp(e.deltaY, -120, 120);
       zoomAtPixel(p.x, p.y, Math.pow(1.0016, -dy));
-      if (env.reduced) render((performance.now() - t0) / 1000);
+      if (env.reduced) { render((performance.now() - t0) / 1000); updateHud(); }
     }
     function onKeyDown(e) {
       if (env.reduced) return;

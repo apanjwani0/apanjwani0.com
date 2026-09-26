@@ -59,7 +59,8 @@
       'pointer-events:none;white-space:nowrap;border-radius:6px}' +
     '.lq-word:focus-visible{pointer-events:auto;outline:2px solid #9b8cff;outline-offset:3px;background:rgba(5,7,12,0.5)}' +
     '.lq-word.lq-revealed{pointer-events:auto}' +
-    '@media (max-width:640px){.lq-tagline{display:none}.lq-hint{display:none}}';
+    '@media (max-width:640px){.lq-tagline{display:none}.lq-hint{display:none}' +
+      '.lq-word{font-size:0.6rem;padding:0.5em 0.65em}}';
 
   var WORD_TITLE = 'the ink shows you what I’ve built';
 
@@ -145,6 +146,11 @@
       var t = cells[i]; cells[i] = cells[j]; cells[j] = t;
     }
     var heroSafeX = w * 0.62, heroSafeY = h * 0.42; // bottom-left hero block keep-out
+    // Margin keeps a button's rendered box (its label can run ~15 chars)
+    // clear of the stage edge, where .lq-root's overflow:hidden would
+    // otherwise clip it mid-word.
+    var marginX = clamp(w * 0.16, 46, 80);
+    var marginY = clamp(h * 0.05, 22, 34);
     var out = [];
     var ci = 0;
     for (var k = 0; k < words.length && ci < cells.length; ci++) {
@@ -154,11 +160,27 @@
       if (cx < heroSafeX && cy > heroSafeY) continue; // inside hero keep-out
       var jitterX = (rand() - 0.5) * (w / cols) * 0.55;
       var jitterY = (rand() - 0.5) * (h / rows) * 0.55;
-      out.push({ item: words[k], x: clamp(cx + jitterX, 24, w - 24), y: clamp(cy + jitterY, 20, h - 20) });
+      out.push({
+        item: words[k],
+        x: clamp(cx + jitterX, marginX, w - marginX),
+        y: clamp(cy + jitterY, marginY, h - marginY)
+      });
       k++;
     }
     return out;
   }
+
+  // Day/night ink colours (see HERO_DATA's palette in the brief).
+  var DAY = [1.0, 0.702, 0.361];
+  var NIGHT = [0.608, 0.549, 1.0];
+  function colorForX(t) {
+    t = clamp(t, 0, 1);
+    return [DAY[0] + (NIGHT[0] - DAY[0]) * t, DAY[1] + (NIGHT[1] - DAY[1]) * t, DAY[2] + (NIGHT[2] - DAY[2]) * t];
+  }
+  // Idle emitters: slow Lissajous orbits in GL UV space (y up). Amber sits
+  // lower-left, violet upper-right, both clear of the bottom-left hero block.
+  var EMIT_DAY = { cx: 0.24, cy: 0.30, rx: 0.15, ry: 0.13, wx: 0.55, wy: 0.71, px: 0.0, py: 1.7, color: DAY };
+  var EMIT_NIGHT = { cx: 0.76, cy: 0.72, rx: 0.16, ry: 0.14, wx: 0.47, wy: 0.63, px: 2.2, py: 0.4, color: NIGHT };
 
   // ---- Shaders. Plain GLSL ES 1.00: compiles under both a WebGL1 and a
   // WebGL2 context (WebGL2 accepts #version-less shaders as ES 1.00). ----
@@ -428,21 +450,74 @@
     };
   }
 
+  // RGBA8/UNSIGNED_BYTE is always core-renderable (no extension, WebGL1 or 2),
+  // unlike the half-float sim targets — used for the tiny CPU-readback copy.
+  function createByteFBO(gl, w, h) {
+    var tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    var fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { tex: tex, fbo: fbo, w: w, h: h };
+  }
+
   function createSim(glInfo, simW, simH, dyeW, dyeH) {
     var gl = glInfo.ctx;
     var filter = glInfo.supportsLinear === false ? gl.NEAREST : gl.LINEAR;
+    var bloomW = Math.max(2, Math.round(dyeW / 4)), bloomH = Math.max(2, Math.round(dyeH / 4));
     return {
       glInfo: glInfo, gl: gl,
       simW: simW, simH: simH, dyeW: dyeW, dyeH: dyeH,
-      texelSim: [1 / simW, 1 / simH], texelDye: [1 / dyeW, 1 / dyeH],
+      bloomW: bloomW, bloomH: bloomH,
+      texelSim: [1 / simW, 1 / simH],
       velocity: createDouble(glInfo, simW, simH, filter),
       dye: createDouble(glInfo, dyeW, dyeH, filter),
       divergence: createFBO(glInfo, simW, simH, gl.NEAREST),
       curl: createFBO(glInfo, simW, simH, gl.NEAREST),
       pressure: createDouble(glInfo, simW, simH, gl.NEAREST),
-      bloomA: null, bloomB: null, maskTex: null, readTarget: null,
+      bloomA: createFBO(glInfo, bloomW, bloomH, filter),
+      bloomB: createFBO(glInfo, bloomW, bloomH, filter),
+      readTarget: createByteFBO(gl, 48, 27),
+      maskTex: null, maskCanvas: null,
       programs: glInfo.programs
     };
+  }
+
+  // Rasterises the hidden word list into an offscreen 2D canvas (top-down,
+  // like the DOM) and uploads it flipped, so its "up" matches the sim's own
+  // render convention (vUv.y=1 -> top of the canvas — see splat()/renderSim()).
+  function buildMask(sim, wordSpots, stageW, stageH) {
+    if (!sim || !stageW || !stageH) return;
+    var gl = sim.gl, mw = sim.dyeW, mh = sim.dyeH;
+    if (!sim.maskCanvas) sim.maskCanvas = document.createElement('canvas');
+    var c = sim.maskCanvas;
+    c.width = mw; c.height = mh;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, mw, mh);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var fontPx = Math.max(9, Math.round(mh * 0.024));
+    ctx.font = '600 ' + fontPx + 'px ui-monospace, Menlo, Consolas, monospace';
+    (wordSpots || []).forEach(function (spot) {
+      ctx.fillText(spot.item.name, spot.x / stageW * mw, spot.y / stageH * mh);
+    });
+    if (!sim.maskTex) sim.maskTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, sim.maskTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
   function destroySim(sim) {
     if (!sim) return;
@@ -512,12 +587,15 @@
     }, sim.pressure.write);
     sim.pressure.swap();
 
+    // Closure hoisted out of the loop: 20 iterations must not mean 20
+    // per-frame allocations for an uniform-setter that reads live sim state.
+    var setPressureUniforms = function (u) {
+      bindTex(gl, 0, sim.pressure.read.tex, u.uPressure);
+      bindTex(gl, 1, sim.divergence.tex, u.uDivergence);
+      gl.uniform2f(u.texelSize, ts[0], ts[1]);
+    };
     for (var i = 0; i < 20; i++) {
-      runProgram(gl, p.pressure, function (u) {
-        bindTex(gl, 0, sim.pressure.read.tex, u.uPressure);
-        bindTex(gl, 1, sim.divergence.tex, u.uDivergence);
-        gl.uniform2f(u.texelSize, ts[0], ts[1]);
-      }, sim.pressure.write);
+      runProgram(gl, p.pressure, setPressureUniforms, sim.pressure.write);
       sim.pressure.swap();
     }
 
@@ -547,8 +625,70 @@
     sim.dye.swap();
   }
 
-  function renderSim(sim, gl, canvas, drawW, drawH, grainSeed) {}
-  function readRevealMask(sim, gl) { return null; }
+  // Threshold the dye, blur it twice (separable, downsampled), then
+  // tone-map + composite straight onto the visible canvas.
+  function renderSim(sim, gl, canvas, drawW, drawH, grainTime) {
+    var p = sim.programs;
+    runProgram(gl, p.threshold, function (u) {
+      bindTex(gl, 0, sim.dye.read.tex, u.uTexture);
+      gl.uniform1f(u.thresh, 0.55);
+    }, sim.bloomA);
+
+    var texelBloom0 = 1 / sim.bloomW, texelBloom1 = 1 / sim.bloomH;
+    var src = sim.bloomA, dst = sim.bloomB, i, tmp;
+    // Both closures read src/dst by reference, so hoisting them out of the
+    // loop is safe and turns 4 per-frame allocations into 2.
+    var setBlurH = function (u) {
+      bindTex(gl, 0, src.tex, u.uTexture);
+      gl.uniform2f(u.texelSize, texelBloom0, texelBloom1);
+      gl.uniform2f(u.dir, 1, 0);
+    };
+    var setBlurV = function (u) {
+      bindTex(gl, 0, src.tex, u.uTexture);
+      gl.uniform2f(u.texelSize, texelBloom0, texelBloom1);
+      gl.uniform2f(u.dir, 0, 1);
+    };
+    for (i = 0; i < 2; i++) {
+      runProgram(gl, p.blur, setBlurH, dst);
+      tmp = src; src = dst; dst = tmp;
+      runProgram(gl, p.blur, setBlurV, dst);
+      tmp = src; src = dst; dst = tmp;
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, drawW, drawH);
+    gl.useProgram(p.display.program);
+    bindTex(gl, 0, sim.dye.read.tex, p.display.uniforms.uDye);
+    bindTex(gl, 1, src.tex, p.display.uniforms.uBloom);
+    bindTex(gl, 2, sim.maskTex, p.display.uniforms.uMask);
+    gl.uniform1f(p.display.uniforms.time, grainTime || 0);
+    gl.uniform1f(p.display.uniforms.grainAmt, 0.02);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  // Copies the raw dye into a tiny UNSIGNED_BYTE target and reads it back —
+  // readPixels is only universally legal against an RGBA8 framebuffer, so the
+  // conversion happens on the GPU (writing into createByteFBO's target), never
+  // by asking readPixels to convert straight out of the half-float dye FBO.
+  function readRevealMask(sim) {
+    var gl = sim.gl, rt = sim.readTarget;
+    runProgram(gl, sim.programs.copy, function (u) {
+      bindTex(gl, 0, sim.dye.read.tex, u.uTexture);
+    }, rt);
+    var buf = new Uint8Array(rt.w * rt.h * 4);
+    gl.readPixels(0, 0, rt.w, rt.h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    return { data: buf, w: rt.w, h: rt.h };
+  }
+  // u,v: GL UV (y up, 0..1). readPixels rows start at the framebuffer's
+  // bottom, i.e. row 0 == v = 0 — the same convention splat()/renderSim() use.
+  function lumaAt(mask, u, v) {
+    if (!mask) return 0;
+    var col = Math.max(0, Math.min(mask.w - 1, Math.round(u * (mask.w - 1))));
+    var row = Math.max(0, Math.min(mask.h - 1, Math.round(v * (mask.h - 1))));
+    var idx = (row * mask.w + col) * 4;
+    var d = mask.data;
+    return (d[idx] * 0.299 + d[idx + 1] * 0.587 + d[idx + 2] * 0.114) / 255;
+  }
   // --------------------------------------------
 
   function create(host, env) {
@@ -568,14 +708,21 @@
       raf: 0,
       lastT: 0,
       clockTimer: 0,
-      revealTimer: 0,
       wordSpots: [],
       wordEls: [],
       lastInput: -1e9,
       hintShown: true,
       destroyed: false,
       frameAvg: 16,
-      hidden: document.hidden
+      hidden: document.hidden,
+      simTime: 0,
+      idleStrength: 0,
+      idleAccum: 0,
+      resCheckAccum: 0,
+      revealAccum: 0,
+      activePointer: null,
+      dragLast: [0, 0],
+      dragMoved: 0
     };
 
     function updateStatus() {
@@ -610,7 +757,8 @@
     function onWordFocus(idx) {
       var spot = state.wordSpots[idx];
       if (!spot || !state.sim) return;
-      splat(state.sim, spot.x / state.w, 1 - spot.y / state.h, 0, 0, 1, 1, 1, 0.12);
+      state.lastInput = performance.now();
+      splat(state.sim, spot.x / state.w, 1 - spot.y / state.h, 0, 0, 0.9, 0.85, 0.95, 0.035);
     }
 
     function hideHint() {
@@ -622,6 +770,48 @@
     function fallbackToPoster() {
       dom.root.classList.add('lq-fallback');
     }
+
+    // ---- Pointer input: drag stirs, a tap/click drops a big ink burst. ----
+    function toUV(clientX, clientY) {
+      var r = dom.canvas.getBoundingClientRect();
+      var x = r.width ? (clientX - r.left) / r.width : 0.5;
+      var y = r.height ? 1 - (clientY - r.top) / r.height : 0.5;
+      return [clamp(x, 0, 1), clamp(y, 0, 1)];
+    }
+    function onPointerDown(e) {
+      if (state.activePointer !== null || !state.sim) return;
+      state.activePointer = e.pointerId;
+      try { dom.canvas.setPointerCapture(e.pointerId); } catch (e0) {}
+      state.dragLast = toUV(e.clientX, e.clientY);
+      state.dragMoved = 0;
+      state.lastInput = performance.now();
+      hideHint();
+    }
+    function onPointerMove(e) {
+      if (state.activePointer !== e.pointerId || !state.sim) return;
+      var uv = toUV(e.clientX, e.clientY);
+      var dx = uv[0] - state.dragLast[0], dy = uv[1] - state.dragLast[1];
+      state.dragMoved += Math.abs(dx) + Math.abs(dy);
+      state.dragLast = uv;
+      state.lastInput = performance.now();
+      var c = colorForX(uv[0]);
+      var speed = clamp(Math.sqrt(dx * dx + dy * dy) * 30, 0, 5);
+      splat(state.sim, uv[0], uv[1], dx * 22, dy * 22, c[0] * 0.9, c[1] * 0.9, c[2] * 0.9, 0.016 + speed * 0.006);
+    }
+    function onPointerUp(e) {
+      if (state.activePointer !== e.pointerId) return;
+      state.activePointer = null;
+      state.lastInput = performance.now();
+      if (state.sim && state.dragMoved < 0.025) {
+        var uv = state.dragLast, c = colorForX(uv[0]);
+        splat(state.sim, uv[0], uv[1], 0, 0, c[0] * 1.5, c[1] * 1.5, c[2] * 1.5, 0.055);
+      }
+      try { dom.canvas.releasePointerCapture(e.pointerId); } catch (e0) {}
+    }
+    dom.canvas.addEventListener('pointerdown', onPointerDown);
+    dom.canvas.addEventListener('pointermove', onPointerMove);
+    dom.canvas.addEventListener('pointerup', onPointerUp);
+    dom.canvas.addEventListener('pointercancel', onPointerUp);
 
     function computeSimDims(w, h) {
       var longRatio = Math.max(w, h) / Math.max(1, Math.min(w, h));
@@ -636,17 +826,20 @@
 
     function setup(w, h) {
       state.w = w; state.h = h;
-      buildWordButtons(w, h);
       updateStatus();
       var gl = createGL(dom.canvas);
       if (!gl) { fallbackToPoster(); state.inited = true; return; }
       state.glInfo = gl; state.gl = gl.ctx; state.isWebGL2 = gl.isWebGL2;
+      buildWordButtons(w, h);
       var d = computeSimDims(w, h);
       state.sim = createSim(gl, d.simW, d.simH, d.dyeW, d.dyeH);
       buildMask(state.sim, state.wordSpots, w, h);
       state.inited = true;
     }
 
+    // In the CSS-poster fallback (no GL) word buttons are never built: there
+    // is no ink to reveal them, so they would sit as invisible, permanently
+    // inert tab stops ahead of the real links.
     function doResize(w, h) {
       w = Math.max(1, w); h = Math.max(1, h);
       var dpr = state.dpr * state.scale;
@@ -655,8 +848,8 @@
       if (!state.inited) { setup(w, h); }
       else {
         state.w = w; state.h = h;
-        buildWordButtons(w, h);
         if (state.sim && state.glInfo) {
+          buildWordButtons(w, h);
           destroySim(state.sim); state.sim = null;
           var d = computeSimDims(w, h);
           state.sim = createSim(state.glInfo, d.simW, d.simH, d.dyeW, d.dyeH);
@@ -670,16 +863,38 @@
       if (!state.sim) return;
       var rand = mulberry32(seedFromString('liquid-reduced-v1'));
       for (var i = 0; i < 120; i++) {
-        if (i % 14 === 0) {
-          var side = (i / 14) % 2 < 1 ? 0 : 1;
-          var x = side === 0 ? 0.18 + rand() * 0.18 : 0.64 + rand() * 0.18;
-          var y = 0.25 + rand() * 0.5;
-          var col = side === 0 ? [1, 0.4, 0] : [0, 0.35, 1];
-          splat(state.sim, x, y, (rand() - 0.5) * 0.8, (rand() - 0.5) * 0.8, col[0], col[1], col[2], 0.22);
+        if (i % 12 === 0) {
+          var side = (i / 12) % 2 < 1 ? 0 : 1;
+          var x = side === 0 ? 0.16 + rand() * 0.2 : 0.62 + rand() * 0.22;
+          var y = 0.22 + rand() * 0.56;
+          var col = side === 0 ? DAY : NIGHT;
+          splat(state.sim, x, y, (rand() - 0.5) * 3, (rand() - 0.5) * 3, col[0], col[1], col[2], 0.05);
         }
         stepSim(state.sim, 1 / 60);
       }
       renderSim(state.sim, state.gl, dom.canvas, dom.canvas.width, dom.canvas.height, 1);
+      updateReveal();
+    }
+
+    function emitIdle(e) {
+      var s = state.simTime;
+      var x = e.cx + Math.sin(s * e.wx + e.px) * e.rx;
+      var y = e.cy + Math.sin(s * e.wy + e.py) * e.ry;
+      var dx = Math.cos(s * e.wx + e.px) * e.wx * e.rx;
+      var dy = Math.cos(s * e.wy + e.py) * e.wy * e.ry;
+      var k = state.idleStrength;
+      splat(state.sim, x, y, dx * 0.7 * k, dy * 0.7 * k, e.color[0] * k, e.color[1] * k, e.color[2] * k, 0.013);
+    }
+
+    function updateReveal() {
+      if (!state.sim) return;
+      var mask = readRevealMask(state.sim);
+      for (var idx = 0; idx < state.wordSpots.length; idx++) {
+        var spot = state.wordSpots[idx];
+        var revealed = lumaAt(mask, spot.x / state.w, 1 - spot.y / state.h) > 0.22;
+        var el = state.wordEls[idx];
+        if (el) el.classList.toggle('lq-revealed', revealed);
+      }
     }
 
     function start() {
@@ -698,20 +913,59 @@
       state.running = false;
       if (state.raf) { cancelAnimationFrame(state.raf); state.raf = 0; }
       if (state.clockTimer) { clearInterval(state.clockTimer); state.clockTimer = 0; }
-      if (state.revealTimer) { clearInterval(state.revealTimer); state.revealTimer = 0; }
     }
 
-    function loop(t) {
+    function loop() {
       if (!state.running) return;
       state.raf = requestAnimationFrame(loop);
-      // filled in next pass: dt calc, idle emitters, stepSim, renderSim, adaptive scale
+      if (!state.sim) return;
+      var t0 = performance.now();
+      var dt = state.lastT ? Math.min((t0 - state.lastT) / 1000, 1 / 20) : 1 / 60;
+      state.lastT = t0;
+      state.simTime += dt;
+
+      var targetIdle = (t0 - state.lastInput) > 4000 ? 1 : 0;
+      state.idleStrength += (targetIdle - state.idleStrength) * Math.min(1, dt * 1.5);
+      if (state.idleStrength > 0.02) {
+        state.idleAccum += dt;
+        if (state.idleAccum > 0.42) {
+          state.idleAccum = 0;
+          emitIdle(EMIT_DAY);
+          emitIdle(EMIT_NIGHT);
+        }
+      }
+
+      stepSim(state.sim, dt);
+      renderSim(state.sim, state.gl, dom.canvas, dom.canvas.width, dom.canvas.height, state.simTime);
+
+      var frameMs = performance.now() - t0;
+      state.frameAvg += (frameMs - state.frameAvg) * 0.08;
+      state.resCheckAccum += dt;
+      if (state.resCheckAccum > 1.2) {
+        state.resCheckAccum = 0;
+        if (state.frameAvg > 22 && state.scale > 0.35) {
+          state.scale = Math.max(0.35, state.scale - 0.12);
+          doResize(state.w, state.h);
+        }
+      }
+
+      state.revealAccum += dt;
+      if (state.revealAccum > 0.2) { state.revealAccum = 0; updateReveal(); }
     }
 
     function destroy() {
       state.destroyed = true;
       stop();
+      dom.canvas.removeEventListener('pointerdown', onPointerDown);
+      dom.canvas.removeEventListener('pointermove', onPointerMove);
+      dom.canvas.removeEventListener('pointerup', onPointerUp);
+      dom.canvas.removeEventListener('pointercancel', onPointerUp);
       if (state.sim) { destroySim(state.sim); state.sim = null; }
-      host.removeEventListener && 0;
+      if (state.gl) {
+        var lose = state.gl.getExtension('WEBGL_lose_context');
+        if (lose) lose.loseContext();
+        state.gl = null;
+      }
       if (dom.root.parentNode) dom.root.parentNode.removeChild(dom.root);
     }
 
