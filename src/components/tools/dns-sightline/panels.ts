@@ -69,7 +69,9 @@ export function sgRenderFindings(r: SgInspection): string {
           ${
             f.evidence.length
               ? `<ul data-type="sg-evidence">${f.evidence.map(e => `<li><code>${sgEsc(e)}</code></li>`).join('')}</ul>`
-              : '<p data-type="sg-evidence-none">Based on the absence of a record rather than on one.</p>'
+              : f.basis === 'unanswered'
+                ? '<p data-type="sg-evidence-none">Based on a lookup that got no answer.</p>'
+                : '<p data-type="sg-evidence-none">Based on the absence of a record rather than on one.</p>'
           }
         </li>`,
         )

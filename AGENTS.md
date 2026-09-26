@@ -523,16 +523,33 @@ test that hangs is a test whose timeout gets raised.
 
 ### A finding cites the record it rests on
 
-`SgFinding.evidence` carries the literal record text a finding was derived from,
-and `basis: 'absence'` marks the findings that are *about* a record not
-existing — the only ones allowed to cite nothing. Same family as Token Bench's
-`proof` label, and it learned Token Bench's lesson at the same cost: the rule is
-only as good as its coverage. A mutation dressing a finding as record-based
-while citing nothing **survived the first version of the assertion**, because
-the one producer branch that emitted it had no fixture. So the producer list is
-derived from the function *signatures* (returns `SgFinding[]`, does not take
-one), and the id list is derived from the source, so a finding added later
-either gets a fixture or fails the gate.
+`SgFinding.evidence` carries the literal record text a finding was derived
+from. `basis: 'absence'` marks the findings that are *about* a record not
+existing, and `basis: 'unanswered'` marks the ones whose premise is a lookup
+that got no answer at all — a SERVFAIL, a timeout, the query budget or the
+deadline. Those two, and only those two, are allowed to cite nothing. Same
+family as Token Bench's `proof` label, and it learned Token Bench's lesson at
+the same cost: the rule is only as good as its coverage. A mutation dressing a
+finding as record-based while citing nothing **survived the first version of
+the assertion**, because the one producer branch that emitted it had no
+fixture. So the producer list is derived from the function *signatures*
+(returns `SgFinding[]`, does not take one), and the id list is derived from the
+source, so a finding added later either gets a fixture or fails the gate.
+
+The two bases that cite nothing used to be one. Every empty-evidence finding
+carried `basis: 'absence'`, including the ones whose own `detail` said the
+opposite: `spf-inconclusive`'s text is "this is a missing answer, not a missing
+record", printed directly above a footer reading "Based on the absence of a
+record rather than on one." Nothing in the type distinguished a lookup that
+failed from a record that was confirmed gone, so both produced `evidence: []`
+and both rendered the same footer. `dmarc-inconclusive`, `mx-inconclusive`, the
+no-policy-found-at-all branch of `caa-inconclusive`, and `resolvers-unreachable`
+carried the same contradiction. `mx-unchecked`, `cname-unchecked`, the
+found-a-parent-policy branch of `caa-inconclusive`, and `zone-servfail` did
+not, because each of those cites a real record — the MX or CNAME entry that
+did answer, the parent's CAA policy, or the SERVFAIL transcript itself — and
+correctly stays `basis: 'record'`. The footer in `panels.ts` now switches on
+`f.basis`, not only on whether `f.evidence` is empty.
 
 Note also what DNS Sightline refuses to claim. "Dangling" means **NXDOMAIN** at
 the CNAME target, never "no address record" — a name that exists carrying only
@@ -642,6 +659,24 @@ to it the day it ships. What that property cannot check is the opposite
 direction — a conclusion wrongly *withheld* — because one present world does not
 stand for every present world; the NXDOMAIN case and the one below have direct
 assertions instead.
+
+The same runs now also hold the *label* these findings carry, not just their
+presence, because "not evidence of anything" and "confirmed to be nothing" used
+to be the same `basis`. Two more assertions, both without a list of findings:
+every finding that cites nothing in one of the unanswered runs, and did not
+already cite nothing in the fully-answered baseline, must carry
+`basis: 'unanswered'` rather than `'absence'`; and no present or absent run —
+0, 3, or the untouched baseline, all of them real answers — may produce a
+`basis: 'unanswered'` finding at all. That pair is what pins
+`spf-inconclusive`, `dmarc-inconclusive`, `mx-inconclusive`, the
+no-policy-found-at-all branch of `caa-inconclusive`, and `resolvers-unreachable`
+to `'unanswered'` today. Reverting any one of them back to `'absence'` fails the
+first assertion; making `spf-missing` (or any confirmed-absence finding) emit
+`'unanswered'` on an answered fixture fails the second — both were run by hand
+against this fixture world before either assertion shipped. A separate,
+narrower check renders the actual footer HTML for both bases and asserts the
+two sentences differ, because a `basis` assigned correctly is not the same
+claim as a footer worded correctly.
 
 ### A conclusion that does not depend on X must not be gated on X
 

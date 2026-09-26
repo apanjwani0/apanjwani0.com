@@ -21,9 +21,11 @@
  * is being believed, and the failure mode is not a crash: it is a confident
  * sentence about a zone that is fine. So `SgFinding.evidence` carries the
  * literal record strings the finding was derived from, `basis: 'absence'` marks
- * the findings that are *about* a record not existing (the only ones allowed to
- * cite nothing), and `security:smoke` asserts that pairing on every producer —
- * not just on the ones the rule was written for.
+ * the findings that are *about* a record not existing, and `basis: 'unanswered'`
+ * marks the ones whose premise is a lookup that got no answer at all (a
+ * SERVFAIL, a timeout, the query budget or the deadline) — those two, and only
+ * those two, are allowed to cite nothing, and `security:smoke` asserts that
+ * pairing on every producer, not just on the ones the rule was written for.
  *
  * All module-level names are sg-/SG_-prefixed because tool component files
  * share one script namespace (`cs` is Chainsaw's, `lp` is Link Peek's, `sl` is
@@ -58,12 +60,22 @@ export interface SgFinding {
   detail: string
   /**
    * The literal record text this finding was derived from. Empty is legal only
-   * when `basis === 'absence'` — a finding about a record that is not there has
-   * nothing to quote, and saying so explicitly is what stops "no evidence" from
-   * quietly becoming the normal case.
+   * when `basis` is `'absence'` or `'unanswered'` — a finding about a record
+   * that is not there, or about a lookup that never came back, has nothing to
+   * quote, and saying so explicitly is what stops "no evidence" from quietly
+   * becoming the normal case.
    */
   evidence: string[]
-  basis: 'record' | 'absence'
+  /**
+   * What kind of premise this finding rests on. `'record'` cites something real
+   * and must never be empty; `'absence'` is a *confirmed* absence (the lookup
+   * answered, and answered with nothing); `'unanswered'` is a lookup that got no
+   * answer at all, which is not evidence of anything. Collapsing the last two
+   * used to put "Based on the absence of a record rather than on one" under a
+   * finding whose own sentence said "this is a missing answer, not a missing
+   * record" — see AGENTS.md, "A finding cites the record it rests on".
+   */
+  basis: 'record' | 'absence' | 'unanswered'
 }
 
 /**
@@ -709,7 +721,7 @@ export function sgSpfFindings(spf: SgSpfReport, domain: string, outage: SgOutage
         ? `Every resolver asked returned SERVFAIL for the TXT lookup at ${domain}, so whether it publishes SPF is unknown. ${SG_ZONE_FAILING}`
         : `The TXT lookup for ${domain} got no answer, so whether it publishes SPF is unknown — this is a missing answer, not a missing record. Re-run the inspection before concluding that no sender is authorised.`,
       evidence: [],
-      basis: 'absence',
+      basis: 'unanswered',
     })
     return out
   }
@@ -888,7 +900,7 @@ export function sgDmarcFindings(d: SgDmarcReport, domain: string, outage: SgOuta
         ? `The lookup got no answer, and every resolver asked returned SERVFAIL for every question about ${domain}, so whether a policy is published is unknown. ${SG_ZONE_FAILING}`
         : 'The lookup got no answer, so whether a policy is published is unknown — a missing answer, not a missing record. Re-run the inspection before concluding there is no DMARC.',
       evidence: [],
-      basis: 'absence',
+      basis: 'unanswered',
     })
     return out
   }
@@ -1107,7 +1119,7 @@ export function sgCaaFindings(v: SgCaaVerdict, name: string, wantedCa: string | 
         ? `Every resolver asked returned SERVFAIL for the CAA lookup at ${name}, so whether any policy governs it is unknown — which is not the same as knowing that none does. ${SG_ZONE_FAILING}`
         : `At least one CAA lookup for ${name} failed or was refused, so the absence of a policy here is not a finding — it is a missing answer. Re-run the inspection before concluding that any CA may issue.`,
       evidence: [],
-      basis: 'absence',
+      basis: 'unanswered',
     })
     return out
   }
@@ -1272,7 +1284,7 @@ export function sgMxFindings(mx: SgAnswer, targets: SgMxTarget[], outage: SgOuta
         ? `Every resolver asked returned SERVFAIL for the MX lookup, so whether this domain receives mail — and where — is unknown. ${SG_ZONE_FAILING}`
         : 'The MX lookup got no answer, so whether this domain receives mail — and where — is unknown. A missing answer is not a missing record; re-run the inspection.',
       evidence: [],
-      basis: 'absence',
+      basis: 'unanswered',
     })
     return out
   }
@@ -1626,7 +1638,7 @@ export function sgReachabilityFindings(diffs: SgDiff[], name: string): SgFinding
       `${said.join(' ')} Nothing below is an observation about the zone` +
       (replied.size ? '. Try again in a moment.' : ', and nothing here means your domain is broken — it means this tool could not ask. Try again in a moment.'),
     evidence: [],
-    basis: 'absence',
+    basis: 'unanswered',
   }]
 }
 

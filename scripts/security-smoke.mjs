@@ -6662,12 +6662,15 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   for (const f of everyFinding) {
     assert.ok(f.id && f.title && f.detail, `a finding needs an id, a title and a detail: ${JSON.stringify(f)}`)
     assert.ok(['error', 'warn', 'info'].includes(f.level), `${f.id} has a real level`)
-    assert.ok(['record', 'absence'].includes(f.basis), `${f.id} declares its basis`)
+    // 'absence' and 'unanswered' are the only bases allowed to cite no record —
+    // 'record' must always cite something, and citing nothing is not a third
+    // option for either of the other two.
+    assert.ok(['record', 'absence', 'unanswered'].includes(f.basis), `${f.id} declares its basis`)
     if (f.basis === 'record') {
       assert.ok(f.evidence.length > 0, `${f.id} claims to rest on a record and cites none`)
       assert.ok(f.evidence.every(e => typeof e === 'string' && e.trim()), `${f.id} cites an empty string as evidence`)
     } else {
-      assert.equal(f.evidence.length, 0, `${f.id} is about an absent record and must cite nothing`)
+      assert.equal(f.evidence.length, 0, `${f.id} rests on '${f.basis}' and must cite nothing`)
     }
     seenIds.add(f.id)
   }
@@ -7728,9 +7731,14 @@ console.log('boot check: starts the entry the Dockerfile runs, no inherited env 
     const stoppedFinding = full.findings.find(f => f.id === 'resolvers-unreachable')
     assert.ok(/time limit/.test(stoppedFinding.detail) && !/could not reach/.test(stoppedFinding.detail),
       `a deadline is not an unreachable resolver: ${stoppedFinding.detail}`)
+    // A second, real-behaviour check of the same basis rule section 4 proves
+    // over a stub zone: nothing here was answered, so nothing here may cite a
+    // record, and the finding that cites nothing must say 'unanswered'.
+    assert.equal(stoppedFinding.basis, 'unanswered', `resolvers-unreachable: a real deadline is not a confirmed absence`)
     for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
       const f = full.findings.find(x => x.id === id)
       assert.ok(/re-run the inspection/i.test(f.detail) && !/zone itself is failing/.test(f.detail), `${id}: the deadline is this tool's miss, so re-running is the advice`)
+      assert.equal(f.basis, 'unanswered', `${id}: a real deadline is not a confirmed absence`)
     }
     assert.equal(full.spf.truncated, true)
     assert.equal(full.caa.incomplete, true)
@@ -8375,6 +8383,7 @@ console.log('dns sightline follow-ups: sgUnanswered is the only test of an answe
    never came. */
 {
   const sg = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const panels = await import('../src/components/tools/dns-sightline/panels.ts')
   const noAnswer = (name, type) => ({ resolver: 'f', type, name, rcode: 'ERROR', records: [], elapsedMs: 0, error: 'no answer within 4000ms' })
   const answer = (name, type, datas, rcode = datas.length ? 'NOERROR' : 'NXDOMAIN') =>
     ({ resolver: 'f', type, name, rcode, records: datas.map(d => ({ type: 16, name, data: d, ttl: 60 })), elapsedMs: 0 })
@@ -8440,7 +8449,22 @@ console.log('dns sightline follow-ups: sgUnanswered is the only test of an answe
      which is the only way three lookups can be absent together (a dangling
      CNAME). A finding in exactly one of present/absent depends on that
      question, so it must not be drawn when the question went unanswered. No id
-     is listed; the dependence is read off the module's own behaviour. */
+     is listed; the dependence is read off the module's own behaviour.
+
+     The same runs also hold the LABEL, not just the presence, of the
+     empty-evidence findings: 'absence' and 'unanswered' are the only bases
+     allowed to cite nothing, and this is what tells them apart. A finding that
+     cites nothing in a present/absent world (0 or 3 — both real answers) is a
+     confirmed absence; one that cites nothing only once a lookup got no answer
+     at all (2 or 'unreachable') is not — it used to be labelled the same way,
+     which is what put "Based on the absence of a record rather than on one"
+     under a finding whose own sentence said "this is a missing answer, not a
+     missing record". No id is listed here either: a finding with real evidence
+     (`mx-unchecked`, `cname-unchecked`, the found-a-parent-policy branch of
+     `caa-inconclusive`, `zone-servfail`) can appear in either kind of run and
+     stays `'record'`, which is exactly why the check is scoped to
+     `evidence.length === 0` rather than to "any finding new under this
+     perturbation". */
   const world = {
     'example.test': {
       A: ['93.184.216.34'], MX: ['10 mail.example.test.'], NS: ['a.ns.test.', 'b.ns.test.'],
@@ -8459,9 +8483,16 @@ console.log('dns sightline follow-ups: sgUnanswered is the only test of an answe
   const dependsOn = new Set()
   let compared = 0
   const absentBasis = new Set()
+  const unansweredBasis = new Set()
   for (const inspected of ['example.test', 'www.example.test']) {
     const asked = new Set()
-    const present = idsOf(await sgInspectOver(world, (r, n, t) => { asked.add(`${n} ${t}`) }, inspected))
+    const baseline = await sgInspectOver(world, (r, n, t) => { asked.add(`${n} ${t}`) }, inspected)
+    const present = idsOf(baseline)
+    // New assertion 2, on the baseline itself: every lookup answered here, so
+    // nothing may cite basis 'unanswered'.
+    for (const f of baseline.findings) {
+      assert.notEqual(f.basis, 'unanswered', `${inspected}: "${f.id}" carries basis 'unanswered' although every lookup answered`)
+    }
     const questions = [...asked].map(q => q.split(' '))
     assert.ok(questions.length >= 12, `${inspected}: the inspection asked the questions it walks (${questions.length})`)
     const names = [...new Set(questions.map(([n]) => n))]
@@ -8472,9 +8503,36 @@ console.log('dns sightline follow-ups: sgUnanswered is the only test of an answe
     for (const p of perturbations) {
       const run = async with_ => sgInspectOver(world, (r, n, t) => (p.hits(n, t) ? with_ : undefined), inspected)
       const absents = await Promise.all([run(0), run(3)])
-      for (const a of absents) for (const f of a.findings) if (f.basis === 'absence') absentBasis.add(f.id)
+      for (const a of absents) {
+        for (const f of a.findings) {
+          if (f.basis === 'absence') absentBasis.add(f.id)
+          // New assertion 2, over the absent worlds too: an empty NOERROR and
+          // an NXDOMAIN are both real answers, so neither world may produce an
+          // 'unanswered'-basis finding either.
+          assert.notEqual(f.basis, 'unanswered', `${inspected}, ${p.label} absent: "${f.id}" carries basis 'unanswered' although the lookup answered, with an absence`)
+        }
+      }
       for (const unanswered of [2, 'unreachable']) {
-        const u = idsOf(await run(unanswered))
+        const result = await run(unanswered)
+        const u = idsOf(result)
+        // New assertion 1: a finding that cites nothing here, and that was NOT
+        // already true in the fully-answered baseline, was introduced by THIS
+        // perturbation's failure — not a confirmed absence (the present/absent
+        // runs above own that label) — so it must say 'unanswered'. The
+        // `!present.has` guard matters: an unrelated, genuinely-absent record
+        // elsewhere in the zone (e.g. `spf-missing` at a name with no SPF at
+        // all) still shows up in every run regardless of this perturbation, and
+        // is correctly `'absence'` throughout. Scoped to `evidence.length ===
+        // 0`: a record-based finding (evidence rule above) can legitimately
+        // appear only under this perturbation too (`mx-unchecked`,
+        // `zone-servfail`, …) without being about "no answer".
+        for (const f of result.findings) {
+          if (f.evidence.length === 0 && !present.has(f.id)) {
+            assert.equal(f.basis, 'unanswered',
+              `${inspected}, ${p.label} unanswered (${unanswered}): "${f.id}" cites nothing while a lookup got no answer, so its basis must be 'unanswered' (got '${f.basis}')`)
+            unansweredBasis.add(f.id)
+          }
+        }
         for (const absent of absents.map(idsOf)) {
           const rests = [...present].filter(id => !absent.has(id)).concat([...absent].filter(id => !present.has(id)))
           for (const id of rests) {
@@ -8498,5 +8556,23 @@ console.log('dns sightline follow-ups: sgUnanswered is the only test of an answe
   for (const id of ['dmarc-at-apex', 'mx-unresolvable', 'cname-hosted', 'cname-dangling']) {
     assert.ok(dependsOn.has(id), `the fixture world reaches ${id} (the findings this block was written for)`)
   }
+  // The mirror-image coverage check for 'unanswered': not vacuous, and it
+  // reaches every finding this fix was written for.
+  assert.ok(unansweredBasis.size >= 5, `the unanswered worlds produced unanswered findings to check (${[...unansweredBasis].join(', ')})`)
+  for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive', 'resolvers-unreachable']) {
+    assert.ok(unansweredBasis.has(id), `the fixture world reaches ${id} under a lookup that got no answer`)
+  }
+
+  /* ── 5. The footer itself, not just the data it switches on. ────────────────
+     A basis assigned correctly is not the same claim as a footer worded
+     correctly — the render function has its own branch, and this is the one
+     check that renders it. */
+  const footerFor = basis => {
+    const html = panels.sgRenderFindings({ findings: [{ id: 'x', level: 'info', title: 't', detail: 'd', evidence: [], basis }] })
+    return /<p data-type="sg-evidence-none">([^<]*)<\/p>/.exec(html)?.[1]
+  }
+  assert.equal(footerFor('absence'), 'Based on the absence of a record rather than on one.')
+  assert.equal(footerFor('unanswered'), 'Based on a lookup that got no answer.')
+  assert.notEqual(footerFor('absence'), footerFor('unanswered'), 'the two footers must read differently, or the basis is decorative')
 }
-console.log('dns sightline follow-ups: no finding rests on a lookup that got no answer (derived over every question the inspection asks), NXDOMAIN settles an MX target, and spf-no-all survives an unanswered include')
+console.log('dns sightline follow-ups: no finding rests on a lookup that got no answer (derived over every question the inspection asks, and over the basis those runs draw), NXDOMAIN settles an MX target, and spf-no-all survives an unanswered include')
