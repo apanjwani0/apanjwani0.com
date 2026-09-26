@@ -1308,12 +1308,12 @@ was a second, mirrored fixture that does.
 
 ## UI refresh (2026-09)
 
-The refresh is seven items. **A** (foundation) shipped first and defines the
-contract below; **B–G** build on it in parallel worktrees and document
-themselves in their own stubs at the end of this section — each item edits only
-its own stub, so their merges do not collide. Owner decisions that stand: refine
-the dark look (not a rebrand); tasteful motion, with `prefers-reduced-motion` as
-the off switch; the home hero is chosen separately (item E's seam).
+The refresh was planned as seven items. **A** (foundation) is built and defines
+the contract below. **B–G** are designed but **paused** (owner, 2026-09-26), so
+anything below marked *planned* does not exist yet; see *Paused items* at the end
+of this section. Owner decisions that stand: refine the dark look (not a rebrand);
+tasteful motion, with `prefers-reduced-motion` as the off switch; the home hero is
+being chosen separately.
 
 **Modules.** Each has no DOM access at module scope.
 
@@ -1363,11 +1363,11 @@ access in a `try`. It restates `resolveTheme` because it cannot import it, so
 (the SSR theme, rendered by both shells beside `data-theme`). Nav buttons
 `button[data-action="palette" | "theme" | "shortcuts"]` stay `visibility:
 hidden` until `data-js` (the rule is in `shared.css`).
-`button[data-type="kit-star"][data-slug][aria-pressed]`,
-`section[data-type="kit-shelf"]`, `div[data-type="detail-actions"][data-dock]`.
+*Planned*, and rendered by nothing yet: `button[data-type="kit-star"][data-slug][aria-pressed]`,
+`section[data-type="kit-shelf"]` and `div[data-type="detail-actions"][data-dock]`.
 Base takes a `canonicalPath` prop for pages that render any query string.
 
-**View-transition names.** `vt-title` is the page h1 (a static rule in
+**View-transition names** (*planned*, item E; no stylesheet declares one yet). `vt-title` is the page h1 (a static rule in
 `shared.css`) and, during a navigation, the clicked card's
 `[data-type="card-title"]`; while a card holds it, `html[data-vt-source]` clears
 the source page's own h1, because two elements with one name abort the
@@ -1377,56 +1377,22 @@ stylesheet declares `view-transition-name`.
 **Tokens** (`theme.css`): `--color-surface-2`, `--color-accent-soft`,
 `--shadow-1/2/3`, `--glow-accent`, `--lift`, `--motion-fast/base/page`,
 `--ease-out`, `--ease-in-out`, `--control-*`, `--tab-*`, `--badge-*`,
-`--text-card`, `--thumb-ratio`. Badges are `[data-type="badge"][data-tone=
+`--text-card`, `--thumb-ratio`. Badges (*planned*, item G) are `[data-type="badge"][data-tone=
 "success | accent | muted"]` (plus `data-streak`), defined only in
 `src/styles/controls.css` (item G).
 
-<!-- Each stub below belongs to one item. Edit only your own; leave the three
-     `·` lines between stubs untouched so parallel merges stay clean. -->
+### Paused items
 
-### B. Theme — live switching everywhere
-
-*Stub — item B fills this in.*
-
-·
-·
-·
-
-### C. Command palette & shortcuts
-
-*Stub — item C fills this in (plus Security bullets for the 404 and `/search.json`).*
-
-·
-·
-·
-
-### D. Toolkit
-
-*Stub — item D fills this in (plus Security bullets for `/tools/kit`).*
-
-·
-·
-·
-
-### E. Shells, nav, motion and the home seam
-
-*Stub — item E fills this in (the width contract, the actions dock, view transitions vs ClientRouter, the hero seam).*
-
-·
-·
-·
-
-### F. Hubs, thumbnails and share cards
-
-*Stub — item F fills this in (and updates Share cards: the site card, thumbnails, `npm run thumbs`).*
-
-·
-·
-·
-
-### G. One control kit
-
-*Stub — item G fills this in (and replaces the "One disabled treatment" bullet in Design System).*
+B (live theme switching everywhere, with the toggle), C (command palette, `?`
+shortcut sheet, smart 404), D (toolkit: stars, shelf, `/tools/kit`, bookmarks
+export), E (shells, nav, motion, the home hero seam), F (hub thumbnails and share
+cards) and G (one control kit) are not built. Until they are, the light theme
+renders only for a visitor who already stored the preference, `kit.ts`,
+`fuzzy.ts` and `shortcuts.ts` have no UI caller, and the four `init*` entry
+points `site-ui.ts` calls are empty: they are the interfaces those items build on,
+covered by
+`security:smoke` so they cannot rot in the meantime. The empty, labelled regions
+at the end of `scripts/security-smoke.mjs` are where each item's assertions go.
 
 ## Skills & Commands
 
