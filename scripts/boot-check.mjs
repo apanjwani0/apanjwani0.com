@@ -12,12 +12,17 @@
  * container had been stopped: it finds this class of failure with the site
  * already down.
  *
- * This builds nothing. It starts dist/server/entry.mjs the way the image does
- * (from the directory holding dist/, which is what og.ts resolves cards
+ * This builds nothing. It starts dist/server/entry.mjs with the image's own
+ * command (from the directory holding dist/, which is what og.ts resolves cards
  * against), on a free loopback port, requests `/`, and requires a complete 200
  * HTML page AND a process still alive a moment later — a server that answers
  * once and then dies on an unhandled rejection is as dead as one that never
  * started. Then it stops the server.
+ *
+ * Run locally it sees YOUR node_modules (devDependencies included), your OS
+ * and your user, so a server that only a devDependency keeps alive passes here.
+ * That is why the Dockerfile runs this same script again inside its runtime
+ * stage, on the production-only tree, as the container's user.
  *
  * Exit 0 = it boots and serves. Non-zero = it does not, and its output is printed.
  */
@@ -89,6 +94,12 @@ async function stop() {
   const timer = setTimeout(() => child.kill('SIGKILL'), 5_000)
   await exit
   clearTimeout(timer)
+}
+
+// Stopped from outside (a pass timing out, CI sending SIGTERM to npm), take the
+// server down too, or it outlives this script holding its loopback port.
+for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+  process.once(signal, () => stop().then(() => process.exit(code)))
 }
 
 async function fail(msg) {

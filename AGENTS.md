@@ -63,7 +63,7 @@ no longer gives a `pipeline` (11.1.6 calls `app.getLogger()`), so `node
 dist/server/entry.mjs` — the Dockerfile `CMD` — threw a `TypeError` on boot
 while `build` and `check` were both green. `npm run
 boot:check` (`scripts/boot-check.mjs`) closes it: after a build it starts that
-entry point the way the image does, on a free loopback port, and requires a
+entry point with the image's own command, on a free loopback port, and requires a
 complete 200 HTML page from `/` plus a process still alive a second later. It
 deletes `ASTRO_NODE_LOGGING` from the child's env on purpose — that variable
 switches off exactly the branch that crashed, so inheriting it from a shell
