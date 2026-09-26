@@ -7571,6 +7571,8 @@ console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unr
   assert.ok(/spawn\(process\.execPath, \[entry\]/.test(bootSrc), 'the boot check runs the entry under node itself')
   assert.ok(/^delete env\.ASTRO_NODE_LOGGING$/m.test(bootSrc),
     'the boot check must scrub ASTRO_NODE_LOGGING — inherited, it disables the branch that crashed')
+  assert.ok(/\['SIGINT', 130\], \['SIGTERM', 143\]\]\)\s*\{\s*process\.once\(signal, \(\) => stop\(\)\.then/.test(bootSrc),
+    'the boot check stops its server when it is itself interrupted, or the server outlives it on its port')
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf-8'))
   assert.equal(pkg.scripts['boot:check'], 'node scripts/boot-check.mjs', 'npm run boot:check is the documented entry')
 
