@@ -5843,17 +5843,22 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
 {
   const themeSrc = await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8')
 
-  // Pull one palette out of a selector block. Only hex tokens participate —
-  // `--color-bg-blur` is an rgba() over whatever is behind it and has no fixed
-  // ratio to compute against.
+  // Pull one palette out of a selector block. Comments are stripped FIRST and
+  // the block is found by its exact selector at the start of a rule: theme.css
+  // documents its blocks at length, and the old first-`indexOf` parse would
+  // have started at the first comment that mentioned `:root` and stopped at the
+  // first brace a comment quoted. Only hex tokens participate — `--color-bg-blur`
+  // is an rgba() over whatever is behind it and has no fixed ratio.
+  const themeCode = themeSrc.replace(/\/\*[\s\S]*?\*\//g, '')
+  const blockOf = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const found = [...themeCode.matchAll(new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))]
+    assert.equal(found.length, 1, `theme.css defines exactly one ${selector} block`)
+    return found[0][1]
+  }
   const paletteIn = (selector) => {
-    const at = themeSrc.indexOf(selector)
-    assert.notEqual(at, -1, `theme.css still defines ${selector}`)
-    const open = themeSrc.indexOf('{', at)
-    const close = themeSrc.indexOf('}', open)
-    const body = themeSrc.slice(open, close)
     const out = {}
-    for (const [, name, hex] of body.matchAll(/--color-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)) out[name] = hex.toLowerCase()
+    for (const [, name, hex] of blockOf(selector).matchAll(/--color-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)) out[name] = hex.toLowerCase()
     return out
   }
   const light = paletteIn(':root')
@@ -5885,6 +5890,14 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
     ['accent', 'bg'], ['accent', 'surface'],
     ['error', 'bg'], ['error', 'surface'],
     ['success', 'bg'], ['success', 'surface'],
+    // The second raised surface is where the refresh's chrome sits (palette,
+    // sheet, kit shelf), so every ink that sits on a surface must clear AA on
+    // it too. This pairing is what forced the 2026-09-25 nudges: dark muted
+    // held 4.33:1 here and light success 4.502:1.
+    ['text', 'surface-2'], ['muted', 'surface-2'], ['accent', 'surface-2'],
+    ['error', 'surface-2'], ['success', 'surface-2'],
+    // The accent tint takes --color-text and nothing else (theme.css says why).
+    ['text', 'accent-soft'],
     // The label on an accent-filled button — the one place --color-bg is ink.
     ['bg', 'accent'],
   ]
@@ -5899,6 +5912,40 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
         `${name}: --color-${ink} (${palette[ink]}) on --color-${ground} (${palette[ground]}) is ${r.toFixed(2)}:1 — under the ${AA_NORMAL}:1 WCAG AA floor for normal text`,
       )
     }
+  }
+
+  // Each theme pins the scheme the UA and Oat resolve against. Oat declares
+  // `color-scheme: light dark` on the root inside a cascade layer, so without
+  // these every light-dark() token it ships and every native control follows
+  // the OS rather than data-theme — JSON Tidy's checkboxes rendered as white
+  // squares on the dark site under a light-mode OS.
+  // (mutation: delete the dark block's declaration → fails)
+  assert.match(blockOf(':root'), /(?:^|;)\s*color-scheme\s*:\s*light\s*;/,
+    'the light root pins color-scheme: light, outranking Oat\'s layered `light dark`')
+  assert.match(blockOf('[data-theme="dark"]'), /(?:^|;)\s*color-scheme\s*:\s*dark\s*;/,
+    'the dark theme pins color-scheme: dark — without it Oat\'s tokens and native controls follow the OS')
+
+  // The browser chrome colour the bootstrap writes is each theme's own page
+  // background, not a second copy of it that can drift.
+  const { THEME_COLOR } = await import('../src/lib/theme.ts')
+  assert.equal(THEME_COLOR.light, light.bg, 'THEME_COLOR.light is the light --color-bg')
+  assert.equal(THEME_COLOR.dark, dark.bg, 'THEME_COLOR.dark is the dark --color-bg')
+
+  // The Oat bridge: Oat's own tokens point at the site's, so a stock Oat
+  // component lands in the site palette. Every ink-on-fill pair the bridge
+  // creates is a text pairing, so each must be one the sweep above holds to AA
+  // — a bridge edit that puts Oat's muted text on a tint nobody measured fails
+  // here. (mutation: bridge --muted to --color-accent-soft → fails)
+  const bridged = Object.fromEntries([...blockOf(':root').matchAll(/(?:^|;)\s*--([a-z-]+)\s*:\s*var\(--((?:color|font)-[a-z0-9-]+)\)\s*(?=;)/g)]
+    .map(m => [m[1], m[2]]))
+  for (const name of ['background', 'foreground', 'card', 'card-foreground', 'border', 'input', 'ring',
+    'primary', 'primary-foreground', 'muted', 'muted-foreground', 'font-sans']) {
+    assert.ok(bridged[name], `theme.css bridges Oat's --${name} to a site token`)
+  }
+  for (const [ink, fill] of [['foreground', 'background'], ['card-foreground', 'card'], ['primary-foreground', 'primary'], ['muted-foreground', 'muted']]) {
+    const [i, g] = [bridged[ink], bridged[fill]].map(t => t.replace(/^color-/, ''))
+    assert.ok(textPairings.some(([a, b]) => a === i && b === g),
+      `the bridge puts --color-${i} ink on --color-${g} (Oat's --${ink} on --${fill}), a pairing the AA sweep does not hold`)
   }
 
   // …and the last pairing is a claim about the code, so it is read from the
@@ -8074,3 +8121,360 @@ console.log('pr 19 review: a retired learning answers 301 to the hub, the publis
     'origin-check compares the header nonce with the body nonce on /zz, /tools/zz and /a/b/c')
 }
 console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard at source, statuses held to astro\'s own list, and the deployed probe in origin-check)')
+
+/* ── The spacing rungs increase in their documented order ──────────────────
+   --space-xs (0.45rem) once sat ABOVE --space-sm (0.4rem), so "a little more
+   room" meant going down a size. Every --space-* token is either a rung of the
+   documented order, declared smallest first, or a named layout measurement.
+   (mutation: swap the xs/sm values back → fails) */
+{
+  const themeCode = (await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+  const rootBlock = themeCode.match(/(?:^|\})\s*:root\s*\{([^}]*)\}/)[1]
+  const declared = [...rootBlock.matchAll(/--space-([a-z0-9-]+)\s*:\s*([\d.]+)rem\s*;/g)].map(m => [m[1], Number(m[2])])
+  const RUNGS = ['2xs', 'xs', 'sm', 'md', 'lg', 'xl', 'card', 'section']
+  const MEASUREMENTS = ['page-x', 'header-offset']
+  assert.deepEqual(declared.map(([n]) => n).filter(n => !MEASUREMENTS.includes(n)), RUNGS,
+    'every --space-* token is a rung of the documented order (declared smallest first, in rem) or a named measurement')
+  const rung = Object.fromEntries(declared)
+  for (let i = 1; i < RUNGS.length; i += 1) {
+    assert.ok(rung[RUNGS[i]] > rung[RUNGS[i - 1]],
+      `--space-${RUNGS[i]} (${rung[RUNGS[i]]}rem) must be larger than --space-${RUNGS[i - 1]} (${rung[RUNGS[i - 1]]}rem)`)
+  }
+}
+
+/* ── The head bootstrap agrees with resolveTheme, whatever storage does ────
+   ROOT_BOOT_JS runs before first paint, so it cannot import resolveTheme; it
+   restates it. Run for real in a sandbox over the whole truth table — stored
+   preference (absent, each value, junk, a storage getter that THROWS as a
+   private window's does) × OS scheme (dark, light, matchMedia throwing) × the
+   site default — and held to the function. No stored preference means the
+   site default, never the OS, and that is pinned separately so the two cannot
+   be changed together into agreeing on the wrong rule.
+   (mutation: make the bootstrap default to the OS scheme → fails) */
+{
+  const vm = await import('node:vm')
+  const { ROOT_BOOT_JS, THEME_COLOR, resolveTheme, patchIncomingDocument } = await import('../src/lib/theme.ts')
+  const { sanitizeKit, KIT_MAX } = await import('../src/lib/kit.ts')
+  assert.equal(resolveTheme(null, 'dark', false), 'dark', 'no stored preference is the site default, not a light OS')
+  assert.equal(resolveTheme(null, 'light', true), 'light', '…and not a dark OS either')
+  assert.equal(resolveTheme('system', 'dark', false), 'light', 'system follows the OS')
+
+  const THROWS = Symbol('throws')
+  const show = v => (v === THROWS ? 'throws' : String(v))
+  const fakeEl = (attrs = {}) => {
+    const a = new Map(Object.entries(attrs))
+    return { getAttribute: n => (a.has(n) ? a.get(n) : null), setAttribute: (n, v) => { a.set(n, String(v)) }, removeAttribute: n => { a.delete(n) } }
+  }
+  const fakeDoc = (ssr, attrs = {}) => {
+    const metas = { 'meta[name="theme-color"]': fakeEl({ content: THEME_COLOR[ssr] }), 'meta[name="color-scheme"]': fakeEl({ content: ssr }) }
+    return { documentElement: fakeEl({ 'data-theme': ssr, 'data-theme-default': ssr, ...attrs }), querySelector: sel => metas[sel] ?? null, metas }
+  }
+  const boot = ({ ssr = 'dark', store = {}, os = false }) => {
+    const document = fakeDoc(ssr)
+    const context = { document }
+    if (store === THROWS) Object.defineProperty(context, 'localStorage', { get() { throw new Error('SecurityError: storage disabled') } })
+    else context.localStorage = { getItem: k => (Object.hasOwn(store, k) ? store[k] : null) }
+    context.matchMedia = os === THROWS ? () => { throw new Error('no matchMedia') } : () => ({ matches: os })
+    vm.runInNewContext(ROOT_BOOT_JS, context)
+    return document
+  }
+
+  let rows = 0
+  for (const ssr of ['dark', 'light']) {
+    for (const stored of [undefined, 'light', 'dark', 'system', 'Dark', 'garbage', THROWS]) {
+      for (const os of [true, false, THROWS]) {
+        const doc = boot({ ssr, os, store: stored === THROWS ? THROWS : stored === undefined ? {} : { 'theme:v1': stored } })
+        const pref = ['light', 'dark', 'system'].includes(stored) ? stored : null
+        const want = resolveTheme(pref, ssr, os === true)
+        const at = `(site ${ssr}, stored ${show(stored)}, OS dark ${show(os)})`
+        const el = doc.documentElement
+        assert.equal(el.getAttribute('data-theme'), want, `the bootstrap and resolveTheme disagree ${at}`)
+        assert.equal(el.getAttribute('data-theme-pref'), pref, `data-theme-pref mirrors only a valid stored preference ${at}`)
+        assert.equal(el.getAttribute('data-js'), '', `the bootstrap marks data-js ${at}`)
+        assert.equal(doc.metas['meta[name="theme-color"]'].getAttribute('content'), THEME_COLOR[want], `theme-color follows the theme ${at}`)
+        assert.equal(doc.metas['meta[name="color-scheme"]'].getAttribute('content'), want, `the color-scheme meta follows the theme ${at}`)
+        rows += 1
+      }
+    }
+  }
+  assert.equal(rows, 42, 'the whole truth table ran')
+
+  // data-kit is the count sanitizeKit would keep, so the shelf can reserve its
+  // height before the kit script runs — and nothing when storage says nothing.
+  const thirty = Array.from({ length: 30 }, (_, i) => `tool-${i}`)
+  for (const [raw, slugs] of [
+    [undefined, null],
+    [JSON.stringify({ v: 1, slugs: ['json-tidy', 'regex-lab', 'json-tidy', 'BAD', 'constructor', 7, 'a'.repeat(49)] }), 'from-raw'],
+    [JSON.stringify({ v: 1, slugs: thirty }), 'from-raw'],
+    [JSON.stringify({ v: 2, slugs: ['json-tidy'] }), null],
+    [JSON.stringify({ v: 1, slugs: 'json-tidy' }), null],
+    ['not json', null],
+    [THROWS, null],
+  ]) {
+    const doc = boot({ store: raw === THROWS ? THROWS : raw === undefined ? {} : { 'kit:v1': raw } })
+    const count = slugs === 'from-raw' ? sanitizeKit(JSON.parse(raw).slugs).length : 0
+    assert.equal(doc.documentElement.getAttribute('data-kit'), count ? String(count) : null,
+      `data-kit agrees with sanitizeKit for ${show(raw).slice(0, 60)}`)
+  }
+  assert.equal(sanitizeKit(thirty).length, KIT_MAX, 'the 30-slug fixture really exercised the cap')
+
+  // It is inert markup-wise and rendered exactly one way: through set:html, with
+  // the page nonce, ahead of every stylesheet in Head.astro.
+  assert.equal(/<\/script|<!--/i.test(ROOT_BOOT_JS), false, 'the bootstrap cannot close its own <script> element')
+  const headSrc = await readFile(new URL('../src/components/Head.astro', import.meta.url), 'utf-8')
+  const bootTag = headSrc.indexOf('<script is:inline nonce={cspNonce} set:html={ROOT_BOOT_JS} />')
+  assert.ok(bootTag !== -1, 'Head.astro renders ROOT_BOOT_JS inline, with the nonce, through set:html')
+  assert.ok(bootTag < headSrc.indexOf('rel="stylesheet"') && bootTag > headSrc.indexOf('<meta name="theme-color"'),
+    'the bootstrap sits after the metas it updates and before every stylesheet, which an inline script would otherwise wait for')
+
+  // ── The only inline executable script. ClientRouter re-inserts a changed
+  //    inline script under the new page's nonce, which the live CSP refuses,
+  //    so every <script> in the templates is bundled, external, JSON-LD data,
+  //    or THE bootstrap. (mutation: add an is:inline script to a page → fails)
+  const templates = []
+  const walkAstro = async dir => {
+    for (const e of await readdir(new URL(`${dir}/`, import.meta.url), { withFileTypes: true })) {
+      if (e.isDirectory()) await walkAstro(`${dir}/${e.name}`)
+      else if (e.name.endsWith('.astro')) templates.push(`${dir}/${e.name}`)
+    }
+  }
+  await walkAstro('../src')
+  const inline = []
+  for (const file of templates) {
+    for (const [tag] of (await readFile(new URL(file, import.meta.url), 'utf-8')).matchAll(/<script\b[^>]*>/g)) {
+      if (tag === '<script>' || /\bsrc="/.test(tag) || /type="application\/ld\+json"/.test(tag)) continue
+      inline.push(`${file.replace('../', '')}: ${tag}`)
+    }
+  }
+  assert.deepEqual(inline, ['src/components/Head.astro: <script is:inline nonce={cspNonce} set:html={ROOT_BOOT_JS} />'],
+    'the head bootstrap is the one inline executable script on the site')
+
+  // ── A ClientRouter swap keeps the client state: patchIncomingDocument copies
+  //    it onto the incoming document, presence AND absence.
+  //    (mutation: drop data-kit from ROOT_STATE_ATTRS → fails)
+  const saved = globalThis.document
+  try {
+    const live = fakeDoc('light', { 'data-theme-pref': 'light', 'data-js': '', 'data-kit': '3' })
+    globalThis.document = live
+    const incoming = fakeDoc('dark')
+    patchIncomingDocument(incoming)
+    for (const name of ['data-theme', 'data-theme-pref', 'data-js', 'data-kit']) {
+      assert.equal(incoming.documentElement.getAttribute(name), live.documentElement.getAttribute(name), `a swap carries ${name}`)
+    }
+    for (const meta of ['meta[name="theme-color"]', 'meta[name="color-scheme"]']) {
+      assert.equal(incoming.metas[meta].getAttribute('content'), live.metas[meta].getAttribute('content'), `a swap carries ${meta}`)
+    }
+    globalThis.document = fakeDoc('dark', { 'data-js': '' })
+    const stale = fakeDoc('dark', { 'data-theme-pref': 'system', 'data-kit': '2' })
+    patchIncomingDocument(stale)
+    assert.equal(stale.documentElement.getAttribute('data-theme-pref'), null, 'an absent preference stays absent across a swap')
+    assert.equal(stale.documentElement.getAttribute('data-kit'), null, 'an emptied kit stays empty across a swap')
+  } finally {
+    if (saved === undefined) delete globalThis.document
+    else globalThis.document = saved
+  }
+}
+
+/* ── Both shells wire the swap patch, and the chrome never pulls in the router ── */
+{
+  const siteUi = await readFile(new URL('../src/lib/site-ui.ts', import.meta.url), 'utf-8')
+  assert.ok(/document\.addEventListener\('astro:before-swap', onBeforeSwap\)/.test(siteUi)
+    && /function onBeforeSwap\([^)]*\)[^{]*\{[\s\S]*?patchIncomingDocument\(incoming\)/.test(siteUi),
+    'initSiteUI patches the incoming document on astro:before-swap — without it every Base navigation resets the theme')
+  for (const layout of ['Base.astro', 'ToolBase.astro']) {
+    const src = await readFile(new URL(`../src/layouts/${layout}`, import.meta.url), 'utf-8')
+    const script = src.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? ''
+    assert.ok(script.includes("import { initSiteUI } from '../lib/site-ui.ts'") && /\binitSiteUI\(\)/.test(script),
+      `${layout} calls initSiteUI() from its module script`)
+    assert.ok(/<html[^>]*data-theme=\{site\.theme\}[^>]*data-theme-default=\{site\.theme\}/.test(src),
+      `${layout} renders the site default twice: data-theme for first paint, data-theme-default for the bootstrap to fall back to`)
+  }
+  // The four feature modules load on ToolBase pages too, and importing the
+  // router client from any of them would put ClientRouter on those pages.
+  for (const mod of ['site-ui', 'theme-ui', 'find-ui', 'kit-ui', 'motion', 'theme', 'kit']) {
+    const src = await readFile(new URL(`../src/lib/${mod}.ts`, import.meta.url), 'utf-8')
+    assert.equal(/from ['"]astro:transitions\/client['"]/.test(src), false, `src/lib/${mod}.ts must not import astro:transitions/client`)
+  }
+  // The nav's JS-only buttons stay hidden until the bootstrap marks data-js.
+  const sharedSrc = (await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+  assert.ok(/html:not\(\[data-js\]\) button:is\(\[data-action="palette"\], \[data-action="theme"\], \[data-action="shortcuts"\]\)\s*\{\s*visibility:\s*hidden;/.test(sharedSrc),
+    'shared.css keeps the palette, theme and shortcut buttons invisible until data-js is set')
+}
+
+/* ── The sitemap is the site index, and matches the route it replaced ──────
+   The route used to compute its own page list; it now serialises
+   indexablePaths. `legacySitemap` below is the old route's logic, kept as the
+   oracle: it reads each kind's predicate directly and shares no code with
+   src/lib/site-index.ts, so the new route must equal it BYTE FOR BYTE across
+   blogs on and off, Driftfield live and wip, and fixtures carrying a wip tool
+   and a draft article. The palette's index is held to the same pages.
+   (mutations: let site-index list wip tools → fails; drop the modes from
+   buildSiteIndex → fails) */
+{
+  const { GET } = await import('../src/pages/sitemap.xml.ts')
+  const { buildSiteIndex, indexablePaths, loadSiteConfigs, projectAnchors } = await import('../src/lib/site-index.ts')
+  const { DRIFTFIELD_SLUG, isDriftfieldPublic } = await import('../src/lib/driftfield.ts')
+  const { escapeHtml } = await import('../src/lib/escape.ts')
+  const { posts } = await import('../src/config/blogs.ts')
+  const legacySitemap = ({ site: s, posts: ps, games: gs, tools: ts, learnings: ls }) => {
+    const blogsPublic = isBlogsPublic(s)
+    const published = ls.filter(isPublishedLearning)
+    const base = s.url.replace(/\/$/, '')
+    const normalize = href => (href.startsWith('http') ? href : href.startsWith('/') ? `${base}${href}` : `${base}/${href}`)
+    const latestPost = ps.reduce((max, p) => (p.date > max ? p.date : max), '')
+    const latestLearning = published.reduce((max, l) => (l.date > max ? l.date : max), '')
+    const pages = [
+      { loc: '/' }, { loc: '/projects' },
+      ...(blogsPublic ? [{ loc: '/blogs', lastmod: latestPost || undefined }] : []),
+      { loc: '/learnings', lastmod: latestLearning || undefined }, { loc: '/games' }, { loc: '/tools' },
+      ...(blogsPublic ? ps : []).filter(p => !/^https?:\/\//i.test(p.href))
+        .map(p => ({ loc: `/blogs/${p.href.replace(/^\/?(blogs\/)?/, '')}`, lastmod: p.date })),
+      ...published.map(l => ({ loc: `/learnings/${l.slug}`, lastmod: l.date })),
+      ...gs.filter(isPlayableGame).map(g => ({ loc: `/games/${g.slug}` })),
+      ...ts.filter(t => t.status === 'live').map(t => ({ loc: `/tools/${t.slug}` })),
+      ...(isDriftfieldPublic(ts) ? DRIFTFIELD_MODES.map(m => ({ loc: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` })) : []),
+    ]
+    const rows = pages.map(u => `  <url><loc>${escapeHtml(normalize(u.loc))}</loc>${u.lastmod ? `<lastmod>${escapeHtml(u.lastmod)}</lastmod>` : ''}</url>`)
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.join('\n')}\n</urlset>`
+  }
+  const tool = (slug, status) => ({ slug, title: slug, description: 'd', status })
+  const learning = (slug, published, content = 'a body') => ({ slug, title: slug, summary: 's', date: '2027-01-01', content, published })
+  let fixtures = 0
+  for (const blogs of [true, false]) {
+    for (const df of ['live', 'wip']) {
+      const fx = {
+        site: { ...site, sections: { ...site.sections, blogs } },
+        tools: [...tools.map(t => (t.slug === DRIFTFIELD_SLUG ? { ...t, status: df } : t)), tool('zz-wip', 'wip'), tool('zz-canary', 'live')],
+        learnings: [...learnings, learning('zz-draft', false), learning('zz-empty', true, '  '), learning('zz-canary-article', true)],
+        blogs: [...posts, { title: 'x', href: '/blogs/tabs-&-spaces', date: '2026-01-02', summary: 's' }, { title: 'y', href: 'https://example.com/p', date: '2027-02-02', summary: 's' }],
+      }
+      const locals = { runtime: { env: { SITE_CONFIG: { get: async key => fx[key] ?? null } } } }
+      const at = `(blogs ${blogs}, driftfield ${df})`
+      const configs = await loadSiteConfigs(locals)
+      const xml = await (await GET({ locals })).text()
+      assert.ok(xml.includes('/tools/zz-canary<') && xml.includes('/learnings/zz-canary-article<'), `the fixture config was read ${at}`)
+      assert.equal(xml, legacySitemap(configs), `the sitemap is byte-identical to the route it replaced ${at}`)
+      assert.ok(!xml.includes('zz-wip') && !xml.includes('zz-draft') && !xml.includes('zz-empty'), `no wip tool or unpublished article is sitemapped ${at}`)
+      const base = configs.site.url.replace(/\/$/, '')
+      const locs = [...xml.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1])
+      assert.deepEqual(locs, indexablePaths(configs).map(p => escapeHtml(`${base}${p.path}`)), `the sitemap lists exactly indexablePaths ${at}`)
+      const entryPaths = [...new Set(buildSiteIndex(configs).map(e => e.u.split('#')[0]))].sort()
+      assert.deepEqual(entryPaths, [...new Set(indexablePaths(configs).map(p => p.path))].sort(),
+        `every index entry points at an indexable page and every indexable page has an entry ${at}`)
+      fixtures += 1
+    }
+  }
+  assert.equal(fixtures, 4)
+  const entries = buildSiteIndex(await loadSiteConfigs({}))
+  const projectEntries = entries.filter(e => e.k === 'project')
+  assert.ok(projectEntries.length > 0 && projectEntries.every(e => /^\/projects#[a-z0-9-]+$/.test(e.u) && e.u === `/projects#${e.s}`),
+    'a project entry points at its own card on /projects')
+  assert.deepEqual(projectAnchors([{ title: 'Sort' }, { title: 'sort' }, { title: '!!!' }]), ['sort', 'sort-2', 'project'],
+    'project anchors are unique and never empty')
+}
+console.log('ui refresh: spacing rungs increase in order, the head bootstrap matches resolveTheme across the truth table and is the one inline script, a swap keeps the client state, and the sitemap equals both the route it replaced and the palette index')
+
+/* ── The kit parse is bounded, and its export writes nothing hostile ───────
+   A ?t= value is whatever a link says, and a stored kit is whatever a page
+   once wrote, so both go through the one bounded parser: live slugs only,
+   unique, in order, at most KIT_MAX, and nothing read past KIT_RAW_MAX.
+   A bookmarks file is imported straight into a browser, so every value is
+   escaped and only https URLs are written.
+   (mutations: remove the KIT_MAX cap → fails; drop quote escaping from the
+   bookmark titles → fails) */
+{
+  const { KIT_MAX, KIT_PARAM, KIT_RAW_MAX, bookmarksFile, kitHref, parseKitParam, sanitizeKit } = await import('../src/lib/kit.ts')
+  const live = tools.filter(t => t.status === 'live').map(t => t.slug)
+  assert.equal(KIT_PARAM, 't')
+  const forty = Array.from({ length: 40 }, (_, i) => `tool-${i}`)
+  assert.equal(parseKitParam(forty.join(','), forty).length, KIT_MAX, 'a link can carry at most KIT_MAX tools')
+  assert.deepEqual(parseKitParam(forty.join(','), forty), forty.slice(0, KIT_MAX), '…the first ones, in the order given')
+  assert.deepEqual(parseKitParam('regex-lab,JSON-TIDY, nope ,json-tidy,,audio-transcriber', live), ['regex-lab', 'json-tidy'],
+    'live slugs only, lowercased, unique, in order — a disabled tool and junk are dropped')
+  assert.deepEqual(parseKitParam(`${'x'.repeat(KIT_RAW_MAX)},json-tidy`, live), [], 'nothing past KIT_RAW_MAX is read at all')
+  assert.deepEqual(parseKitParam(null, live), [])
+  assert.deepEqual(sanitizeKit('json-tidy'), [], 'a stored kit that is not an array is empty')
+  assert.deepEqual(sanitizeKit(['a b', 'A', '', 'x'.repeat(49), 7, 'ok', 'ok']), ['ok'], 'the slug grammar holds in storage too')
+  assert.equal(kitHref(['json-tidy', 'regex-lab', 'json-tidy']), '/tools/kit?t=json-tidy,regex-lab', 'the canonical permalink')
+  assert.equal(kitHref([]), '/tools/kit')
+  assert.deepEqual(parseKitParam(kitHref(['regex-lab', 'json-tidy']).split('=')[1], live), ['regex-lab', 'json-tidy'], 'the permalink round-trips')
+
+  const now = Date.UTC(2026, 8, 25)
+  const nasty = `& <b>"q"</b> 'x'`
+  const items = ['json-tidy', 'regex-lab'].map(slug => ({ title: `${slug} ${nasty}`, url: new URL(`/tools/${slug}`, site.url).href }))
+  const hostile = [
+    { title: 'js', url: 'javascript:alert(1)' },
+    { title: 'data', url: 'data:text/html,<script>alert(1)</script>' },
+    { title: 'plain http', url: 'http://apanjwani0.com/tools/json-tidy' },
+    { title: 'credentials', url: 'https://user:pw@apanjwani0.com/tools/json-tidy' },
+    { title: 'whitespace', url: 'https://apanjwani0.com/tools/json tidy' },
+  ]
+  const file = bookmarksFile([...items, ...hostile], { folder: `apanjwani0 tools ${nasty}`, now })
+  assert.ok(file.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>'), 'the Netscape format every browser imports')
+  const hrefs = [...file.matchAll(/HREF="([^"]*)"/g)].map(m => m[1])
+  assert.deepEqual(hrefs, items.map(i => i.url), 'only the https /tools/<live slug> URLs are written')
+  for (const href of hrefs) assert.match(href, /^https:\/\/apanjwani0\.com\/tools\/[a-z0-9-]+$/)
+  const escaped = '&amp; &lt;b&gt;&quot;q&quot;&lt;/b&gt; &#39;x&#39;'
+  assert.equal(file.split(escaped).length - 1, 3, 'the folder name and every title are escaped — & < > " \' all five')
+  assert.equal(/<b>|"q"|'x'/.test(file), false, 'no raw markup or quote from an item reaches the file')
+  assert.ok(file.includes(`ADD_DATE="${Math.floor(now / 1000)}"`), 'dates are in seconds, as importers expect')
+}
+
+/* ── Fuzzy matching: the 404 suggests the page a typo meant, and nothing to scanners ──
+   (mutation: drop the scanner guard → fails — /tools/json-tidy.php is one
+   letter-run from a real page, so without the guard it would be answered with
+   one; /wp-login.php alone could not tell, because nothing resembles it) */
+{
+  const { buildSiteIndex, loadSiteConfigs } = await import('../src/lib/site-index.ts')
+  const { fuzzyScore, isScannerPath, suggestPaths } = await import('../src/lib/fuzzy.ts')
+  const entries = buildSiteIndex(await loadSiteConfigs({}))
+  assert.equal(suggestPaths('/tools/jsontidy', entries)[0]?.u, '/tools/json-tidy', 'a missing hyphen still finds JSON Tidy')
+  assert.equal(suggestPaths('/tool/regex-lab', entries)[0]?.u, '/tools/regex-lab', 'a singular section still finds Regex Lab')
+  assert.equal(suggestPaths('/json-tidy', entries)[0]?.u, '/tools/json-tidy', 'a missing section prefix still finds it')
+  assert.ok(suggestPaths('/tools/jsontidy', entries).length <= 3, 'three suggestions at most')
+  assert.deepEqual(suggestPaths('/zzzzzz', entries), [], 'nothing in common gets nothing, not a guess')
+  for (const path of ['/wp-login.php', '/tools/json-tidy.php', '/tools/json-tidy/.env', '/.git/config', `/tools/${'json-tidy/'.repeat(25)}`]) {
+    assert.ok(isScannerPath(path), `${path.slice(0, 40)} is scanner-shaped`)
+    assert.deepEqual(suggestPaths(path, entries), [], `${path.slice(0, 40)} gets no suggestions — a scanner is not owed a crawl list`)
+  }
+  assert.deepEqual(fuzzyScore('jt', 'JSON Tidy')?.hits, [0, 5], 'the match is recoverable for highlighting')
+  assert.ok(fuzzyScore('jt', 'JSON Tidy').score > fuzzyScore('jt', 'Adjust').score, 'word starts outrank a buried subsequence')
+  assert.equal(fuzzyScore('zz', 'JSON Tidy'), null)
+  assert.equal(fuzzyScore('x'.repeat(65), 'x'.repeat(100)), null, 'an over-long query is refused before any quadratic work')
+}
+console.log('ui refresh: the kit parse is bounded and its bookmarks export writes only escaped https tool links; the 404 suggests what a typo meant and nothing to a scanner')
+
+/* ══════════════  UI refresh · anchor regions for items B–G  ══════════════
+
+   One region per item, each with its own banner and end marker. An item adds
+   its assertions ONLY between its own two lines, and the three spacer lines
+   between regions stay untouched, so items built in parallel worktrees merge
+   without touching each other's hunks. */
+
+/* ── item B · theme: every engine repaints on a theme change ── (region start) */
+/* ── item B · end of region ── */
+// ·
+// ·
+// ·
+/* ── item C · find: palette, shortcut sheet, smart 404 ── (region start) */
+/* ── item C · end of region ── */
+// ·
+// ·
+// ·
+/* ── item D · toolkit: stars, shelf, /tools/kit ── (region start) */
+/* ── item D · end of region ── */
+// ·
+// ·
+// ·
+/* ── item E · shells, nav, motion, home seam ── (region start) */
+/* ── item E · end of region ── */
+// ·
+// ·
+// ·
+/* ── item F · hubs, thumbnails, share cards ── (region start) */
+/* ── item F · end of region ── */
+// ·
+// ·
+// ·
+/* ── item G · one control kit ── (region start) */
+/* ── item G · end of region ── */
