@@ -149,6 +149,9 @@ function lpForbiddenV6(ip: string): boolean {
     return lpForbiddenV4(`${h[1] >> 8}.${h[1] & 0xff}.${h[2] >> 8}.${h[2] & 0xff}`)
   }
   if (h[0] === 0x2001 && h[1] === 0) return true                // Teredo 2001::/32 — a tunnel to wherever
+  if (h[0] === 0x2001 && h[1] === 2 && h[2] === 0) return true  // benchmarking 2001:2::/48 (the v6 198.18/15)
+  if (h[0] === 0x2001 && (h[1] & 0xfff0) === 0x10) return true  // ORCHID 2001:10::/28 — identifiers, not locators
+  if (h[0] === 0x2001 && (h[1] & 0xfff0) === 0x20) return true  // ORCHIDv2 2001:20::/28
   if (h[0] === 0x100 && h[1] === 0 && h[2] === 0 && h[3] === 0) return true // discard-only 100::/64
   if (h[0] === 0) return true                                   // ::, ::1, v4-compatible
   if ((h[0] & 0xfe00) === 0xfc00) return true                   // ULA fc00::/7

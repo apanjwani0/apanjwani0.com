@@ -79,13 +79,15 @@ function csTicks(text: string): string {
 
 /**
  * The CA Issuers URL: a link when `csLinkableUrl` says it is a plain http(s)
- * URL, escaped text otherwise. It came off somebody else's certificate, so it
- * opens in a new tab with no opener and no referrer.
+ * URL that reads exactly as it goes, escaped text otherwise. The link's text is
+ * the href itself, so what a visitor reads is where the click lands. It came
+ * off somebody else's certificate, so it opens in a new tab with no opener and
+ * no referrer.
  */
 function csIssuerLink(raw: string): string {
   const href = csLinkableUrl(raw)
   return href
-    ? `<a href="${csEsc(href)}" rel="noopener noreferrer" target="_blank">${csEsc(raw)}</a>`
+    ? `<a href="${csEsc(href)}" rel="noopener noreferrer" target="_blank">${csEsc(href)}</a>`
     : csEsc(raw)
 }
 

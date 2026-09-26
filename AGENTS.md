@@ -484,6 +484,12 @@ The mirror-image rule is that a difference must still read as one, so
 silent resolver among answering ones is reported as **filtering** rather than as
 propagation — a policy decision at one operator, with a different fix.
 
+A resolver that could not answer is not a third opinion, and **a SERVFAIL is not
+an answer**: it is excluded from the verdict exactly like one that could not be
+reached, and the diff table says what it returned. It used to be compared as an
+empty answer, which is the filtering shape — so one resolver's SERVFAIL for MX
+was reported as that resolver *withholding* the record.
+
 Ask it of any new comparison: **what differs here for reasons that are not the
 thing I am looking for?**
 
@@ -517,16 +523,33 @@ test that hangs is a test whose timeout gets raised.
 
 ### A finding cites the record it rests on
 
-`SgFinding.evidence` carries the literal record text a finding was derived from,
-and `basis: 'absence'` marks the findings that are *about* a record not
-existing — the only ones allowed to cite nothing. Same family as Token Bench's
-`proof` label, and it learned Token Bench's lesson at the same cost: the rule is
-only as good as its coverage. A mutation dressing a finding as record-based
-while citing nothing **survived the first version of the assertion**, because
-the one producer branch that emitted it had no fixture. So the producer list is
-derived from the function *signatures* (returns `SgFinding[]`, does not take
-one), and the id list is derived from the source, so a finding added later
-either gets a fixture or fails the gate.
+`SgFinding.evidence` carries the literal record text a finding was derived
+from. `basis: 'absence'` marks the findings that are *about* a record not
+existing, and `basis: 'unanswered'` marks the ones whose premise is a lookup
+that got no answer at all — a SERVFAIL, a timeout, the query budget or the
+deadline. Those two, and only those two, are allowed to cite nothing. Same
+family as Token Bench's `proof` label, and it learned Token Bench's lesson at
+the same cost: the rule is only as good as its coverage. A mutation dressing a
+finding as record-based while citing nothing **survived the first version of
+the assertion**, because the one producer branch that emitted it had no
+fixture. So the producer list is derived from the function *signatures*
+(returns `SgFinding[]`, does not take one), and the id list is derived from the
+source, so a finding added later either gets a fixture or fails the gate.
+
+The two bases that cite nothing used to be one. Every empty-evidence finding
+carried `basis: 'absence'`, including the ones whose own `detail` said the
+opposite: `spf-inconclusive`'s text is "this is a missing answer, not a missing
+record", printed directly above a footer reading "Based on the absence of a
+record rather than on one." Nothing in the type distinguished a lookup that
+failed from a record that was confirmed gone, so both produced `evidence: []`
+and both rendered the same footer. `dmarc-inconclusive`, `mx-inconclusive`, the
+no-policy-found-at-all branch of `caa-inconclusive`, and `resolvers-unreachable`
+carried the same contradiction. `mx-unchecked`, `cname-unchecked`, the
+found-a-parent-policy branch of `caa-inconclusive`, and `zone-servfail` did
+not, because each of those cites a real record — the MX or CNAME entry that
+did answer, the parent's CAA policy, or the SERVFAIL transcript itself — and
+correctly stays `basis: 'record'`. The footer in `panels.ts` now switches on
+`f.basis`, not only on whether `f.evidence` is empty.
 
 Note also what DNS Sightline refuses to claim. "Dangling" means **NXDOMAIN** at
 the CNAME target, never "no address record" — a name that exists carrying only
@@ -572,14 +595,88 @@ The rule is not CAA's alone, and it took the inspection deadline to show it: a
 deadline turns every question still queued into a failed one at once. SPF read
 a failed include exactly like NXDOMAIN — "no SPF record, a receiver treats that
 as a permerror", plus a void lookup — and DMARC and MX read a failed lookup as no
-record and no address ("mail bounces"). `sgUnanswered` (`analyze.ts`) is now the
-one test of whether a question got an answer, and every finding that reads an
-empty record set asks it first: an unanswered include makes the SPF count a
-floor (`truncated`, titled "At least N"), and an unanswered root, `_dmarc`, MX or
+record and no address ("mail bounces"). `sgUnanswered` (`analyze.ts`) is the one
+test of whether a question got an answer, and every finding that reads an empty
+record set asks it first: an unanswered include makes the SPF count a floor
+(`truncated`, titled "At least N"), and an unanswered root, `_dmarc`, MX or
 MX-target lookup yields `spf-inconclusive`, `dmarc-inconclusive`,
-`mx-inconclusive` or `mx-unchecked` in place of the absence finding. The page's
-panels read the same fields, so a panel cannot say "No MX records" beside a
-finding that says the MX lookup failed.
+`mx-inconclusive` or `mx-unchecked` in place of the absence finding.
+
+**One test means one**, and for a while it did not. The diff, and the choice of
+which resolver's answer the analysis reads, asked a second question — "has no
+`error`" — which a SERVFAIL passes, because the transport reached the resolver
+and the resolver said it could not answer. So Cloudflare's SERVFAIL for MX won
+over Google and Quad9 both holding the record, the targets were never resolved,
+and the Mail panel, deciding absence by a *third* test, printed "No MX records."
+beside `mx-inconclusive`. Now `sgPickAnswer` is the one rule for which answer is
+read (the primary's when it answered, else any that did, else the primary's own
+failure), the Records table and the walks read it too — a question about the
+inspected name is served from the diff's pick rather than asked again — and the
+report carries `mxStatus`, which the panel switches on instead of deciding for
+itself. The panels live in `dns-sightline/panels.ts`, pure functions of the
+report, so they can be rendered from a real inspection. `security:smoke` holds
+this three ways: a TypeScript-checker scan of every module in the folder (an
+answer's `error` may be read outside `sgUnanswered` only to say *why* it failed,
+and `'NOERROR'` appears nowhere else — the checker, not a regex, because
+`counts.error` is not an answer's), every mix of seven answer kinds across three
+resolvers through the pick, the diff and the MX status, and the real `sgInspect`
+over a stubbed resolver, where a lone SERVFAIL for any type must change no
+finding and no panel, and no unreadable world may print a sentence the panels
+only print when a record is really absent.
+
+**Whose failure it was decides the advice.** "Re-run the inspection" is honest
+after a timeout, the deadline or the budget — this tool's miss. It is wrong when
+every resolver returned SERVFAIL for the question (`sgOutageOf`): independent
+validating resolvers failing the same way is the zone failing, a broken DNSSEC
+chain or nameservers that do not answer, and re-running changes nothing. The
+unreadable-record findings say which, and when every question fails that way the
+headline is `zone-servfail` rather than `resolvers-unreachable` — the resolvers
+answered. `resolvers-unreachable` in turn tells the deadline apart from a
+resolver this server could not reach, from `SgAnswer.stopped`, which the
+transport sets on every question it cut off itself.
+
+**A finding may lean on an absence without being *about* one**, and that is
+where the rule kept escaping. `dmarc-at-apex` is record-based — it cites the
+stray `v=DMARC1` at the apex — but "read by nobody" is a claim that `_dmarc`
+holds nothing, so an unanswered `_dmarc` beside that apex record produced an
+error-level finding beside `dmarc-inconclusive`; it now needs `_dmarc` to have
+answered. The presence twin is the same mistake: `cname-hosted` said "resolves,
+so this is not dangling" off three failed target lookups, and "not dangling"
+needs an answer saying the name is *there* — `sgCnameTargetUnchecked` reports
+`cname-unchecked` instead. And NXDOMAIN settles more than one question: it is
+about the name, so an MX target whose A lookup said NXDOMAIN has no address of
+either family however its AAAA lookup went (`mx-unresolvable`, not
+`mx-unchecked`).
+
+So `security:smoke` asserts the general form without a list of findings. For
+every question the real inspection asks — read off the stubbed resolver's own
+log — and for every name, all its questions at once, it runs the zone with that
+record present, absent (an empty NOERROR, and NXDOMAIN) and unanswered (SERVFAIL
+everywhere, and unreachable). A finding in exactly one of present/absent depends
+on that question, so it must not appear when the question went unanswered. The
+dependence is read off the module's behaviour, so a finding added later is held
+to it the day it ships. What that property cannot check is the opposite
+direction — a conclusion wrongly *withheld* — because one present world does not
+stand for every present world; the NXDOMAIN case and the one below have direct
+assertions instead.
+
+The same runs now also hold the *label* these findings carry, not just their
+presence, because "not evidence of anything" and "confirmed to be nothing" used
+to be the same `basis`. Two more assertions, both without a list of findings:
+every finding that cites nothing in one of the unanswered runs, and did not
+already cite nothing in the fully-answered baseline, must carry
+`basis: 'unanswered'` rather than `'absence'`; and no present or absent run —
+0, 3, or the untouched baseline, all of them real answers — may produce a
+`basis: 'unanswered'` finding at all. That pair is what pins
+`spf-inconclusive`, `dmarc-inconclusive`, `mx-inconclusive`, the
+no-policy-found-at-all branch of `caa-inconclusive`, and `resolvers-unreachable`
+to `'unanswered'` today. Reverting any one of them back to `'absence'` fails the
+first assertion; making `spf-missing` (or any confirmed-absence finding) emit
+`'unanswered'` on an answered fixture fails the second — both were run by hand
+against this fixture world before either assertion shipped. A separate,
+narrower check renders the actual footer HTML for both bases and asserts the
+two sentences differ, because a `basis` assigned correctly is not the same
+claim as a footer worded correctly.
 
 ### A conclusion that does not depend on X must not be gated on X
 
@@ -610,6 +707,15 @@ so many words, and the assertion holds it there. The alternative accuses a
 correctly-run CA of breaking the rules because somebody edited a DNS record last
 Tuesday.
 
+`spf-no-all` is the small instance of the same rule. It was suppressed whenever
+the SPF walk stopped early, including at an include that got no answer — but an
+include can only ever *match* a sender, so without a `redirect=` an unlisted
+sender's result is neutral whatever the includes hold. `SgSpfReport.fallthrough`
+now follows only what decides that result: the record's first `all` (§5.1), or,
+when it has none, its `redirect=` chain to the end (§6.1). The finding is
+suppressed only when a record in that chain went unread, and a redirect to a
+record with `-all` is no longer reported as having no `all` at all.
+
 A narrow `scope=caa` on `/api/tools/dns-sightline` serves Chainsaw's panel, so one
 question does not pay for a 24-query resolver diff. It gets its **own** rate-limit
 buckets, which is only defensible because the resource being bounded — outbound
@@ -633,7 +739,13 @@ numbers fails the gate rather than a comment going stale.
   must match `image/` plus `[a-z0-9.+-]` (`lpImageMediaType`) rather than merely
   start with `image/`; Chainsaw's CA Issuers URL comes off a stranger's
   certificate, so it is a link only when it parses as plain http(s) with no
-  credentials (`csLinkableUrl`), and escaped text otherwise.
+  credentials **and the certificate's text is already exactly the URL the
+  parser produces** (`csLinkableUrl`), and escaped text otherwise. The second
+  half is what makes the link honest: parsing rewrites before it navigates (`\`
+  becomes `/`, an ideographic full stop a dot, `0x7f.1` becomes `127.0.0.1`), so
+  a link showing the certificate's string over the parser's href read
+  `http://evil.test\@pki.goog/r1.crt` as pki.goog and went to evil.test. The
+  link's text is now its own href.
 - An exception's message never goes into a response: routes answer failures
   they expect with fixed sentences, and wrap the call that could throw one they
   do not (`csInspect`) so it answers fixed `no-store` JSON too.
