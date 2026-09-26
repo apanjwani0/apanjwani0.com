@@ -8036,3 +8036,41 @@ console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a
     'a permanent redirect to the mapped target, edge-cacheable but not pinned in the browser')
 }
 console.log('pr 19 review: a retired learning answers 301 to the hub, the publish predicate refuses it so no sitemap can list it, and the /games intro counts its dailies')
+
+/* ══════════════  UI refresh · item A: the foundation the other items build on  ══════════════
+
+   Tokens, the head bootstrap, the site index and the error-page nonce. Each
+   block below was checked by breaking the thing it guards and watching it
+   fail; the mutation is named in the block's own comment. */
+
+/* ── A rerouted error page carries the nonce its CSP names ──────────────────
+   A route that answers a BODYLESS 404/500 is re-rendered through 404.astro with
+   the middleware run a second time, and Astro's mergeResponses keeps the FIRST
+   pass's headers — so a CSP set on that pass names nonce A over a body rendered
+   under nonce B, and the head bootstrap is refused on every such page
+   (/zz and /tools/zz both take that path). The middleware leaves CSP to the
+   re-render. The status list is held to Astro's own, so an upgrade that reroutes
+   another status fails here rather than on production 404s.
+   (mutation: set the CSP unconditionally again → fails) */
+{
+  const mwSrc = await readFile(new URL('../src/middleware.ts', import.meta.url), 'utf-8')
+  const code = mwSrc.split('\n').filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n')
+  const cspSets = [...code.matchAll(/response\.headers\.set\('Content-Security-Policy'/g)]
+  assert.equal(cspSets.length, 1, 'the middleware sets the CSP header in exactly one place')
+  const before = code.slice(0, cspSets[0].index)
+  assert.ok(/if \(!isReroutedByAstro\(response\)\) \{\s*$/.test(before),
+    'the CSP header is set only when Astro will NOT re-render the response — a bodyless 404/500 gets its CSP from the second pass')
+  assert.ok(/function isReroutedByAstro\(response: Response\): boolean \{\s*return response\.body === null && REROUTED_ERROR_STATUSES\.includes\(response\.status\)/.test(code),
+    'the guard is exactly Astro\'s own reroute condition: a null body and a reroutable status')
+  const listed = JSON.parse(code.match(/const REROUTED_ERROR_STATUSES = (\[[\d, ]+\])/)?.[1] ?? 'null')
+  const { REROUTABLE_STATUS_CODES } = await import('../node_modules/astro/dist/core/constants.js')
+  assert.deepEqual(listed, [...REROUTABLE_STATUS_CODES],
+    'the middleware skips CSP for exactly the statuses Astro reroutes — an upgrade that adds one must add it here too')
+
+  // …and the deployed half: origin-check asks production for the same pair on
+  // the three 404 shapes, since the edge caches a 404 for everyone.
+  const originCheck = await readFile(new URL('./origin-check.sh', import.meta.url), 'utf-8')
+  assert.ok(/for path in \/zz \/tools\/zz \/a\/b\/c; do/.test(originCheck) && originCheck.includes('[[ $hdr == "$body" ]]'),
+    'origin-check compares the header nonce with the body nonce on /zz, /tools/zz and /a/b/c')
+}
+console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard at source, statuses held to astro\'s own list, and the deployed probe in origin-check)')
