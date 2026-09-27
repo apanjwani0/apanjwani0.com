@@ -599,8 +599,10 @@ string.
 B (theme toggle everywhere), C (command palette, `?` sheet, smart 404), D
 (toolkit: stars, shelf, `/tools/kit`, bookmarks export), E (shells, nav, motion,
 the home hero seam), F (hub thumbnails and share cards) and G (one control kit)
-are designed, not built. Until they are, `kit.ts`, `fuzzy.ts` and `shortcuts.ts`
-have no UI caller; `security:smoke` covers them so they don't rot, and each
+are designed, not built. The plan (`ui-refresh/ui-plan.md`, the worker brief and
+item A's report) is only on the `wip/ui-refresh-notes` branch: read it before
+building any of them, and keep that branch. Until they are built, `kit.ts`,
+`fuzzy.ts` and `shortcuts.ts` have no UI caller; `security:smoke` covers them so they don't rot, and each
 item's assertions go in its labelled region at the end of that script. Planned
 names nothing renders yet: `button[data-type="kit-star"]`,
 `section[data-type="kit-shelf"]`, `div[data-type="detail-actions"]`, and badges
