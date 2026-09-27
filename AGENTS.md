@@ -1082,10 +1082,10 @@ was a second, mirrored fixture that does.
   mid-sentence in card copy. `Base.astro` still defaults `starfield={true}`, so
   **the home hero keeps it** and that is the one place it is load-bearing for
   the site's identity; a new listing page should pass `starfield={false}`.
-  The one exception is the dev server's live heroes (`?hero=liquid|network`,
-  see *Home hero candidates*): each draws its own full-bleed canvas, so the page
-  passes `starfield={false}` for them. The classic hero, which production
-  renders, still has it.
+  The one exception is the dev server's live heroes
+  (`?hero=liquid|network|monsoon`, see *Home hero candidates*): each draws its
+  own full-bleed canvas, so the page passes `starfield={false}` for them. The
+  classic hero, which production renders, still has it.
 - **Fonts on tools/games**: Tool and game detail pages pass `loadFonts={false}` to `Head`. This avoids mobile CLS and a render-blocking third-party font request on utility pages; fallback system fonts are acceptable there.
 - **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
@@ -1400,14 +1400,29 @@ at the end of `scripts/security-smoke.mjs` are where each item's assertions go.
 
 ## Home hero candidates (dev only, 2026-09)
 
-Two live heroes are under review on the real page before the owner picks one:
-**liquid light** (a WebGL fluid simulation in the colour of the hour) and
-**network** (a replay of how this page load reached the visitor). Both were
-approved in the Hero Lab; the lab source is on the `wip/ui-refresh-notes`
-branch until one ships. **Production renders the classic hero.** On the dev
-server, `/?hero=liquid`, `/?hero=network` and `/?hero=classic` switch between
-them, and so does the pill `nav[data-type="hero-switch"]` that only the dev
-server renders.
+Three live heroes are on the real page before the owner picks one.
+**Production renders the classic hero.** On the dev server `/?hero=liquid`,
+`network`, `monsoon` and `classic` switch between them, and so does the pill
+`nav[data-type="hero-switch"]` that only the dev server renders. The Hero Lab
+backgrounds are kept as references in `docs/ideas/hero-lab/`, for screensavers
+and for the image/GIF generators.
+
+- **liquid light** (a WebGL fluid in the colour of the hour). Owner,
+  2026-09-27: "more like a screen saver for me", so it is on the
+  screensaver/idea pile, not a hero contender.
+- **network** (a replay of how this page load reached the visitor). Owner:
+  "design wise we may improve some things, + i don't want to leak any of my
+  sensitive info". It must never show the host provider, runtime or origin
+  details.
+- **monsoon** (the newest): a cyberpunk city at night through a rain-covered
+  window, a matchbox and a candle on the sill, and a scroll that runs the
+  owner's day in IST on an endless loop. Its design record, briefs and
+  harnesses are in `docs/plans/monsoon/`; see *Monsoon* below.
+
+The site nav on the home page keeps "tools" and "games": those sections are
+for independent reach (a visitor lands on a tool or game page from search). The
+home page may advertise them in a later scroll chapter, but not now, so the
+no-tools-or-games rule below still covers everything the page renders.
 
 - **The switch is dev-only by construction.** `src/pages/index.astro` reads the
   query as `import.meta.env.DEV ? … : null`. That is a build-time constant, so a
@@ -1428,7 +1443,9 @@ server renders.
   which every document or window listener a hero adds must take. `day.ts` is
   the owner's clock (IST, no city, at the owner's request) and `clock.ts` the
   24-hour scrubber. Styles are `home.css` (shared) plus
-  `hero-liquid.css` / `hero-network.css`.
+  `hero-liquid.css` / `hero-network.css` / `hero-monsoon.css`. `mount.ts`
+  observes the **stage**, not the section, for visibility: monsoon's stage is
+  fixed to the viewport while its section scrolls away.
 - **No tools or games in the hero.** The owner asked for none (2026-09-27): not
   in the copy, not as a link, not as a hover-to-discover affordance, not even
   by name. The meta description keeps listing them, because search is where
@@ -1444,9 +1461,63 @@ server renders.
 `security:smoke` holds the switch to dev, the fallback to classic, the hero to
 no tools or games (the tagline, the section markup, and every string literal
 and stylesheet the heroes ship), the hooks to the DEV gate, and each hero to its
-own chunk. **When the owner picks one,** delete the switch, the other hero and
-its stylesheet in the same change, make the pick the page's only hero, and
+own chunk. **When the owner picks one,** delete the switch, the other heroes and
+their stylesheets in the same change, make the pick the page's only hero, and
 update this section and the StarField note above.
+
+### Monsoon
+
+Eleven modules in `src/components/home/hero/monsoon/`: `gl.ts`, `camera.ts`,
+`types.ts` and `light.ts` are the shared contract; `city.ts` paints the view
+once (Canvas2D plates); `glass.ts` is the one full-screen pass (rain, fog,
+refraction, compositing, post); `props.ts` raymarches the sill; `smoke.ts` is
+the fluid; `match.ts` is the pure-TS match and candle sim; `story.ts` turns
+scroll into story time; `index.ts` wires the frame. Decisions taken for it:
+**a candle, not a cigarette** (recruiters land here), **the landing is always
+night** (the clock line shows story time, never "It's …"), and the chapters use
+only text already public on the site (the first sentence of `site.bio`,
+`site.tagline`, and GitHub projects filtered so no tool or game can appear).
+
+What cost real bugs and must survive a refactor:
+
+- **`match.ts` has a check; run it after touching the sim.**
+  `npx tsx docs/plans/monsoon/harness/match-check.ts` drives scripted pointer
+  paths through the real camera. It exists because the striker contact test
+  measured depth from the box's *centre* instead of the striker's face, so no
+  drag could ever light the match, and every other check still passed (the
+  keyboard path only "worked" through a forced ignition 24 cm past the box).
+  Reverting that one line fails 18 of its checks. It also pins the other rules
+  learned the same way: the spring substeps (explicit Euler at ω 26 flung the
+  match through the window on a 0.1 s frame), a flick is judged in screen
+  heights per second rather than metres per second (a phone spans far fewer
+  metres), and the flame's depth easing reaches the wick within 25 px.
+- **Every city plate is opaque.** `gl.ts` uploads without premultiplying, so a
+  transparent canvas reads back un-premultiplied and every soft glow's fringe
+  comes out at full brightness. The emit and flicker plates fill black first.
+- **The rain is outside, the condensation inside.** A static drop behind fog is
+  seen *through* it, soft and faint, until a wipe clears the glass. A running
+  drop is water on the inner face: it stays crisp and its trail wipes the fog.
+  Cutting the fog with every drop (the first version) turned the fogged band
+  into a sheet of dark polka dots.
+- **A flame's light falls off with a soft core in metres**
+  (`1 / (1 + d²/0.02²)`): raw `1/d²` in metres is 400× too bright at 5 cm and
+  blew the sill out to white. `FlameLight.pos` is the flame's centre, so props
+  draws the flame's base below it, on the wick or the head.
+- **The endless loop only works if nothing moves at the jump.** The clone
+  (`div[data-type="story-loop"]`) mirrors the landing's markup and every
+  landing rule is a selector list naming both. `story.ts` measures with
+  `getBoundingClientRect`, not `offsetTop` (the story is positioned so it can
+  stack above the fixed scene, which makes `offsetTop` story-relative), jumps a
+  pixel early (the clone's top is fractional), and the clone has a 20svh runway
+  below it, because a phone whose URL bar has hidden is taller than 100svh and
+  could otherwise never reach the jump.
+- **Reduced motion never runs a loop**: frames render on demand, and a 250 ms
+  tick runs only while something is moving (a flame, a press, or a match that is
+  not at rest). No smoke module is created at all.
+
+The camera's `FRAMINGS` table holds numbers only and is tuned with
+`npx tsx docs/plans/monsoon/cam-probe.ts`: `wide` puts the objects in the right
+half, clear of the text column; `tall` sets them low under the text.
 
 ## Skills & Commands
 

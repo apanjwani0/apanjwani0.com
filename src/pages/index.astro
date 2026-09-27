@@ -3,12 +3,13 @@ export const prerender = false
 
 import Base from '../layouts/Base.astro'
 import Avatar from '../components/Avatar.astro'
-import { getSite } from '../lib/config'
+import { getProjects, getSite } from '../lib/config'
 import { personJsonLd, webSiteJsonLd } from '../lib/jsonld'
 import { safeExternalUrl } from '../lib/security'
 import '../styles/home.css'
 import '../styles/hero-liquid.css'
 import '../styles/hero-network.css'
+import '../styles/hero-monsoon.css'
 
 const site = await getSite(Astro.locals)
 const cspNonce = (Astro.locals as any).cspNonce
@@ -24,7 +25,7 @@ const heroTagline =
 // server also takes ?hero=liquid|network|classic, so the owner can compare the
 // two candidates on the real page before picking one. `import.meta.env.DEV`
 // is a build-time constant, so a production build never reads the query.
-const HEROES = ['classic', 'liquid', 'network'] as const
+const HEROES = ['classic', 'liquid', 'network', 'monsoon'] as const
 type Hero = (typeof HEROES)[number]
 const requestedHero = import.meta.env.DEV ? Astro.url.searchParams.get('hero') : null
 const hero: Hero = HEROES.find(h => h === requestedHero) ?? 'classic'
@@ -56,6 +57,23 @@ const siteLd = webSiteJsonLd({
   authorName: site.name,
   authorUrl: site.url,
 })
+
+// The monsoon hero's story chapters (see AGENTS.md "Home hero candidates").
+// Kept tools/games-free the same blunt way the hero's own copy is: no project
+// whose url or text so much as mentions either word makes the night chapter.
+const TOOLS_GAMES_WORD = /\b(tools?|games?)\b/i
+function firstSentence(text: string): string {
+  const stripped = text.replace(/\*\*/g, '')
+  const m = /^[^.!?]*[.!?]/.exec(stripped.trim())
+  return (m ? m[0] : stripped).trim()
+}
+const nightProjects = hero === 'monsoon'
+  ? (await getProjects(Astro.locals)).filter(p =>
+      !p.url.includes('/tools') && !p.url.includes('/games') &&
+      !TOOLS_GAMES_WORD.test(p.title) && !TOOLS_GAMES_WORD.test(p.description),
+    )
+  : []
+const bioFirstSentence = firstSentence(site.bio)
 ---
 
 <Base bare starfield={!liveHero} description={homeDescription} keywords={`${site.name}, ${site.handle}, portfolio, software engineer, developer tools, browser games`}>
@@ -64,7 +82,7 @@ const siteLd = webSiteJsonLd({
 
   {/* A live hero draws on a canvas that is dark at every hour, so it pins the
       dark palette for its own subtree whatever theme the visitor stored. */}
-  <section data-type="hero" aria-label="Introduction" data-hero={liveHero} data-theme={liveHero && 'dark'}>
+  <section data-type="hero" aria-label="Introduction" data-hero={liveHero} data-theme={liveHero && 'dark'} data-at={hero === 'monsoon' ? '1420' : undefined}>
     {liveHero && <div data-type="hero-stage"></div>}
     <div data-type="hero-content">
       {!liveHero && <Avatar src={site.avatar} alt={`Portrait of ${site.name}`} />}
@@ -75,7 +93,64 @@ const siteLd = webSiteJsonLd({
         {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="me noopener noreferrer" aria-label={`${site.name} on LinkedIn (opens in a new tab)`}>linkedin</a>}
       </nav>
     </div>
+    {hero === 'monsoon' && (
+      <>
+        <p data-type="monsoon-hint" hidden>psst… strike a match</p>
+        <p data-type="monsoon-hud" aria-hidden="true"></p>
+        <p data-type="monsoon-live" aria-live="polite" data-visually-hidden></p>
+        <p data-type="monsoon-cue" aria-hidden="true">scroll ↓</p>
+      </>
+    )}
   </section>
+
+  {hero === 'monsoon' && (
+    <div data-type="story" data-theme="dark">
+      <section data-chapter="night" data-at="95" aria-labelledby="chapter-night-title">
+        <p data-type="kicker">night shift</p>
+        <h2 id="chapter-night-title">My own apps, after hours.</h2>
+        {nightProjects.length > 0 && (
+          <ul>
+            {nightProjects.map(p => {
+              const url = safeExternalUrl(p.url)
+              return url && (
+                <li>
+                  <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`${p.title} (opens in a new tab)`}>{p.title}</a>
+                  <p>{firstSentence(p.description)}</p>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        <a href="/projects">all projects →</a>
+      </section>
+      <section data-chapter="day" data-at="660" aria-labelledby="chapter-day-title">
+        <p data-type="kicker">day shift</p>
+        <h2 id="chapter-day-title">Payments at scale.</h2>
+        <p>{bioFirstSentence}</p>
+        <p data-type="mono-line">{site.tagline}</p>
+      </section>
+      <section data-chapter="dusk" data-at="1180" aria-labelledby="chapter-dusk-title">
+        <p data-type="kicker">off the clock</p>
+        <h2 id="chapter-dusk-title">Say hi.</h2>
+        <nav aria-label="Social profiles">
+          {githubUrl && <a href={githubUrl} target="_blank" rel="me noopener noreferrer" aria-label={`${site.name} on GitHub (opens in a new tab)`}>github</a>}
+          {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="me noopener noreferrer" aria-label={`${site.name} on LinkedIn (opens in a new tab)`}>linkedin</a>}
+        </nav>
+        <a href="/learnings">learnings →</a>
+      </section>
+      <div data-type="story-loop" aria-hidden="true" inert>
+        <div data-type="hero-content">
+          <p data-type="loop-name">{site.name}</p>
+          <p data-type="tagline">{heroTagline}</p>
+          <nav data-type="hero-links" aria-label="Social profiles">
+            {githubUrl && <a href={githubUrl} target="_blank" rel="me noopener noreferrer">github</a>}
+            {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="me noopener noreferrer">linkedin</a>}
+          </nav>
+        </div>
+        <p data-type="monsoon-cue">scroll ↓</p>
+      </div>
+    </div>
+  )}
 
   {import.meta.env.DEV && (
     <nav data-type="hero-switch" aria-label="Hero preview (dev server only)">

@@ -7,7 +7,7 @@
  * the HTML before any script runs and for a visitor with none. A hero reads
  * them from `env.text` and never draws its own copy.
  */
-export type HeroId = 'liquid' | 'network'
+export type HeroId = 'liquid' | 'network' | 'monsoon'
 
 export interface HeroText {
   /** `section[data-type="hero"]`, the full-bleed hero. */

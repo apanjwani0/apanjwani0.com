@@ -18,6 +18,7 @@ import type { HeroCreate, HeroEnv, HeroId, HeroInstance } from './types'
 const LOADERS: Record<HeroId, () => Promise<{ create: HeroCreate }>> = {
   liquid: () => import('./liquid'),
   network: () => import('./network'),
+  monsoon: () => import('./monsoon'),
 }
 
 const CLOCK_RESERVE = 72
@@ -114,7 +115,9 @@ async function mount() {
   }
   guarded(() => instance.resize(...size()))
 
-  // Running only while the tab is visible and the hero is on screen.
+  // Running only while the tab is visible and the hero is on screen. The stage
+  // is what is observed: monsoon's stage is fixed to the viewport while its
+  // section scrolls away, and every other hero's stage fills its section.
   let onScreen = true
   let running = false
   const sync = () => {
@@ -129,7 +132,7 @@ async function mount() {
     onScreen = entries[entries.length - 1].isIntersecting
     sync()
   })
-  visibility.observe(section)
+  visibility.observe(host)
   mounted.observers.push(resizer, visibility)
   document.addEventListener('visibilitychange', sync, { signal: controller.signal })
   sync()
