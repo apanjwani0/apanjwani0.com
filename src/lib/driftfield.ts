@@ -18,7 +18,7 @@
  * routes cost little, `?mode=` genuinely does not rank as a separate page, and
  * the 301s from the old `/games/*` URLs are right either way — nobody searches
  * for a "flow field game", so those pages had the wrong intent. Do NOT extend
- * this pattern to new engines without demand data; see docs/plans/learnings.md.
+ * this pattern to new engines without demand data.
  */
 
 import type { Tool } from '../config/tools'

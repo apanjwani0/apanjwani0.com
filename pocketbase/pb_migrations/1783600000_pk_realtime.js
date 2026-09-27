@@ -5,7 +5,7 @@
 // PocketBase is the SEQUENCER — writes serialize through it, and clients read the
 // log back in `seq` order (NOT SSE arrival order, which PB does not guarantee).
 // SSE is only a "something changed, go read" nudge; on connect/reconnect a client
-// queries `seq > lastSeen` to catch up. See docs/poker-backend.md.
+// queries `seq > lastSeen` to catch up. See pocketbase/README.md.
 //
 // Rules are open on purpose: this is a play-money game, invite codes are the only
 // gate, and the deterministic replay + chip-conservation check catch bad entries.

@@ -1,8 +1,11 @@
 # PocketBase — local backend (dev only, for now)
 
+**Unused right now:** the Poker Together client this served was replaced by the
+poker trainer, and nothing in `src/` calls it. Kept in case online play returns.
+
 Thin coordinator for Poker Together: **accounts, room registry, invite codes, and
 (later) durable books**. Game state stays P2P — the server does no game
-computation (see [../docs/poker-backend.md](../docs/poker-backend.md)). Running
+computation. Running
 locally only right now; the same binary later moves to the Raspberry Pi (behind a
 Cloudflare Tunnel) or a free scale-to-zero host — no code change, just a URL.
 

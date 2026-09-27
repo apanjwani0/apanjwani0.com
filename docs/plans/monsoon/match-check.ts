@@ -1,10 +1,10 @@
-// The match sim's node check (BRIEF-page §1): the real camera, a seeded
-// random, scripted pointer paths. Run: npx tsx docs/plans/monsoon/harness/match-check.ts
+// The match sim's node check: the real camera, a seeded
+// random, scripted pointer paths. Run: npx tsx docs/plans/monsoon/match-check.ts
 // Written after the striker contact test turned out to measure depth from the
 // box's centre, so no drag could ever light the match and nothing noticed.
-import { makeCamera } from '../../../../src/components/home/hero/monsoon/camera.ts'
-import { createMatchSim, type MatchEvent } from '../../../../src/components/home/hero/monsoon/match.ts'
-import { createSceneState, type Vec3 } from '../../../../src/components/home/hero/monsoon/types.ts'
+import { makeCamera } from '../../../src/components/home/hero/monsoon/camera.ts'
+import { createMatchSim, type MatchEvent } from '../../../src/components/home/hero/monsoon/match.ts'
+import { createSceneState, type Vec3 } from '../../../src/components/home/hero/monsoon/types.ts'
 
 let fails = 0
 function check(name: string, ok: boolean, extra = '') {

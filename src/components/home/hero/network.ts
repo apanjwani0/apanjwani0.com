@@ -7,7 +7,7 @@
  * network.js (round 4, "bold pass"); see AGENTS.md's Home hero candidates
  * section for the contract every hero here follows.
  *
- * Differences from the lab module, all required by BRIEF-network.md:
+ * Differences from the lab module:
  *  - The name and tagline are gone: they are server-rendered into
  *    env.text.content, and this module only measures around them.
  *  - Edge facts (colo/http/tls/kex) come from a same-origin fetch of
