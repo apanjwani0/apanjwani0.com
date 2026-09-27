@@ -7,6 +7,18 @@
 
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
+  // Critically damped spring ("SmoothDamp", a standard closed-form approach
+  // to camera easing): reaches target with no overshoot and no oscillation,
+  // framerate-independent. vObj holds velocity under vKey so the camera
+  // needs no per-frame allocation.
+  function smoothDamp(current, target, smoothTime, dt, vObj, vKey) {
+    var omega = 2 / Math.max(0.0001, smoothTime);
+    var x = omega * dt, exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+    var change = current - target, v = vObj[vKey];
+    var temp = (v + omega * change) * dt;
+    vObj[vKey] = (v - omega * temp) * exp;
+    return target + (change + temp) * exp;
+  }
   function mix3(c0, c1, t) { return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)]; }
   function rgbCss(c, a) { return 'rgba(' + Math.round(c[0] * 255) + ',' + Math.round(c[1] * 255) + ',' + Math.round(c[2] * 255) + ',' + (a == null ? 1 : a) + ')'; }
   function hexRgb(h) { return [1, 3, 5].map(function (i) { return parseInt(h.substr(i, 2), 16) / 255; }); }
@@ -15,7 +27,19 @@
   var VIOLET = hexRgb('#9b8cff');
   var WHITE = [0.96, 0.97, 1.0];
   var REST = hexRgb('#394255');
+  // The machines rest a step brighter than the wires between them, so the
+  // five nodes read as objects and the links as the paths joining them.
+  var REST_GLYPH = hexRgb('#58647f');
+  // Every glyph is a solid panel: a wire ends at its outline instead of
+  // running through it, and an arriving packet slides in underneath.
+  var BODY = hexRgb('#0b0f19');
+  var SCREEN_BG = '#070a12';
+  var LED_ON = 'rgba(130,255,170,0.95)', LED_OFF = 'rgba(80,110,95,0.35)';
   var PALETTE = [AMBER, VIOLET, WHITE];
+  // Scratch colour for mixInto(): glyph colours are mixed into this every
+  // frame instead of into a fresh array.
+  var MIX = [0, 0, 0];
+  function mixInto(out, c0, c1, t) { out[0] = lerp(c0[0], c1[0], t); out[1] = lerp(c0[1], c1[1], t); out[2] = lerp(c0[2], c1[2], t); return out; }
 
   // A packet's actual colour can be any hourColor() sample (dawn coral, dusk
   // rose, ...), but there are only ever 3 pre-rendered comet sprites, so it
@@ -65,7 +89,7 @@
     '.nw-root.nw-fallback .nw-canvas{display:none}' +
     '.nw-root.nw-fallback .nw-poster{display:block}' +
     '.nw-click{position:absolute;inset:0;background:transparent;border:0;padding:0;margin:0;display:block;width:100%}' +
-    '.nw-nodes{position:absolute;inset:0;pointer-events:none}' +
+    '.nw-nodes{position:absolute;inset:0;pointer-events:none;transform-origin:0 0}' +
     '.nw-node-btn{position:absolute;top:0;left:0;width:46px;height:46px;margin:-23px 0 0 -23px;' +
       'border-radius:50%;border:0;background:transparent;padding:0;pointer-events:auto;cursor:pointer}' +
     '.nw-node-btn:focus-visible{outline:2px solid #9b8cff;outline-offset:3px;border-radius:50%}' +
@@ -76,18 +100,44 @@
     '@media (prefers-reduced-motion: reduce){.nw-card{transition:none}}' +
     '.nw-hero{position:absolute;left:0;right:0;bottom:0;z-index:2;' +
       'padding:0 clamp(20px,4.5vw,64px) max(28px,clamp(20px,5vh,48px));pointer-events:none}' +
-    '.nw-hero::before{content:"";position:absolute;left:-10%;right:-10%;bottom:-14%;top:-40%;' +
-      'background:radial-gradient(65% 100% at 22% 100%, rgba(5,7,12,0.85), transparent 74%);z-index:0}' +
+    '.nw-hero::before{content:"";position:absolute;left:-12%;right:-12%;bottom:-18%;top:-85%;' +
+      'background:radial-gradient(75% 105% at 24% 100%, rgba(4,5,9,0.94), rgba(4,5,9,0.7) 55%, transparent 78%);z-index:0}' +
+    // Phone's hero spans the full device width (the trace log runs edge to
+    // edge), so a corner-anchored radial leaves the far side of every long
+    // log line barely dimmed. A full-width linear replacement fixes that;
+    // desktop's narrower, left-anchored content keeps the radial above.
+    // It starts just above the name, not far up the stage: on a phone the
+    // whole diagram sits above the text, and a scrim reaching into it only
+    // dims the row of nodes nearest the name.
+    '.nw-root.nw-phone .nw-hero::before{left:-6%;right:-6%;top:-14%;' +
+      'background:linear-gradient(180deg, transparent, rgba(4,5,9,0.82) 16%, rgba(4,5,9,0.96) 48%)}' +
     '.nw-name{position:relative;z-index:1;margin:0;font-family:"Source Serif 4",Georgia,serif;font-weight:600;' +
-      'font-size:clamp(3rem,9vw,7.5rem);line-height:1.02;color:#dde6f2;letter-spacing:-0.01em;' +
+      'font-size:clamp(3rem,calc(7vw + .5rem),7rem);line-height:1.02;color:#dde6f2;letter-spacing:-0.01em;' +
       'text-shadow:0 2px 28px rgba(5,7,12,0.9),0 1px 2px rgba(5,7,12,0.7)}' +
     '.nw-tagline{position:relative;z-index:1;margin:.5em 0 0;max-width:46ch;font-family:inherit;' +
       'font-size:clamp(.85rem,1.6vw,1.05rem);line-height:1.5;color:#c3cddb;text-shadow:0 1px 14px rgba(5,7,12,.85)}' +
-    '.nw-readout{position:static;z-index:1;margin-top:.9em}' +
-    '.nw-root:not(.nw-phone) .nw-readout{position:absolute;right:clamp(20px,4.5vw,64px);bottom:max(28px,clamp(20px,5vh,48px));' +
-      'text-align:right;max-width:340px}' +
-    '.nw-trace{font-size:.72rem;line-height:1.6;color:#a9b3c4;text-shadow:0 1px 10px rgba(5,7,12,.9);white-space:pre-wrap}' +
-    '.nw-trace b{color:#dde6f2;font-weight:500}' +
+    // position:relative (not static) is load-bearing: z-index has no effect
+    // on a statically positioned element, so a static readout painted BELOW
+    // the scrim in stacking order — invisible, not merely dim — while
+    // staying in normal flow exactly like static did visually otherwise.
+    '.nw-readout{position:relative;z-index:1;margin-top:.9em}' +
+    // Beside the name, sized to its widest line. That width is final from
+    // the first frame (every row holds its full text while hidden), so the
+    // box never widens under its right anchor as lines type. When name and
+    // log do not fit side by side, .nw-stack puts the log under the tagline.
+    '.nw-root:not(.nw-phone):not(.nw-stack) .nw-readout{position:absolute;right:clamp(20px,4.5vw,64px);bottom:max(28px,clamp(20px,5vh,48px));' +
+      'width:max-content;max-width:min(30rem,46vw)}' +
+    '.nw-trace{font-size:.8rem;line-height:1.65;color:#b7c0cf;text-shadow:0 1px 12px rgba(4,5,9,.95)}' +
+    '.nw-root.nw-phone .nw-trace{font-size:.72rem;line-height:1.6}' +
+    // Every row exists from the start and is only hidden, and the untyped
+    // rest of a line keeps its space while it types: the block never
+    // changes height, so the name above it (in flow on a phone) never jumps.
+    '.nw-row{display:grid;grid-template-columns:6ch 1fr;visibility:hidden}' +
+    '.nw-row.nw-on{visibility:visible}' +
+    '.nw-row b{color:#dde6f2;font-weight:500}' +
+    '.nw-row .nw-rest,.nw-row .nw-note.nw-wait{visibility:hidden}' +
+    '.nw-note{color:#6c778b}' +
+    '.nw-row.nw-hint span{color:#7d889c}' +
     '.nw-replay{display:inline-block;margin-top:.6em;pointer-events:auto;' +
       'appearance:none;border:1px solid #394255;background:rgba(5,7,12,.5);color:#dde6f2;' +
       'font:500 .74rem/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.03em;' +
@@ -133,7 +183,11 @@
     hero.className = 'nw-hero';
     var h1 = document.createElement('h1');
     h1.className = 'nw-name';
-    h1.textContent = D.name;
+    // The text sits in a span so its own width can be measured against the
+    // log's (an h1 is as wide as the hero).
+    var nameText = document.createElement('span');
+    nameText.textContent = D.name;
+    h1.appendChild(nameText);
     var tagline = document.createElement('p');
     tagline.className = 'nw-tagline';
     tagline.textContent = D.line;
@@ -153,11 +207,19 @@
     root.appendChild(hero);
 
     host.appendChild(root);
-    return { root: root, canvas: canvas, poster: poster, click: click, nodesLayer: nodesLayer, card: card, trace: trace, replay: replay };
+    return { root: root, canvas: canvas, poster: poster, click: click, nodesLayer: nodesLayer, card: card, hero: hero, name: h1, nameText: nameText, tagline: tagline, readout: readout, trace: trace, replay: replay };
   }
 
   var NODE_IDS = ['you', 'network', 'dns', 'edge', 'origin'];
   var LINKS = [['you', 'network'], ['network', 'dns'], ['network', 'edge'], ['edge', 'origin']];
+  // 'a>b' → which link a hop rides and whether it runs against the link's
+  // own direction. Built once, so a packet resolves its wire at spawn time
+  // and never builds a lookup string per frame.
+  var LINK_OF = {};
+  LINKS.forEach(function (l, i) {
+    LINK_OF[l[0] + '>' + l[1]] = { i: i, rev: false, key: linkKey(l[0], l[1]) };
+    LINK_OF[l[1] + '>' + l[0]] = { i: i, rev: true, key: linkKey(l[0], l[1]) };
+  });
 
   function referrerSub() {
     try {
@@ -174,69 +236,216 @@
       { id: 'you', kind: env.isTouch ? 'phone' : 'laptop', label: 'you', sub: referrerSub() },
       { id: 'network', kind: 'router', label: 'your network', sub: '' },
       { id: 'dns', kind: 'dns', label: 'DNS', sub: '' },
-      { id: 'edge', kind: 'edge', label: 'edge · ' + D.edgeSample.colo, sub: D.edgeSample.city + ' · cache ' + D.edgeSample.cache },
+      // The colo code is drawn inside the hexagon itself, so the label
+      // below it does not repeat it.
+      { id: 'edge', kind: 'edge', label: 'edge', sub: D.edgeSample.city + ' · cache ' + D.edgeSample.cache },
       { id: 'origin', kind: 'origin', label: 'origin', sub: D.origin }
     ];
   }
 
-  // Desktop: a gentle left-to-right arc, DNS off to one side above it. Phone
-  // (w<=520): a compact vertical spine with DNS branching to the right, kept
-  // clear of the bottom-left name/tagline/trace block.
-  var DESKTOP_XY = { you: [0.08, 0.54], network: [0.25, 0.40], dns: [0.25, 0.15], edge: [0.60, 0.26], origin: [0.88, 0.44] };
-  // A zig-zag, not a spine: bigger glyphs need more room per node than the
-  // quiet first pass had, so DNS+network now share a row (the "off to one
-  // side" branch) instead of costing the layout a whole extra row, and the
-  // whole diagram is held inside the top ~45% of the stage.
-  // Measured against the real rendered hero block (getBoundingClientRect at
-  // 390x844), not guessed: the hero's own top edge sits at ~44% of the
-  // stage's height once the 2-line name, tagline, full log and button are
-  // all in, so the diagram's lowest label has to clear well above that.
-  var PHONE_XY = { you: [0.24, 0.045], network: [0.62, 0.15], dns: [0.88, 0.15], edge: [0.30, 0.235], origin: [0.60, 0.33] };
-  // ~1.6x the quiet-pass size on desktop, where there is room to spare; a
-  // more modest bump on phone, which is the tighter fit of the two.
-  function layoutPositions(w, h, phone) {
-    var map = phone ? PHONE_XY : DESKTOP_XY, out = {}, size = phone ? 20 : 32;
-    for (var id in map) out[id] = { x: map[id][0] * w, y: map[id][1] * h, size: size };
+  // Desktop: a sweep that rises from 'you' to DNS and falls back to the
+  // origin. The whole route stays above the name (bottom-left) and the trace
+  // log (bottom-right), so the story's first node is never under the text.
+  var DESKTOP_XY = { you: [0.11, 0.43], network: [0.29, 0.29], dns: [0.44, 0.155], edge: [0.64, 0.30], origin: [0.86, 0.43] };
+  // Phone: two rows zig-zagging left to right. You, DNS and the origin sit on
+  // top, the router and the edge below, all in the band between the page's
+  // nav and the top of the text block.
+  var PHONE_X = { you: 0.15, dns: 0.5, origin: 0.85, network: 0.33, edge: 0.67 };
+  var PHONE_TOP_ROW = { you: true, dns: true, origin: true };
+  var NAV_CLEAR = 60;
+  // How far below its centre each glyph ends, in units of its half-extent,
+  // so a label sits under the drawing it names rather than under a fixed box.
+  var GLYPH_BOTTOM = { laptop: 0.4, phone: 1, router: 0.3, dns: 0.85, edge: 1, origin: 1 };
+  var GLYPH_TOP = { laptop: 0.92, phone: 1, router: 0.95, dns: 0.85, edge: 1, origin: 1 };
+  // Room above the phone's top row for a label and two lines of sub-label.
+  var PHONE_LABEL_ROOM = 43;
+  function layoutPositions(w, h, phone, textTop) {
+    var out = {}, id;
+    if (!phone) {
+      // Big enough to be the scene, capped so it stays a background and
+      // never outweighs the name, and smaller when the text leaves less room.
+      var size = clamp(Math.min(w * 0.05, h * 0.085, (textTop - NAV_CLEAR - 60) / 4.2), 34, 76);
+      // The sweep's bottom row (you, the origin) keeps its labels clear of
+      // the text block. When the text is tall (stacked), the sweep flattens
+      // into the room above it rather than running under the name.
+      var yTop = Math.max(0.155 * h, NAV_CLEAR + 0.85 * size + 4);
+      var yBot = Math.max(yTop + 40, Math.min(0.43 * h, textTop - 12 - size - 44));
+      for (id in DESKTOP_XY) {
+        var k = (DESKTOP_XY[id][1] - 0.155) / (0.43 - 0.155);
+        out[id] = { x: DESKTOP_XY[id][0] * w, y: yTop + k * (yBot - yTop), size: size };
+      }
+      return out;
+    }
+    // textTop is measured, not assumed: the text block's height depends on
+    // the name's font and on how the trace lines wrap on this width.
+    var bottom = Math.max(NAV_CLEAR + 180, textTop - 10);
+    var s = clamp((bottom - NAV_CLEAR) * 0.13, 22, 32);
+    // The top row's labels sit ABOVE its glyphs. The wires from the lower
+    // row arrive from below, so labels under the top row would sit right in
+    // their path.
+    var topY = NAV_CLEAR + PHONE_LABEL_ROOM + s;
+    // The lower row's labels end at the band's foot, with room for the
+    // wires between the two rows.
+    var lowY = Math.max(bottom - s - 30, topY + 2 * s + 34);
+    for (id in PHONE_X) out[id] = { x: PHONE_X[id] * w, y: PHONE_TOP_ROW[id] ? topY : lowY, size: s, labAbove: !!PHONE_TOP_ROW[id] };
     return out;
   }
+  // Word-wraps text to maxW at the context's current font. Called on resize
+  // only; the frame loop draws the cached lines.
+  function wrapText(ctx, text, maxW) {
+    var words = text.split(' '), lines = [], line = '';
+    for (var i = 0; i < words.length; i++) {
+      var next = line ? line + ' ' + words[i] : words[i];
+      if (line && ctx.measureText(next).width > maxW) { lines.push(line); line = words[i]; } else line = next;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
 
-  // ---- Glyphs: stroked line drawings, centred at (x,y), half-extent s.
-  function setStroke(ctx, color) { ctx.strokeStyle = rgbCss(color); ctx.fillStyle = rgbCss(color); ctx.lineWidth = 2; }
-  function drawLaptop(ctx, x, y, s) {
-    ctx.strokeRect(x - s, y - s * 0.15, s * 2, s * 0.75);
-    ctx.beginPath(); ctx.moveTo(x - s * 0.75, y - s * 0.15); ctx.lineTo(x - s * 0.55, y - s * 0.95);
-    ctx.lineTo(x + s * 0.55, y - s * 0.95); ctx.lineTo(x + s * 0.75, y - s * 0.15); ctx.stroke();
-  }
-  function drawPhone(ctx, x, y, s) {
-    ctx.strokeRect(x - s * 0.5, y - s, s, s * 2);
-    ctx.beginPath(); ctx.moveTo(x - s * 0.18, y + s * 0.78); ctx.lineTo(x + s * 0.18, y + s * 0.78); ctx.stroke();
-  }
-  function drawRouter(ctx, x, y, s) {
-    ctx.strokeRect(x - s, y - s * 0.35, s * 2, s * 0.7);
+  // ---- Glyphs: solid panels with a crisp outline, centred at (x,y) with
+  // half-extent s. g is ONE scratch object that drawGlyphs() refills for
+  // each node each frame: stroke, body and ink are CSS colours, lw is the
+  // outline width, heat is 0..1, fill is the response's download progress
+  // (the device's screen), simTime is in ms (LEDs) and colo is the edge's code.
+  function roundRectPath(ctx, x0, y0, x1, y1, r) {
     ctx.beginPath();
-    ctx.moveTo(x - s * 0.4, y - s * 0.35); ctx.lineTo(x - s * 0.55, y - s * 0.95);
-    ctx.moveTo(x + s * 0.4, y - s * 0.35); ctx.lineTo(x + s * 0.55, y - s * 0.95);
-    ctx.arc(x, y, s * 0.08, 0, 6.3); ctx.stroke();
+    ctx.moveTo(x0 + r, y0); ctx.lineTo(x1 - r, y0); ctx.quadraticCurveTo(x1, y0, x1, y0 + r);
+    ctx.lineTo(x1, y1 - r); ctx.quadraticCurveTo(x1, y1, x1 - r, y1);
+    ctx.lineTo(x0 + r, y1); ctx.quadraticCurveTo(x0, y1, x0, y1 - r);
+    ctx.lineTo(x0, y0 + r); ctx.quadraticCurveTo(x0, y0, x0 + r, y0);
+    ctx.closePath();
   }
-  function drawDns(ctx, x, y, s) {
-    ctx.beginPath(); ctx.arc(x, y, s * 0.85, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(x, y, s * 0.85, s * 0.34, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, y - s * 0.85); ctx.lineTo(x, y + s * 0.85); ctx.stroke();
+  // Fills the current path as a solid panel, then outlines it.
+  function panel(ctx, g) {
+    ctx.fillStyle = g.body; ctx.fill();
+    ctx.lineWidth = g.lw; ctx.strokeStyle = g.stroke; ctx.stroke();
   }
-  function drawHex(ctx, x, y, s) {
+  // Interior markings (meridians, rack units, ports) are thinner and dimmer
+  // than the outline, so each glyph reads as one object with markings on it
+  // rather than a tangle of equal lines.
+  function detailStroke(ctx, g) {
+    ctx.lineWidth = g.lw * 0.6; ctx.globalAlpha = 0.7; ctx.strokeStyle = g.stroke; ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  // Status LEDs, each on its own slow phase so they never blink in lockstep.
+  // While traffic crosses the node they flicker fast.
+  function ledOn(g, i) {
+    var t = g.simTime * 0.001;
+    return g.heat > 0.3 ? Math.sin(t * 38 + i * 1.7) > -0.2 : Math.sin(t * (1.6 + i * 0.7) + i * 2.1) > 0.2;
+  }
+  function led(ctx, x, y, r, on) { ctx.fillStyle = on ? LED_ON : LED_OFF; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.fill(); }
+
+  // The device's screen draws a miniature of this very page as the
+  // response's bytes arrive: first the diagram, then the name, then the
+  // tagline, top to bottom in the order they were delivered. Fades use
+  // globalAlpha over constant fill strings, so no colour is built per frame.
+  function drawScreen(ctx, x0, y0, w, h, g) {
+    ctx.fillStyle = SCREEN_BG; ctx.fillRect(x0, y0, w, h);
+    var f = g.fill;
+    if (f <= 0.01) return;
+    ctx.globalAlpha = 0.14 * f; ctx.fillStyle = '#9b8cff'; ctx.fillRect(x0, y0, w, h);
+    var a = clamp((f - 0.05) / 0.15, 0, 1), id;
+    if (a > 0) {
+      ctx.globalAlpha = a * 0.8; ctx.strokeStyle = '#9b8cff'; ctx.lineWidth = Math.max(0.6, w * 0.012);
+      ctx.beginPath();
+      for (var i = 0; i < LINKS.length; i++) {
+        var p = DESKTOP_XY[LINKS[i][0]], q = DESKTOP_XY[LINKS[i][1]];
+        ctx.moveTo(x0 + w * (0.1 + 0.8 * p[0]), y0 + h * (0.04 + p[1]));
+        ctx.lineTo(x0 + w * (0.1 + 0.8 * q[0]), y0 + h * (0.04 + q[1]));
+      }
+      ctx.stroke();
+      ctx.fillStyle = '#dde6f2';
+      var r = Math.max(0.9, w * 0.02);
+      for (id in DESKTOP_XY) {
+        var d = DESKTOP_XY[id];
+        ctx.beginPath(); ctx.arc(x0 + w * (0.1 + 0.8 * d[0]), y0 + h * (0.04 + d[1]), r, 0, 6.3); ctx.fill();
+      }
+    }
+    ctx.fillStyle = '#dde6f2';
+    screenBar(ctx, f, 0.35, x0 + w * 0.08, y0 + h * 0.62, w * 0.56, h * 0.1);
+    screenBar(ctx, f, 0.6, x0 + w * 0.08, y0 + h * 0.78, w * 0.4, h * 0.045);
+    screenBar(ctx, f, 0.72, x0 + w * 0.08, y0 + h * 0.86, w * 0.28, h * 0.045);
+    ctx.globalAlpha = 1;
+  }
+  function screenBar(ctx, f, th, x, y, w, h) {
+    var a = clamp((f - th) / 0.12, 0, 1);
+    if (a <= 0) return;
+    ctx.globalAlpha = a * 0.85; ctx.fillRect(x, y, w, Math.max(1, h));
+  }
+
+  function drawLaptop(ctx, x, y, s, g) {
+    roundRectPath(ctx, x - 0.8 * s, y - 0.92 * s, x + 0.8 * s, y + 0.27 * s, 0.07 * s); panel(ctx, g);
+    drawScreen(ctx, x - 0.7 * s, y - 0.83 * s, 1.4 * s, s, g);
+    ctx.beginPath();
+    ctx.moveTo(x - s, y + 0.27 * s); ctx.lineTo(x + s, y + 0.27 * s);
+    ctx.lineTo(x + 1.12 * s, y + 0.4 * s); ctx.lineTo(x - 1.12 * s, y + 0.4 * s); ctx.closePath();
+    panel(ctx, g);
+    ctx.beginPath();
+    ctx.moveTo(x - 0.2 * s, y + 0.27 * s); ctx.lineTo(x - 0.16 * s, y + 0.32 * s);
+    ctx.lineTo(x + 0.16 * s, y + 0.32 * s); ctx.lineTo(x + 0.2 * s, y + 0.27 * s);
+    detailStroke(ctx, g);
+  }
+  function drawPhone(ctx, x, y, s, g) {
+    roundRectPath(ctx, x - 0.52 * s, y - s, x + 0.52 * s, y + s, 0.14 * s); panel(ctx, g);
+    drawScreen(ctx, x - 0.43 * s, y - 0.8 * s, 0.86 * s, 1.58 * s, g);
+    ctx.beginPath(); ctx.moveTo(x - 0.12 * s, y - 0.9 * s); ctx.lineTo(x + 0.12 * s, y - 0.9 * s); detailStroke(ctx, g);
+  }
+  function drawRouter(ctx, x, y, s, g) {
+    // Antennae first, so the body panel covers where they meet it.
+    ctx.beginPath();
+    ctx.moveTo(x - 0.6 * s, y - 0.3 * s); ctx.lineTo(x - 0.74 * s, y - 0.95 * s);
+    ctx.moveTo(x + 0.6 * s, y - 0.3 * s); ctx.lineTo(x + 0.74 * s, y - 0.95 * s);
+    ctx.lineWidth = g.lw; ctx.strokeStyle = g.stroke; ctx.stroke();
+    var tip = Math.max(1.2, 0.06 * s);
+    ctx.fillStyle = g.stroke; ctx.beginPath();
+    ctx.arc(x - 0.74 * s, y - 0.95 * s, tip, 0, 6.3);
+    ctx.moveTo(x + 0.74 * s + tip, y - 0.95 * s); ctx.arc(x + 0.74 * s, y - 0.95 * s, tip, 0, 6.3);
+    ctx.fill();
+    roundRectPath(ctx, x - s, y - 0.3 * s, x + s, y + 0.3 * s, 0.1 * s); panel(ctx, g);
+    ctx.beginPath();
+    for (var i = 0; i < 3; i++) ctx.rect(x + 0.3 * s + i * 0.2 * s, y - 0.09 * s, 0.13 * s, 0.18 * s);
+    detailStroke(ctx, g);
+    var lr = Math.max(1.1, 0.055 * s);
+    for (i = 0; i < 4; i++) led(ctx, x - 0.72 * s + i * 0.16 * s, y, lr, ledOn(g, i));
+  }
+  function drawDns(ctx, x, y, s, g) {
+    var r = 0.85 * s, cy = 0.5 * r, cx = Math.sqrt(r * r - cy * cy);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); panel(ctx, g);
+    ctx.beginPath();
+    ctx.moveTo(x + 0.42 * r, y); ctx.ellipse(x, y, 0.42 * r, r, 0, 0, 6.2832);
+    ctx.moveTo(x + r, y); ctx.lineTo(x - r, y);
+    ctx.moveTo(x, y - r); ctx.lineTo(x, y + r);
+    ctx.moveTo(x - cx, y - cy); ctx.lineTo(x + cx, y - cy);
+    ctx.moveTo(x - cx, y + cy); ctx.lineTo(x + cx, y + cy);
+    detailStroke(ctx, g);
+  }
+  function hexPath(ctx, x, y, r) {
     ctx.beginPath();
     for (var i = 0; i < 6; i++) {
-      var a = Math.PI / 6 + i * Math.PI / 3, px = x + Math.cos(a) * s, py = y + Math.sin(a) * s;
+      var a = -Math.PI / 2 + i * Math.PI / 3, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
-    ctx.closePath(); ctx.stroke();
+    ctx.closePath();
   }
-  function drawRack(ctx, x, y, s) {
-    ctx.strokeRect(x - s * 0.6, y - s, s * 1.2, s * 2);
-    for (var i = -1; i <= 1; i++) {
-      ctx.beginPath(); ctx.moveTo(x - s * 0.6, y + i * s * 0.62); ctx.lineTo(x + s * 0.6, y + i * s * 0.62); ctx.stroke();
-      ctx.beginPath(); ctx.arc(x - s * 0.35, y + i * s * 0.62 - s * 0.22, s * 0.06, 0, 6.3); ctx.fill();
+  function drawHex(ctx, x, y, s, g) {
+    hexPath(ctx, x, y, s); panel(ctx, g);
+    hexPath(ctx, x, y, 0.78 * s); detailStroke(ctx, g);
+    // The code of the edge that served this page, written in the edge itself.
+    ctx.fillStyle = g.ink; ctx.font = g.coloFont; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(g.colo, x, y + 0.02 * s);
+    ctx.textBaseline = 'alphabetic';
+  }
+  function drawRack(ctx, x, y, s, g) {
+    roundRectPath(ctx, x - 0.58 * s, y - s, x + 0.58 * s, y + s, 0.06 * s); panel(ctx, g);
+    ctx.beginPath();
+    var u, cy;
+    for (u = 1; u < 4; u++) { cy = y - s + u * 0.5 * s; ctx.moveTo(x - 0.58 * s, cy); ctx.lineTo(x + 0.58 * s, cy); }
+    for (u = 0; u < 4; u++) {
+      cy = y - s + (u + 0.5) * 0.5 * s;
+      for (var k = -1; k <= 1; k++) { ctx.moveTo(x - 0.1 * s, cy + k * 0.1 * s); ctx.lineTo(x + 0.4 * s, cy + k * 0.1 * s); }
     }
+    detailStroke(ctx, g);
+    var lr = Math.max(1.1, 0.055 * s);
+    for (u = 0; u < 4; u++) led(ctx, x - 0.36 * s, y - s + (u + 0.5) * 0.5 * s, lr, ledOn(g, u));
   }
   var GLYPH = { laptop: drawLaptop, phone: drawPhone, router: drawRouter, dns: drawDns, edge: drawHex, origin: drawRack };
 
@@ -246,7 +455,7 @@
   var POOL_SIZE = 96;
   function makePool() {
     var arr = [];
-    for (var i = 0; i < POOL_SIZE; i++) arr.push({ active: false, kind: 'main', a: null, b: null, t: 0, dur: 300, color: WHITE, size: 3, delay: 0 });
+    for (var i = 0; i < POOL_SIZE; i++) arr.push({ active: false, kind: 'main', a: null, b: null, li: -1, rev: false, key: '', t: 0, dur: 300, color: WHITE, size: 3, delay: 0 });
     return arr;
   }
   // delay (ms) holds a packet inactive-looking but reserved, so a burst can
@@ -257,6 +466,10 @@
       if (!pool[i].active) {
         var p = pool[i];
         p.active = true; p.kind = kind; p.a = a; p.b = b; p.t = 0; p.dur = Math.max(1, dur); p.color = color; p.size = size || 3; p.delay = delay || 0;
+        // A main packet resolves its wire once, here: which link, which way
+        // along it, and the heat key it lights.
+        var l = kind === 'main' ? LINK_OF[a + '>' + b] : null;
+        p.li = l ? l.i : -1; p.rev = l ? l.rev : false; p.key = l ? l.key : '';
         return p;
       }
     }
@@ -287,16 +500,18 @@
     }
   }
   function drawPulses(ctx, pool, nodePos) {
+    ctx.globalCompositeOperation = 'lighter';
     for (var i = 0; i < pool.length; i++) {
       var p = pool[i];
       if (!p.active) continue;
       var pos = nodePos[p.id];
       if (!pos) continue;
       var t = clamp(p.t, 0, 1), r = lerp(pos.size * 0.9, p.maxR, t);
-      ctx.strokeStyle = rgbCss(p.color, (1 - t) * 0.8);
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = rgbCss(p.color, (1 - t) * 0.85);
+      ctx.lineWidth = 2.2;
       ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, 6.3); ctx.stroke();
     }
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   // Point lookup: 'main' packets reference node ids in nodePos; 'ambient'
@@ -305,10 +520,15 @@
     return kind === 'ambient' ? state.ambient.pts[ref] : state.nodePos[ref];
   }
 
-  function makeHeat() { return { r: REST[0], g: REST[1], b: REST[2], heat: 0 }; }
-  function bumpHeat(h, color) { h.heat = 1; h.r = color[0]; h.g = color[1]; h.b = color[2]; }
+  // dir (links only) is which way the last packet crossed: +1 along the
+  // link's own direction, -1 against it, so the flowing dashes run the way
+  // the traffic actually went.
+  function makeHeat() { return { r: REST[0], g: REST[1], b: REST[2], heat: 0, dir: 1 }; }
+  function bumpHeat(h, color, dir) { h.heat = 1; h.r = color[0]; h.g = color[1]; h.b = color[2]; if (dir) h.dir = dir; }
   function decayHeat(h, dt) { h.heat *= Math.exp(-2.2 * dt); }
-  function heatColor(h) { return mix3(REST, [h.r, h.g, h.b], h.heat); }
+  var HEAT_RGB = [0, 0, 0];
+  // base → the heat's own colour, written into out; no array per call.
+  function heatInto(out, base, h) { HEAT_RGB[0] = h.r; HEAT_RGB[1] = h.g; HEAT_RGB[2] = h.b; return mixInto(out, base, HEAT_RGB, h.heat); }
 
   function makeHeatMaps() {
     var nodeHeat = {}, linkHeat = {}, i;
@@ -329,7 +549,7 @@
   // pulse at each node it touches, deactivate on arrival. A delayed packet
   // (see spawnPacket) counts down and does nothing else until it starts.
   function updatePackets(state, dt) {
-    var pool = state.pool, heat = state.heat, pulses = state.pulses;
+    var pool = state.pool, heat = state.heat, pulses = state.pulses, nodePos = state.nodePos;
     for (var i = 0; i < pool.length; i++) {
       var p = pool[i];
       if (!p.active) continue;
@@ -337,12 +557,17 @@
       var prevT = p.t;
       p.t += dt * 1000 / p.dur;
       if (p.kind === 'main') {
-        var key = linkKey(p.a, p.b);
-        if (heat.link[key]) bumpHeat(heat.link[key], p.color);
-        if (prevT < 0.12) { bumpHeat(heat.node[p.a], p.color); spawnPulse(pulses, p.a, p.color, 480, p.size * 7 + 14); }
+        if (p.key) bumpHeat(heat.link[p.key], p.color, p.rev ? -1 : 1);
+        // Pulse radius follows the NODE's own size (a ring has to reach
+        // past the glyph it rings), not the packet's — a fixed multiple of
+        // the packet dot would sit hidden inside an 80px node.
+        // Only a lead packet (a request, a reply, a ping) rings the nodes it
+        // touches. A burst or a response stream is many small packets, and a
+        // ring for each would bury the diagram in ripples; they warm the node.
+        if (prevT < 0.12) { bumpHeat(heat.node[p.a], p.color); if (p.size >= 3) spawnPulse(pulses, p.a, p.color, 520, nodePos[p.a].size * 1.7 + 16); }
       }
       if (p.t >= 1) {
-        if (p.kind === 'main') { bumpHeat(heat.node[p.b], p.color); spawnPulse(pulses, p.b, p.color, 480, p.size * 7 + 14); }
+        if (p.kind === 'main') { bumpHeat(heat.node[p.b], p.color); if (p.size >= 3) spawnPulse(pulses, p.b, p.color, 520, nodePos[p.b].size * 1.7 + 16); }
         p.active = false;
       }
     }
@@ -368,9 +593,24 @@
     }
     return links;
   }
-  function makeAmbient(count) {
+  // 3 parallax layers in one 120-point mesh: far (tiny, dim, still), mid,
+  // near (bigger, brighter, a slow drift). One shared link mesh across all
+  // of them — "the whole field", not three separate unrelated ones.
+  var AMBIENT_LAYERS = [
+    { n: 60, r: 0.85, fill: 'rgba(160,170,190,0.16)', drift: 0 },
+    { n: 40, r: 1.5, fill: 'rgba(160,170,190,0.32)', drift: 0 },
+    { n: 20, r: 2.6, fill: 'rgba(160,170,190,0.6)', drift: 1 }
+  ];
+  function makeAmbient() {
     var pts = [];
-    for (var i = 0; i < count; i++) pts.push({ fx: Math.random(), fy: Math.random(), x: 0, y: 0 });
+    AMBIENT_LAYERS.forEach(function (layer, li) {
+      for (var i = 0; i < layer.n; i++) {
+        pts.push({
+          fx: Math.random(), fy: Math.random(), x: 0, y: 0, layer: li,
+          driftPhase: Math.random() * 6.28, driftR: layer.drift ? 5 + Math.random() * 9 : 0
+        });
+      }
+    });
     var links = computeAmbientLinks(pts);
     // Adjacency for the burst walk below: which points a given point is
     // directly wired to, built once alongside the links themselves.
@@ -379,189 +619,360 @@
     return { pts: pts, links: links, adj: adj };
   }
   function resizeAmbient(ambient, w, h) {
-    for (var i = 0; i < ambient.pts.length; i++) { ambient.pts[i].x = ambient.pts[i].fx * w; ambient.pts[i].y = ambient.pts[i].fy * h; }
+    for (var i = 0; i < ambient.pts.length; i++) { var p = ambient.pts[i]; p.baseX = p.fx * w; p.baseY = p.fy * h; p.x = p.baseX; p.y = p.baseY; }
+  }
+  // Near-layer points drift slowly on a fixed per-point orbit driven by
+  // simTime — arithmetic only, no stored velocity to integrate or allocate.
+  function driftAmbient(ambient, simTime) {
+    var pts = ambient.pts;
+    for (var i = 0; i < pts.length; i++) {
+      var p = pts[i];
+      if (!p.driftR) continue;
+      p.x = p.baseX + Math.cos(simTime * 0.00012 + p.driftPhase) * p.driftR;
+      p.y = p.baseY + Math.sin(simTime * 0.00009 + p.driftPhase) * p.driftR;
+    }
   }
   function drawAmbient(ctx, ambient) {
     var pts = ambient.pts, links = ambient.links, i;
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(148,158,178,0.14)';
+    ctx.strokeStyle = 'rgba(150,160,182,0.1)';
     ctx.beginPath();
     for (i = 0; i < links.length; i++) {
       var a = pts[links[i][0]], b = pts[links[i][1]];
       ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
     }
     ctx.stroke();
-    ctx.fillStyle = 'rgba(148,158,178,0.4)';
-    for (i = 0; i < pts.length; i++) { ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, 1.3, 0, 6.3); ctx.fill(); }
+    for (i = 0; i < pts.length; i++) {
+      var p = pts[i], layer = AMBIENT_LAYERS[p.layer];
+      ctx.fillStyle = layer.fill;
+      ctx.beginPath(); ctx.arc(p.x, p.y, layer.r, 0, 6.3); ctx.fill();
+    }
   }
 
-  // Quadratic bezier with a small perpendicular bulge, so a hop reads as a
-  // gentle arc rather than a ruler-straight line.
-  function hopPoint(p0, p1, t) {
-    var mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2;
-    var dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
-    var nx = -dy / len, ny = dx / len, bulge = Math.min(18, len * 0.12);
-    var cx = mx + nx * bulge, cy = my + ny * bulge, u = 1 - t;
-    return { x: u * u * p0.x + 2 * u * t * cx + t * t * p1.x, y: u * u * p0.y + 2 * u * t * cy + t * t * p1.y };
+  // ---- Wires. Each main link is a gentle quadratic arc. Its control point
+  // is computed on resize (layoutLinks) and read by BOTH the wire and every
+  // packet on it, so a packet rides exactly the line drawn for it. Every arc
+  // bows upward (leftward, for a vertical link), so all the diagram's wires
+  // curve the same way.
+  var LINK_KEYS = LINKS.map(function (l) { return linkKey(l[0], l[1]); });
+  function makeLinkCtrl() { return LINKS.map(function () { return { x: 0, y: 0, len: 1 }; }); }
+  function layoutLinks(state) {
+    for (var i = 0; i < LINKS.length; i++) {
+      var a = state.nodePos[LINKS[i][0]], b = state.nodePos[LINKS[i][1]], c = state.linkCtrl[i];
+      var dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var nx = -dy / len, ny = dx / len;
+      if (ny > 0 || (ny === 0 && nx > 0)) { nx = -nx; ny = -ny; }
+      var bulge = Math.min(30, len * 0.09);
+      c.x = (a.x + b.x) / 2 + nx * bulge; c.y = (a.y + b.y) / 2 + ny * bulge; c.len = len;
+    }
+  }
+  // Where packet p is at progress t, written into out (no allocation): its
+  // position, its heading (for the comet's tail) and the length of its hop.
+  // A main packet rides its link's own arc, reversed for a reply; an ambient
+  // packet runs straight along its hairline.
+  function packetPoint(state, p, t, out) {
+    if (p.li >= 0) {
+      var L = LINKS[p.li], a = state.nodePos[L[0]], b = state.nodePos[L[1]], c = state.linkCtrl[p.li];
+      var u = p.rev ? 1 - t : t, v = 1 - u;
+      out.x = v * v * a.x + 2 * v * u * c.x + u * u * b.x;
+      out.y = v * v * a.y + 2 * v * u * c.y + u * u * b.y;
+      var tx = v * (c.x - a.x) + u * (b.x - c.x), ty = v * (c.y - a.y) + u * (b.y - c.y);
+      out.ang = p.rev ? Math.atan2(-ty, -tx) : Math.atan2(ty, tx);
+      out.len = c.len;
+      return out;
+    }
+    var p0 = pointOf(state, p.kind, p.a), p1 = pointOf(state, p.kind, p.b);
+    var dx = p1.x - p0.x, dy = p1.y - p0.y;
+    out.x = p0.x + dx * t; out.y = p0.y + dy * t;
+    out.ang = Math.atan2(dy, dx); out.len = Math.sqrt(dx * dx + dy * dy) || 1;
+    return out;
+  }
+
+  // The cinematic follow: tight on whatever the lead packet is doing until
+  // the request lands at the edge (state.camWide), then a damped pull out to
+  // the wide shot. The followed point is held above the name block rather
+  // than at dead centre, where the name would cover it. Between two hops the
+  // target simply holds, so the camera never lurches back to 'you'.
+  var CAM_PT = { x: 0, y: 0, ang: 0, len: 1 };
+  function camZoom(state) { return state.phone ? 1.6 : 1.8; }
+  // World y the camera must centre on for world point y to sit at the held
+  // fraction of the screen's height, at zoom z.
+  function camCentreY(state, y, z) { return y + (0.5 - (state.phone ? 0.22 : 0.34)) * state.h / z; }
+  function updateCamera(state, dt) {
+    var cam = state.camera, tx, ty, tz;
+    if (state.camWide) {
+      tx = state.w / 2; ty = state.h / 2; tz = 1;
+    } else {
+      var lp = state.leadPacket;
+      if (lp && lp.active && lp.delay <= 0) { packetPoint(state, lp, clamp(lp.t, 0, 1), CAM_PT); cam.tx = CAM_PT.x; cam.ty = CAM_PT.y; }
+      tz = camZoom(state); tx = cam.tx; ty = camCentreY(state, cam.ty, tz);
+    }
+    cam.x = smoothDamp(cam.x, tx, 0.42, dt, cam, 'vx');
+    cam.y = smoothDamp(cam.y, ty, 0.42, dt, cam, 'vy');
+    cam.zoom = smoothDamp(cam.zoom, tz, 0.55, dt, cam, 'vz');
   }
   // Packets as comets: a bright pre-rendered head plus a tail sprite
   // stretched (via drawImage's destination size, not re-rendered) to a
-  // length that follows how fast this hop is actually moving.
+  // length that follows how fast this hop is actually moving. Additive
+  // ('lighter') so overlapping light brightens instead of overpainting.
+  // Drawn BEFORE the glyphs, so a packet arriving at a node slides in
+  // under its panel instead of across it.
+  var PT = { x: 0, y: 0, ang: 0, len: 1 };
   function drawPackets(ctx, state) {
     var pool = state.pool, sprites = state.sprites;
+    ctx.globalCompositeOperation = 'lighter';
     for (var i = 0; i < pool.length; i++) {
       var p = pool[i];
       if (!p.active || p.delay > 0) continue;
-      var p0 = pointOf(state, p.kind, p.a), p1 = pointOf(state, p.kind, p.b);
-      if (!p0 || !p1) continue;
-      var t = clamp(p.t, 0, 1), at = hopPoint(p0, p1, t);
-      var dx = p1.x - p0.x, dy = p1.y - p0.y, dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      var speed = dist / p.dur, angle = Math.atan2(dy, dx);
+      var t = clamp(p.t, 0, 1);
+      packetPoint(state, p, t, PT);
       var pal = nearestPaletteIndex(p.color);
-      var tailLen = clamp(speed * 90, p.size * 1.4, 70);
+      var tailLen = clamp(PT.len / p.dur * 150, p.size * 2.4, 130);
       var fade = t < 0.08 ? t / 0.08 : (t > 0.85 ? (1 - t) / 0.15 : 1);
       ctx.save();
-      ctx.translate(at.x, at.y); ctx.rotate(angle + Math.PI);
+      ctx.translate(PT.x, PT.y); ctx.rotate(PT.ang + Math.PI);
       ctx.globalAlpha = fade;
-      ctx.drawImage(sprites.tail[pal], 0, -p.size * 1.6, tailLen, p.size * 3.2);
+      ctx.drawImage(sprites.tail[pal], 0, -p.size * 2, tailLen, p.size * 4);
       ctx.restore();
-      var hs = p.size * 4.4;
+      var hs = p.size * 5.6;
       ctx.globalAlpha = fade;
-      ctx.drawImage(sprites.head[pal], at.x - hs / 2, at.y - hs / 2, hs, hs);
+      ctx.drawImage(sprites.head[pal], PT.x - hs / 2, PT.y - hs / 2, hs, hs);
       ctx.globalAlpha = 1;
     }
+    ctx.globalCompositeOperation = 'source-over';
   }
-  // Main-path links: 2px with a soft glow, plus a flowing dash overlay while
-  // a phase is actually crossing (heat above a small floor) so traffic reads
-  // as light moving through the wire, not just a colour change.
+  // Main-path links: bold with a soft glow, plus an additive flowing-dash
+  // overlay while traffic is crossing, running the way that traffic went,
+  // so it reads as light moving through the wire, not just a colour change.
+  var DASH = [9, 11], NO_DASH = [];
   function drawLinks(ctx, state, simTime) {
+    ctx.lineWidth = state.phone ? 2 : 3;
     for (var i = 0; i < LINKS.length; i++) {
-      var a = state.nodePos[LINKS[i][0]], b = state.nodePos[LINKS[i][1]];
-      var h = state.heat.link[linkKey(LINKS[i][0], LINKS[i][1])], col = heatColor(h);
-      ctx.lineWidth = 2;
-      ctx.shadowColor = rgbCss(col, 0.65 * h.heat);
-      ctx.shadowBlur = 3 + h.heat * 12;
-      ctx.strokeStyle = rgbCss(col);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      var a = state.nodePos[LINKS[i][0]], b = state.nodePos[LINKS[i][1]], c = state.linkCtrl[i];
+      var h = state.heat.link[LINK_KEYS[i]];
+      heatInto(MIX, REST, h);
+      ctx.shadowColor = rgbCss(MIX, 0.7 * h.heat);
+      ctx.shadowBlur = 4 + h.heat * 18;
+      ctx.strokeStyle = rgbCss(MIX);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(c.x, c.y, b.x, b.y); ctx.stroke();
       if (h.heat > 0.1) {
-        ctx.setLineDash([7, 9]);
-        ctx.lineDashOffset = -simTime * 0.07;
-        ctx.strokeStyle = rgbCss([h.r, h.g, h.b], h.heat * 0.9);
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-        ctx.setLineDash([]);
+        ctx.shadowBlur = 0;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.setLineDash(DASH);
+        ctx.lineDashOffset = -h.dir * simTime * 0.09;
+        ctx.strokeStyle = rgbCss(HEAT_RGB, h.heat);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(c.x, c.y, b.x, b.y); ctx.stroke();
+        ctx.setLineDash(NO_DASH);
+        ctx.globalCompositeOperation = 'source-over';
       }
     }
     ctx.shadowBlur = 0;
   }
-  function drawGlyphs(ctx, state, meta, phone) {
-    ctx.font = (phone ? '10px ' : '11px ') + 'ui-monospace,Menlo,Consolas,monospace';
-    ctx.textAlign = 'center';
+
+  // ---- Labels are laid out on resize (wrapped to the room a node has, and
+  // pulled in from the stage's edges as one block) and only drawn per frame.
+  var MONO = 'ui-monospace,Menlo,Consolas,monospace';
+  function layoutLabels(ctx, state, meta) {
+    var phone = state.phone;
+    var font = (phone ? '11px ' : '13px ') + MONO, subFont = (phone ? '10px ' : '12px ') + MONO;
     for (var i = 0; i < meta.length; i++) {
       var m = meta[i], pos = state.nodePos[m.id];
-      setStroke(ctx, heatColor(state.heat.node[m.id]));
-      GLYPH[m.kind](ctx, pos.x, pos.y, pos.size);
-      ctx.fillStyle = 'rgba(221,230,242,0.92)';
-      ctx.fillText(m.label, pos.x, pos.y + pos.size + 8);
-      if (m.sub) { ctx.fillStyle = 'rgba(132,144,160,0.92)'; ctx.fillText(m.sub, pos.x, pos.y + pos.size + 20); }
+      ctx.font = subFont;
+      var lines = [m.label].concat(m.sub ? wrapText(ctx, m.sub, phone ? state.w * 0.31 : 300) : []);
+      var half = 0;
+      for (var k = 0; k < lines.length; k++) {
+        ctx.font = k === 0 ? font : subFont;
+        half = Math.max(half, ctx.measureText(lines[k]).width / 2 + 8);
+      }
+      var lead = phone ? 13 : 15, n = lines.length;
+      var y = pos.labAbove ? pos.y - GLYPH_TOP[m.kind] * pos.size - 8 - lead * (n - 1) : pos.y + GLYPH_BOTTOM[m.kind] * pos.size + (phone ? 13 : 16);
+      pos.lab = {
+        lines: lines, x: clamp(pos.x, half, Math.max(half, state.w - half)), y: y, lead: lead,
+        // On a stage too short for the whole diagram above the text, a node
+        // can end up behind the name. Its glyph stays, dimmed by the scrim,
+        // but its label is not printed over the name.
+        hidden: !pos.labAbove && y + lead * (n - 1) > state.textTop - 4,
+        font: font, subFont: subFont
+      };
+    }
+    state.coloFont = '600 ' + Math.round(0.34 * state.nodePos.edge.size) + 'px ' + MONO;
+  }
+  function drawLabel(ctx, lab) {
+    if (lab.hidden) return;
+    ctx.textAlign = 'center';
+    ctx.font = lab.font; ctx.fillStyle = 'rgba(221,230,242,0.92)';
+    ctx.fillText(lab.lines[0], lab.x, lab.y);
+    if (lab.lines.length < 2) return;
+    ctx.font = lab.subFont; ctx.fillStyle = 'rgba(132,144,160,0.92)';
+    for (var k = 1; k < lab.lines.length; k++) ctx.fillText(lab.lines[k], lab.x, lab.y + lab.lead * k);
+  }
+  // One scratch object for every glyph call (see the Glyphs section).
+  var G = { stroke: '', body: '', ink: '', lw: 2, heat: 0, fill: 0, simTime: 0, colo: '', coloFont: '' };
+  var TINT = [0, 0, 0];
+  function drawGlyphs(ctx, state, meta) {
+    G.fill = state.downloadProgress; G.simTime = state.simTime; G.colo = state.colo; G.coloFont = state.coloFont;
+    for (var i = 0; i < meta.length; i++) {
+      var m = meta[i], pos = state.nodePos[m.id], h = state.heat.node[m.id];
+      heatInto(MIX, REST_GLYPH, h);
+      G.heat = h.heat;
+      G.stroke = rgbCss(MIX);
+      G.body = rgbCss(mixInto(TINT, BODY, MIX, 0.07 + 0.12 * h.heat));
+      G.ink = rgbCss(mixInto(TINT, MIX, WHITE, 0.45));
+      G.lw = clamp(pos.size * 0.035, 1.4, 2.6);
+      GLYPH[m.kind](ctx, pos.x, pos.y, pos.size, G);
+      drawLabel(ctx, pos.lab);
     }
   }
 
   // ---- Real numbers: Navigation Timing, normalised so every value below is
   // a plain millisecond duration whether the browser gives us the modern
   // entry (already relative) or the legacy `performance.timing` (epoch ms).
+  function readPaint() {
+    try {
+      var fcp = performance.getEntriesByType('paint').filter(function (p) { return p.name === 'first-contentful-paint'; })[0];
+      if (fcp) return fcp.startTime;
+      var nav = performance.getEntriesByType('navigation')[0];
+      if (nav && nav.domContentLoadedEventEnd > 0) return nav.domContentLoadedEventEnd;
+    } catch (e) {}
+    var t = performance.timing;
+    return t && t.domContentLoadedEventEnd > 0 ? t.domContentLoadedEventEnd - t.navigationStart : 0;
+  }
   function readTiming() {
     var nav = null;
     try { nav = performance.getEntriesByType('navigation')[0]; } catch (e) {}
     var src = nav || performance.timing;
     function d(a, b) { return Math.max(0, (src[a] || 0) - (src[b] || 0)); }
+    var connect = d('connectEnd', 'connectStart');
     var tls = src.secureConnectionStart > 0 ? Math.max(0, src.connectEnd - src.secureConnectionStart) : 0;
-    var tcp = Math.max(0, d('connectEnd', 'connectStart') - tls);
-    var painted = 0;
-    try {
-      var fcp = performance.getEntriesByType('paint').filter(function (p) { return p.name === 'first-contentful-paint'; })[0];
-      painted = fcp ? fcp.startTime : d('domContentLoadedEventEnd', (nav ? 'startTime' : 'navigationStart'));
-    } catch (e2) {}
     var size = (nav && nav.transferSize) || 0, decoded = (nav && nav.decodedBodySize) || 0;
+    var protocol = (nav && nav.nextHopProtocol) || '';
     return {
-      dns: d('domainLookupEnd', 'domainLookupStart'), tcp: tcp, tls: tls,
+      dns: d('domainLookupEnd', 'domainLookupStart'), connect: connect, tls: tls, tcp: Math.max(0, connect - tls),
+      // A connect of zero is a connection the browser already had open.
+      // Over HTTP/3 the transport and TLS handshakes are one QUIC exchange,
+      // so neither half is reported as zero-because-reused.
+      reused: connect <= 0, quic: protocol === 'h3',
       ttfb: d('responseStart', 'requestStart'), download: d('responseEnd', 'responseStart'),
-      painted: painted, protocol: (nav && nav.nextHopProtocol) || '', size: size, decoded: decoded
+      painted: readPaint(), protocol: protocol, size: size, decoded: decoded,
+      fromCache: size === 0 && decoded > 0
     };
   }
 
+  // A phase's animation length from its real duration: tiny phases stay
+  // visible, long ones don't drag, and order and relative size stay true.
   function dur(ms) { return clamp(300 + 60 * Math.sqrt(Math.max(0, ms)), 300, 1600); }
-  function pathHops(route, color, totalMs, size) {
-    var n = route.length - 1, each = totalMs / Math.max(1, n), out = [];
-    for (var i = 0; i < n; i++) out.push({ a: route[i], b: route[i + 1], color: color, dur: each, size: size || 3 });
-    return out;
-  }
+  // No leg of a hop is faster than this, so a 2 ms phase split over four
+  // legs is still something you can watch.
+  var HOP_MIN = 210;
+  function legMs(ms, legs) { return Math.max(HOP_MIN, dur(ms) / legs); }
 
+  // A zero is a real answer, and each line says what it means.
   function fmtDns(ms, D) { return ms <= 0 ? D.host + ' · cached' : D.host + ' in ' + Math.round(ms) + ' ms'; }
-  function fmtTcp(ms) { return ms <= 0 ? 'reused connection to the edge' : 'connected to the edge in ' + Math.round(ms) + ' ms'; }
-  function fmtTls(ms, D) { return D.edgeSample.tls + ' · ' + D.edgeSample.kex + ' · ' + Math.round(ms) + ' ms (sample)'; }
-  function fmtHttp(protocol, D) {
-    var proto = protocol || D.edgeSample.http;
-    return proto + ' · edge ' + D.edgeSample.colo + ', ' + D.edgeSample.city + ' · cache ' + D.edgeSample.cache + ' (sample)';
+  function fmtConnect(t) {
+    if (t.reused) return 'reused connection to the edge';
+    if (t.quic) return 'QUIC to the edge in ' + Math.round(t.connect) + ' ms';
+    return 'connected to the edge in ' + Math.round(t.tcp) + ' ms';
   }
-  function fmtBytes(ttfb, size, decoded, download) {
-    var bytes = (size === 0 && decoded > 0) ? 'from the browser cache' : Math.max(1, Math.round(size / 1024)) + ' KB in ' + Math.round(download) + ' ms';
-    return 'first byte at ' + Math.round(ttfb) + ' ms · ' + bytes;
+  // The measured part leads and the sampled part trails, so the dim
+  // "(sample)" after it covers only what came from the sample.
+  function fmtTls(t, D) {
+    var how = t.reused ? 'reused session' : t.quic ? 'inside the QUIC handshake' : t.tls > 0 ? 'handshake in ' + Math.round(t.tls) + ' ms' : '';
+    if (!how) return { text: 'none, this hop is plain HTTP', note: '' };
+    return { text: how + ' · ' + D.edgeSample.tls + ', ' + D.edgeSample.kex, note: 'sample' };
+  }
+  function fmtHttp(t, D) {
+    if (t.fromCache) return 'served from your browser cache, nothing sent';
+    return (t.protocol || D.edgeSample.http) + ' · edge ' + D.edgeSample.colo + ', ' + D.edgeSample.city + ' · cache ' + D.edgeSample.cache;
+  }
+  function fmtBytes(t) {
+    var bytes = t.fromCache ? 'from the browser cache' : Math.max(1, Math.round(t.size / 1024)) + ' KB in ' + Math.round(t.download) + ' ms';
+    return 'first byte at ' + Math.round(t.ttfb) + ' ms · ' + bytes;
   }
   function fmtPaint(ms) { return 'on screen at ' + Math.round(ms) + ' ms'; }
 
-  // A flat, precomputed timeline: {start, hop} entries to spawn packets from,
-  // and {at, label, text} entries to write a trace line from. Both are walked
-  // by a single cursor each frame in the main loop (piece 5) — no per-phase
-  // timers. The 600ms head start matches "about 600ms after start" in the
-  // brief; GAP paces phases so the whole replay reads at human speed.
-  var GAP = 480;
-  function buildTimeline(timing, D) {
-    var cursor = 600, timeline = [], logs = [];
-    function hops(list) { for (var i = 0; i < list.length; i++) { timeline.push({ start: cursor, hop: list[i] }); cursor += list[i].dur; } }
-    function log(label, text) { logs.push({ at: cursor, label: label, text: text }); cursor += GAP; }
+  // Trace rows, in their fixed order. The log entries below name rows by
+  // index; the last row is the ping.
+  var ROW_LABELS = ['dns', 'tcp', 'tls', 'http', 'bytes', 'paint', 'ping'];
+  var ROW_HTTP = 3, ROW_PAINT = 5, ROW_PING = 6;
 
-    var dDns = dur(timing.dns) / 2;
-    hops(pathHops(['you', 'network', 'dns'], AMBER, dDns));
-    hops(pathHops(['dns', 'network', 'you'], VIOLET, dDns));
-    log('dns', fmtDns(timing.dns, D));
-
-    var dTcp = dur(timing.tcp) / 2;
-    hops(pathHops(['you', 'network', 'edge'], AMBER, dTcp));
-    hops(pathHops(['edge', 'network', 'you'], VIOLET, dTcp));
-    log('tcp', fmtTcp(timing.tcp));
-
-    var dTls = dur(timing.tls) / 4;
-    hops(pathHops(['you', 'network', 'edge'], WHITE, dTls));
-    hops(pathHops(['edge', 'network', 'you'], WHITE, dTls));
-    hops(pathHops(['you', 'network', 'edge'], WHITE, dTls));
-    hops(pathHops(['edge', 'network', 'you'], WHITE, dTls));
-    log('tls', fmtTls(timing.tls, D));
-
-    var dReq = dur(timing.ttfb), miss = D.edgeSample.cache !== 'HIT';
-    if (miss) {
-      hops(pathHops(['you', 'network', 'edge'], AMBER, dReq * 0.5));
-      hops(pathHops(['edge', 'origin'], AMBER, dReq * 0.25));
-      hops(pathHops(['origin', 'edge'], VIOLET, dReq * 0.25));
-    } else {
-      hops(pathHops(['you', 'network', 'edge'], AMBER, dReq));
+  // A flat timeline built per replay from this page's own timing: hop
+  // entries (a packet leg to spawn) and fx entries (a pulse or a glow),
+  // sorted by start, plus log entries (a trace row to type). The frame loop
+  // walks both lists with one cursor each; there are no per-phase timers.
+  // Nothing crosses the network that did not: a cached lookup lights the
+  // device, a reused connection glows along the path it already holds.
+  var GAP = 340, STAGGER = 70;
+  function buildTimeline(t, D) {
+    var cursor = 600, timeline = [], logs = [], k, end;
+    function route(ids, color, ms, size, at) {
+      for (var i = 0; i + 1 < ids.length; i++) { timeline.push({ start: at, a: ids[i], b: ids[i + 1], color: color, dur: ms, size: size || 3.4 }); at += ms; }
+      return at;
     }
-    log('http', fmtHttp(timing.protocol, D));
+    // A TLS or QUIC flight is several records at once: three packets a
+    // little apart, each way.
+    function burst(ids, ms, at) { var last = at; for (var j = 0; j < 3; j++) last = route(ids, WHITE, ms, 2.6, at + j * STAGGER); return last; }
+    function fx(at, name) { timeline.push({ start: at, fx: name }); }
+    function log(row) { logs.push({ at: cursor, row: row }); cursor += GAP; }
 
-    var dResp = dur(timing.download) / 4, k;
-    for (k = 0; k < 4; k++) hops(pathHops(['edge', 'network', 'you'], VIOLET, dResp, 2));
-    log('bytes', fmtBytes(timing.ttfb, timing.size, timing.decoded, timing.download));
+    if (t.dns > 0) {
+      var ld = legMs(t.dns, 4);
+      cursor = route(['you', 'network', 'dns'], AMBER, ld, 0, cursor);
+      cursor = route(['dns', 'network', 'you'], VIOLET, ld, 0, cursor);
+    } else { fx(cursor, 'local'); cursor += 380; }
+    log(0);
 
-    log('paint', fmtPaint(timing.painted));
-    return { timeline: timeline, logs: logs, total: cursor };
+    if (t.reused) {
+      fx(cursor, 'reuse'); cursor += 420; log(1); log(2);
+    } else if (t.quic) {
+      var lq = legMs(t.connect, 4);
+      cursor = burst(['you', 'network', 'edge'], lq, cursor);
+      cursor = burst(['edge', 'network', 'you'], lq, cursor);
+      log(1); log(2);
+    } else {
+      var lt = legMs(t.tcp, 4);
+      cursor = route(['you', 'network', 'edge'], AMBER, lt, 0, cursor);
+      cursor = route(['edge', 'network', 'you'], VIOLET, lt, 0, cursor);
+      log(1);
+      if (t.tls > 0) {
+        var ls = legMs(t.tls, 4);
+        cursor = burst(['you', 'network', 'edge'], ls, cursor);
+        cursor = burst(['edge', 'network', 'you'], ls, cursor);
+      }
+      log(2);
+    }
+
+    var miss = D.edgeSample.cache !== 'HIT';
+    if (t.fromCache) { fx(cursor, 'local'); cursor += 380; } else {
+      var lr = legMs(t.ttfb, miss ? 4 : 2);
+      cursor = route(['you', 'network', 'edge'], AMBER, lr, 0, cursor);
+      if (miss) { cursor = route(['edge', 'origin'], AMBER, lr, 0, cursor); cursor = route(['origin', 'edge'], VIOLET, lr, 0, cursor); }
+      else fx(cursor, 'hit');
+    }
+    log(ROW_HTTP);
+
+    // The response as a stream of small violet packets, pipelined rather
+    // than one after another; the count follows the real size, so a bigger
+    // page visibly reads as more traffic.
+    var respStart, respEnd;
+    if (t.fromCache) { respStart = cursor; respEnd = cursor + 500; cursor = respEnd; } else {
+      var n = clamp(Math.round(4 + Math.max(1, t.size / 1024) / 3), 4, 24);
+      var lb = legMs(t.download, 2), gap = clamp(dur(t.download) / n, 45, 110);
+      end = cursor;
+      for (k = 0; k < n; k++) end = route(['edge', 'network', 'you'], VIOLET, lb, 2.4, cursor + k * gap);
+      respStart = cursor + 2 * lb; respEnd = end; cursor = end;
+    }
+    log(4); log(ROW_PAINT); log(ROW_PING);
+    timeline.sort(function (x, y) { return x.start - y.start; });
+    return { timeline: timeline, logs: logs, respStart: respStart, respEnd: respEnd };
   }
 
   HeroLab.register({
     id: 'network',
     label: 'How you landed here',
     notes: {
-      what: 'A live network diagram that replays how your own browser reached this page: your device, your router, DNS, the edge and the origin server, timed from real numbers your browser measured.',
-      play: 'Watch the first run play on its own. Hover or tab through a node to see what it is and its measured value. Click empty space to send a real ping and watch it travel. The small button plays the landing again.',
-      cost: 'It reads the browser’s own Navigation Timing for this page. On the real site the edge, city and cache facts would come from Cloudflare’s same-origin trace endpoint instead of a sample. Nothing is stored or sent anywhere else. Reduced motion shows the finished diagram and trace log with no moving packets; without canvas it falls back to a static poster with the same log as text.'
+      what: 'A live network diagram that replays how your own browser reached this page: your device, your router, DNS, the edge and the origin server, timed from real numbers your browser measured. The screen on your device fills in as the page’s bytes arrive.',
+      play: 'Watch the first run play on its own. Hover or tab through a node to see what it is and its measured value. Once the log has finished, click empty space to send a real ping and watch it travel. The small button plays the landing again.',
+      cost: 'It reads the browser’s own Navigation Timing for this page. On the real site the edge, city, cache and TLS facts would come from Cloudflare’s same-origin trace endpoint instead of a sample. Nothing is stored or sent anywhere else. Reduced motion shows the finished diagram and trace log with no moving packets; without canvas it falls back to a static poster with the same log as text.'
     },
     create: function (host, env) {
       var D = env.data;
@@ -573,24 +984,94 @@
       if (!ctx) dom.root.classList.add('nw-fallback');
 
       var state = {
-        dpr: clamp(env.dpr || 1, 1, 2), w: 0, h: 0, phone: false,
-        nodePos: {}, pool: makePool(), pulses: makePulsePool(), heat: makeHeatMaps(), ambient: makeAmbient(16),
-        sprites: ctx ? makeSprites() : null, simTime: 0,
+        dpr: clamp(env.dpr || 1, 1, 2), w: 0, h: 0, phone: false, textTop: 0,
+        nodePos: {}, linkCtrl: makeLinkCtrl(), pool: makePool(), pulses: makePulsePool(), heat: makeHeatMaps(), ambient: makeAmbient(),
+        sprites: ctx ? makeSprites() : null, simTime: 0, colo: D.edgeSample.colo, coloFont: '',
         running: false, raf: 0, lastT: 0, destroyed: false,
-        cursor: 0, timeline: null, logs: null, tIdx: 0, lIdx: 0, replaying: false,
+        timing: readTiming(), cursor: 0, timeline: null, logs: null, tIdx: 0, lIdx: 0, replaying: false,
         ambientAccum: 0, ambientBurstAccum: 4 + Math.random() * 4, keepAccum: Math.random() * 3,
-        pingBusy: false, cardId: null, typing: null
+        pingBusy: false, cardId: null, typing: null,
+        // Cinematic camera: a critically damped follow (see smoothDamp);
+        // tx/ty is the world point it is holding on.
+        camera: { x: 0, y: 0, zoom: 1, vx: 0, vy: 0, vz: 0, tx: 0, ty: 0 },
+        camWide: true, leadPacket: null, downloadProgress: 0, respStart: 0, respEnd: 0
       };
+
+      // ---- Trace rows: the whole log is built here, every row hidden, so
+      // the text block has its final height before the first line types
+      // (and before the first resize measures it).
+      var rows = ROW_LABELS.map(function (label) {
+        var row = document.createElement('div'), b = document.createElement('b'), txt = document.createElement('span');
+        var typed = document.createElement('span'), rest = document.createElement('span'), note = document.createElement('span');
+        row.className = 'nw-row'; b.textContent = label; rest.className = 'nw-rest'; note.className = 'nw-note';
+        txt.appendChild(typed); txt.appendChild(rest); txt.appendChild(note);
+        row.appendChild(b); row.appendChild(txt);
+        dom.trace.appendChild(row);
+        return { row: row, typed: typed, rest: rest, note: note, text: '' };
+      });
+      var pingHint = (env.isTouch ? 'tap' : 'click') + ' anywhere to send a ping';
+      function setRow(r, text, noteText) {
+        r.text = text; r.typed.textContent = ''; r.rest.textContent = text;
+        r.note.textContent = noteText ? ' (' + noteText + ')' : '';
+        r.note.classList.add('nw-wait'); r.row.classList.remove('nw-on');
+      }
+      function showRow(r) { r.row.classList.add('nw-on'); r.typed.textContent = r.text; r.rest.textContent = ''; r.note.classList.remove('nw-wait'); }
+      function fillRows() {
+        var t = state.timing, tls = fmtTls(t, D);
+        setRow(rows[0], fmtDns(t.dns, D));
+        setRow(rows[1], fmtConnect(t));
+        setRow(rows[2], tls.text, tls.note);
+        setRow(rows[ROW_HTTP], fmtHttp(t, D), t.fromCache ? '' : 'sample');
+        setRow(rows[4], fmtBytes(t));
+        setRow(rows[ROW_PAINT], fmtPaint(t.painted));
+        setRow(rows[ROW_PING], pingHint);
+        rows[ROW_PING].row.classList.add('nw-hint');
+      }
+      // First paint is often recorded after this module starts, so the paint
+      // row re-reads it at the moment it is written.
+      function refreshPaint() {
+        var p = readPaint();
+        if (p > 0 && p !== state.timing.painted) { state.timing.painted = p; rows[ROW_PAINT].text = fmtPaint(p); rows[ROW_PAINT].rest.textContent = rows[ROW_PAINT].text; }
+      }
+      fillRows();
+
+      // A line types at a terminal's pace, and faster when the next row is
+      // due sooner, so every line finishes typing before the next begins.
+      var TYPE_CPS = 60;
+      function startTyping(r) {
+        // Two rows due in one frame (a slow frame, a tab resume): finish the
+        // one in flight rather than orphan it half-typed.
+        if (state.typing) showRow(state.typing.r);
+        r.row.classList.add('nw-on');
+        var next = state.logs && state.lIdx < state.logs.length ? state.logs[state.lIdx].at - state.cursor : Infinity;
+        state.typing = { r: r, shown: 0, cps: Math.max(TYPE_CPS, r.text.length / Math.max(0.12, next * 0.85 / 1000)) };
+      }
+      function advanceTyping(dt) {
+        var ty = state.typing;
+        if (!ty) return;
+        ty.shown += dt * ty.cps;
+        var full = ty.r.text, n = Math.min(full.length, Math.floor(ty.shown));
+        ty.r.typed.textContent = full.slice(0, n); ty.r.rest.textContent = full.slice(n);
+        if (n >= full.length) { ty.r.note.classList.remove('nw-wait'); state.typing = null; }
+      }
 
       // ---- Node buttons: invisible, focusable overlays so keyboard users
       // reach the same info a hover gives a mouse. The glyphs themselves are
       // canvas-drawn, so this is the only real DOM per node.
+      function nodeInfo(id) {
+        var t = state.timing;
+        if (id === 'you') return 'Your device · ' + meta[0].sub;
+        if (id === 'network') return 'Your router · every request leaves through it';
+        if (id === 'dns') return 'DNS resolver · ' + (t.dns <= 0 ? 'answered from cache' : 'answered in ' + Math.round(t.dns) + ' ms');
+        if (id === 'edge') return 'Cloudflare edge ' + D.edgeSample.colo + ' · ' + D.edgeSample.city + ' · cache ' + D.edgeSample.cache + ' (sample)';
+        return 'Origin server · ' + D.origin;
+      }
       var buttons = {};
       meta.forEach(function (m) {
         var b = document.createElement('button');
         b.type = 'button';
         b.className = 'nw-node-btn';
-        b.setAttribute('aria-label', m.label + (m.sub ? ', ' + m.sub : ''));
+        b.setAttribute('aria-label', nodeInfo(m.id));
         b.addEventListener('mouseenter', function () { showCard(m.id); });
         b.addEventListener('mouseleave', function () { hideCard(m.id); });
         b.addEventListener('focus', function () { showCard(m.id); });
@@ -598,137 +1079,171 @@
         dom.nodesLayer.appendChild(b);
         buttons[m.id] = b;
       });
-
-      function nodeInfo(id) {
-        var t = state.timing;
-        if (id === 'you') return 'Your device · ' + (meta[0].sub || 'direct visit');
-        if (id === 'network') return 'Your router · relays every request from your device.';
-        if (id === 'dns') return 'DNS resolver · ' + (t ? (t.dns <= 0 ? 'answered from cache' : 'answered in ' + Math.round(t.dns) + ' ms') : 'not yet measured');
-        if (id === 'edge') return 'Cloudflare edge · ' + D.edgeSample.city + ' · cache ' + D.edgeSample.cache + ' (sample)';
-        return 'Origin server · ' + D.origin;
-      }
       function showCard(id) {
         state.cardId = id;
-        var info = nodeInfo(id);
-        dom.card.textContent = info;
-        // The card itself is aria-hidden (it is a visual echo), so a screen
-        // reader gets the same live, measured text through the button's own
-        // accessible name instead of a static label.
-        buttons[id].setAttribute('aria-label', info);
-        var p = state.nodePos[id];
+        dom.card.textContent = nodeInfo(id);
+        var p = state.nodePos[id], cam = state.camera;
         if (!p) return;
-        var left = p.x + p.size + 14, top = p.y - 10;
-        if (left + 230 > state.w) left = p.x - p.size - 14 - 230;
-        top = clamp(top, 8, Math.max(8, state.h - 60));
+        // Node positions are world coordinates; the card lives in screen
+        // space, so it goes through the same camera the canvas does.
+        var z = cam.zoom, sx = (p.x - cam.x) * z + state.w / 2, sy = (p.y - cam.y) * z + state.h / 2, r = p.size * z;
+        var left = sx + r + 14, top = clamp(sy - 10, 8, Math.max(8, state.h - 60));
+        if (left + 230 > state.w) left = sx - r - 14 - 230;
         dom.card.style.left = clamp(left, 8, Math.max(8, state.w - 238)) + 'px';
         dom.card.style.top = top + 'px';
         dom.card.classList.add('nw-show');
       }
       function hideCard(id) { if (state.cardId === id) { state.cardId = null; dom.card.classList.remove('nw-show'); } }
 
+      // Positions, wires, labels and hit areas, from the stage size and, on a
+      // phone, the measured top of the text block.
+      function layout() {
+        // Side by side when the name and the log fit with room between
+        // them; stacked otherwise. Measured with the stack off, since
+        // stacking is what moves the log.
+        // When the name would run into the log, it first shrinks to fit
+        // (the log's width is fixed by its longest line); only when that
+        // would take it below 3rem does the log move under the tagline.
+        dom.root.classList.remove('nw-stack');
+        dom.name.style.fontSize = '';
+        dom.tagline.style.maxWidth = '';
+        var stacked = false;
+        if (!state.phone) {
+          var nr = dom.nameText.getBoundingClientRect(), logLeft = dom.readout.getBoundingClientRect().left;
+          var room = logLeft - 40 - nr.left;
+          if (nr.width > room) {
+            var fit = parseFloat(getComputedStyle(dom.name).fontSize) * room / nr.width * 0.99;
+            if (fit >= 48) dom.name.style.fontSize = fit + 'px';
+            else { stacked = true; dom.root.classList.add('nw-stack'); }
+          }
+          // The tagline wraps short of the log too, rather than running
+          // up against its first column.
+          if (!stacked) dom.tagline.style.maxWidth = 'min(46ch, ' + Math.max(160, logLeft - 40 - dom.tagline.getBoundingClientRect().left) + 'px)';
+        }
+        // The top of the text block: the name, or the log beside it if the
+        // log is the taller of the two.
+        state.textTop = dom.hero.offsetTop + (state.phone || stacked ? 0 : Math.min(0, dom.readout.offsetTop));
+        state.nodePos = layoutPositions(state.w, state.h, state.phone, state.textTop);
+        layoutLinks(state);
+        if (ctx) layoutLabels(ctx, state, meta);
+        meta.forEach(function (m) {
+          var p = state.nodePos[m.id], hit = p.size * 1.7, btn = buttons[m.id];
+          btn.style.left = p.x + 'px'; btn.style.top = p.y + 'px';
+          btn.style.width = hit + 'px'; btn.style.height = hit + 'px'; btn.style.margin = (-hit / 2) + 'px 0 0 ' + (-hit / 2) + 'px';
+        });
+      }
       function resize(w, h) {
         state.w = w; state.h = h; state.phone = w <= 520;
         dom.root.classList.toggle('nw-phone', state.phone);
-        state.nodePos = layoutPositions(w, h, state.phone);
-        resizeAmbient(state.ambient, w, h);
         if (ctx) { dom.canvas.width = Math.max(1, Math.round(w * state.dpr)); dom.canvas.height = Math.max(1, Math.round(h * state.dpr)); }
-        meta.forEach(function (m) {
-          var p = state.nodePos[m.id];
-          buttons[m.id].style.left = p.x + 'px'; buttons[m.id].style.top = p.y + 'px';
-        });
+        layout();
+        resizeAmbient(state.ambient, w, h);
+        // Keep the wide shot actually wide across a resize, but only while
+        // wide, so a resize mid-replay does not fight the follow camera.
+        if (state.camWide) { state.camera.x = w / 2; state.camera.y = h / 2; state.camera.zoom = 1; }
         if (state.cardId) showCard(state.cardId);
         renderNow();
       }
+      // The name's web font changes the text block's height once it loads.
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { if (!state.destroyed && state.w) { layout(); renderNow(); } });
+      }
 
-      // ---- Drawing: canvas is HiDPI-scaled once per frame so every other
-      // coordinate below is plain CSS px.
+      // ---- Drawing: canvas is HiDPI-scaled once per frame, cleared in that
+      // plain space, THEN the camera is applied so world content draws in
+      // world px regardless of zoom. The invisible node-button layer gets
+      // the identical CSS transform, so hit areas track the camera too.
       function draw() {
         if (!ctx) return;
         ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
         ctx.clearRect(0, 0, state.w, state.h);
+        var cam = state.camera;
+        ctx.translate(state.w / 2, state.h / 2);
+        ctx.scale(cam.zoom, cam.zoom);
+        ctx.translate(-cam.x, -cam.y);
         drawAmbient(ctx, state.ambient);
         drawLinks(ctx, state, state.simTime);
-        drawGlyphs(ctx, state, meta, state.phone);
         drawPackets(ctx, state);
+        drawGlyphs(ctx, state, meta);
         drawPulses(ctx, state.pulses, state.nodePos);
+        dom.nodesLayer.style.transform = 'translate(' + (state.w / 2) + 'px,' + (state.h / 2) + 'px) scale(' + cam.zoom + ') translate(' + (-cam.x) + 'px,' + (-cam.y) + 'px)';
       }
       function renderNow() { if (!state.running) draw(); }
 
-      // Builds the row + label immediately; returns the text node the caller
-      // fills in, either all at once (appendLogEntry) or typed out over time
-      // (startTyping). One shape, so reduced motion and the live loop render
-      // an identical line, just at different speeds.
-      function makeLogRow(entry) {
-        var row = document.createElement('div'), b = document.createElement('b'), span = document.createElement('span');
-        b.textContent = (entry.label + '      ').slice(0, 6);
-        row.appendChild(b); row.appendChild(span);
-        dom.trace.appendChild(row);
-        return span;
-      }
-      function appendLogEntry(entry) { makeLogRow(entry).textContent = entry.text; }
-      var TYPE_CPS = 46;
-      function startTyping(entry) {
-        // If two log thresholds are crossed in the same frame (a slow frame,
-        // a tab resume), finish the line already in flight instantly rather
-        // than orphaning it half-typed when state.typing is replaced.
-        if (state.typing) state.typing.span.textContent = state.typing.full;
-        state.typing = { span: makeLogRow(entry), full: entry.text, shown: 0 };
-      }
-      function advanceTyping(dt) {
-        var ty = state.typing;
-        if (!ty) return;
-        ty.shown += dt * TYPE_CPS;
-        var n = Math.min(ty.full.length, Math.floor(ty.shown));
-        ty.span.textContent = ty.full.slice(0, n);
-        if (n >= ty.full.length) state.typing = null;
-      }
-
-      // Builds (or rebuilds, for the replay button) the flat hop/log
-      // timeline from this page's own real timing. The loop below is the
-      // only thing that ever advances it. "This is you": a ripple opens the
-      // run from the node the whole diagram is about.
+      // Builds (or rebuilds, for the replay button) the timeline from this
+      // page's own timing. "This is you": a ripple opens the run from the
+      // node the whole diagram is about, with the camera close on it.
       function startReplay() {
-        if (!state.timing) state.timing = readTiming();
         var built = buildTimeline(state.timing, D);
         state.timeline = built.timeline; state.logs = built.logs;
         state.tIdx = 0; state.lIdx = 0; state.cursor = 0; state.replaying = true; state.typing = null;
-        dom.trace.textContent = '';
-        if (ctx) spawnPulse(state.pulses, 'you', WHITE, 950, 78);
+        state.respStart = built.respStart; state.respEnd = built.respEnd; state.downloadProgress = 0;
+        state.leadPacket = null; state.camWide = false;
+        fillRows();
+        if (ctx) {
+          var you = state.nodePos.you, cam = state.camera, z = camZoom(state);
+          spawnPulse(state.pulses, 'you', WHITE, 950, you.size * 2.6 + 30);
+          cam.tx = you.x; cam.ty = you.y;
+          cam.x = you.x; cam.y = camCentreY(state, you.y, z); cam.zoom = z; cam.vx = cam.vy = cam.vz = 0;
+        }
       }
-      // Reduced motion never runs the loop, so the whole replay is resolved
-      // at once: every hop's heat is applied in order (last write wins per
-      // node/link, which is exactly the state an animated run would settle
-      // into) and the full log is written in one pass.
+      // Reduced motion never runs the loop, so the whole replay resolves at
+      // once: every hop's heat is applied in order (last write wins, which is
+      // the state an animated run settles into) and every row is shown.
       function renderFinalState() {
-        if (!state.timing) state.timing = readTiming();
         var built = buildTimeline(state.timing, D);
-        state.logs = built.logs;
+        state.downloadProgress = 1;
+        state.camWide = true;
+        var cam = state.camera;
+        cam.x = state.w / 2; cam.y = state.h / 2; cam.zoom = 1; cam.vx = cam.vy = cam.vz = 0;
         built.timeline.forEach(function (e) {
-          var h = e.hop, key = linkKey(h.a, h.b);
-          if (state.heat.link[key]) { state.heat.link[key].heat = 0.55; state.heat.link[key].r = h.color[0]; state.heat.link[key].g = h.color[1]; state.heat.link[key].b = h.color[2]; }
-          [h.a, h.b].forEach(function (id) { if (state.heat.node[id]) { state.heat.node[id].heat = 0.5; state.heat.node[id].r = h.color[0]; state.heat.node[id].g = h.color[1]; state.heat.node[id].b = h.color[2]; } });
+          if (e.fx) return;
+          var l = LINK_OF[e.a + '>' + e.b], lh = l && state.heat.link[l.key];
+          if (lh) { lh.heat = 0.55; lh.r = e.color[0]; lh.g = e.color[1]; lh.b = e.color[2]; }
+          [e.a, e.b].forEach(function (id) { var nh = state.heat.node[id]; if (nh) { nh.heat = 0.5; nh.r = e.color[0]; nh.g = e.color[1]; nh.b = e.color[2]; } });
         });
-        dom.trace.textContent = '';
-        built.logs.forEach(appendLogEntry);
+        fillRows(); refreshPaint();
+        rows.forEach(showRow);
         draw();
       }
 
+      function runFx(e) {
+        var you = state.nodePos.you, edge = state.nodePos.edge;
+        if (e.fx === 'local') { bumpHeat(state.heat.node.you, WHITE); spawnPulse(state.pulses, 'you', WHITE, 700, you.size * 1.8 + 20); }
+        else if (e.fx === 'reuse') {
+          bumpHeat(state.heat.link[LINK_KEYS[0]], WHITE, 1); bumpHeat(state.heat.link[LINK_KEYS[2]], WHITE, 1);
+          bumpHeat(state.heat.node.edge, WHITE); spawnPulse(state.pulses, 'edge', WHITE, 600, edge.size * 1.7 + 16);
+        }
+        else if (e.fx === 'hit') { bumpHeat(state.heat.node.edge, AMBER); spawnPulse(state.pulses, 'edge', WHITE, 650, edge.size * 1.9 + 18); }
+        else if (e.fx === 'pong') { state.pingBusy = false; setPing(e.text, false); }
+      }
       function advanceTimeline(dt) {
         if (!state.timeline) return;
         state.cursor += dt * 1000;
-        while (state.tIdx < state.timeline.length && state.cursor >= state.timeline[state.tIdx].start) {
-          var h = state.timeline[state.tIdx].hop;
-          spawnPacket(state.pool, 'main', h.a, h.b, h.color, h.dur, h.size);
-          state.tIdx++;
+        var tl = state.timeline;
+        while (state.tIdx < tl.length && state.cursor >= tl[state.tIdx].start) {
+          var e = tl[state.tIdx++];
+          if (e.fx) { runFx(e); continue; }
+          // The lead packet is the newest hop, furthest along the route; the
+          // camera (updateCamera) follows it.
+          var np = spawnPacket(state.pool, 'main', e.a, e.b, e.color, e.dur, e.size);
+          if (np) state.leadPacket = np;
         }
         while (state.lIdx < state.logs.length && state.cursor >= state.logs[state.lIdx].at) {
-          startTyping(state.logs[state.lIdx]); state.lIdx++;
+          var row = state.logs[state.lIdx++].row;
+          // The request has landed at the edge: the route is decided and
+          // nothing is left to chase, so the camera pulls out for the response.
+          if (row === ROW_HTTP) state.camWide = true;
+          if (row === ROW_PAINT) refreshPaint();
+          startTyping(rows[row]);
         }
-        if (state.replaying && state.lIdx >= state.logs.length) state.replaying = false;
+        if (state.respEnd > state.respStart) {
+          state.downloadProgress = clamp((state.cursor - state.respStart) / (state.respEnd - state.respStart), 0, 1);
+        }
+        if (state.replaying && state.lIdx >= state.logs.length && !state.typing) state.replaying = false;
       }
-      // Roughly 3x the quiet pass's rate, and itself denser by day (payments
-      // at scale) than by night, so the field's own pace tells the same
-      // day/night story the packet colour does.
+      // The field's own pace tells the day/night story the packet colour
+      // does: denser and quicker by day (payments at scale), sparser by night.
       function ambientTick(dt) {
         state.ambientAccum -= dt;
         if (state.ambientAccum > 0) return;
@@ -737,10 +1252,10 @@
         var links = state.ambient.links, pick = links[(Math.random() * links.length) | 0];
         spawnPacket(state.pool, 'ambient', pick[0], pick[1], D.hourColor(D.localMinutes()), lerp(1100, 650, day), 1.5);
       }
-      // "Occasional bursts": a short chain of ambient links carries several
+      // Occasional bursts: a short chain of ambient links carries several
       // small packets in quick succession, like a surge of traffic. Denser,
-      // faster and amber by day; sparser, slower and violet by night — both
-      // read straight off dayness, tinted by the real hourColor.
+      // faster and amber by day; sparser, slower and violet by night, tinted
+      // by the real hourColor.
       function ambientBurstTick(dt) {
         state.ambientBurstAccum -= dt;
         if (state.ambientBurstAccum > 0) return;
@@ -758,10 +1273,10 @@
         if (chain.length < 2) return;
         var hc = D.hourColor(D.localMinutes()), base = day >= 0.5 ? AMBER : VIOLET;
         var color = mix3(base, hc, 0.4);
-        var count = Math.round(lerp(4, 9, day)), legDur = lerp(760, 420, day), stagger = legDur / 2.6, t = 0;
+        var count = Math.round(lerp(4, 9, day)), leg = lerp(760, 420, day), stagger = leg / 2.6, t = 0;
         for (var k = 0; k < count; k++) {
-          var leg = k % (chain.length - 1);
-          spawnPacket(state.pool, 'ambient', chain[leg], chain[leg + 1], color, legDur, day >= 0.5 ? 1.7 : 1.3, t);
+          var li = k % (chain.length - 1);
+          spawnPacket(state.pool, 'ambient', chain[li], chain[li + 1], color, leg, day >= 0.5 ? 1.7 : 1.3, t);
           t += stagger;
         }
       }
@@ -770,8 +1285,8 @@
         state.keepAccum -= dt;
         if (state.keepAccum > 0) return;
         state.keepAccum = 3 + Math.random() * 3.5;
-        var l = LINKS[(Math.random() * LINKS.length) | 0];
-        spawnPacket(state.pool, 'main', l[0], l[1], Math.random() < 0.5 ? AMBER : VIOLET, 550, 2);
+        var l = LINKS[(Math.random() * LINKS.length) | 0], out = Math.random() < 0.5;
+        spawnPacket(state.pool, 'main', out ? l[0] : l[1], out ? l[1] : l[0], out ? AMBER : VIOLET, 550, 2);
       }
 
       function loop(tsNow) {
@@ -783,6 +1298,8 @@
         decayAllHeat(state.heat, dt);
         updatePackets(state, dt);
         updatePulses(state.pulses, dt);
+        updateCamera(state, dt);
+        driftAmbient(state.ambient, state.simTime);
         advanceTimeline(dt);
         advanceTyping(dt);
         ambientTick(dt);
@@ -791,37 +1308,48 @@
         draw();
       }
 
+      // ---- Ping: a real request, timed. One at a time, and not while the
+      // landing is still replaying (its last row is the ping's own).
+      function setPing(text, instant) {
+        var r = rows[ROW_PING];
+        r.row.classList.remove('nw-hint');
+        r.text = text; r.note.textContent = '';
+        if (instant) showRow(r); else startTyping(r);
+      }
       function finishPing(ms) {
-        state.pingBusy = false;
-        if (ms < 0) return;
-        var entry = { label: 'ping', text: 'answered in ' + Math.round(ms) + ' ms' };
-        if (reduced || !ctx || !state.running) {
-          appendLogEntry(entry);
-          if (ctx) {
+        if (state.destroyed) return;
+        var text = ms < 0 ? 'no answer this time' : 'answered in ' + Math.round(ms) + ' ms';
+        if (reduced || !ctx || !state.running || ms < 0) {
+          state.pingBusy = false;
+          setPing(text, reduced || !state.running);
+          if (ctx && ms >= 0) {
             bumpHeat(state.heat.node.edge, VIOLET);
-            bumpHeat(state.heat.link[linkKey('you', 'network')], VIOLET);
-            bumpHeat(state.heat.link[linkKey('network', 'edge')], VIOLET);
-            draw();
+            bumpHeat(state.heat.link[LINK_KEYS[0]], VIOLET, -1);
+            bumpHeat(state.heat.link[LINK_KEYS[2]], VIOLET, -1);
+            renderNow();
           }
           return;
         }
-        var half = clamp(ms / 2, 150, 700), base = state.cursor + 30, t = base;
-        pathHops(['you', 'network', 'edge'], AMBER, half).concat(pathHops(['edge', 'network', 'you'], VIOLET, half))
-          .forEach(function (h) { state.timeline.push({ start: t, hop: h }); t += h.dur; });
-        state.logs.push({ at: t, label: entry.label, text: entry.text });
+        // The packet travels the measured round trip (clamped to watchable),
+        // and the row updates when it lands, not when the fetch resolved.
+        var leg = clamp(ms / 4, HOP_MIN, 500), t = state.cursor + 30, tl = state.timeline;
+        [['you', 'network'], ['network', 'edge']].forEach(function (h) { tl.push({ start: t, a: h[0], b: h[1], color: AMBER, dur: leg, size: 3 }); t += leg; });
+        [['edge', 'network'], ['network', 'you']].forEach(function (h) { tl.push({ start: t, a: h[0], b: h[1], color: VIOLET, dur: leg, size: 3 }); t += leg; });
+        tl.push({ start: t, fx: 'pong', text: text });
       }
       function ping() {
-        if (state.pingBusy) return;
+        if (state.pingBusy || state.replaying || !state.timeline && ctx && !reduced) return;
         state.pingBusy = true;
         var t0 = performance.now();
         fetch('network.js', { cache: 'no-store' }).then(function () { finishPing(performance.now() - t0); }).catch(function () { finishPing(-1); });
       }
-      dom.click.addEventListener('click', ping);
-      dom.replay.addEventListener('click', function () {
+      function onReplay() {
         if (reduced || !ctx) { renderFinalState(); return; }
         startReplay();
         if (!state.running) start();
-      });
+      }
+      dom.click.addEventListener('click', ping);
+      dom.replay.addEventListener('click', onReplay);
 
       function start() {
         if (state.destroyed) return;
@@ -837,6 +1365,7 @@
         state.destroyed = true;
         stop();
         dom.click.removeEventListener('click', ping);
+        dom.replay.removeEventListener('click', onReplay);
         if (dom.root.parentNode) dom.root.parentNode.removeChild(dom.root);
       }
 
