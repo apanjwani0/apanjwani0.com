@@ -8986,6 +8986,100 @@ console.log('ui refresh: spacing rungs increase in order, the head bootstrap mat
 }
 console.log('ui refresh: the kit parse is bounded and its bookmarks export writes only escaped https tool links; the 404 suggests what a typo meant and nothing to a scanner')
 
+/* ─────  Home hero candidates: the dev-only ?hero= switch  ─────
+
+   Two live heroes (liquid light, network) are under review on the real page
+   before the owner picks one. Production renders the classic hero whatever the
+   query says, and three things about that must not drift while they wait:
+
+   1. The switch reads its query only under `import.meta.env.DEV`, a
+      build-time constant, and falls back to the classic hero. The pill that
+      flips between them renders only there too, and a classic page carries no
+      hero script at all.
+   2. No tools or games in the hero (owner, 2026-09-27: not in the copy, not a
+      link, not a "discover" affordance). This is checked over the tagline, the
+      hero section's markup, and every string literal and stylesheet the live
+      heroes ship. The meta description is deliberately outside the rule.
+   3. The test hooks the heroes keep (`?at=`, `?scale=`) are dev-only: every
+      read of `location.search` in their modules sits behind the same constant. */
+{
+  const styleUrl = n => new URL(`../src/styles/${n}`, import.meta.url)
+  const homeSrc = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf-8')
+  const [frontmatter, template] = homeSrc.split(/^---$/m).slice(1)
+
+  // ── 1. Dev-only, classic by default, and no script on the classic hero ──
+  assert.equal((frontmatter.match(/searchParams/g) ?? []).length, 1,
+    'the home page reads exactly one query parameter, the dev-only hero switch')
+  assert.match(frontmatter, /=\s*import\.meta\.env\.DEV\s*\?\s*Astro\.url\.searchParams\.get\('hero'\)\s*:\s*null\b/,
+    "?hero= is read only when import.meta.env.DEV, so a production build ignores it")
+  assert.match(frontmatter, /\?\?\s*'classic'/, 'an absent or unknown ?hero= falls back to the classic hero')
+  const devBlocks = [...template.matchAll(/\{import\.meta\.env\.DEV && \(([\s\S]*?)\n  \)\}/g)].map(m => m[1])
+  assert.ok(devBlocks.some(b => b.includes('data-type="hero-switch"')), 'the hero switch renders inside an import.meta.env.DEV block')
+  assert.equal((template.match(/data-type="hero-switch"/g) ?? []).length, 1, '…and nowhere else')
+  const heroScript = template.match(/\{liveHero && \(\s*<script>([\s\S]*?)<\/script>\s*\)\}/)
+  assert.ok(heroScript && /initHero\(\)/.test(heroScript[1]),
+    'the hero mount script renders only for a live hero, so the classic hero downloads none of it')
+  assert.equal((template.match(/<script>/g) ?? []).length, 1, 'the page has one bundled script, the gated hero mount')
+
+  // ── 2. No tools or games anywhere in the hero ──
+  const banned = /\b(tools?|games?)\b|\/(tools|games)\b/i
+  const tagline = frontmatter.match(/const heroTagline =\s*'([^']*)'/)
+  assert.ok(tagline, 'the hero line is one literal')
+  assert.doesNotMatch(tagline[1], banned, 'the hero line names no tools or games')
+  const section = template.match(/<section data-type="hero"[\s\S]*?<\/section>/)
+  assert.ok(section, 'the hero section is found')
+  assert.doesNotMatch(section[0].replace(/\{\/\*[\s\S]*?\*\/\}/g, ''), banned, 'the hero markup links and names no tools or games')
+  // Every string literal a live hero ships, comments dropped first, so a
+  // docblock may still say why the rule exists.
+  const literalsOf = (code) => {
+    const out = []
+    for (let i = 0; i < code.length; i += 1) {
+      const c = code[i]
+      if (c === '/' && code[i + 1] === '/') { i = code.indexOf('\n', i); if (i < 0) break; continue }
+      if (c === '/' && code[i + 1] === '*') { i = code.indexOf('*/', i + 2) + 1; if (i <= 0) break; continue }
+      if (c === "'" || c === '"' || c === '`') {
+        let j = i + 1
+        while (j < code.length && code[j] !== c) j += code[j] === '\\' ? 2 : 1
+        out.push(code.slice(i + 1, j))
+        i = j
+      }
+    }
+    return out
+  }
+  const heroDir = new URL('../src/components/home/hero/', import.meta.url)
+  const heroFiles = (await readdir(heroDir)).filter(f => f.endsWith('.ts'))
+  for (const need of ['types.ts', 'day.ts', 'clock.ts', 'mount.ts', 'liquid.ts', 'network.ts']) {
+    assert.ok(heroFiles.includes(need), `src/components/home/hero/${need} exists — has the hero moved?`)
+  }
+  for (const file of heroFiles) {
+    const code = await readFile(new URL(file, heroDir), 'utf-8')
+    for (const literal of literalsOf(code)) {
+      assert.doesNotMatch(literal, banned, `src/components/home/hero/${file} ships a string naming tools or games: "${literal.slice(0, 80)}"`)
+    }
+    // ── 3. Test hooks are dev-only ── (whole comment lines dropped, so a
+    // docblock naming the constant cannot stand in for the gate itself)
+    const live = code.split('\n').filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n')
+    for (const m of live.matchAll(/\blocation\.search\b/g)) {
+      assert.ok(live.slice(Math.max(0, m.index - 240), m.index).includes('import.meta.env.DEV'),
+        `src/components/home/hero/${file} reads location.search outside an import.meta.env.DEV gate — a test hook would ship`)
+    }
+  }
+  for (const sheet of ['hero-liquid.css', 'hero-network.css', 'home.css']) {
+    const css = (await readFile(styleUrl(sheet), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.doesNotMatch(css.replace(/\[data-type="[^"]*"\]/g, ''), banned, `${sheet} puts no tools or games into the hero`)
+  }
+  // The live heroes load only through mount.ts's per-hero dynamic imports.
+  const mountSrc = await readFile(new URL('mount.ts', heroDir), 'utf-8')
+  for (const id of ['liquid', 'network']) {
+    assert.match(mountSrc, new RegExp(`${id}: \\(\\) => import\\('\\./${id}'\\)`), `${id} is its own lazily imported chunk`)
+  }
+  for (const file of heroFiles.filter(f => f !== 'mount.ts')) {
+    const code = await readFile(new URL(file, heroDir), 'utf-8')
+    assert.doesNotMatch(code, /from '\.\/(liquid|network)'|import\('\.\/(liquid|network)'\)/, `${file} does not pull a hero into another chunk`)
+  }
+}
+console.log('home hero: the ?hero= switch is dev-only and classic by default, no hero names tools or games, and its test hooks compile out of production')
+
 /* ══════════════  UI refresh · anchor regions for items B–G  ══════════════
 
    One region per item, each with its own banner and end marker. An item adds

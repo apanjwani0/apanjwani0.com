@@ -22,7 +22,7 @@ KV; the bundled `src/config/*.ts` files are the git-tracked fallbacks.
 - `src/config/*.ts` — config interfaces + default data (git source of truth & KV fallback).
 - `src/lib/config.ts` — KV-aware accessors (`getSite`, `getProjects`, …). The only sanctioned way to read config.
 - `src/pages/` — routes; `src/pages/admin.astro` (config editor) and `src/pages/api/admin/save.ts` (save allowlist).
-- `src/layouts/` — page shells; `src/components/` (`home/`, `tools/`, `games/`) — UI pieces.
+- `src/layouts/` — page shells; `src/components/` (`home/`, `tools/`, `games/`) — UI pieces. `src/components/home/hero/` holds the live home-hero candidates (see *Home hero candidates*).
 - `src/lib/caa.ts` — the CAA vocabulary (`issue`/`issuewild`, the CA identifier registry, issuer→identifier mapping, and the renewal outlook) shared by DNS Sightline and Chainsaw. Hoisted like `src/lib/ip.ts`; Sightline re-exports its old `sg*` names.
 - `src/styles/theme.css` — design tokens (single source of truth for palette/fonts/scale/spacing).
 - `src/lib/theme.ts` — the visitor's theme preference, `ROOT_BOOT_JS` (the head bootstrap) and the ClientRouter swap patch; `src/lib/site-ui.ts` — `initSiteUI()`, the chrome both shells start. See **UI refresh** below.
@@ -1082,6 +1082,10 @@ was a second, mirrored fixture that does.
   mid-sentence in card copy. `Base.astro` still defaults `starfield={true}`, so
   **the home hero keeps it** and that is the one place it is load-bearing for
   the site's identity; a new listing page should pass `starfield={false}`.
+  The one exception is the dev server's live heroes (`?hero=liquid|network`,
+  see *Home hero candidates*): each draws its own full-bleed canvas, so the page
+  passes `starfield={false}` for them. The classic hero, which production
+  renders, still has it.
 - **Fonts on tools/games**: Tool and game detail pages pass `loadFonts={false}` to `Head`. This avoids mobile CLS and a render-blocking third-party font request on utility pages; fallback system fonts are acceptable there.
 - **ClientRouter on tools/games**: Direct tool and game detail pages pass `clientRouter={false}` to `Head` to avoid loading Astro's client navigation bundle on utility-first landing pages. Keep normal navigation working through full-page loads there.
 - **No JS framework**: Oat uses WebComponents for dynamic behavior. Avoid adding React/Vue/Svelte unless absolutely necessary.
@@ -1393,6 +1397,56 @@ points `site-ui.ts` calls are empty: they are the interfaces those items build o
 covered by
 `security:smoke` so they cannot rot in the meantime. The empty, labelled regions
 at the end of `scripts/security-smoke.mjs` are where each item's assertions go.
+
+## Home hero candidates (dev only, 2026-09)
+
+Two live heroes are under review on the real page before the owner picks one:
+**liquid light** (a WebGL fluid simulation in the colour of the hour) and
+**network** (a replay of how this page load reached the visitor). Both were
+approved in the Hero Lab; the lab source is on the `wip/ui-refresh-notes`
+branch until one ships. **Production renders the classic hero.** On the dev
+server, `/?hero=liquid`, `/?hero=network` and `/?hero=classic` switch between
+them, and so does the pill `nav[data-type="hero-switch"]` that only the dev
+server renders.
+
+- **The switch is dev-only by construction.** `src/pages/index.astro` reads the
+  query as `import.meta.env.DEV ? … : null`. That is a build-time constant, so a
+  production build never looks, and anything else falls back to `classic`. A
+  classic page renders no hero script, so its visitors download none of this.
+- **Text is server-rendered and shared.** All three heroes render the same h1,
+  tagline and social links in the HTML. A live hero reads them through
+  `env.text` and positions around them (liquid's shader mask measures them);
+  it never draws its own copy. The live heroes drop the avatar and the
+  StarField, and their section carries `data-theme="dark"`: the canvas is dark
+  at every hour, so the tokens inside it must be too, whatever theme a visitor
+  stored.
+- **The contract** is `src/components/home/hero/types.ts`: `create(host, env)`
+  returns `{ start, stop, resize, destroy }`, the Hero Lab's contract carried
+  over. `mount.ts` is the only caller. It imports each hero as its own chunk,
+  mounts on `astro:page-load`, destroys on `astro:before-swap`, runs a hero only
+  while the tab is visible and the hero is on screen, and passes `env.signal`,
+  which every document or window listener a hero adds must take. `day.ts` is
+  the owner's clock (IST, no city, at the owner's request) and `clock.ts` the
+  24-hour scrubber. Styles are `home.css` (shared) plus
+  `hero-liquid.css` / `hero-network.css`.
+- **No tools or games in the hero.** The owner asked for none (2026-09-27): not
+  in the copy, not as a link, not as a hover-to-discover affordance, not even
+  by name. The meta description keeps listing them, because search is where
+  that helps.
+- **Test hooks are dev-only too.** `?at=HH:MM` pins the clock and liquid's
+  `?scale=` pins its resolution for screenshots under a software renderer.
+  Both are read behind `import.meta.env.DEV`.
+- **Looping motion is allowed here and nowhere else.** The refresh's motion rule
+  forbids decoration that loops; the home hero is the owner's explicit
+  exception. It still stops when hidden or off screen, and under
+  `prefers-reduced-motion` it renders one still frame.
+
+`security:smoke` holds the switch to dev, the fallback to classic, the hero to
+no tools or games (the tagline, the section markup, and every string literal
+and stylesheet the heroes ship), the hooks to the DEV gate, and each hero to its
+own chunk. **When the owner picks one,** delete the switch, the other hero and
+its stylesheet in the same change, make the pick the page's only hero, and
+update this section and the StarField note above.
 
 ## Skills & Commands
 

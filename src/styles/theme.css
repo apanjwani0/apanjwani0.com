@@ -43,6 +43,7 @@
   --color-border: #b7b7b7;   /* hairlines / dividers            */
   --color-bg-blur: rgba(255, 255, 255, 0.82); /* translucent bg for the sticky header */
   --color-accent: #6a5bd0;   /* violet — links, markers, trail  */
+  --color-day: #ffb35c;      /* amber — the day end of the live home hero's clock (theme-free: that hero is always dark) */
   /* A tinted fill for "yours / selected" (a starred tool, the active palette
      row). ONLY --color-text may sit on it: muted ink on a tint reads as
      disabled whatever its ratio says. */
@@ -102,6 +103,8 @@
   --text-display: clamp(2rem, 7vw, 3.5rem);   /* home hero name  */
   --text-lead: clamp(1rem, 2.7vw, 1.3rem);    /* home tagline    */
   --text-label: clamp(0.72rem, 2vw, 0.8rem);  /* mono nav + small links */
+  --text-hero-name: clamp(3rem, 9vw, 7.5rem);         /* live home hero name (?hero=) */
+  --text-hero-line: clamp(0.85rem, 1.6vw, 1.05rem);   /* live home hero tagline      */
   --text-wordmark: clamp(1.05rem, 1rem + 0.6vw, 1.2rem);  /* header wordmark — fluid 1.05→1.2 */
 
   /* ── Spacing ───────────────────────────────────────────────
