@@ -1,0 +1,9 @@
+node_modules
+dist
+.astro
+.env
+.env.*
+.git
+.claude
+*.md
+data/*.json

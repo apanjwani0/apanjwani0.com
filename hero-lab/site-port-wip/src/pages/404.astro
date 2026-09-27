@@ -1,0 +1,78 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import { getSite, navLinks } from '../lib/config'
+
+// The suggested links are DERIVED from navLinks(), never hand-written: a
+// hand-written list is one more consumer of "which sections exist" that no
+// predicate reaches — this page advertised /blogs on every 404 for five days
+// after the section was gated hidden, because it was the one link list that
+// read no flag. navLinks() already applies isBlogsPublic (and whatever gate
+// comes next), so this page can no longer disagree with the nav and footer.
+const site = await getSite(Astro.locals)
+const links = navLinks(site)
+---
+
+<!-- noindex: an error page should never enter the index (it can be served for any
+     unknown URL, and an indexed 404 is a soft-404 in Search Console). -->
+<Base title="404" description="That page wandered off — here are a few good places to land instead." noindex>
+  <section data-type="notfound" aria-labelledby="nf-title">
+    <p data-type="nf-code">404</p>
+    <h1 id="nf-title">This page drifted off into space.</h1>
+    <p data-type="nf-lead">
+      The link you followed is broken or the page has moved. No harm done —
+      here are a few places worth landing instead.
+    </p>
+    <nav data-type="nf-links" aria-label="Suggested pages">
+      <a href="/">home</a>
+      {links.map(l => <a href={l.href}>{l.label}</a>)}
+    </nav>
+  </section>
+</Base>
+
+<style>
+  section[data-type="notfound"] {
+    padding: clamp(2rem, 8vw, 4rem) 0;
+    max-width: 34rem;
+  }
+
+  p[data-type="nf-code"] {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    letter-spacing: 0.25em;
+    color: var(--color-muted);
+    margin: 0 0 0.75rem;
+  }
+
+  section[data-type="notfound"] h1 {
+    font-size: var(--text-title);
+    line-height: 1.2;
+    margin: 0 0 0.9rem;
+  }
+
+  p[data-type="nf-lead"] {
+    color: var(--color-muted);
+    line-height: 1.6;
+    margin: 0 0 1.75rem;
+  }
+
+  nav[data-type="nf-links"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(1rem, 4vw, 1.75rem);
+  }
+
+  nav[data-type="nf-links"] a {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: 0.04em;
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-underline-offset: 0.35em;
+  }
+
+  nav[data-type="nf-links"] a:hover {
+    text-decoration-thickness: 2px;
+  }
+</style>

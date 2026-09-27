@@ -1,0 +1,245 @@
+/* Home — single full-bleed interactive space hero. Nav and starfield styles
+   (shared across all pages now) live in shared.css; this file owns only the
+   hero-specific content layout. */
+
+section[data-type="hero"] {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  min-height: 100svh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  /* drags pass through to the canvas; links re-enable below */
+  pointer-events: none;
+}
+
+div[data-type="hero-content"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: clamp(0.85rem, 2.5vw, 1.3rem);
+  max-width: 42rem;
+}
+
+section[data-type="hero"] h1 {
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: normal;
+  margin: 0;
+  color: var(--color-text);
+}
+
+section[data-type="hero"] p[data-type="tagline"] {
+  font-family: var(--font-serif);
+  font-size: var(--text-lead);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 34rem;
+  color: var(--color-muted);
+}
+
+nav[data-type="hero-links"] {
+  display: flex;
+  gap: clamp(1rem, 4vw, 1.75rem);
+  margin-top: 0.4rem;
+}
+
+nav[data-type="hero-links"] a {
+  pointer-events: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.35em;
+}
+
+nav[data-type="hero-links"] a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ── Live heroes: the dev server's ?hero=liquid|network ──────────────────────
+   src/components/home/hero/ draws them. The section carries data-hero and
+   data-theme="dark", because the canvas is dark at every hour, so the tokens
+   below resolve to the dark palette whatever theme a visitor stored. The
+   canvas and the clock live in the stage. The server-rendered name, tagline
+   and links sit over it at the bottom left, as they did in the Hero Lab.
+   Per-hero rules are in hero-liquid.css and hero-network.css. */
+section[data-type="hero"][data-hero] {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--color-bg);
+}
+
+div[data-type="hero-stage"] {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* The section passes pointers through to the canvas; the stage takes them. */
+  pointer-events: auto;
+}
+
+section[data-type="hero"][data-hero] div[data-type="hero-content"] {
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: 1;
+  max-width: none;
+  align-items: flex-start;
+  text-align: left;
+  gap: 0;
+  padding: 0 clamp(20px, 4.5vw, 64px) max(28px, clamp(20px, 5vh, 48px));
+}
+
+section[data-type="hero"][data-hero] h1 {
+  font-size: var(--text-hero-name);
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  text-shadow:
+    0 2px 28px color-mix(in srgb, var(--color-bg) 90%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-bg) 70%, transparent);
+}
+
+section[data-type="hero"][data-hero] p[data-type="tagline"] {
+  margin-top: 0.5em;
+  max-width: 44ch;
+  font-family: var(--font-mono);
+  font-size: var(--text-hero-line);
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--color-text) 75%, var(--color-muted));
+  text-shadow: 0 1px 14px color-mix(in srgb, var(--color-bg) 85%, transparent);
+}
+
+section[data-type="hero"][data-hero] nav[data-type="hero-links"] {
+  margin-top: 1.1em;
+}
+
+section[data-type="hero"][data-hero] nav[data-type="hero-links"] a {
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--color-bg) 90%, transparent);
+}
+
+/* The 24-hour clock along the stage's bottom edge (clock.ts). The knob's
+   colour and glow come from the hour, so clock.ts sets only those inline. */
+div[data-type="hero-clock"] {
+  position: absolute;
+  inset: auto 16px 10px 16px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--color-text);
+  pointer-events: none;
+}
+
+div[data-type="hero-clock"] [data-part="row"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+}
+
+div[data-type="hero-clock"] [data-part="line"] {
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 10px color-mix(in srgb, var(--color-bg) 90%, transparent);
+}
+
+div[data-type="hero-clock"] [data-part="now"] {
+  pointer-events: auto;
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-bg) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-text) 30%, transparent);
+  border-radius: var(--radius-pill);
+  padding: 0.35em 0.8em;
+}
+
+div[data-type="hero-clock"] [data-part="now"]:hover {
+  border-color: var(--color-day);
+}
+
+div[data-type="hero-clock"] [data-part="track"] {
+  pointer-events: auto;
+  position: relative;
+  height: 26px;
+  cursor: ew-resize;
+  /* A drag on the dial scrubs the day instead of scrolling the page. */
+  touch-action: none;
+  border-radius: 13px;
+}
+
+div[data-type="hero-clock"] [data-part="sky"] {
+  position: absolute;
+  inset: 11px 0 auto 0;
+  height: 4px;
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+div[data-type="hero-clock"] [data-part="knob"] {
+  position: absolute;
+  top: 4px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-bg) 85%, transparent),
+    0 0 18px var(--hero-clock-glow, var(--color-day));
+}
+
+div[data-type="hero-clock"] [data-part="ticks"] {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.86em;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+}
+
+/* Dev server only: the pill that switches between the heroes under review. */
+nav[data-type="hero-switch"] {
+  position: fixed;
+  top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-md));
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 3px 3px 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--color-muted);
+  background: var(--color-bg-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+nav[data-type="hero-switch"] a {
+  padding: 0.45em 0.9em;
+  color: var(--color-muted);
+  text-decoration: none;
+  border-radius: var(--radius-pill);
+}
+
+nav[data-type="hero-switch"] a:hover {
+  color: var(--color-text);
+}
+
+nav[data-type="hero-switch"] a[aria-current="page"] {
+  color: var(--color-bg);
+  background: linear-gradient(90deg, var(--color-day), var(--color-accent));
+}

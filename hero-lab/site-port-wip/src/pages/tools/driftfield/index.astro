@@ -1,0 +1,119 @@
+---
+export const prerender = false
+
+import ToolBase from '../../../layouts/ToolBase.astro'
+import Breadcrumbs from '../../../components/Breadcrumbs.astro'
+import { getLearnings, getSite, getTools } from '../../../lib/config'
+import { breadcrumbListJsonLd, itemListJsonLd } from '../../../lib/jsonld'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from '../../../lib/driftfield'
+import { existingOgCardPath, toolHasOgCard } from '../../../lib/og'
+import { learningsAboutEmbed } from '../../../lib/learnings'
+import '../../../styles/seo-support.css'
+import '../../../components/tools/tools-common.css'
+import '../../../components/tools/wallpaper-forge/wallpaper-forge.css'
+
+const [site, tools, learnings] = await Promise.all([
+  getSite(Astro.locals),
+  getTools(Astro.locals),
+  getLearnings(Astro.locals),
+])
+const cspNonce = (Astro.locals as any).cspNonce
+const tool = tools.find(t => t.slug === DRIFTFIELD_SLUG)
+
+// The hub is a real route, but its listing and share card still come from the
+// tools config, so /tools, the sitemap and this page cannot disagree about
+// whether Driftfield exists. One predicate, read here and by every mode route,
+// the sitemap and the card generator — src/lib/driftfield.ts.
+if (!tool || !isDriftfieldPublic(tools)) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+const canonicalUrl = `${site.url}/tools/${DRIFTFIELD_SLUG}`
+const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', DRIFTFIELD_SLUG) : undefined
+
+const ldJson = itemListJsonLd(
+  'Driftfield modes',
+  DRIFTFIELD_MODES.map(m => ({ name: m.title, url: `${canonicalUrl}/${m.slug}` })),
+)
+
+const crumbs = [
+  { label: 'home', href: '/' },
+  { label: 'tools', href: '/tools' },
+  { label: tool.title },
+]
+const breadcrumbLd = breadcrumbListJsonLd([
+  { name: 'Home', url: site.url },
+  { name: 'Tools', url: `${site.url}/tools` },
+  { name: tool.title, url: canonicalUrl },
+])
+---
+
+<ToolBase
+  toolTitle={tool.title}
+  seoTitle={tool.seoTitle}
+  metaDescription={tool.metaDescription}
+  keywords={tool.keywords}
+  ogCard={ogCard}
+>
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <Breadcrumbs items={crumbs} inset />
+
+  {/* The seeded studio — nine pattern engines with PNG and GIF export. This is
+      the tool formerly published as Wallpaper Forge; the component keeps its
+      original directory name, only the product around it was renamed. */}
+  <wallpaper-forge-tool data-tool="wallpaper-forge">
+    <h1>{tool.title}</h1>
+    <p>{tool.intro || tool.description}</p>
+  </wallpaper-forge-tool>
+
+  {/* The six live simulations, each on its own route. They are separate pages
+      and not modes of the studio above because that is where the searchable
+      long tail is — see src/lib/driftfield.ts. */}
+  <section data-type="driftfield-live">
+    <h2>Live simulations</h2>
+    <p>
+      Six systems that run rather than render — each one tunable, each with the
+      story of where it came from.
+    </p>
+    <ul data-type="card-grid">
+      {DRIFTFIELD_MODES.map(m => (
+        <li>
+          <h3 data-type="card-title">
+            <a href={`/tools/${DRIFTFIELD_SLUG}/${m.slug}`}>{m.title}</a>
+          </h3>
+          <p>{m.description}</p>
+          {learningsAboutEmbed(m.slug, learnings).map(story => (
+            <p data-type="driftfield-story">
+              <a href={`/learnings/${story.slug}`}>{story.title} →</a>
+            </p>
+          ))}
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <script>
+    // Mount on initial load AND after every View Transition navigation — bundled
+    // scripts run once per session, so an in-site click would otherwise land on a
+    // blank studio until a hard reload.
+    function mountStudio() {
+      if (document.querySelector('[data-tool="wallpaper-forge"]')) {
+        import('../../../components/tools/wallpaper-forge/WallpaperForge.ts')
+      }
+    }
+    document.addEventListener('astro:page-load', mountStudio)
+    mountStudio()
+  </script>
+</ToolBase>
+
+<style>
+  section[data-type="driftfield-live"] {
+    margin-top: var(--space-section);
+  }
+
+  p[data-type="driftfield-story"] {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+</style>

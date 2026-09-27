@@ -1,0 +1,89 @@
+---
+import { getSite } from '../lib/config'
+import { ogImageMeta } from '../lib/og'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+import Head from '../components/Head.astro'
+import '../styles/shared.css'
+
+interface Props {
+  toolTitle?: string
+  seoTitle?: string
+  metaDescription?: string
+  keywords?: string
+  /** Generated share card from existingOgCardPath(); omit for the avatar fallback. */
+  ogCard?: string
+  /** Keep a page out of search results — e.g. the admin-only disabled-tool preview. */
+  noindex?: boolean
+}
+
+const site = await getSite(Astro.locals)
+const { toolTitle, seoTitle, metaDescription, keywords, ogCard, noindex = false } = Astro.props
+const pageTitle = seoTitle || (toolTitle ? `${toolTitle} · ${site.name}` : `${site.name} · tools`)
+// Fall back to a tool-appropriate sentence rather than the site's role line
+// (`site.tagline`), which reads as nonsense as a tool page's meta description.
+const description =
+  metaDescription ||
+  (toolTitle
+    ? `${toolTitle} — a fast, free, no-login tool that runs entirely in your browser, by ${site.name}.`
+    : `Fast, free, browser-based developer tools by ${site.name}.`)
+const canonicalURL = new URL(Astro.url.pathname, site.url).href
+// Absolute URL + dimensions for the social-share preview image, matching
+// Base.astro (shared helper) so tool links render a preview card, not a bare link.
+const ogImage = ogImageMeta(site, ogCard, toolTitle)
+---
+
+<!doctype html>
+<html lang="en" data-theme={site.theme} data-theme-default={site.theme}>
+  <head>
+    <Head
+      pageTitle={pageTitle}
+      description={description}
+      canonicalURL={canonicalURL}
+      siteName={site.name}
+      noindex={noindex}
+      keywords={keywords}
+      image={ogImage.src}
+      imageWidth={ogImage.width}
+      imageHeight={ogImage.height}
+      imageAlt={ogImage.alt}
+      imageType={ogImage.type}
+      twitterCard={ogImage.card}
+      handle={site.handle}
+      loadFonts={false}
+      clientRouter={false}
+      theme={site.theme}
+    />
+  </head>
+  <body>
+    <a href="#main-content" data-type="skip-link">Skip to content</a>
+    <Nav site={site} />
+    <main id="main-content" tabindex="-1">
+      <slot />
+    </main>
+    <Footer site={site} />
+    <script src="/oat.min.js" defer></script>
+    <script>
+      // Nav height sync, hide-on-scroll, and StarField mount — shared verbatim
+      // with Base.astro, so it lives in one module (src/lib/nav-ui.ts).
+      // initSiteUI (src/lib/site-ui.ts) is the site chrome both shells share.
+      import { initNav } from '../lib/nav-ui.ts'
+      import { initAnalytics } from '../lib/analytics-client.ts'
+      import { initSiteUI } from '../lib/site-ui.ts'
+      initNav()
+      initAnalytics()
+      initSiteUI()
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+</style>

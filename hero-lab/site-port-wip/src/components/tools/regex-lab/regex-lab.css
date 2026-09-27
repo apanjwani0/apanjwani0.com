@@ -1,0 +1,502 @@
+/* Regex Lab — a live regular-expression tester. Tokens only (theme.css); no
+   hardcoded colours, fonts, or sizes. Structure mirrors the other card-based
+   tools (cron-whisperer / epoch-wizard) so the whole /tools hub reads as one
+   family. Button chrome, focus rings, <kbd> styling, the toolbar layout, and the
+   card container + card <h2> label all come from the shared tools-common.css
+   (regex-lab is opted into those selector lists); only tool-specific pieces and
+   the bespoke card <h2> bottom margin live here. */
+
+/* Card <h2> bottom margin — only the margin is bespoke; the mono/uppercase label
+   styling is shared in tools-common.css. */
+section[data-type="rl-card"] h2 {
+  margin: 0 0 0.8rem;
+}
+
+/* Flavour badge in the toolbar. */
+span[data-type="rl-flavor"] {
+  margin-left: auto;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  color: var(--color-muted);
+}
+
+/* Highlight the pattern card so it reads as the tool's focal point. */
+section[data-type="rl-card"][data-card="input"] {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+}
+
+/* ── The pattern input row (/ pattern / flags) ───────────── */
+div[data-group="rl-patternrow"] {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+span[data-type="rl-delim"] {
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  color: var(--color-muted);
+}
+
+div[data-tool="regex-lab"] input[data-input="pattern"] {
+  flex: 1 1 18rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  letter-spacing: 0.04em;
+}
+
+span[data-type="rl-flags-display"] {
+  align-self: center;
+  min-width: 2.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  color: var(--color-muted);
+  letter-spacing: 0.08em;
+}
+
+div[data-tool="regex-lab"][data-invalid] input[data-input="pattern"] {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+/* ── Flag chips ──────────────────────────────────────────── */
+div[data-group="rl-flags"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+div[data-group="rl-flags"] button[data-flag] {
+  min-width: 2.1rem;
+  text-transform: none;
+}
+
+div[data-group="rl-flags"] button[data-flag][aria-pressed="true"] {
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* ── Action button rows ──────────────────────────────────── */
+div[data-group="rl-actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+/* ── Status / error line ─────────────────────────────────── */
+div[data-type="rl-statusbar"] {
+  margin-top: 0.75rem;
+  min-height: 1.2rem;
+}
+
+span[data-type="rl-status"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+span[data-type="rl-status"][data-error] {
+  color: var(--color-error);
+}
+
+/* ── Match count badge on the test-string card ───────────── */
+span[data-type="rl-count"] {
+  margin-left: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-accent);
+}
+
+/* ── The overlay editor: a transparent textarea over a mirror div that carries
+      the match highlights. Both share identical box metrics so the tinted marks
+      sit exactly under the caret. ───────────────────────── */
+div[data-type="rl-editor"] {
+  position: relative;
+}
+
+div[data-type="rl-editor"] textarea[data-input="text"],
+div[data-type="rl-editor"] div[data-type="rl-highlight"] {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  letter-spacing: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  box-sizing: border-box;
+  width: 100%;
+  tab-size: 2;
+}
+
+div[data-type="rl-editor"] div[data-type="rl-highlight"] {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-color: transparent;
+  background: var(--color-bg);
+  color: var(--color-text);
+  z-index: 0;
+}
+
+div[data-type="rl-editor"] textarea[data-input="text"] {
+  position: relative;
+  z-index: 1;
+  min-height: 12rem;
+  resize: vertical;
+  color: transparent;
+  background: transparent;
+  caret-color: var(--color-text);
+}
+
+div[data-type="rl-editor"] textarea[data-input="text"]::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* Match highlights — two alternating tints so back-to-back matches stay
+   distinct. Text colour stays readable; only the backing changes. */
+div[data-type="rl-highlight"] mark {
+  color: inherit;
+  border-radius: var(--radius-sm);
+}
+
+div[data-type="rl-highlight"] mark[data-alt="0"] {
+  background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+}
+
+div[data-type="rl-highlight"] mark[data-alt="1"] {
+  background: color-mix(in srgb, var(--color-success) 32%, transparent);
+}
+
+/* Zero-width match — render as a thin caret so it's visible with no content. */
+div[data-type="rl-highlight"] mark[data-empty] {
+  background: none;
+  border-left: 2px solid var(--color-accent);
+  margin-left: -1px;
+}
+
+/* ── Results tabs ────────────────────────────────────────── */
+div[data-group="rl-tabs"] {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Tab buttons opt OUT of the shared toolbar button chrome (higher specificity,
+   loaded after tools-common.css). */
+div[data-tool="regex-lab"] [data-tab-btn] {
+  padding: 0.4rem 0.9rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+div[data-tool="regex-lab"] [data-tab-btn]:hover {
+  color: var(--color-text);
+}
+
+div[data-tool="regex-lab"] [data-tab-btn][aria-selected="true"] {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+}
+
+/* ── Match list ──────────────────────────────────────────── */
+div[data-type="rl-matches"] {
+  display: grid;
+  gap: 0.6rem;
+}
+
+div[data-type="rl-match"] {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+div[data-type="rl-match-head"] {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+span[data-type="rl-match-idx"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+}
+
+span[data-type="rl-match-pos"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+div[data-type="rl-match-val"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+div[data-type="rl-match-val"] em,
+div[data-type="rl-gval"] em {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+div[data-type="rl-groups"] {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+}
+
+div[data-type="rl-grow"] {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  align-items: baseline;
+  gap: 0.3rem 0.9rem;
+}
+
+span[data-type="rl-gname"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+span[data-type="rl-gval"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+p[data-type="rl-empty"] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+p[data-type="rl-empty"][data-error] {
+  color: var(--color-error);
+}
+
+/* ── Replace tab ─────────────────────────────────────────── */
+label[data-type="rl-field"] {
+  display: grid;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+}
+
+div[data-tool="regex-lab"] input[data-input="replace"] {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+p[data-type="rl-replace-hint"] {
+  margin: 0.6rem 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-muted);
+  max-width: 72ch;
+}
+
+p[data-type="rl-replace-hint"] code,
+p[data-type="rl-replace-info"] {
+  font-family: var(--font-mono);
+}
+
+p[data-type="rl-replace-hint"] code {
+  color: var(--color-text);
+}
+
+p[data-type="rl-replace-info"] {
+  margin: 0.7rem 0 0.4rem;
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+}
+
+pre[data-type="rl-replace-out"] {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  min-height: 3rem;
+  max-height: 24rem;
+  overflow: auto;
+}
+
+/* ── Examples ────────────────────────────────────────────── */
+details[data-type="rl-examples"],
+details[data-type="rl-reference"],
+details[data-type="rl-explainer"] {
+  margin-top: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.6rem 0.9rem 0.9rem;
+}
+
+details[data-type="rl-examples"] summary,
+details[data-type="rl-reference"] summary,
+details[data-type="rl-explainer"] summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+details[data-type="rl-examples"] summary:hover,
+details[data-type="rl-reference"] summary:hover,
+details[data-type="rl-explainer"] summary:hover {
+  color: var(--color-text);
+}
+
+div[data-type="rl-example-grid"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+button[data-type="rl-example"] {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-bg);
+}
+
+button[data-type="rl-example"] code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-accent);
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+button[data-type="rl-example"] span {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ── Quick reference ─────────────────────────────────────── */
+div[data-type="rl-ref-grid"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem 1.5rem;
+  margin-top: 0.8rem;
+}
+
+div[data-type="rl-ref-col"] h3 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+div[data-type="rl-ref-row"] {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.3rem 0.75rem;
+  align-items: baseline;
+  padding: 0.15rem 0;
+}
+
+div[data-type="rl-ref-row"] code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+div[data-type="rl-ref-row"] span {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+/* ── Explainer ───────────────────────────────────────────── */
+details[data-type="rl-explainer"] p {
+  margin: 0.75rem 0 0.25rem;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  max-width: 72ch;
+}
+
+details[data-type="rl-explainer"] code {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+
+/* ── Narrow screens ──────────────────────────────────────── */
+@media (max-width: 640px) {
+  div[data-type="rl-grow"] {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+  span[data-type="rl-flavor"] {
+    margin-left: 0;
+  }
+}

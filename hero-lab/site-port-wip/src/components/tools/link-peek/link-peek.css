@@ -1,0 +1,352 @@
+/* Link Peek — layout for the URL row, the three platform mockups, the lint
+   list and the declared-tags table. Tokens only (theme.css); the shared card,
+   toolbar and button chrome come from tools-common.css (this tool opts in via
+   its selectors there). */
+
+/* Card <h2> bottom margin — the one property the shared card-h2 rule leaves
+   bespoke (see tools-common.css). */
+section[data-type="lp-card"] h2 {
+  margin-bottom: 0.8rem;
+}
+
+/* URL row — input grows, UA select and button keep their size. */
+div[data-tool="link-peek"] [data-group="lp-urlrow"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+div[data-tool="link-peek"] [data-input="url"] {
+  flex: 1 1 16rem;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+div[data-tool="link-peek"] [data-input="ua"] {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="link-peek"] [data-type="lp-status"] {
+  display: block;
+  min-height: 1.2em;
+  margin-top: 0.5rem;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="link-peek"] [data-type="lp-hint"] {
+  margin: 0.75rem 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+div[data-tool="link-peek"] [data-type="lp-hint"][data-ok="1"] {
+  color: var(--color-success);
+}
+
+div[data-tool="link-peek"] [data-type="lp-fetchline"] {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- the three platform mockups ---------- */
+
+div[data-tool="link-peek"] [data-group="lp-previews"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+
+div[data-tool="link-peek"] [data-type="lp-mock"] {
+  margin: 0;
+  min-width: 0;
+}
+
+div[data-tool="link-peek"] [data-type="lp-mock"] > figcaption {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.4rem;
+}
+
+div[data-tool="link-peek"] [data-type="lp-mock-title"] {
+  margin: 0.15rem 0 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+div[data-tool="link-peek"] [data-type="lp-mock-desc"] {
+  margin: 0.25rem 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+div[data-tool="link-peek"] [data-type="lp-mock-domain"] {
+  margin: 0.25rem 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+/* Slack: left accent bar, favicon + site row on top. */
+div[data-tool="link-peek"] [data-type="lp-slack"] {
+  border-left: 4px solid var(--color-border);
+  padding: 0.35rem 0 0.35rem 0.75rem;
+}
+
+div[data-tool="link-peek"] [data-group="lp-slack-site"] {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+div[data-tool="link-peek"] [data-type="lp-favicon"] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--color-border);
+}
+
+div[data-tool="link-peek"] [data-type="lp-favicon"][data-loaded="1"] {
+  border-color: transparent;
+  background-color: transparent;
+}
+
+div[data-tool="link-peek"] [data-type="lp-slack"] [data-type="lp-mock-title"] {
+  color: var(--color-accent);
+}
+
+/* X: bordered rounded card; large = image on top, small = thumb beside text. */
+div[data-tool="link-peek"] [data-type="lp-x"] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  padding: 0;
+}
+
+div[data-tool="link-peek"] [data-type="lp-x"] [data-group="lp-x-body"] {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  min-width: 0;
+}
+
+div[data-tool="link-peek"] [data-type="lp-x"][data-card-kind="none"] {
+  padding: 0.6rem 0.75rem;
+}
+
+div[data-tool="link-peek"] [data-type="lp-x"] [data-img-slot="x-thumb"] {
+  flex: 0 0 4.5rem;
+  height: 4.5rem;
+}
+
+div[data-tool="link-peek"] [data-type="lp-x"] [data-type="lp-mock-domain"] {
+  margin-top: 0;
+}
+
+/* iMessage: bubble — image on top, title + domain beneath. */
+div[data-tool="link-peek"] [data-type="lp-imsg"] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--color-bg);
+  /* width:min(), not a width cap property: the smoke guard forbids that
+     property anywhere under a [data-tool] selector so no tool can restyle its
+     own container. This is an inner element (the iMessage bubble). */
+  width: min(100%, 20rem);
+}
+
+div[data-tool="link-peek"] [data-group="lp-imsg-body"] {
+  padding: 0.5rem 0.75rem 0.6rem;
+}
+
+div[data-tool="link-peek"] [data-group="lp-imsg-body"] [data-type="lp-mock-title"] {
+  margin-top: 0;
+}
+
+/* Image slots — shared by all mockups. */
+div[data-tool="link-peek"] [data-type="lp-imgbox"] {
+  margin-top: 0.5rem;
+  min-height: 3rem;
+  background: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+div[data-tool="link-peek"] [data-type="lp-x"] [data-img-slot="x"],
+div[data-tool="link-peek"] [data-type="lp-imsg"] [data-img-slot="imessage"] {
+  margin-top: 0;
+  border-radius: 0;
+}
+
+div[data-tool="link-peek"] [data-type="lp-imgbox"] img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+div[data-tool="link-peek"] [data-img-slot="slack"],
+div[data-tool="link-peek"] [data-img-slot="x"],
+div[data-tool="link-peek"] [data-img-slot="imessage"] {
+  aspect-ratio: 1.91 / 1;
+}
+
+div[data-tool="link-peek"] [data-img-slot="slack-thumb"] {
+  width: 5rem;
+  height: 5rem;
+  float: right;
+}
+
+div[data-tool="link-peek"] [data-type="lp-imgwait"],
+div[data-tool="link-peek"] [data-type="lp-noimg"] {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 0.5rem;
+  text-align: center;
+}
+
+div[data-tool="link-peek"] [data-type="lp-noimg"] {
+  margin-top: 0.5rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+div[data-tool="link-peek"] [data-type="lp-imgfact"] {
+  margin: 0.75rem 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* ---------- lint ---------- */
+
+div[data-tool="link-peek"] [data-type="lp-count"] {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="link-peek"] [data-type="lp-findings"] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+div[data-tool="link-peek"] [data-type="lp-findings"] li {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+div[data-tool="link-peek"] [data-type="lp-level"] {
+  display: inline-block;
+  min-width: 3.2em;
+  margin-right: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+}
+
+div[data-tool="link-peek"] [data-type="lp-findings"] li[data-level="error"] [data-type="lp-level"] {
+  color: var(--color-error);
+}
+
+div[data-tool="link-peek"] [data-type="lp-findings"] li[data-level="warn"] [data-type="lp-level"] {
+  color: var(--color-accent);
+}
+
+/* ---------- declared tags table ---------- */
+
+div[data-tool="link-peek"] [data-group="lp-tagshead"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+div[data-tool="link-peek"] [data-group="lp-tagshead"] [data-group="toolbar"] {
+  margin: 0;
+}
+
+/* Keyboard-reachable for the same reason as DNS Sightline's tables: the
+   wrapper renders `tabindex="0"` as a named region, and the site's own
+   :focus-visible ring marks it. */
+div[data-tool="link-peek"] [data-type="lp-tablewrap"] {
+  overflow-x: auto;
+}
+
+div[data-tool="link-peek"] [data-type="lp-tags"] {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+div[data-tool="link-peek"] [data-type="lp-tags"] th,
+div[data-tool="link-peek"] [data-type="lp-tags"] td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.35rem 0.6rem 0.35rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+div[data-tool="link-peek"] [data-type="lp-tags"] th[scope="row"] {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+div[data-tool="link-peek"] [data-type="lp-tags"] td {
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+}
+
+div[data-tool="link-peek"] [data-type="lp-explainer"] {
+  margin-top: 1.5rem;
+}

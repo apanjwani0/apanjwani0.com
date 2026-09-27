@@ -1,0 +1,52 @@
+# .graphifyignore — paths graphify should skip when building the code-graph.
+# Keep the graph focused on source we actually navigate; exclude deps, build
+# output, generated artifacts, and binary/runtime noise. One pattern per line
+# (no inline comments — same rule as .gitignore).
+
+# dependencies
+node_modules/
+
+# build output
+dist/
+.astro/
+
+# graphify's own generated output (don't graph the graph)
+graphify-out/
+
+# wrangler local state
+.wrangler/
+
+# runtime config data (written by /admin, not source)
+data/
+
+# agent / AI tooling internals
+.claude/
+
+# lockfiles & generated types
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+worker-configuration.d.ts
+
+# personal media / binaries
+public/avatar.*
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.ico
+*.svg
+*.woff
+*.woff2
+*.ttf
+
+# os / editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# env
+.env
+.env.*

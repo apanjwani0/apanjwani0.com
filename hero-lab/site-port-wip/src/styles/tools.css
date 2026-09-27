@@ -1,0 +1,49 @@
+/* Tools hub cards — the card frame (border/padding/grid) comes from the shared
+   [data-type="card-grid"] rule in shared.css; here we style only the internals:
+   a prominent name, a status badge, and a muted one-line description. */
+div[data-type="tool-head"] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  /* Every current name plus its badge fits a 280px card (measured, no
+     overflow at 375px), but the row is one badge away from not fitting and a
+     nowrap flex row would push the grid wider rather than clip. */
+  flex-wrap: wrap;
+}
+
+/* The tool name is the shared `card-title` idiom (sized and weighted once in
+   shared.css) — this sheet must not restate its size or weight. It used to set
+   --text-lg/600 here, which is how /tools ended up the only hub of five with
+   20.8px card titles. */
+li[data-status="wip"] [data-type="card-title"] {
+  color: var(--color-muted);
+}
+
+span[data-type="tool-wip"] {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+}
+
+span[data-type="tool-description"] {
+  color: var(--color-muted);
+}
+
+/* "server" marks the tools that need this site's origin to work at all — the
+   thing that separates them from a shelf of browser-only text transformers.
+   Accent rather than muted, because this is the one distinction on the hub
+   that is worth drawing the eye: it ranks the cards by what they can do.
+   Same chrome as the games hub's badges (mono, --text-xs, hairline, radius)
+   so the two lanes read as one system. */
+span[data-type="tool-server"] {
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  padding: var(--space-2xs) var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+

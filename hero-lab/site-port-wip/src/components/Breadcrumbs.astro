@@ -1,0 +1,104 @@
+---
+/**
+ * Breadcrumb trail for detail pages (/tools/x, /blogs/x, /games/x).
+ *
+ * Renders a semantic <nav><ol> with the current page marked aria-current="page",
+ * giving every detail route a visible "up" path back to its section — the site
+ * header alone only tells you *where* you are, not how to get back one level.
+ *
+ * Pair it with `breadcrumbListJsonLd()` (src/lib/jsonld.ts) on the same page so
+ * the machine-readable BreadcrumbList matches the visible trail; search engines
+ * need both to show a breadcrumb path in results.
+ *
+ * The last crumb carries no `href` (you don't link to the page you're on).
+ */
+export interface Crumb {
+  label: string
+  /** Omit on the current (last) crumb. */
+  href?: string
+}
+
+interface Props {
+  items: Crumb[]
+  /**
+   * Align with the wide tool workbench (--tool-width) instead of the centred
+   * page column — tool pages render outside <main>, in their own full-width shell.
+   */
+  inset?: boolean
+}
+
+const { items, inset = false } = Astro.props
+---
+
+<nav data-type="breadcrumb" data-inset={inset ? '' : undefined} aria-label="Breadcrumb">
+  <ol>
+    {items.map((item, i) => (
+      <li>
+        {item.href
+          ? <a href={item.href}>{item.label}</a>
+          : <span aria-current="page">{item.label}</span>}
+        {i < items.length - 1 && (
+          <span data-type="breadcrumb-sep" aria-hidden="true">/</span>
+        )}
+      </li>
+    ))}
+  </ol>
+</nav>
+
+<style>
+  nav[data-type="breadcrumb"] {
+    margin: 0 0 1.25rem;
+  }
+
+  /* Tool pages live outside <main>; match the workbench width + gutter so the
+     trail lines up with the tool below it. */
+  nav[data-type="breadcrumb"][data-inset] {
+    max-width: var(--tool-width);
+    margin-inline: auto;
+    padding: 1.25rem var(--space-page-x) 0;
+    margin-bottom: 0;
+    box-sizing: border-box;
+  }
+
+  nav[data-type="breadcrumb"] ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: 0.04em;
+    color: var(--color-muted);
+  }
+
+  nav[data-type="breadcrumb"] li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  nav[data-type="breadcrumb"] a {
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+
+  nav[data-type="breadcrumb"] a:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-underline-offset: 0.3em;
+  }
+
+  nav[data-type="breadcrumb"] [aria-current="page"] {
+    color: var(--color-text);
+  }
+
+  /* Muted (not hairline) so the "/" stays legible on the dark theme, where
+     --color-border sits very close to the page background. */
+  nav[data-type="breadcrumb"] [data-type="breadcrumb-sep"] {
+    color: var(--color-muted);
+  }
+</style>

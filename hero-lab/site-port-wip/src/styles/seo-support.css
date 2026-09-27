@@ -1,0 +1,31 @@
+section[data-type="seo-support"] {
+  width: min(var(--max-width), 100%);
+  margin: var(--space-section) auto 0;
+  padding-top: var(--space-section);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+section[data-type="seo-support"] h2 {
+  margin: 0 0 0.75rem;
+  font-size: var(--text-title);
+}
+
+section[data-type="seo-support"] h3 {
+  margin: 1.3rem 0 0.45rem;
+  font-size: var(--text-lg);
+}
+
+section[data-type="seo-support"] p,
+section[data-type="seo-support"] li {
+  color: var(--color-muted);
+}
+
+section[data-type="seo-support"] ul,
+section[data-type="seo-support"] ol {
+  padding-left: 1.2rem;
+}
+
+section[data-type="seo-support"] li + li {
+  margin-top: 0.3rem;
+}

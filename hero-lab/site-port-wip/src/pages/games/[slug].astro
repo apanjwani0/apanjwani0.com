@@ -1,0 +1,297 @@
+---
+export const prerender = false
+
+import Base from '../../layouts/Base.astro'
+import { getSite, getGames, getLearnings } from '../../lib/config'
+import { render } from '../../lib/markdown'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import RelatedLinks from '../../components/RelatedLinks.astro'
+import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
+import { gameTag, isPlayableGame } from '../../lib/games'
+import { MOVED_GAMES } from '../../lib/driftfield'
+import { getInterest } from '../../lib/interest'
+import { learningsAboutEmbed } from '../../lib/learnings'
+import '../../styles/seo-support.css'
+import '../../styles/games-embed.css'
+
+const { slug } = Astro.params
+if (slug === 'wallpaper-forge') return Astro.redirect('/tools/driftfield', 301)
+
+// The six generative engines and Game of Life left /games — they were never
+// games, and "flow field game" is not a thing anyone searches for. Their URLs
+// are retargeted rather than dropped: same content, correct intent, and whatever
+// equity those pages had follows them. See src/lib/driftfield.ts.
+const movedGame = MOVED_GAMES[slug as string]
+if (movedGame) return Astro.redirect(movedGame, 301)
+
+const [site, games, learnings] = await Promise.all([
+  getSite(Astro.locals),
+  getGames(Astro.locals),
+  getLearnings(Astro.locals),
+])
+const cspNonce = (Astro.locals as any).cspNonce
+const game = games.find(g => g.slug === slug && g.enabled)
+
+if (!game) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+// For a "coming soon" page, point the visitor at a game that's actually
+// playable right now so the page is an invitation, not a dead end.
+const liveGame = games.find(g => isPlayableGame(g) && g.slug !== slug)
+// Sibling links, so this page is not a dead end for a crawler or a visitor who
+// arrived here from a search. Only playable games — the same set the sitemap and
+// the hub's ItemList list, so nothing here points at a noindex page.
+const relatedGames = games
+  .filter(g => isPlayableGame(g) && g.slug !== slug)
+  .map(g => ({ title: g.title, href: `/games/${g.slug}` }))
+
+// …and the article about this game, if one is published. The article embeds this
+// very component, which makes this page the most relevant one on the site to
+// link it from — and the article's own hub is otherwise its only way in.
+const stories = learningsAboutEmbed(slug as string, learnings)
+  .map(l => ({ title: l.title, href: `/learnings/${l.slug}` }))
+const pageDescription = game.metaDescription || game.description
+const gameIntro = game.intro || game.description
+const gameIntroHtml = render(gameIntro)
+const gameSeoContentHtml = game.seoContent ? render(game.seoContent) : ''
+
+const ldJson = webAppJsonLd({
+  name: game.title,
+  description: pageDescription,
+  url: `${site.url}/games/${game.slug}`,
+  authorName: site.name,
+  authorUrl: site.url,
+  applicationCategory: 'Game',
+  alsoType: 'VideoGame',
+  keywords: game.keywords,
+})
+
+// Visible trail + matching BreadcrumbList, emitted together on every game page.
+// They must always agree: search engines only surface a breadcrumb path when the
+// markup and the structured data match, so neither is emitted without the other.
+// Interactive games render the trail above their component (which draws its own
+// h1), exactly as the tool pages do.
+const crumbs = [
+  { label: 'home', href: '/' },
+  { label: 'games', href: '/games' },
+  { label: game.title },
+]
+const breadcrumbLd = breadcrumbListJsonLd([
+  { name: 'Home', url: site.url },
+  { name: 'Games', url: `${site.url}/games` },
+  { name: game.title, url: `${site.url}/games/${game.slug}` },
+])
+
+// One custom-element tag per playable game. Every mount renders the identical
+// body (h1 + intro), so a single dynamic-tag block replaces twelve copies that
+// could only ever drift. A slug with no tag registered renders as "coming soon"
+// — and because the sitemap and the share card read the same predicate from
+// src/lib/games.ts, all three agree about that instead of contradicting.
+const GameTag = gameTag(game)
+
+// Card only when the generator emits one AND the PNG is really on disk — a
+// forgotten `npm run og` must degrade to the avatar, not a 404ing og:image.
+const ogCard = gameHasOgCard(game) ? await existingOgCardPath('games', game.slug) : undefined
+
+// Rendered server-side so the count is there with JavaScript off, and so the
+// button has a real starting number rather than flashing in. Only meaningful on
+// a coming-soon page, so it is not read for a playable one.
+const interestCount = GameTag ? 0 : await getInterest(game.slug)
+---
+
+<Base
+  title={game.title}
+  seoTitle={game.seoTitle}
+  description={pageDescription}
+  keywords={game.keywords}
+  noindex={!GameTag}
+  starfield={false}
+  loadFonts={false}
+  clientRouter={false}
+  ogCard={ogCard}
+>
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <Breadcrumbs items={crumbs} inset />
+  {GameTag && (
+    <GameTag data-game={game.slug}>
+      <h1>{game.title}</h1>
+      <div data-type="project-description" set:html={gameIntroHtml} />
+    </GameTag>
+  )}
+  {!GameTag && (
+    <>
+      <h1>{game.title}</h1>
+      <p data-type="coming-soon">Not playable yet — being built</p>
+      <div data-type="project-description" set:html={gameIntroHtml} />
+
+      {/* The one thing a placeholder page can honestly offer: a way to say you
+          want it. A counter and not a form — a form needs moderation, storage
+          bounds on free text and an escaping story, and answers no question the
+          page is asking. Server-rendered count, so it works without JS. */}
+      <section data-type="interest" data-slug={game.slug}>
+        <h2>Want this sooner?</h2>
+        <p>
+          One press bumps a counter I actually check when deciding what to build next.
+          No sign-up, no email, nothing recorded about you — just the number going up.
+        </p>
+        <button data-action="want" type="button">Build this sooner</button>
+        <p data-type="interest-count" aria-live="polite" data-count={interestCount}>
+          {interestCount === 0
+            ? 'Nobody has asked yet. Be the first.'
+            : interestCount === 1
+              ? '1 person wants this'
+              : `${interestCount.toLocaleString()} people want this`}
+        </p>
+      </section>
+
+      {liveGame && (
+        <p>
+          Want to play something now? <a href={`/games/${liveGame.slug}`}>{liveGame.title}</a> is live and ready.
+        </p>
+      )}
+    </>
+  )}
+  {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
+  <RelatedLinks heading="Read about it" items={stories} />
+  <RelatedLinks heading="More games" items={relatedGames} />
+
+  {GameTag && (
+    <script>
+      // Mount on initial load AND after every View Transition navigation. Bundled
+      // scripts run only once per session, so without astro:page-load a game
+      // reached via in-site nav renders blank until a hard reload.
+      import { mountGame } from '../../lib/game-mount'
+      document.addEventListener('astro:page-load', mountGame)
+      mountGame()
+    </script>
+  )}
+
+  {!GameTag && (
+    <script>
+      // "Want this sooner?" — one POST, then the button retires itself.
+      //
+      // The already-voted flag is localStorage, which the visitor can clear: that
+      // is fine and deliberate. It exists so the page does not invite the same
+      // person to press twice, NOT to enforce one vote each — enforcing that would
+      // need a per-visitor identity, which this site does not keep for anything
+      // (AGENTS.md → Analytics). The server's actual defence is its rate limiter.
+      const wire = () => {
+        const host = document.querySelector<HTMLElement>('[data-type="interest"]')
+        if (!host) return
+        // Guard against wiring twice. Game pages set clientRouter={false} today,
+        // so astro:page-load never fires here and the module-scope call is the
+        // only one — but if the router is ever switched on, both would run and a
+        // single press would send two votes. Cheap to prevent, invisible to debug.
+        if (host.dataset.wired) return
+        host.dataset.wired = '1'
+        const slug = host.dataset.slug!
+        const button = host.querySelector<HTMLButtonElement>('[data-action="want"]')!
+        const label = host.querySelector<HTMLElement>('[data-type="interest-count"]')!
+        const voted = `interest:${slug}`
+
+        const show = (count: number) => {
+          label.textContent = count === 1 ? '1 person wants this'
+            : `${count.toLocaleString()} people want this`
+        }
+
+        const retire = (message: string) => {
+          button.disabled = true
+          button.textContent = message
+        }
+
+        if (localStorage.getItem(voted)) retire('Noted — thanks')
+
+        button.addEventListener('click', async () => {
+          retire('Sending…')
+          try {
+            const response = await fetch('/api/games/interest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ slug }),
+            })
+            const data = await response.json()
+            if (!response.ok) throw new Error(data.error ?? 'failed')
+            localStorage.setItem(voted, '1')
+            show(data.count)
+            retire('Noted — thanks')
+          } catch {
+            // Say so rather than leaving a dead button: a silent failure here
+            // reads as "the site is broken", which is worse than the ask failing.
+            button.disabled = false
+            button.textContent = "Didn't send — try again"
+          }
+        })
+      }
+      document.addEventListener('astro:page-load', wire)
+      wire()
+    </script>
+  )}
+</Base>
+
+<style>
+  /* Status line on the non-interactive game pages. A small muted label rather
+     than an <h2>: "Coming Soon" as a heading claimed the same rank as the real
+     section below it, and outranked the description it was labelling. */
+  p[data-type="coming-soon"] {
+    margin: 0 0 var(--space-section);
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* The ask block — a bordered panel so it reads as the page's one action
+     rather than another paragraph. Tokens only. */
+  section[data-type="interest"] {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    background: var(--color-surface);
+  }
+
+  section[data-type="interest"] h2 {
+    margin: 0 0 0.5rem;
+    text-transform: none;
+    font-size: var(--text-lg);
+  }
+
+  section[data-type="interest"] p {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    max-width: 42rem;
+  }
+
+  section[data-type="interest"] button {
+    margin: 1rem 0 0.6rem;
+    padding: 0.55rem 1.1rem;
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
+    color: var(--color-bg);
+    font: inherit;
+    font-size: var(--text-base);
+    cursor: pointer;
+  }
+
+  section[data-type="interest"] button:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  section[data-type="interest"] button:disabled {
+    background: transparent;
+    border-color: var(--color-border);
+    color: var(--color-muted);
+    cursor: default;
+  }
+
+  section[data-type="interest"] p[data-type="interest-count"] {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+  }
+</style>

@@ -1,0 +1,286 @@
+@import './shared.css';
+
+/* The content column lives on <main>, not <body>, so the sticky header/nav spans
+   the FULL viewport width (matching home's nav) while text stays centered. Prose
+   pages use the readable --max-width; listings widen; games/home go full-bleed. */
+main {
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  box-sizing: border-box;
+  /* padding-top is owned by shared.css (nav clearance + one rhythm step) so both
+     layouts stay in step; only the sides and bottom are set here.
+     Longhands avoid the shorthand from resetting shared.css's padding-top. */
+  padding-right: var(--space-page-x);
+  padding-bottom: var(--space-section);
+  padding-left: var(--space-page-x);
+}
+
+/* Listing/index pages fill a wider column. */
+main[data-width="wide"] {
+  max-width: var(--content-width);
+}
+
+/* Full-bleed content: interactive games (nav present, data-fluid) and the home
+   hero (no standard nav, data-bare). Both escape the centered column entirely. */
+main[data-bare],
+main[data-fluid] {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The page title's `h1` used to be declared here. It is in shared.css now:
+   BOTH shells render exactly one h1 per page and ToolBase.astro does not load
+   this file, so a size declared here reached only half the site. Do not re-add
+   it — two homes for one size is how the tools lane ended up with three. */
+
+h2 {
+  font-size: var(--text-lg);
+  letter-spacing: normal;
+  text-wrap: balance;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+}
+
+section {
+  margin-top: var(--space-section);
+}
+
+section[data-type="hero"] {
+  margin-top: 0;
+}
+
+p[data-type="tagline"] {
+  margin: 0 0 0.5rem 0;
+  font-size: var(--text-base);
+  color: var(--color-muted);
+}
+
+section h2 {
+  text-transform: lowercase;
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+div[data-type="project-header"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-xl);
+}
+
+span[data-type="project-stats"] {
+  display: flex;
+  gap: var(--space-lg);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+span[data-type="project-stats"] a {
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+span[data-type="project-stats"] a:hover {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+div[data-type="project-description"] {
+  color: var(--color-muted);
+  margin: 0;
+}
+
+div[data-type="project-description"] p,
+div[data-type="writing-summary"] p {
+  margin: 0.5rem 0;
+}
+
+div[data-type="project-description"] ul,
+div[data-type="project-description"] ol,
+div[data-type="writing-summary"] ul,
+div[data-type="writing-summary"] ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+div[data-type="project-description"] li,
+div[data-type="writing-summary"] li {
+  margin-bottom: 0.25rem;
+}
+
+div[data-type="project-description"] > *:first-child,
+div[data-type="writing-summary"] > *:first-child {
+  margin-top: 0;
+}
+
+div[data-type="project-description"] > *:last-child,
+div[data-type="writing-summary"] > *:last-child {
+  margin-bottom: 0;
+}
+
+p[data-type="project-tags"] {
+  font-size: var(--text-xs);
+  margin: 0.5rem 0 0 0;
+  color: var(--color-muted);
+}
+
+article[data-type="experience"] {
+  margin-bottom: var(--space-section);
+}
+
+article[data-type="experience"] h2 {
+  margin: 0 0 1rem 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+div[data-type="role"] {
+  padding-left: 1rem;
+  border-left: 1px solid var(--color-border);
+  margin-bottom: 1.5rem;
+}
+
+div[data-type="role-header"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
+  font-size: var(--text-sm);
+}
+
+span[data-type="role-team"] {
+  color: var(--color-muted);
+}
+
+div[data-type="period"] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+article[data-type="experience"] > ul {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* A reading list, not a product shelf. /learnings entries carry a date and a
+   prose summary, so they want one column at a readable measure — the 3-up
+   product grid gave each article a 326px box and, with only a few published,
+   left two empty tracks beside them reading as a half-built page. Everything
+   else about the card (frame, hover, focus-within, the stretched title link)
+   is inherited unchanged; only the track count and measure differ, which is
+   why this is a variant of the shared idiom rather than a second idiom.
+   42rem matches p[data-type="page-intro"] so the intro and the list share an
+   edge instead of missing it by a few pixels. */
+[data-type="card-grid"][data-variant="list"] {
+  grid-template-columns: 1fr;
+  max-width: 42rem;
+}
+
+/* Date above the title, not beside it. Side by side, a title that wraps sits
+   indented past the date while the summary underneath returns to the card's
+   left edge — three elements, two different left edges, which the eye catches
+   before it can name why. This is the treatment the <=560px breakpoint below
+   already chose; the list variant is wide but still one column, so it wants
+   the same thing at every width. */
+[data-type="card-grid"][data-variant="list"] div[data-type="writing-row"] {
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+div[data-type="writing-row"] {
+  display: flex;
+  gap: var(--space-xl);
+  align-items: baseline;
+}
+
+/* Element-agnostic: the listing date is a <time datetime> (machine-readable),
+   matching the post page — the selector must not be pinned to a <span>. */
+[data-type="writing-date"] {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+div[data-type="writing-summary"] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  margin: 0.5rem 0 0 0;
+}
+
+/* Status pill on each /games card. Lives here rather than in a scoped <style>
+   in games.astro because the daily-streak strip (src/lib/daily-streak-strip.ts)
+   inserts one of these at runtime, and a JS-created element never carries
+   Astro's scoping attribute — a scoped rule cannot reach it. Tokens only. */
+[data-type="game-badge"] {
+  font-size: var(--text-xs);
+  border: 1px solid var(--color-border);
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+[data-type="game-badge"][data-live] {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+/* Coming-soon reads as secondary: a muted label, distinct from the green live
+   state and from primary body text, so the badge states are ranked. */
+[data-type="game-badge"]:not([data-live]):not([data-streak]) {
+  color: var(--color-muted);
+}
+
+/* The personal daily-streak pill — accent, so "yours" reads apart from the
+   green "live" state and the muted "coming soon" state. */
+[data-type="game-badge"][data-streak] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* Two pills on one card (streak + play) need breathing room between them. */
+[data-type="game-badge"] + [data-type="game-badge"] {
+  margin-left: var(--space-2xs);
+}
+
+@media (max-width: 560px) {
+  /* Keep the side gutter on mobile: since the content column moved from <body>
+     to <main>, the horizontal padding lives here (var(--space-page-x)) — a bare
+     `1.5rem 0` would let text run to the screen edges. Full-bleed pages
+     (main[data-bare]/[data-fluid]) still win via their higher-specificity rule. */
+  main {
+    padding-top: var(--nav-h, var(--space-header-offset));
+    padding-right: var(--space-page-x);
+    padding-bottom: 1.5rem;
+    padding-left: var(--space-page-x);
+  }
+
+  section {
+    margin-top: 1.75rem;
+  }
+
+  div[data-type="writing-row"] {
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+}

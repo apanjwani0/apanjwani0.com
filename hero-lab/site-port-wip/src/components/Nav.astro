@@ -1,0 +1,60 @@
+---
+import { getSite, navLinks, type Site } from '../lib/config'
+
+interface Props {
+  site?: Site
+  /**
+   * True on the full-bleed home hero (Base's `bare`). Suppresses the no-JS
+   * frosted override below — see the <noscript> comment.
+   */
+  bare?: boolean
+}
+
+const { site: siteProp, bare = false } = Astro.props
+const site = siteProp ?? await getSite(Astro.locals)
+const current = Astro.url.pathname
+// A nav link is "current" when the path matches it exactly or (for section links
+// other than home) sits within that section — e.g. /tools/json-tidy → tools.
+const isActive = (href: string) =>
+  current === href || (href !== '/' && current.startsWith(href + '/'))
+
+const links = navLinks(site)
+---
+
+<nav data-type="hero-nav" aria-label="Site sections">
+  {/* The label reads "Aman Panjwani — home", not the handle-plus-name pileup
+      ("apanjwani0 — Aman Panjwani home") a screen reader got before: the handle
+      is the VISIBLE wordmark, so the accessible name only needs the person and
+      the destination. Keep in sync with the footer wordmark's label. */}
+  <a href="/" data-type="hero-wordmark" aria-label={`${site.name} — home`}>{site.handle}</a>
+  <span data-type="hero-links">
+    {links.map((link) => (
+      <a
+        href={link.href}
+        data-active={isActive(link.href) ? true : undefined}
+        aria-current={isActive(link.href) ? 'page' : undefined}
+      >{link.label}</a>
+    ))}
+  </span>
+</nav>
+{!bare && (
+  <noscript>
+    <style>
+      /* transparent-at-rest depends on JS toggling data-nav-scrolled (nav-ui.ts);
+         without scripts the frosted readability state must be permanent, or body
+         text scrolls beneath a fully transparent fixed nav.
+
+         Not on `bare` (the home hero): shared.css keeps the nav transparent at
+         rest specifically because painting it opaque "clipped the stars into a
+         hard-edged black band across the top", and that page is a single
+         immersive screen with nothing scrolling under the nav to be unreadable.
+         So the one page where this override costs the most is the one page it
+         buys nothing on. */
+      nav[data-type="hero-nav"] {
+        background-color: var(--color-bg-blur);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+      }
+    </style>
+  </noscript>
+)}
