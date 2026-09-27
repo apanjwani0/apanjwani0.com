@@ -15,12 +15,12 @@
 [data-type='tb-titlebar'] {
   display: flex;
   align-items: baseline;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
 [data-type='tb-badge'] {
-  padding: var(--space-2xs) var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   color: var(--color-muted);
@@ -29,7 +29,7 @@
 
 [data-type='tb-grid'] {
   display: grid;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 [data-type='tb-field'] {
@@ -70,7 +70,7 @@
 [data-type='tb-actions'] {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 /* The verdict is the whole point of the tool, so it gets the emphasis. Colour
@@ -79,7 +79,7 @@
 [data-type='tb-verdict'] {
   display: block;
   min-height: 1.5em;
-  padding: var(--space-xs);
+  padding: var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-mono);
@@ -94,7 +94,7 @@
 
 [data-type='tb-panes'] {
   display: grid;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 @media (min-width: 48rem) {
@@ -130,7 +130,7 @@
 [data-type='tb-claims'] th {
   color: var(--color-muted);
   font-weight: 400;
-  padding-right: var(--space-xs);
+  padding-right: var(--space-sm);
   white-space: nowrap;
 }
 
@@ -151,14 +151,14 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 [data-type='tb-findings']:empty,
 [data-type='tb-findings'][hidden] { display: none; }
 
 [data-type='tb-findings'] > li {
-  padding: var(--space-xs);
+  padding: var(--space-sm);
   border: 1px solid var(--color-border);
   border-left-width: 3px;
   border-radius: var(--radius-lg);
@@ -198,7 +198,7 @@
 [data-type='tb-why'] {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 [data-type='tb-why'][hidden] { display: none; }

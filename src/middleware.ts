@@ -8,6 +8,17 @@ function createNonce(): string {
   return btoa(String.fromCharCode(...bytes))
 }
 
+/**
+ * The statuses Astro re-renders through the error page when a route returns
+ * them with no body — exactly its REROUTABLE_STATUS_CODES, which
+ * security:smoke reads out of node_modules and holds this list to.
+ */
+const REROUTED_ERROR_STATUSES = [404, 500]
+
+function isReroutedByAstro(response: Response): boolean {
+  return response.body === null && REROUTED_ERROR_STATUSES.includes(response.status)
+}
+
 function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
@@ -49,7 +60,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   response.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=(self)')
-  response.headers.set('Content-Security-Policy', buildCsp(cspNonce))
+  // A route that answers with a BODYLESS 404 or 500 is not the response the
+  // visitor gets: Astro re-renders src/pages/404.astro for it, running this
+  // middleware a second time with a fresh nonce, then merges the two responses
+  // keeping THIS pass's headers (mergeResponses in
+  // astro/dist/core/errors/default-handler.js). A CSP set here would pair nonce
+  // A in the header with a body rendered under nonce B, and the head bootstrap
+  // — the one inline script on every page — would be refused on every such
+  // 404. So this pass leaves CSP to the re-render, which sets the matching one.
+  if (!isReroutedByAstro(response)) {
+    response.headers.set('Content-Security-Policy', buildCsp(cspNonce))
+  }
 
   // Caching policy. Cloudflare's edge sits in front (a Cache Rule makes HTML
   // eligible for caching); these headers tell it *how long* and *what to skip*.
