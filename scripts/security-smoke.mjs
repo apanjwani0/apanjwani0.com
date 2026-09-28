@@ -8849,11 +8849,14 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
    oracle: it reads each kind's predicate directly and shares no code with
    src/lib/site-index.ts, so the new route must equal it BYTE FOR BYTE across
    blogs on and off, Driftfield live and wip, and fixtures carrying a wip tool
-   and a draft article. The palette's index is held to the same pages.
+   and a draft article. The palette's index and /llms.txt are held to the same
+   pages.
    (mutations: let site-index list wip tools → fails; drop the modes from
-   buildSiteIndex → fails) */
+   buildSiteIndex → fails; drop a kind from llms.txt → fails; stop escaping its
+   link text → fails) */
 {
   const { GET } = await import('../src/pages/sitemap.xml.ts')
+  const { GET: llmsGET } = await import('../src/pages/llms.txt.ts')
   const { buildSiteIndex, indexablePaths, loadSiteConfigs, projectAnchors } = await import('../src/lib/site-index.ts')
   const { DRIFTFIELD_SLUG, isDriftfieldPublic } = await import('../src/lib/driftfield.ts')
   const { escapeHtml } = await import('../src/lib/escape.ts')
@@ -8903,10 +8906,21 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
       const entryPaths = [...new Set(buildSiteIndex(configs).map(e => e.u.split('#')[0]))].sort()
       assert.deepEqual(entryPaths, [...new Set(indexablePaths(configs).map(p => p.path))].sort(),
         `every index entry points at an indexable page and every indexable page has an entry ${at}`)
+      const md = await (await llmsGET({ locals })).text()
+      const mdLinks = [...md.matchAll(/^- \[(?:\\.|[^\\\]])*\]\(([^)\s]+)\)/gm)].map(m => m[1]).filter(u => u.startsWith(`${base}/`))
+      assert.deepEqual(mdLinks.sort(), buildSiteIndex(configs).map(e => `${base}${e.u}`).sort(), `llms.txt lists exactly the site index ${at}`)
       fixtures += 1
     }
   }
   assert.equal(fixtures, 4)
+  {
+    const nasty = { slug: 'zz-nasty', title: 'Evil](https://evil.example)\n# Injected [x]', description: 'one\n\n## two', status: 'live' }
+    const fx = { tools: [...tools, nasty] }
+    const md = await (await llmsGET({ locals: { runtime: { env: { SITE_CONFIG: { get: async key => fx[key] ?? null } } } } })).text()
+    assert.ok(md.includes('\n- [Evil\\](https://evil.example) # Injected \\[x\\]](https://apanjwani0.com/tools/zz-nasty): one\n'),
+      'a hostile title stays inside its own link text in llms.txt')
+    assert.equal(/^#+ (Injected|two)/m.test(md), false, 'no config value starts a heading in llms.txt')
+  }
   const entries = buildSiteIndex(await loadSiteConfigs({}))
   const projectEntries = entries.filter(e => e.k === 'project')
   assert.ok(projectEntries.length > 0 && projectEntries.every(e => /^\/projects#[a-z0-9-]+$/.test(e.u) && e.u === `/projects#${e.s}`),
@@ -8914,7 +8928,7 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
   assert.deepEqual(projectAnchors([{ title: 'Sort' }, { title: 'sort' }, { title: '!!!' }]), ['sort', 'sort-2', 'project'],
     'project anchors are unique and never empty')
 }
-console.log('ui refresh: spacing rungs increase in order, the head bootstrap matches resolveTheme across the truth table and is the one inline script, a swap keeps the client state, and the sitemap equals both the route it replaced and the palette index')
+console.log('ui refresh: spacing rungs increase in order, the head bootstrap matches resolveTheme across the truth table and is the one inline script, a swap keeps the client state, and the sitemap equals both the route it replaced and the palette index, and llms.txt lists the same pages')
 
 /* ── The kit parse is bounded, and its export writes nothing hostile ───────
    A ?t= value is whatever a link says, and a stored kit is whatever a page

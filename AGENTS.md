@@ -37,7 +37,7 @@ dev-only and writes `src/config/*.ts`, which ships through git.
   visit counter and the origin lock.
 - `src/lib/caa.ts` — the CAA vocabulary shared by DNS Sightline and Chainsaw.
 - `src/lib/site-index.ts` — the site's real pages, derived once for the
-  sitemap, the command palette and the 404.
+  sitemap, `/llms.txt`, the command palette and the 404.
 - `src/lib/theme.ts`, `src/lib/site-ui.ts`, `src/lib/kit.ts`,
   `src/lib/fuzzy.ts`, `src/lib/shortcuts.ts` — see *UI refresh*.
 - `src/styles/theme.css` — design tokens, the single source of truth.
@@ -156,6 +156,21 @@ one fall back to the avatar and a `summary` Twitter card.
 - Product pages and the `/tools` and `/games` hubs use a keyword-first
   `seoTitle` with no owner name; section pages (`/projects`, `/blogs`) keep the
   name suffix. Authorship lives in the JSON-LD `author` and the footer.
+
+## AI crawlers
+
+The owner's choice (2026-09-28): search and AI answers yes, training no.
+`public/robots.txt` states it in a `Content-Signal` line, which is a request,
+and disallows the crawlers that only collect training data: GPTBot, ClaudeBot,
+CCBot and Applebot-Extended.
+
+- **Never disallow a search or user-fetch agent** (OAI-SearchBot, ChatGPT-User,
+  Claude-SearchBot, Claude-User): that takes the site out of AI answers.
+- Google-Extended stays allowed, because Google ties Gemini's training and its
+  answers to that one token.
+- `/llms.txt` (`src/pages/llms.txt.ts`) is the site index as Markdown, asserted
+  to list exactly the sitemap's pages. Crawlers barely read it, so it is a
+  courtesy to agents, not an SEO lever.
 
 ## Security
 
@@ -739,8 +754,9 @@ kind has one predicate, and every consumer reads it:
   `driftfield` tools entry is `live`. The hub, every mode route, the sitemap and
   `scripts/generate-og.mjs` read it; it is stricter than `/tools/[slug]`.
 
-The sitemap (`indexablePaths`), the palette index (`buildSiteIndex`) and the
-404's suggestions all derive from `src/lib/site-index.ts`, asserted to agree. A
+The sitemap (`indexablePaths`), the palette index (`buildSiteIndex`),
+`/llms.txt` and the 404's suggestions all derive from `src/lib/site-index.ts`,
+asserted to agree. A
 project entry is the one hand-written on-site URL: any `apanjwani0.com` link in
 `src/config/projects.ts` must match a shape in `projectPathShapes` and pass that
 kind's predicate.
