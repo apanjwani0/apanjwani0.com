@@ -213,10 +213,10 @@ function panel(ctx: CanvasRenderingContext2D, g: GlyphScratch) {
 function detailStroke(ctx: CanvasRenderingContext2D, g: GlyphScratch) {
   ctx.lineWidth = g.lw * 0.6; ctx.globalAlpha = 0.7; ctx.strokeStyle = g.stroke; ctx.stroke(); ctx.globalAlpha = 1
 }
-// Status LEDs, each on its own slow phase; they flicker while traffic crosses.
+// Status LEDs stay lit at rest and flicker only while traffic crosses: blinking
+// with nothing happening read as the page flickering (owner, 2026-09-28).
 function ledOn(g: GlyphScratch, i: number): boolean {
-  const t = g.time * 0.001
-  return g.heat > 0.3 ? Math.sin(t * 38 + i * 1.7) > -0.2 : Math.sin(t * (1.6 + i * 0.7) + i * 2.1) > 0.2
+  return g.heat <= 0.3 || Math.sin(g.time * 0.038 + i * 1.7) > -0.2
 }
 function led(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, on: boolean) {
   ctx.fillStyle = on ? LED_ON : LED_OFF
