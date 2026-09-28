@@ -1,23 +1,18 @@
 /**
- * The owner's clock, which the home heroes run on: minutes past midnight in
- * India, how much of that is day, the colour of the hour, and the one status
- * line the clock shows. Ported from the Hero Lab shell (round 5).
- *
- * The zone label is written out rather than read from Intl. The zone is fixed,
- * and ICU builds disagree about its short name: a browser says "IST" and a
- * small-ICU runtime says "GMT+5:30". The owner asked for "IST" and no city.
+ * The owner's clock, which the home hero runs on: minutes past midnight in
+ * India, how much of that is day, and the colour of the hour. Ported from the
+ * Hero Lab shell (round 5).
  */
-export const HERO_TIME_ZONE = 'Asia/Kolkata'
-export const ZONE_LABEL = 'IST'
-export const DAY_MIN = 24 * 60
+const HERO_TIME_ZONE = 'Asia/Kolkata'
+const DAY_MIN = 24 * 60
 
 export type Rgb = [number, number, number]
 
-export function wrapMin(m: number): number {
+function wrapMin(m: number): number {
   return ((Math.round(m) % DAY_MIN) + DAY_MIN) % DAY_MIN
 }
 
-export function smooth(a: number, b: number, x: number): number {
+function smooth(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
   return t * t * (3 - 2 * t)
 }
@@ -61,12 +56,6 @@ export function dayness(min: number): number {
   return smooth(330, 450, m) * (1 - smooth(1050, 1170, m))
 }
 
-export function formatClock(min: number): string {
-  const m = wrapMin(min)
-  const h = Math.floor(m / 60)
-  const mm = m % 60
-  return `${h % 12 || 12}:${mm < 10 ? '0' : ''}${mm} ${h < 12 ? 'am' : 'pm'}`
-}
 
 // The colour of each hour, eased between keyframes: deep indigo after
 // midnight, coral at dawn, amber through the working day, warm white at noon,
@@ -96,10 +85,4 @@ export function hourColor(min: number, out: Rgb = [0, 0, 0]): Rgb {
   out[1] = first[1]
   out[2] = first[2]
   return out
-}
-
-/** The clock's one status sentence, e.g. "It’s 6:20 pm IST · night shift: building". */
-export function shiftLine(min: number, isNow: boolean): string {
-  const shift = dayness(min) >= 0.5 ? 'day shift: payments' : 'night shift: building'
-  return `${isNow ? 'It’s ' : ''}${formatClock(min)} ${ZONE_LABEL} · ${shift}`
 }

@@ -1,7 +1,7 @@
 /* Network hero (?hero=network): a live diagram replaying how this page load
    reached the visitor. Everything is scoped under the section's own
-   [data-hero="network"] so it never leaks onto the liquid hero, which shares
-   the same [data-type="hero-stage"]/[data-type="hero-content"] shells.
+   [data-hero="network"], so another live hero can share the same
+   [data-type="hero-stage"]/[data-type="hero-content"] shells.
    Canvas-drawn colours (glyphs, packets, wires) are data, chosen in
    network.ts, and stay literal there — this file only styles real DOM. */
 

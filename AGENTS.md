@@ -31,8 +31,8 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - `src/pages/` — routes; `admin.astro` (config editor) and `api/admin/save.ts`
   (save allowlist).
 - `src/layouts/` — `Base.astro` and `ToolBase.astro`; `src/components/`
-  (`home/`, `tools/`, `games/`). `src/components/home/hero/` holds the hero
-  candidates.
+  (`home/`, `tools/`, `games/`). `src/components/home/hero/` holds the network
+  hero candidate.
 - `src/middleware.ts` — security headers, the CSP nonce, `Cache-Control`, the
   visit counter and the origin lock.
 - `src/lib/caa.ts` — the CAA vocabulary shared by DNS Sightline and Chainsaw.
@@ -614,94 +614,43 @@ clicked card's title, with `html[data-vt-source]` clearing the source page's h1
 
 ## Home hero candidates (dev only, 2026-09)
 
-**Production renders the classic hero.** On the dev server,
-`/?hero=classic|liquid|network|monsoon` switches between it and three live
-candidates, and so does the pill `nav[data-type="hero-switch"]` that only the
-dev server renders.
+**Production renders the classic hero.** On the dev server, `/?hero=network`
+(or the pill `nav[data-type="hero-switch"]` that only the dev server renders)
+shows the network hero: a replay of how this page load reached the visitor. The
+owner picked that concept on 2026-09-28 and is still reviewing it. It must never
+show the host provider, runtime or origin details.
 
-- **liquid light**, a WebGL fluid in the colour of the hour. The owner sees it
-  as a screensaver, not a contender.
-- **network**, a replay of how this page load reached the visitor. It must
-  never show the host provider, runtime or origin details.
-- **monsoon**, a city at night through a rain-covered window, with a matchbox
-  and a candle on the sill. See *Monsoon*.
-
-The Hero Lab prototypes are kept in `docs/ideas/hero-lab/` as references for
-screensavers and the image/GIF tools.
+Liquid light, monsoon and the Hero Lab prototypes moved out of the repo to
+`~/Projects/screensavers/` (2026-09-28), kept for future macOS screen savers.
 
 - **The switch is dev-only by construction.** `src/pages/index.astro` reads the
   query as `import.meta.env.DEV ? … : null`, anything else falls back to
   `classic`, and a classic page ships no hero script.
-- **Text is server-rendered and shared.** Every hero renders the same h1,
-  tagline and social links. A live hero reads them through `env.text` and
-  never draws its own copy. Live heroes drop the avatar and the StarField and
-  put `data-theme="dark"` on their section, because the canvas is dark at every
-  hour.
+- **Text is server-rendered and shared.** Both heroes render the same h1,
+  tagline and social links. The live hero reads them through `env.text` and
+  never draws its own copy. It drops the avatar and the StarField and puts
+  `data-theme="dark"` on its section, because the canvas is dark at every hour.
 - **The contract** is `src/components/home/hero/types.ts`: `create(host, env)`
   returns `{ start, stop, resize, destroy }`. `mount.ts` is the only caller. It
-  loads each hero as its own chunk, mounts on `astro:page-load`, destroys on
-  `astro:before-swap`, and runs a hero only while the tab is visible and the
-  **stage** is on screen (monsoon's stage is fixed while its section scrolls).
-  Every document or window listener a hero adds takes `env.signal`. `day.ts` is
-  the owner's clock (IST), `clock.ts` the 24-hour scrubber. Styles: `home.css`
-  plus `hero-liquid.css`, `hero-network.css`, `hero-monsoon.css`.
+  loads the hero as its own chunk, mounts on `astro:page-load`, destroys on
+  `astro:before-swap`, and runs the hero only while the tab is visible and the
+  stage is on screen. Every document or window listener the hero adds takes
+  `env.signal`. `day.ts` is the owner's clock (IST). Styles: `home.css` plus
+  `hero-network.css`.
 - **No tools or games in the hero** (the owner's rule): not in the copy, not as
   a link or a hover affordance, not even by name. The site nav keeps "tools"
   and "games" for search reach, and the meta description still lists them.
-- **Test hooks are DEV-gated**: `?at=HH:MM` pins the clock; liquid's `?scale=`
-  pins its resolution.
+- **The test hook is DEV-gated**: `?at=HH:MM` pins the clock.
 - **Looping motion is allowed here and nowhere else.** It still stops when the
   hero is hidden or off screen, and renders one still frame under
   `prefers-reduced-motion`.
 
 `security:smoke` holds the switch to dev, the fallback to classic, the hero to
 no tools or games (the tagline, the section markup, and every string literal and
-stylesheet the heroes ship), the hooks to the DEV gate, and each hero to its own
-chunk. **When the owner picks one,** delete the switch, the other heroes and
-their stylesheets in the same change, and update this section and the StarField
-note.
-
-### Monsoon
-
-Modules in `src/components/home/hero/monsoon/`: `gl.ts`, `camera.ts`,
-`types.ts` and `light.ts` are the shared contract; `city.ts` paints the view
-once as Canvas2D plates; `glass.ts` is the one full-screen pass (rain, fog,
-refraction, compositing, post); `props.ts` raymarches the sill; `smoke.ts` is
-the fluid; `match.ts` is the pure-TS match and candle sim; `story.ts` turns
-scroll into story time; `index.ts` wires the frame. Decisions: a candle, not a
-cigarette; the landing is always night (the clock line shows story time, never
-"It's …"); the chapters use only text already public on the site (the first
-sentence of `site.bio`, `site.tagline`, and GitHub projects filtered so no tool
-or game can appear).
-
-Rules that cost real bugs:
-
-- **Run `npx tsx docs/plans/monsoon/match-check.ts` after touching
-  `match.ts`.** It drives scripted pointer paths through the real camera and
-  pins: the striker contact (depth measured from the striker's face; from the
-  box's centre, no drag could light the match), the spring substeps (explicit
-  Euler flung the match through the window on a 0.1 s frame), a flick judged in
-  screen heights per second, and the wick easing within 25 px.
-- **Every city plate is opaque.** `gl.ts` uploads without premultiplying, so a
-  transparent canvas gives every soft glow a full-brightness fringe.
-- **The rain is outside, the condensation inside.** A static drop behind fog is
-  seen soft through it until a wipe clears the glass; a running drop is crisp
-  and its trail wipes the fog.
-- **Flame light falls off with a soft core** (`1 / (1 + d²/0.02²)`, metres);
-  raw `1/d²` whites out the sill. `FlameLight.pos` is the flame's centre, so
-  props draws the base below it.
-- **The endless loop only works if nothing moves at the jump.** The clone
-  (`div[data-type="story-loop"]`) mirrors the landing, and every landing rule is
-  a selector list naming both. `story.ts` measures with
-  `getBoundingClientRect` (the story is positioned, so `offsetTop` is
-  story-relative) and jumps a pixel early, and the clone has a 20svh runway so a
-  phone with its URL bar hidden can reach the jump.
-- **Reduced motion runs no loop**: frames render on demand, a 250 ms tick runs
-  only while something moves, and no smoke module is created.
-
-`camera.ts`'s `FRAMINGS` holds numbers only; tune it with
-`npx tsx docs/plans/monsoon/cam-probe.ts`. Status and open tuning:
-`docs/plans/monsoon/README.md`.
+stylesheet the hero ships), the hook to the DEV gate, and the hero to its own
+chunk. **When the owner approves network,** make it the page's only hero: delete
+the switch and the classic markup in the same change, and update this section
+and the StarField note.
 
 ## Skills & Commands
 

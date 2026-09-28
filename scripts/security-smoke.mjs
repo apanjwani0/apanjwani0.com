@@ -8988,10 +8988,10 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
 
 /* ─────  Home hero candidates: the dev-only ?hero= switch  ─────
 
-   Three live heroes (liquid light, network, monsoon) are under review on the
-   real page before the owner picks one. Production renders the classic hero
-   whatever the query says, and three things about that must not drift while
-   they wait:
+   The network hero is under review on the real page before it replaces the
+   classic one (liquid light and monsoon moved out of the repo, 2026-09-28).
+   Production renders the classic hero whatever the query says, and three
+   things about that must not drift while it waits:
 
    1. The switch reads its query only under `import.meta.env.DEV`, a
       build-time constant, and falls back to the classic hero. The pill that
@@ -8999,11 +8999,11 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
       hero script at all.
    2. No tools or games in the hero (owner, 2026-09-27: not in the copy, not a
       link, not a "discover" affordance). This is checked over the tagline, the
-      page's markup (monsoon's story chapters included), and every string
-      literal and stylesheet the live heroes ship. The meta description and
-      keywords are deliberately outside the rule.
-   3. The test hooks the heroes keep (`?at=`, `?scale=`) are dev-only: every
-      read of `location.search` in their modules sits behind the same constant. */
+      page's markup, and every string literal and stylesheet the live hero
+      ships. The meta description and keywords are deliberately outside the
+      rule.
+   3. The test hook the hero keeps (`?at=`) is dev-only: every read of
+      `location.search` in its modules sits behind the same constant. */
 {
   const styleUrl = n => new URL(`../src/styles/${n}`, import.meta.url)
   const homeSrc = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf-8')
@@ -9030,11 +9030,11 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   assert.doesNotMatch(tagline[1], banned, 'the hero line names no tools or games')
   const section = template.match(/<section data-type="hero"[\s\S]*?<\/section>/)
   assert.ok(section, 'the hero section is found')
-  // The whole template, not just the section: monsoon's chapters render after
-  // it. Only the <Base> tag is exempt, for its meta keywords.
+  // The whole template, not just the section, so markup added after it is
+  // covered too. Only the <Base> tag is exempt, for its meta keywords.
   const markup = template.replace(/<Base\b[^>]*>/, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
   assert.doesNotMatch(markup, banned, 'the home page markup links and names no tools or games')
-  // Every string literal a live hero ships, comments dropped first, so a
+  // Every string literal the live hero ships, comments dropped first, so a
   // docblock may still say why the rule exists.
   const literalsOf = (code) => {
     const out = []
@@ -9053,9 +9053,7 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   }
   const heroDir = new URL('../src/components/home/hero/', import.meta.url)
   const heroFiles = (await readdir(heroDir, { recursive: true })).filter(f => f.endsWith('.ts'))
-  const monsoonFiles = ['index', 'gl', 'camera', 'types', 'light', 'city', 'glass', 'props', 'smoke', 'match', 'story']
-    .map(f => `monsoon/${f}.ts`)
-  for (const need of ['types.ts', 'day.ts', 'clock.ts', 'mount.ts', 'liquid.ts', 'network.ts', ...monsoonFiles]) {
+  for (const need of ['types.ts', 'day.ts', 'mount.ts', 'network.ts']) {
     assert.ok(heroFiles.includes(need), `src/components/home/hero/${need} exists — has the hero moved?`)
   }
   for (const file of heroFiles) {
@@ -9071,18 +9069,18 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
         `src/components/home/hero/${file} reads location.search outside an import.meta.env.DEV gate — a test hook would ship`)
     }
   }
-  for (const sheet of ['hero-liquid.css', 'hero-network.css', 'hero-monsoon.css', 'home.css']) {
+  for (const sheet of ['hero-network.css', 'home.css']) {
     const css = (await readFile(styleUrl(sheet), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
     assert.doesNotMatch(css.replace(/\[data-type="[^"]*"\]/g, ''), banned, `${sheet} puts no tools or games into the hero`)
   }
-  // The live heroes load only through mount.ts's per-hero dynamic imports.
+  // The live hero loads only through mount.ts's per-hero dynamic import.
   const mountSrc = await readFile(new URL('mount.ts', heroDir), 'utf-8')
-  for (const id of ['liquid', 'network', 'monsoon']) {
+  for (const id of ['network']) {
     assert.match(mountSrc, new RegExp(`${id}: \\(\\) => import\\('\\./${id}'\\)`), `${id} is its own lazily imported chunk`)
   }
   for (const file of heroFiles.filter(f => f !== 'mount.ts')) {
     const code = await readFile(new URL(file, heroDir), 'utf-8')
-    assert.doesNotMatch(code, /from '\.\.?\/(liquid|network|monsoon)(\/index)?'|import\('\.\.?\/(liquid|network|monsoon)(\/index)?'\)/, `${file} does not pull a hero into another chunk`)
+    assert.doesNotMatch(code, /from '\.\.?\/network(\/index)?'|import\('\.\.?\/network(\/index)?'\)/, `${file} does not pull the hero into another chunk`)
   }
 }
 console.log('home hero: the ?hero= switch is dev-only and classic by default, no hero names tools or games, and its test hooks compile out of production')

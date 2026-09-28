@@ -65,13 +65,13 @@ nav[data-type="hero-links"] a:hover {
   text-decoration-thickness: 2px;
 }
 
-/* ── Live heroes: the dev server's ?hero=liquid|network ──────────────────────
-   src/components/home/hero/ draws them. The section carries data-hero and
+/* ── Live hero: the dev server's ?hero=network ───────────────────────────────
+   src/components/home/hero/ draws it. The section carries data-hero and
    data-theme="dark", because the canvas is dark at every hour, so the tokens
    below resolve to the dark palette whatever theme a visitor stored. The
-   canvas and the clock live in the stage. The server-rendered name, tagline
-   and links sit over it at the bottom left, as they did in the Hero Lab.
-   Per-hero rules are in hero-liquid.css and hero-network.css. */
+   canvas lives in the stage. The server-rendered name, tagline and links sit
+   over it at the bottom left, as they did in the Hero Lab. The hero's own
+   rules are in hero-network.css. */
 section[data-type="hero"][data-hero] {
   display: block;
   padding: 0;
@@ -126,90 +126,7 @@ section[data-type="hero"][data-hero] nav[data-type="hero-links"] a {
   text-shadow: 0 1px 12px color-mix(in srgb, var(--color-bg) 90%, transparent);
 }
 
-/* The 24-hour clock along the stage's bottom edge (clock.ts). The knob's
-   colour and glow come from the hour, so clock.ts sets only those inline. */
-div[data-type="hero-clock"] {
-  position: absolute;
-  inset: auto 16px 10px 16px;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  font-weight: 500;
-  line-height: 1.2;
-  color: var(--color-text);
-  pointer-events: none;
-}
-
-div[data-type="hero-clock"] [data-part="row"] {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 22px;
-}
-
-div[data-type="hero-clock"] [data-part="line"] {
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 10px color-mix(in srgb, var(--color-bg) 90%, transparent);
-}
-
-div[data-type="hero-clock"] [data-part="now"] {
-  pointer-events: auto;
-  appearance: none;
-  cursor: pointer;
-  font: inherit;
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-bg) 55%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-text) 30%, transparent);
-  border-radius: var(--radius-pill);
-  padding: 0.35em 0.8em;
-}
-
-div[data-type="hero-clock"] [data-part="now"]:hover {
-  border-color: var(--color-day);
-}
-
-div[data-type="hero-clock"] [data-part="track"] {
-  pointer-events: auto;
-  position: relative;
-  height: 26px;
-  cursor: ew-resize;
-  /* A drag on the dial scrubs the day instead of scrolling the page. */
-  touch-action: none;
-  border-radius: 13px;
-}
-
-div[data-type="hero-clock"] [data-part="sky"] {
-  position: absolute;
-  inset: 11px 0 auto 0;
-  height: 4px;
-  border-radius: 2px;
-  opacity: 0.85;
-}
-
-div[data-type="hero-clock"] [data-part="knob"] {
-  position: absolute;
-  top: 4px;
-  width: 18px;
-  height: 18px;
-  margin-left: -9px;
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--color-bg) 85%, transparent),
-    0 0 18px var(--hero-clock-glow, var(--color-day));
-}
-
-div[data-type="hero-clock"] [data-part="ticks"] {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.86em;
-  color: color-mix(in srgb, var(--color-text) 50%, transparent);
-}
-
-/* Dev server only: the pill that switches between the heroes under review. */
+/* Dev server only: the pill that switches between the classic and live heroes. */
 nav[data-type="hero-switch"] {
   position: fixed;
   top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-md));

@@ -5,8 +5,8 @@
  * no-op when the same section already has its hero. The hero is destroyed on
  * `astro:before-swap`.
  *
- * Each hero is its own chunk, imported only by the page that shows it, so a
- * visitor to the classic hero downloads neither.
+ * The hero is its own chunk, imported only by the page that shows it, so a
+ * visitor to the classic hero downloads none of it.
  *
  * The document-level listeners are registered once behind `wired`, the
  * singleton shape nav-ui.ts uses. Everything per mount (visibility, the
@@ -16,12 +16,8 @@
 import type { HeroCreate, HeroEnv, HeroId, HeroInstance } from './types'
 
 const LOADERS: Record<HeroId, () => Promise<{ create: HeroCreate }>> = {
-  liquid: () => import('./liquid'),
   network: () => import('./network'),
-  monsoon: () => import('./monsoon'),
 }
-
-const CLOCK_RESERVE = 72
 
 interface Mounted {
   section: HTMLElement
@@ -84,7 +80,6 @@ async function mount() {
     isTouch,
     lowPower: isTouch || (navigator.hardwareConcurrency || 8) <= 4,
     dpr: Math.min(window.devicePixelRatio || 1, 2),
-    clockReserve: CLOCK_RESERVE,
     text: {
       section,
       content,
@@ -115,9 +110,7 @@ async function mount() {
   }
   guarded(() => instance.resize(...size()))
 
-  // Running only while the tab is visible and the hero is on screen. The stage
-  // is what is observed: monsoon's stage is fixed to the viewport while its
-  // section scrolls away, and every other hero's stage fills its section.
+  // Running only while the tab is visible and the hero's stage is on screen.
   let onScreen = true
   let running = false
   const sync = () => {
