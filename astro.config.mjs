@@ -5,7 +5,8 @@ import node from '@astrojs/node';
 // import cloudflare from '@astrojs/cloudflare';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { Agent, request } from 'node:https';
+import { request } from 'node:https';
+import { connect } from 'node:http2';
 import { promises as dns } from 'node:dns';
 
 /** @param {unknown} data */
@@ -243,23 +244,11 @@ const adminSavePlugin = {
 // the page comes from localhost. So the dev server measures one real request
 // to the live site from this machine instead (DNS, TCP, TLS, first byte and
 // body, plus the edge's own trace), and the review shows real numbers, never
-// a sample. `?ping` times one HEAD over a kept-alive connection, like the
-// hero's click-to-ping. Loopback callers only, so a dev server started with
+// a sample. `?ping` times one HEAD over a kept-open HTTP/2 connection, like
+// the hero's click-to-ping. Loopback callers only, so a dev server started with
 // --host is not an open measuring proxy. configureServer never runs in a
 // production build.
 const PROBE_HOST = 'apanjwani0.com';
-const probeAgent = new Agent({ keepAlive: true });
-
-/** @param {import('node:https').RequestOptions} options */
-function probeRequest(options) {
-  return new Promise((resolve, reject) => {
-    const req = request({ timeout: 6000, ...options });
-    req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', reject);
-    req.on('response', resolve);
-    req.end();
-  });
-}
 
 async function probeVisit() {
   const t0 = performance.now();
@@ -285,31 +274,46 @@ async function probeVisit() {
   const tFirst = performance.now();
   let size = 0;
   for await (const chunk of res) size += chunk.length;
+  const tLast = performance.now();
   const age = Number.parseInt(String(res.headers.age ?? ''), 10);
   const trace = await fetch(`https://${PROBE_HOST}/cdn-cgi/trace`, { signal: AbortSignal.timeout(4000) })
     .then((r) => (r.ok ? r.text() : ''))
     .catch(() => '');
   return {
-    dns: tDns - t0, tcp: tConnect - tDns, tls: tTls - tConnect, ttfb: tFirst - tTls, download: performance.now() - tFirst,
+    dns: tDns - t0, tcp: tConnect - tDns, tls: tTls - tConnect, ttfb: tFirst - tTls, download: tLast - tFirst,
     size, cache: String(res.headers['cf-cache-status'] ?? ''), age: Number.isFinite(age) ? age : null, trace,
   };
 }
 
-// The browser pings over the connection its page load already opened, so the
-// first ping here opens one untimed, and only the round trip on it is timed.
-let probeWarm = false;
+// The browser pings over the HTTP/2 connection its page load already opened,
+// so this keeps one open and times a HEAD on it; a new connection's first HEAD
+// is untimed. Not HTTP/1.1: Node closes that connection after the edge's HEAD
+// reply (it carries no length), so every timing would include a handshake.
+/** @type {import('node:http2').ClientHttp2Session | undefined} */
+let probeSession;
+/** @param {import('node:http2').ClientHttp2Session} session */
+function probeHead(session) {
+  return new Promise((resolve, reject) => {
+    const req = session.request({ ':method': 'HEAD', ':path': '/' });
+    req.setTimeout(6000, () => req.close());
+    req.on('response', () => { resolve(undefined); req.close(); });
+    req.on('error', reject);
+    req.on('close', () => reject(new Error('closed')));
+    req.end();
+  });
+}
 async function probePing() {
-  const head = { host: PROBE_HOST, path: '/', method: 'HEAD', agent: probeAgent };
-  if (!probeWarm) {
-    /** @type {any} */
-    const warm = await probeRequest(head);
-    warm.resume();
-    probeWarm = true;
+  let session = probeSession;
+  if (!session || session.closed || session.destroyed) {
+    const fresh = connect(`https://${PROBE_HOST}`);
+    fresh.on('error', () => {});
+    fresh.on('goaway', () => { if (probeSession === fresh) probeSession = undefined; });
+    fresh.unref();
+    probeSession = session = fresh;
+    await probeHead(fresh);
   }
   const t0 = performance.now();
-  /** @type {any} */
-  const res = await probeRequest(head);
-  res.resume();
+  await probeHead(session);
   return { ms: performance.now() - t0 };
 }
 

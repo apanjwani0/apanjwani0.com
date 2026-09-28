@@ -881,6 +881,10 @@ export const create: HeroCreate = (host, env) => {
   frame.append(kicker, headline, bar)
   const log = doc.createElement('div')
   log.dataset.type = 'hero-log'
+  // Both describe whoever is looking, a crawler included, so neither may
+  // become the page's search snippet.
+  frame.setAttribute('data-nosnippet', '')
+  log.setAttribute('data-nosnippet', '')
   host.append(canvas, poster, pingTarget, nodesLayer, card, frame, log)
 
   // The log sits at the stage's bottom right on desktop and moves into the
@@ -1088,6 +1092,9 @@ export const create: HeroCreate = (host, env) => {
     for (const p of pool) p.active = false
     for (const p of pulses) p.active = false
     fill = 0
+    // A ping still animating loses its landing to the new schedule, so it must
+    // not keep the next ping locked out.
+    pinging = false
     typing = null
     log.replaceChildren()
     setClock('')
@@ -1138,7 +1145,8 @@ export const create: HeroCreate = (host, env) => {
     pingOnce(env.signal).then(landPing, () => landPing(-1))
   }
   function landPing(ms: number) {
-    if (destroyed) return
+    // A replay started while the request was out: it has cleared the log.
+    if (destroyed || playing) return
     const line: Line = ms < 0
       ? { title: 'Ping', ms: '', text: 'No answer this time.', detail: '', pal: OUT }
       : { title: 'Ping', ms: fmtMs(ms), text: story.pingText, detail: 'HEAD /', pal: OUT }
@@ -1382,6 +1390,9 @@ export const create: HeroCreate = (host, env) => {
   function loop(now: number) {
     if (!running) return
     raf = requestAnimationFrame(loop)
+    // ponytail: between replays only the stars move (7 px/s at most), so idle
+    // frames are drawn at ~30 fps instead of the display's 60–120.
+    if (!playing && !pinging && last && now - last < 30) return
     const dt = last ? Math.min((now - last) / 1000, 0.25) : 1 / 60
     last = now
     time += dt * 1000
