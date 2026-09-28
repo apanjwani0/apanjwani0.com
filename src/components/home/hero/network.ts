@@ -1,315 +1,200 @@
 /**
- * "How you landed here" — a live network diagram replaying how this page
- * load reached the visitor: their device, their router, a DNS resolver, the
- * Cloudflare edge and the origin, timed
- * from this browser's own Navigation Timing. The device's own on-canvas
- * screen fills in as the page's bytes arrive. Ported from the Hero Lab's
- * network.js (round 4, "bold pass"); see AGENTS.md's Home hero candidates
- * section for the contract every hero here follows.
+ * The network heroes: how a web page reaches you, drawn as one metro line
+ * over an endless drift of stars. One engine and two stories, picked by the
+ * section's data-hero (the dev-only switch in src/pages/index.astro):
  *
- * Differences from the lab module:
- *  - The name and tagline are gone: they are server-rendered into
- *    env.text.content, and this module only measures around them.
- *  - Edge facts (colo/http/tls/kex) come from a same-origin fetch of
- *    Cloudflare's /cdn-cgi/trace in production, parsed below; a labelled
- *    sample is the fallback (and the whole story on the dev server, which
- *    has no /cdn-cgi/trace). Cache status is a THIRD, independent source
- *    (Server-Timing, then a ping's response header, then nothing) — the
- *    trace endpoint never reports it, sample or real.
- *  - The "ping" fetches this page ('/', HEAD) instead of the lab's own file.
- *  - HeroLab.register/env.data/lab-only hooks are gone; this exports
- *    `create` directly per ./types.
+ *  - `network` replays THIS page load, slowed down, from the browser's own
+ *    Navigation Timing, Cloudflare's /cdn-cgi/trace and one HEAD of '/'.
+ *    Real data only (owner, 2026-09-28): a fact the page cannot measure is
+ *    left out, never filled in with a sample. On the dev server the page
+ *    comes from localhost, so the same facts come from one real request to
+ *    the live site that the dev server makes (/__hero-probe, in
+ *    astro.config.mjs).
+ *  - `internet` explains how any page reaches anyone, in plain words, on the
+ *    same stage. Its only number is this page's own total.
+ *
+ * Neither ever names the host provider, the runtime or anything else about
+ * the origin (owner, 2026-09-27): that is what helps someone reach it around
+ * Cloudflare. AGENTS.md's Home hero candidates section has the contract.
  */
 import type { HeroCreate, HeroInstance } from './types'
-import { dayness, hexRgb, hourColor, localMinutes, type Rgb } from './day'
+
+type Rgb = [number, number, number]
 
 function clamp(v: number, a: number, b: number): number { return v < a ? a : v > b ? b : v }
 function lerp(a: number, b: number, t: number): number { return a + (b - a) * t }
-
-// Critically damped spring ("SmoothDamp", a standard closed-form approach to
-// camera easing): reaches target with no overshoot and no oscillation,
-// framerate-independent. vObj holds velocity under vKey so the camera needs
-// no per-frame allocation.
-function smoothDamp(current: number, target: number, smoothTime: number, dt: number, vObj: Camera, vKey: 'vx' | 'vy' | 'vz'): number {
-  const omega = 2 / Math.max(0.0001, smoothTime)
-  const x = omega * dt
-  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x)
-  const change = current - target
-  const v = vObj[vKey]
-  const temp = (v + omega * change) * dt
-  vObj[vKey] = (v - omega * temp) * exp
-  return target + (change + temp) * exp
-}
-function mix3(c0: Rgb, c1: Rgb, t: number): Rgb { return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)] }
-function rgbCss(c: Rgb, a?: number): string { return `rgba(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)},${a ?? 1})` }
+function hexRgb(hex: string): Rgb { return [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16) / 255) as Rgb }
+function rgbCss(c: Rgb, a = 1): string { return `rgba(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)},${a})` }
 function mixInto(out: Rgb, c0: Rgb, c1: Rgb, t: number): Rgb {
   out[0] = lerp(c0[0], c1[0], t); out[1] = lerp(c0[1], c1[1], t); out[2] = lerp(c0[2], c1[2], t)
   return out
 }
 
+// ---- Colours. A request travels amber, an answer violet and a handshake
+// white, in the diagram and in the log's dots alike.
 const AMBER = hexRgb('#ffb35c')
 const VIOLET = hexRgb('#9b8cff')
-const WHITE: Rgb = [0.96, 0.97, 1.0]
+const WHITE: Rgb = [0.96, 0.97, 1]
+const PALETTE: Rgb[] = [AMBER, VIOLET, WHITE]
+const OUT = 0, BACK = 1, SHAKE = 2
+const TONES = ['out', 'back', 'shake']
 const REST = hexRgb('#394255')
-// The machines rest a step brighter than the wires between them, so the five
-// nodes read as objects and the links as the paths joining them.
+// The machines rest a step brighter than the wires, so they read as objects
+// and the wires as the paths between them.
 const REST_GLYPH = hexRgb('#58647f')
-// Every glyph is a solid panel: a wire ends at its outline instead of running
-// through it, and an arriving packet slides in underneath.
+// Every glyph is a solid panel: a wire ends at its outline, and an arriving
+// packet slides in underneath.
 const BODY = hexRgb('#0b0f19')
 const SCREEN_BG = '#070a12'
+const SCREEN_INK = '#dde6f2'
 const LED_ON = 'rgba(130,255,170,0.95)'
 const LED_OFF = 'rgba(80,110,95,0.35)'
-const PALETTE: Rgb[] = [AMBER, VIOLET, WHITE]
-// Scratch colour for mixInto(): glyph colours are mixed into this every
-// frame instead of into a fresh array.
+const STAR = 'rgb(200,210,230)'
+const CONSTELLATION = 'rgb(150,160,182)'
+const LABEL = 'rgba(221,230,242,0.92)'
+const SUB = 'rgba(132,144,160,0.92)'
+const CHIP = rgbCss(AMBER, 0.95)
+// Scratch colours, refilled every frame instead of allocated.
 const MIX: Rgb = [0, 0, 0]
+const TINT: Rgb = [0, 0, 0]
 
-// A packet's actual colour can be any hourColor() sample (dawn coral, dusk
-// rose, ...), but there are only ever 3 pre-rendered comet sprites, so it is
-// drawn with whichever is closest. Cheap (3 comparisons, no allocation).
-function nearestPaletteIndex(c: Rgb): number {
-  let best = 0
-  let bestD = Infinity
-  for (let i = 0; i < PALETTE.length; i++) {
-    const p = PALETTE[i]
-    const dr = c[0] - p[0], dg = c[1] - p[1], db = c[2] - p[2]
-    const d = dr * dr + dg * dg + db * db
-    if (d < bestD) { bestD = d; best = i }
-  }
-  return best
-}
-
+// ---- Comets: a head and a tail sprite per palette colour, rendered once per
+// instance. drawImage stretches them to every packet's size.
 interface Sprites { head: HTMLCanvasElement[]; tail: HTMLCanvasElement[] }
-
-// ---- Comet sprites: pre-rendered ONCE per instance (create()), never per
-// frame. A head (radial glow) and a tail (linear-fading strip) per palette
-// colour; drawImage can stretch either to any size, so 6 small offscreen
-// canvases cover every packet for the whole session.
-function makeHeadSprite(color: Rgb): HTMLCanvasElement {
-  const s = 48
-  const c = document.createElement('canvas')
-  c.width = s; c.height = s
-  const g = c.getContext('2d')
-  if (!g) return c
-  const grad = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2)
-  grad.addColorStop(0, rgbCss(color, 1)); grad.addColorStop(0.4, rgbCss(color, 0.55)); grad.addColorStop(1, rgbCss(color, 0))
-  g.fillStyle = grad; g.fillRect(0, 0, s, s)
-  return c
-}
-function makeTailSprite(color: Rgb): HTMLCanvasElement {
-  const w = 64, h = 16
+function sprite(w: number, h: number, paint: (g: CanvasRenderingContext2D) => void): HTMLCanvasElement {
   const c = document.createElement('canvas')
   c.width = w; c.height = h
   const g = c.getContext('2d')
-  if (!g) return c
-  const grad = g.createLinearGradient(0, 0, w, 0)
-  grad.addColorStop(0, rgbCss(color, 0.65)); grad.addColorStop(1, rgbCss(color, 0))
-  g.fillStyle = grad; g.fillRect(0, 0, w, h)
+  if (g) paint(g)
   return c
 }
-function makeSprites(): Sprites { return { head: PALETTE.map(makeHeadSprite), tail: PALETTE.map(makeTailSprite) } }
-
-// ---- Topology: five nodes, four links between them.
-type NodeId = 'you' | 'network' | 'dns' | 'edge' | 'origin'
-type NodeKind = 'laptop' | 'phone' | 'router' | 'dns' | 'edge' | 'origin'
-const NODE_IDS: NodeId[] = ['you', 'network', 'dns', 'edge', 'origin']
-const LINKS: Array<[NodeId, NodeId]> = [['you', 'network'], ['network', 'dns'], ['network', 'edge'], ['edge', 'origin']]
-function linkKey(a: NodeId, b: NodeId): string { return a < b ? `${a}|${b}` : `${b}|${a}` }
-const LINK_KEYS = LINKS.map(l => linkKey(l[0], l[1]))
-// 'a>b' → which link a hop rides and whether it runs against the link's own
-// direction. Built once, so a packet resolves its wire at spawn time and
-// never builds a lookup string per frame.
-const LINK_OF: Record<string, { i: number; rev: boolean; key: string }> = {}
-LINKS.forEach((l, i) => {
-  LINK_OF[`${l[0]}>${l[1]}`] = { i, rev: false, key: linkKey(l[0], l[1]) }
-  LINK_OF[`${l[1]}>${l[0]}`] = { i, rev: true, key: linkKey(l[0], l[1]) }
-})
-
-const HOST = 'apanjwani0.com'
-// Generic on purpose: the owner asked that the hero leak nothing about the host
-// (2026-09-27), and the host provider is exactly what helps someone reach the
-// origin around Cloudflare.
-const ORIGIN = 'the server that renders this page'
-
-function referrerSub(): string {
-  try {
-    if (document.referrer) return `from ${new URL(document.referrer).host}`
-  } catch { /* an unparsable referrer is not worth surfacing */ }
-  return 'typed or bookmarked'
-}
-
-// ---- Edge facts: real in production (same-origin Cloudflare trace), a
-// clearly labelled sample everywhere else (the dev server has no
-// /cdn-cgi/trace, so this is the whole story there). Cache status is NOT
-// part of the trace body — Cloudflare never puts it there — so it is
-// resolved independently below and never falls back to the sample's guess.
-interface EdgeFacts { colo: string; city: string; http: string; tls: string; kex: string; sample: boolean }
-const SAMPLE_EDGE: EdgeFacts = { colo: 'BOM', city: 'Mumbai', http: 'h3', tls: 'TLSv1.3', kex: 'X25519MLKEM768', sample: true }
-const COLO_CITY: Record<string, string> = {
-  BOM: 'Mumbai', DEL: 'New Delhi', MAA: 'Chennai', BLR: 'Bangalore', HYD: 'Hyderabad', CCU: 'Kolkata',
-  SIN: 'Singapore', FRA: 'Frankfurt', LHR: 'London', AMS: 'Amsterdam', CDG: 'Paris', IAD: 'Ashburn',
-  ORD: 'Chicago', DFW: 'Dallas', LAX: 'Los Angeles', SJC: 'San Jose', SEA: 'Seattle', NRT: 'Tokyo',
-  HKG: 'Hong Kong', SYD: 'Sydney', DXB: 'Dubai', GRU: 'São Paulo',
-}
-function edgePlace(edge: EdgeFacts): string { return edge.city || edge.colo }
-function edgeSub(edge: EdgeFacts, cache: string): string {
-  const place = edgePlace(edge)
-  return cache ? `${place} · cache ${cache}` : place
-}
-function translateHttpProtocol(v: string): string {
-  if (v === 'http/3') return 'h3'
-  if (v === 'http/2') return 'h2'
-  return v
-}
-// key=value lines, one per line; 'ip' is skipped before it is ever stored,
-// not merely left unread — this hero must never show or keep the visitor's
-// address.
-function parseTraceBody(body: string): Map<string, string> {
-  const out = new Map<string, string>()
-  for (const line of body.split('\n')) {
-    const eq = line.indexOf('=')
-    if (eq < 0) continue
-    const key = line.slice(0, eq).trim()
-    if (!key || key === 'ip') continue
-    out.set(key, line.slice(eq + 1).trim())
-  }
-  return out
-}
-async function fetchWithTimeout(url: string, outerSignal: AbortSignal, ms: number): Promise<Response> {
-  const ac = new AbortController()
-  const onAbort = () => ac.abort()
-  outerSignal.addEventListener('abort', onAbort, { once: true })
-  const timer = setTimeout(() => ac.abort(), ms)
-  try {
-    return await fetch(url, { cache: 'no-store', signal: ac.signal })
-  } finally {
-    clearTimeout(timer)
-    outerSignal.removeEventListener('abort', onAbort)
-  }
-}
-async function loadEdgeFacts(signal: AbortSignal): Promise<EdgeFacts> {
-  try {
-    const res = await fetchWithTimeout('/cdn-cgi/trace', signal, 2500)
-    if (!res.ok) throw new Error('trace not ok')
-    const kv = parseTraceBody(await res.text())
-    const colo = kv.get('colo')
-    if (!colo) throw new Error('no colo in trace')
-    return {
-      colo,
-      city: COLO_CITY[colo] ?? '',
-      http: translateHttpProtocol(kv.get('http') ?? ''),
-      tls: kv.get('tls') ?? '',
-      kex: kv.get('kex') ?? '',
-      sample: false,
-    }
-  } catch {
-    return SAMPLE_EDGE
-  }
-}
-function readCfCacheStatusFromServerTiming(nav: PerformanceNavigationTiming | undefined): string {
-  try {
-    for (const entry of nav?.serverTiming ?? []) if (entry.name === 'cfCacheStatus') return entry.description
-  } catch { /* serverTiming can be absent on older browsers */ }
-  return ''
-}
-async function probeCacheStatus(signal: AbortSignal): Promise<string> {
-  try {
-    const res = await fetch('/', { method: 'HEAD', cache: 'no-store', signal })
-    return res.headers.get('cf-cache-status') ?? ''
-  } catch {
-    return ''
+function makeSprites(): Sprites {
+  return {
+    head: PALETTE.map(color => sprite(48, 48, g => {
+      const grad = g.createRadialGradient(24, 24, 0, 24, 24, 24)
+      grad.addColorStop(0, rgbCss(color)); grad.addColorStop(0.4, rgbCss(color, 0.55)); grad.addColorStop(1, rgbCss(color, 0))
+      g.fillStyle = grad; g.fillRect(0, 0, 48, 48)
+    })),
+    tail: PALETTE.map(color => sprite(64, 16, g => {
+      const grad = g.createLinearGradient(0, 0, 64, 0)
+      grad.addColorStop(0, rgbCss(color, 0.65)); grad.addColorStop(1, rgbCss(color, 0))
+      g.fillStyle = grad; g.fillRect(0, 0, 64, 16)
+    })),
   }
 }
 
-interface NodeMetaEntry { id: NodeId; kind: NodeKind; label: string; sub: string }
-function nodeMeta(isTouch: boolean, edge: EdgeFacts, cache: string): NodeMetaEntry[] {
-  return [
-    { id: 'you', kind: isTouch ? 'phone' : 'laptop', label: 'you', sub: referrerSub() },
-    { id: 'network', kind: 'router', label: 'your network', sub: '' },
-    { id: 'dns', kind: 'dns', label: 'DNS', sub: '' },
-    // The colo code is drawn inside the hexagon itself, so the label below
-    // it does not repeat it.
-    { id: 'edge', kind: 'edge', label: 'edge', sub: edgeSub(edge, cache) },
-    { id: 'origin', kind: 'origin', label: 'origin', sub: ORIGIN },
-  ]
+// ---- Stations: the machines on the line, in the order a request meets them.
+type Kind = 'laptop' | 'phone' | 'router' | 'dns' | 'edge' | 'origin' | 'isp'
+interface Station {
+  id: string
+  kind: Kind
+  label: string
+  sub: string
+  /** Hover and screen-reader text. */
+  info: string
+  /** Off the line, above it: a question asked on the way (DNS). */
+  branch?: boolean
+  /** Written inside the edge's hexagon: the data centre's code. */
+  code?: string
+  /** Names the stretch of line arriving at this station. */
+  via?: string
+  /** Draws that stretch as network hops handing the packets along. */
+  hops?: boolean
+}
+// A branch hangs off the main station before it; every other station joins
+// the main station before it.
+interface Link { a: number; b: number; via: string; hops: boolean }
+function linksOf(stations: Station[]): Link[] {
+  const links: Link[] = []
+  let prev = -1
+  stations.forEach((s, i) => {
+    if (prev >= 0) links.push({ a: prev, b: i, via: s.via ?? '', hops: Boolean(s.hops) })
+    if (!s.branch) prev = i
+  })
+  return links
+}
+interface Hop { li: number; rev: boolean }
+function hopsOf(stations: Station[], links: Link[]): Map<string, Hop> {
+  const m = new Map<string, Hop>()
+  links.forEach((l, li) => {
+    m.set(`${stations[l.a].id}>${stations[l.b].id}`, { li, rev: false })
+    m.set(`${stations[l.b].id}>${stations[l.a].id}`, { li, rev: true })
+  })
+  return m
 }
 
-// ---- Layout: node positions, from the stage size and, on a phone, the
-// measured top of the text block.
-interface LabelInfo { lines: string[]; x: number; y: number; lead: number; hidden: boolean; font: string; subFont: string }
-interface NodePos { x: number; y: number; size: number; labAbove?: boolean; lab?: LabelInfo }
-
-// Desktop: a sweep that rises from 'you' to DNS and falls back to the
-// origin. The whole route stays above the name (bottom-left) and the trace
-// log (bottom-right), so the story's first node is never under the text.
-const DESKTOP_XY: Record<NodeId, [number, number]> = { you: [0.11, 0.43], network: [0.29, 0.29], dns: [0.44, 0.155], edge: [0.64, 0.30], origin: [0.86, 0.43] }
-// Phone: two rows zig-zagging left to right. You, DNS and the origin sit on
-// top, the router and the edge below, all in the band between the page's
-// nav and the top of the text block.
-const PHONE_X: Record<NodeId, number> = { you: 0.15, dns: 0.5, origin: 0.85, network: 0.33, edge: 0.67 }
-const PHONE_TOP_ROW: Record<NodeId, boolean> = { you: true, dns: true, origin: true, network: false, edge: false }
-const NAV_CLEAR = 60
-// How far below its centre each glyph ends, in units of its half-extent, so
-// a label sits under the drawing it names rather than under a fixed box.
-const GLYPH_BOTTOM: Record<NodeKind, number> = { laptop: 0.4, phone: 1, router: 0.3, dns: 0.85, edge: 1, origin: 1 }
-const GLYPH_TOP: Record<NodeKind, number> = { laptop: 0.92, phone: 1, router: 0.95, dns: 0.85, edge: 1, origin: 1 }
-// Room above the phone's top row for a label and two lines of sub-label.
-const PHONE_LABEL_ROOM = 43
-
-function layoutPositions(w: number, h: number, phone: boolean, textTop: number): Record<NodeId, NodePos> {
-  const out = {} as Record<NodeId, NodePos>
-  if (!phone) {
-    // Big enough to be the scene, capped so it stays a background and never
-    // outweighs the name, and smaller when the text leaves less room.
-    const size = clamp(Math.min(w * 0.05, h * 0.085, (textTop - NAV_CLEAR - 60) / 4.2), 34, 76)
-    // The sweep's bottom row (you, the origin) keeps its labels clear of the
-    // text block. When the text is tall (stacked), the sweep flattens into
-    // the room above it rather than running under the name.
-    const yTop = Math.max(0.155 * h, NAV_CLEAR + 0.85 * size + 4)
-    const yBot = Math.max(yTop + 40, Math.min(0.43 * h, textTop - 12 - size - 44))
-    for (const id of NODE_IDS) {
-      const xy = DESKTOP_XY[id]
-      const k = (xy[1] - 0.155) / (0.43 - 0.155)
-      out[id] = { x: xy[0] * w, y: yTop + k * (yBot - yTop), size }
-    }
-    return out
-  }
-  // textTop is measured, not assumed: the text block's height depends on the
-  // name's font and on how the trace lines wrap on this width.
-  const bottom = Math.max(NAV_CLEAR + 180, textTop - 10)
-  const s = clamp((bottom - NAV_CLEAR) * 0.13, 22, 32)
-  // The top row's labels sit ABOVE its glyphs. The wires from the lower row
-  // arrive from below, so labels under the top row would sit right in their
-  // path.
-  const topY = NAV_CLEAR + PHONE_LABEL_ROOM + s
-  // The lower row's labels end at the band's foot, with room for the wires
-  // between the two rows.
-  const lowY = Math.max(bottom - s - 30, topY + 2 * s + 34)
-  for (const id of NODE_IDS) out[id] = { x: PHONE_X[id] * w, y: PHONE_TOP_ROW[id] ? topY : lowY, size: s, labAbove: PHONE_TOP_ROW[id] }
+// ---- Layout: the main stations evenly along one horizontal line, a branch
+// above it midway to the next station, the whole drawing centred in the band
+// between the frame (top left) and the text (bottom). `above` and `below`
+// are the measured label blocks, so a short band shortens the branch before
+// any label has to go.
+interface Pos { x: number; y: number; s: number }
+function lineX(w: number, phone: boolean, main: number): { mx: number; step: number } {
+  const mx = phone ? Math.max(w * 0.11, 34) : clamp(w * 0.1, 64, 180)
+  return { mx, step: (w - 2 * mx) / Math.max(1, main - 1) }
+}
+function layoutLine(stations: Station[], w: number, top: number, bottom: number, phone: boolean, above: number, below: number): Pos[] {
+  const { mx, step } = lineX(w, phone, stations.filter(s => !s.branch).length)
+  const band = Math.max(90, bottom - top)
+  const s = clamp(Math.min(w * (phone ? 0.055 : 0.03), band * (phone ? 0.1 : 0.13)), phone ? 16 : 24, phone ? 26 : 46)
+  const rise = clamp(band - 2 * s - above - below, s * (phone ? 1.8 : 2.2), phone ? 70 : 118)
+  const y = top + Math.max(0, (band - (rise + 2 * s + above + below)) / 2) + above + s + rise
+  const out: Pos[] = []
+  let k = 0
+  stations.forEach((st, i) => { if (!st.branch) out[i] = { x: mx + step * k++, y, s } })
+  stations.forEach((st, i) => { if (st.branch) out[i] = { x: (out[i - 1].x + out[i + 1].x) / 2, y: y - rise, s: s * 0.92 } })
   return out
 }
 
-// Word-wraps text to maxW at the context's current font. Called on resize
-// only; the frame loop draws the cached lines.
+// How far each glyph reaches above and below its centre, in units of its
+// half-extent, so a label sits against the drawing it names.
+const GLYPH_TOP: Record<Kind, number> = { laptop: 0.92, phone: 1, router: 0.95, dns: 0.85, edge: 1, origin: 1, isp: 1.25 }
+const GLYPH_BOTTOM: Record<Kind, number> = { laptop: 0.4, phone: 1, router: 0.3, dns: 0.85, edge: 1, origin: 1, isp: 1 }
+
+interface Fonts { label: string; sub: string; chip: string; code: string }
+// A label block is the name, its wrapped sub-line and, once its step has
+// landed, a chip with what happened there. The chip's line is reserved from
+// the start, so nothing moves when it appears.
+interface Label { x: number; y: number; lines: string[]; lead: number; hidden: boolean }
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
-  const words = text.split(' ')
   const lines: string[] = []
   let line = ''
-  for (const word of words) {
+  for (const word of text.split(' ')) {
     const next = line ? `${line} ${word}` : word
     if (line && ctx.measureText(next).width > maxW) { lines.push(line); line = word } else line = next
   }
   if (line) lines.push(line)
   return lines
 }
+function labelLines(ctx: CanvasRenderingContext2D, stations: Station[], fonts: Fonts, maxW: number): string[][] {
+  ctx.font = fonts.sub
+  return stations.map(st => [st.label, ...(st.sub ? wrapText(ctx, st.sub, maxW) : [])])
+}
+function layoutLabels(ctx: CanvasRenderingContext2D, stations: Station[], pos: Pos[], lines: string[][], fonts: Fonts, lead: number, w: number, textTop: number, phone: boolean): Label[] {
+  return stations.map((st, i) => {
+    const p = pos[i], own = lines[i]
+    let half = 0
+    for (let k = 0; k < own.length; k++) {
+      ctx.font = k ? fonts.sub : fonts.label
+      half = Math.max(half, ctx.measureText(own[k]).width / 2 + 4)
+    }
+    const n = own.length + 1
+    const y = st.branch
+      ? p.y - GLYPH_TOP[st.kind] * p.s - 10 - lead * (n - 1)
+      : p.y + GLYPH_BOTTOM[st.kind] * p.s + (phone ? 14 : 17)
+    return {
+      x: clamp(p.x, half + 4, Math.max(half + 4, w - half - 4)), y, lines: own, lead,
+      // On a stage too short for the whole drawing, a label is not printed
+      // over the name.
+      hidden: !st.branch && y + lead * (n - 1) > textTop - 4,
+    }
+  })
+}
 
-// ---- Glyphs: solid panels with a crisp outline, centred at (x,y) with
-// half-extent s. g is ONE scratch object that drawGlyphs() refills for each
-// node each frame: stroke, body and ink are CSS colours, lw is the outline
-// width, heat is 0..1, fill is the response's download progress (the
-// device's screen), simTime is in ms (LEDs) and colo is the edge's code.
-interface GlyphScratch { stroke: string; body: string; ink: string; lw: number; heat: number; fill: number; simTime: number; colo: string; coloFont: string }
+// ---- Glyphs: solid panels with a crisp outline, centred at (x, y) with
+// half-extent s. G is one scratch object refilled per station per frame.
+interface GlyphScratch { stroke: string; body: string; ink: string; lw: number; heat: number; fill: number; time: number; code: string; codeFont: string }
+const G: GlyphScratch = { stroke: '', body: '', ink: '', lw: 2, heat: 0, fill: 0, time: 0, code: '', codeFont: '' }
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, r: number) {
   ctx.beginPath()
@@ -319,21 +204,18 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1
   ctx.lineTo(x0, y0 + r); ctx.quadraticCurveTo(x0, y0, x0 + r, y0)
   ctx.closePath()
 }
-// Fills the current path as a solid panel, then outlines it.
 function panel(ctx: CanvasRenderingContext2D, g: GlyphScratch) {
   ctx.fillStyle = g.body; ctx.fill()
   ctx.lineWidth = g.lw; ctx.strokeStyle = g.stroke; ctx.stroke()
 }
-// Interior markings (meridians, rack units, ports) are thinner and dimmer
-// than the outline, so each glyph reads as one object with markings on it
-// rather than a tangle of equal lines.
+// Interior markings are thinner and dimmer than the outline, so a glyph
+// reads as one object with markings on it.
 function detailStroke(ctx: CanvasRenderingContext2D, g: GlyphScratch) {
   ctx.lineWidth = g.lw * 0.6; ctx.globalAlpha = 0.7; ctx.strokeStyle = g.stroke; ctx.stroke(); ctx.globalAlpha = 1
 }
-// Status LEDs, each on its own slow phase so they never blink in lockstep.
-// While traffic crosses the node they flicker fast.
+// Status LEDs, each on its own slow phase; they flicker while traffic crosses.
 function ledOn(g: GlyphScratch, i: number): boolean {
-  const t = g.simTime * 0.001
+  const t = g.time * 0.001
   return g.heat > 0.3 ? Math.sin(t * 38 + i * 1.7) > -0.2 : Math.sin(t * (1.6 + i * 0.7) + i * 2.1) > 0.2
 }
 function led(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, on: boolean) {
@@ -345,10 +227,8 @@ function screenBar(ctx: CanvasRenderingContext2D, f: number, th: number, x: numb
   if (a <= 0) return
   ctx.globalAlpha = a * 0.85; ctx.fillRect(x, y, w, Math.max(1, h))
 }
-// The device's screen draws a miniature of this very page as the response's
-// bytes arrive: first the diagram, then the name, then the tagline, top to
-// bottom in the order they were delivered. Fades use globalAlpha over
-// constant fill strings, so no colour is built per frame.
+// The device's screen draws a miniature of this page as the answer's bytes
+// arrive: the line of stations first, then the name, then the tagline.
 function drawScreen(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number, g: GlyphScratch) {
   ctx.fillStyle = SCREEN_BG; ctx.fillRect(x0, y0, w, h)
   const f = g.fill
@@ -356,28 +236,19 @@ function drawScreen(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: nu
   ctx.globalAlpha = 0.14 * f; ctx.fillStyle = '#9b8cff'; ctx.fillRect(x0, y0, w, h)
   const a = clamp((f - 0.05) / 0.15, 0, 1)
   if (a > 0) {
+    const ly = y0 + h * 0.34
     ctx.globalAlpha = a * 0.8; ctx.strokeStyle = '#9b8cff'; ctx.lineWidth = Math.max(0.6, w * 0.012)
-    ctx.beginPath()
-    for (const l of LINKS) {
-      const p = DESKTOP_XY[l[0]], q = DESKTOP_XY[l[1]]
-      ctx.moveTo(x0 + w * (0.1 + 0.8 * p[0]), y0 + h * (0.04 + p[1]))
-      ctx.lineTo(x0 + w * (0.1 + 0.8 * q[0]), y0 + h * (0.04 + q[1]))
-    }
-    ctx.stroke()
-    ctx.fillStyle = '#dde6f2'
-    const r = Math.max(0.9, w * 0.02)
-    for (const id of NODE_IDS) {
-      const d = DESKTOP_XY[id]
-      ctx.beginPath(); ctx.arc(x0 + w * (0.1 + 0.8 * d[0]), y0 + h * (0.04 + d[1]), r, 0, 6.3); ctx.fill()
-    }
+    ctx.beginPath(); ctx.moveTo(x0 + w * 0.12, ly); ctx.lineTo(x0 + w * 0.88, ly); ctx.stroke()
+    ctx.fillStyle = SCREEN_INK
+    const r = Math.max(0.9, w * 0.022)
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(x0 + w * (0.12 + 0.2533 * i), ly, r, 0, 6.3); ctx.fill() }
   }
-  ctx.fillStyle = '#dde6f2'
+  ctx.fillStyle = SCREEN_INK
   screenBar(ctx, f, 0.35, x0 + w * 0.08, y0 + h * 0.62, w * 0.56, h * 0.1)
   screenBar(ctx, f, 0.6, x0 + w * 0.08, y0 + h * 0.78, w * 0.4, h * 0.045)
   screenBar(ctx, f, 0.72, x0 + w * 0.08, y0 + h * 0.86, w * 0.28, h * 0.045)
   ctx.globalAlpha = 1
 }
-
 function drawLaptop(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, g: GlyphScratch) {
   roundRectPath(ctx, x - 0.8 * s, y - 0.92 * s, x + 0.8 * s, y + 0.27 * s, 0.07 * s); panel(ctx, g)
   drawScreen(ctx, x - 0.7 * s, y - 0.83 * s, 1.4 * s, s, g)
@@ -435,9 +306,10 @@ function hexPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number)
 function drawHex(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, g: GlyphScratch) {
   hexPath(ctx, x, y, s); panel(ctx, g)
   hexPath(ctx, x, y, 0.78 * s); detailStroke(ctx, g)
-  // The code of the edge that served this page, written in the edge itself.
-  ctx.fillStyle = g.ink; ctx.font = g.coloFont; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-  ctx.fillText(g.colo, x, y + 0.02 * s)
+  if (!g.code) return
+  // The code of the data centre that served this page, written in it.
+  ctx.fillStyle = g.ink; ctx.font = g.codeFont; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText(g.code, x, y + 0.02 * s)
   ctx.textBaseline = 'alphabetic'
 }
 function drawRack(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, g: GlyphScratch) {
@@ -452,1234 +324,1118 @@ function drawRack(ctx: CanvasRenderingContext2D, x: number, y: number, s: number
   const lr = Math.max(1.1, 0.055 * s)
   for (let u = 0; u < 4; u++) led(ctx, x - 0.36 * s, y - s + (u + 0.5) * 0.5 * s, lr, ledOn(g, u))
 }
-const GLYPH: Record<NodeKind, (ctx: CanvasRenderingContext2D, x: number, y: number, s: number, g: GlyphScratch) => void> = {
-  laptop: drawLaptop, phone: drawPhone, router: drawRouter, dns: drawDns, edge: drawHex, origin: drawRack,
-}
-
-// ---- Packet pool. Fixed-size, reused every frame: no per-frame allocation.
-// A packet's endpoints are looked up live by id/index each draw, so an
-// in-flight packet survives a resize instead of flying to a stale pixel.
-interface Packet {
-  active: boolean
-  kind: 'main' | 'ambient'
-  a: NodeId | number
-  b: NodeId | number
-  li: number
-  rev: boolean
-  key: string
-  t: number
-  dur: number
-  color: Rgb
-  size: number
-  delay: number
-}
-const POOL_SIZE = 96
-function makePool(): Packet[] {
-  return Array.from({ length: POOL_SIZE }, () => ({
-    active: false, kind: 'main', a: 'you', b: 'you', li: -1, rev: false, key: '', t: 0, dur: 300, color: WHITE, size: 3, delay: 0,
-  }))
-}
-// delay (ms) holds a packet inactive-looking but reserved, so a burst can
-// schedule several packets at once with staggered starts using only the
-// existing pool — no separate timer/queue needed.
-function spawnPacket(pool: Packet[], kind: 'main' | 'ambient', a: NodeId | number, b: NodeId | number, color: Rgb, dur: number, size?: number, delay?: number): Packet | null {
-  for (const p of pool) {
-    if (p.active) continue
-    p.active = true; p.kind = kind; p.a = a; p.b = b; p.t = 0; p.dur = Math.max(1, dur); p.color = color; p.size = size || 3; p.delay = delay || 0
-    // A main packet resolves its wire once, here: which link, which way
-    // along it, and the heat key it lights.
-    const l = kind === 'main' ? LINK_OF[`${a}>${b}`] : undefined
-    p.li = l ? l.i : -1; p.rev = l ? l.rev : false; p.key = l ? l.key : ''
-    return p
-  }
-  return null
-}
-
-// ---- Pulse pool: a small ring drawn once from a node when a hop touches
-// it. Same fixed-pool shape as packets, on its own tiny array (different
-// draw/lifecycle, so not worth sharing one pool with two meanings).
-interface Pulse { active: boolean; id: NodeId | null; t: number; dur: number; color: Rgb; maxR: number }
-const PULSE_SIZE = 24
-function makePulsePool(): Pulse[] {
-  return Array.from({ length: PULSE_SIZE }, () => ({ active: false, id: null, t: 0, dur: 500, color: WHITE, maxR: 30 }))
-}
-function spawnPulse(pool: Pulse[], id: NodeId, color: Rgb, dur: number, maxR: number) {
-  for (const p of pool) {
-    if (p.active) continue
-    p.active = true; p.id = id; p.t = 0; p.dur = dur; p.color = color; p.maxR = maxR
-    return
+// A radio mast: the internet provider every home and phone connects through.
+function drawTower(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, g: GlyphScratch) {
+  ctx.beginPath()
+  ctx.moveTo(x - 0.46 * s, y + s); ctx.lineTo(x, y - 0.55 * s); ctx.lineTo(x + 0.46 * s, y + s); ctx.closePath()
+  panel(ctx, g)
+  ctx.beginPath()
+  ctx.moveTo(x - 0.3 * s, y + 0.5 * s); ctx.lineTo(x + 0.3 * s, y + 0.5 * s)
+  ctx.moveTo(x - 0.15 * s, y); ctx.lineTo(x + 0.15 * s, y)
+  detailStroke(ctx, g)
+  const top = y - 0.66 * s
+  ctx.fillStyle = g.stroke; ctx.beginPath(); ctx.arc(x, top, Math.max(1.4, 0.09 * s), 0, 6.3); ctx.fill()
+  ctx.lineWidth = g.lw * 0.8; ctx.strokeStyle = g.stroke
+  for (const r of [0.34, 0.58]) {
+    ctx.beginPath(); ctx.arc(x, top, r * s, -0.9, 0.9); ctx.stroke()
+    ctx.beginPath(); ctx.arc(x, top, r * s, Math.PI - 0.9, Math.PI + 0.9); ctx.stroke()
   }
 }
-function updatePulses(pool: Pulse[], dt: number) {
-  for (const p of pool) {
-    if (!p.active) continue
-    p.t += (dt * 1000) / p.dur
-    if (p.t >= 1) p.active = false
+const GLYPH: Record<Kind, (ctx: CanvasRenderingContext2D, x: number, y: number, s: number, g: GlyphScratch) => void> = {
+  laptop: drawLaptop, phone: drawPhone, router: drawRouter, dns: drawDns, edge: drawHex, origin: drawRack, isp: drawTower,
+}
+
+// ---- Space: an endless, slow drift of stars in depth, the nearer ones
+// joined into constellations that form and dissolve as they pass each other.
+// Sorted nearest first, so the constellation pass walks only a prefix.
+interface Star { x: number; y: number; z: number; ph: number }
+const DRIFT = 7
+const NEAR = 0.62
+function makeStars(n: number, w: number, h: number): Star[] {
+  return Array.from({ length: n }, () => ({ x: Math.random() * w, y: Math.random() * h, z: 0.2 + 0.8 * Math.random() ** 1.6, ph: Math.random() * 6.28 }))
+    .sort((a, b) => b.z - a.z)
+}
+function driftStars(stars: Star[], w: number, h: number, dt: number) {
+  for (const st of stars) {
+    st.x -= DRIFT * st.z * dt
+    st.y -= DRIFT * 0.2 * st.z * dt
+    if (st.x < -8) { st.x += w + 16; st.y = Math.random() * h } else if (st.y < -8) st.y += h + 16
   }
 }
-function drawPulses(ctx: CanvasRenderingContext2D, pool: Pulse[], nodePos: Record<NodeId, NodePos>) {
-  ctx.globalCompositeOperation = 'lighter'
-  for (const p of pool) {
-    if (!p.active || !p.id) continue
-    const pos = nodePos[p.id]
-    if (!pos) continue
-    const t = clamp(p.t, 0, 1)
-    const r = lerp(pos.size * 0.9, p.maxR, t)
-    ctx.strokeStyle = rgbCss(p.color, (1 - t) * 0.85)
-    ctx.lineWidth = 2.2
-    ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, 6.3); ctx.stroke()
-  }
-  ctx.globalCompositeOperation = 'source-over'
-}
-
-// Point lookup: 'main' packets reference node ids in nodePos; 'ambient'
-// packets reference an index into ambient.pts (px cache, resize-safe).
-function pointOf(state: HeroState, kind: 'main' | 'ambient', ref: NodeId | number): { x: number; y: number } {
-  return kind === 'ambient' ? state.ambient.pts[ref as number] : state.nodePos[ref as NodeId]
-}
-
-// dir (links only) is which way the last packet crossed: +1 along the
-// link's own direction, -1 against it, so the flowing dashes run the way
-// the traffic actually went.
-interface Heat { r: number; g: number; b: number; heat: number; dir: number }
-function makeHeat(): Heat { return { r: REST[0], g: REST[1], b: REST[2], heat: 0, dir: 1 } }
-function bumpHeat(h: Heat, color: Rgb, dir?: number) { h.heat = 1; h.r = color[0]; h.g = color[1]; h.b = color[2]; if (dir) h.dir = dir }
-function decayHeat(h: Heat, dt: number) { h.heat *= Math.exp(-2.2 * dt) }
-const HEAT_RGB: Rgb = [0, 0, 0]
-// base → the heat's own colour, written into out; no array per call.
-function heatInto(out: Rgb, base: Rgb, h: Heat): Rgb { HEAT_RGB[0] = h.r; HEAT_RGB[1] = h.g; HEAT_RGB[2] = h.b; return mixInto(out, base, HEAT_RGB, h.heat) }
-
-function makeHeatMaps(): { node: Record<NodeId, Heat>; link: Record<string, Heat> } {
-  const node = {} as Record<NodeId, Heat>
-  const link: Record<string, Heat> = {}
-  for (const id of NODE_IDS) node[id] = makeHeat()
-  for (const l of LINKS) link[linkKey(l[0], l[1])] = makeHeat()
-  return { node, link }
-}
-// Called once per frame before packets re-bump whatever they're still
-// touching, so a link/node with nothing on it actually fades to REST
-// instead of sitting at full heat forever.
-function decayAllHeat(heat: { node: Record<NodeId, Heat>; link: Record<string, Heat> }, dt: number) {
-  for (const id of NODE_IDS) decayHeat(heat.node[id], dt)
-  for (const key of LINK_KEYS) decayHeat(heat.link[key], dt)
-}
-
-// Advance every active packet, light the link/nodes it touches, ring a
-// pulse at each node it touches, deactivate on arrival. A delayed packet
-// (see spawnPacket) counts down and does nothing else until it starts.
-function updatePackets(state: HeroState, dt: number) {
-  const { pool, heat, pulses, nodePos } = state
-  for (const p of pool) {
-    if (!p.active) continue
-    if (p.delay > 0) { p.delay -= dt * 1000; continue }
-    const prevT = p.t
-    p.t += (dt * 1000) / p.dur
-    if (p.kind === 'main') {
-      if (p.key) bumpHeat(heat.link[p.key], p.color, p.rev ? -1 : 1)
-      // Pulse radius follows the NODE's own size (a ring has to reach past
-      // the glyph it rings), not the packet's — a fixed multiple of the
-      // packet dot would sit hidden inside an 80px node. Only a lead packet
-      // (a request, a reply, a ping) rings the nodes it touches. A burst or
-      // a response stream is many small packets, and a ring for each would
-      // bury the diagram in ripples; they warm the node.
-      if (prevT < 0.12) {
-        const a = p.a as NodeId
-        bumpHeat(heat.node[a], p.color)
-        if (p.size >= 3) spawnPulse(pulses, a, p.color, 520, nodePos[a].size * 1.7 + 16)
-      }
-    }
-    if (p.t >= 1) {
-      if (p.kind === 'main') {
-        const b = p.b as NodeId
-        bumpHeat(heat.node[b], p.color)
-        if (p.size >= 3) spawnPulse(pulses, b, p.color, 520, nodePos[b].size * 1.7 + 16)
-      }
-      p.active = false
+function drawStars(ctx: CanvasRenderingContext2D, stars: Star[], time: number, reach: number) {
+  ctx.strokeStyle = CONSTELLATION; ctx.lineWidth = 1
+  const r2 = reach * reach
+  for (let i = 0; i < stars.length && stars[i].z >= NEAR; i++) {
+    const a = stars[i]
+    for (let j = i + 1; j < stars.length && stars[j].z >= NEAR; j++) {
+      const b = stars[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy
+      if (d2 > r2) continue
+      const f = 1 - Math.sqrt(d2) / reach
+      ctx.globalAlpha = 0.2 * f * f
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
     }
   }
-}
-
-// ---- Ambient field: faint distant nodes + hairline links standing for the
-// rest of the internet. Positions are seeded once (fractional) and rescaled
-// on resize; the occasional tiny packet crossing one is tinted by the hour.
-interface AmbientPoint { fx: number; fy: number; x: number; y: number; baseX: number; baseY: number; layer: number; driftPhase: number; driftR: number }
-interface Ambient { pts: AmbientPoint[]; links: Array<[number, number]>; adj: number[][] }
-
-function computeAmbientLinks(pts: AmbientPoint[]): Array<[number, number]> {
-  const links: Array<[number, number]> = []
-  const seen = new Set<string>()
-  for (let i = 0; i < pts.length; i++) {
-    const best: Array<[number, number]> = []
-    for (let j = 0; j < pts.length; j++) {
-      if (i === j) continue
-      const dx = pts[i].fx - pts[j].fx, dy = pts[i].fy - pts[j].fy
-      best.push([j, dx * dx + dy * dy])
-    }
-    best.sort((a, b) => a[1] - b[1])
-    for (let k = 0; k < 2 && k < best.length; k++) {
-      const j2 = best[k][0]
-      const key = `${Math.min(i, j2)}|${Math.max(i, j2)}`
-      if (!seen.has(key)) { seen.add(key); links.push([i, j2]) }
-    }
+  ctx.fillStyle = STAR
+  for (const st of stars) {
+    ctx.globalAlpha = (0.15 + 0.65 * st.z) * (0.8 + 0.2 * Math.sin(time * 0.0011 * (0.6 + st.z) + st.ph))
+    ctx.beginPath(); ctx.arc(st.x, st.y, 0.45 + 1.35 * st.z * st.z, 0, 6.2832); ctx.fill()
   }
-  return links
+  ctx.globalAlpha = 1
 }
-// 3 parallax layers in one 120-point mesh: far (tiny, dim, still), mid,
-// near (bigger, brighter, a slow drift). One shared link mesh across all of
-// them — "the whole field", not three separate unrelated ones.
-const AMBIENT_LAYERS = [
-  { n: 60, r: 0.85, fill: 'rgba(160,170,190,0.16)', drift: 0 },
-  { n: 40, r: 1.5, fill: 'rgba(160,170,190,0.32)', drift: 0 },
-  { n: 20, r: 2.6, fill: 'rgba(160,170,190,0.6)', drift: 1 },
-] as const
-function makeAmbient(): Ambient {
-  const pts: AmbientPoint[] = []
-  AMBIENT_LAYERS.forEach((layer, li) => {
-    for (let i = 0; i < layer.n; i++) {
-      pts.push({
-        fx: Math.random(), fy: Math.random(), x: 0, y: 0, baseX: 0, baseY: 0, layer: li,
-        driftPhase: Math.random() * 6.28, driftR: layer.drift ? 5 + Math.random() * 9 : 0,
+
+// ---- Traffic: fixed pools of packets (comets on a wire) and pulses (a ring
+// from a station), reused every frame. Heat is how lit a wire or a station
+// is: it fades to its floor, and the floor is the trail a replay leaves.
+interface Packet { active: boolean; li: number; rev: boolean; t: number; dur: number; pal: number; size: number; trail: boolean }
+interface Pulse { active: boolean; i: number; t: number; dur: number; pal: number; maxR: number }
+interface Heat { c: Rgb; heat: number; floor: number; dir: number }
+const TRAIL = 0.34
+function heat(): Heat { return { c: REST, heat: 0, floor: 0, dir: 1 } }
+function bump(h: Heat, pal: number, dir = 0) { h.heat = 1; h.c = PALETTE[pal]; if (dir) h.dir = dir }
+
+// ---- Facts: what this page load can actually tell about itself.
+interface Timing {
+  dns: number; connect: number; tls: number; tcp: number; ttfb: number; download: number
+  reused: boolean; quic: boolean; fromCache: boolean; otherPage: boolean
+  protocol: string; size: number
+  /** Real ms since the navigation began, for the replay's clock. */
+  dnsEnd: number; connectEnd: number; firstByte: number; lastByte: number; paint: number
+}
+interface Edge { colo: string; city: string; country: string; ip: string; tls: string; kex: string; http: string }
+type CacheKind = 'hit' | 'origin' | ''
+interface CacheFacts { cache: CacheKind; cacheStatus: string; cacheAge: number }
+interface Facts extends CacheFacts { timing: Timing | null; edge: Edge | null; device: string; dev: boolean }
+const NO_CACHE: CacheFacts = { cache: '', cacheStatus: '', cacheAge: 0 }
+
+function readPaint(): number {
+  try { return performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? 0 } catch { return 0 }
+}
+function readTiming(): Timing | null {
+  let nav: PerformanceNavigationTiming | undefined
+  try { nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined } catch { /* exotic embeds */ }
+  if (!nav || nav.responseEnd <= 0) return null
+  const connect = Math.max(0, nav.connectEnd - nav.connectStart)
+  const tls = nav.secureConnectionStart > 0 ? Math.max(0, nav.connectEnd - nav.secureConnectionStart) : 0
+  let otherPage = false
+  // After an in-site swap back to '/', the entry still describes the
+  // session's first hard load, which can be another page.
+  try { otherPage = new URL(nav.name).pathname !== location.pathname } catch { /* a malformed name: assume this page */ }
+  return {
+    dns: Math.max(0, nav.domainLookupEnd - nav.domainLookupStart), connect, tls, tcp: Math.max(0, connect - tls),
+    ttfb: Math.max(0, nav.responseStart - nav.requestStart), download: Math.max(0, nav.responseEnd - nav.responseStart),
+    // A connect of zero is a connection the browser already had open. Over
+    // HTTP/3 the transport and TLS handshakes are one QUIC exchange.
+    reused: connect <= 0, quic: nav.nextHopProtocol === 'h3',
+    fromCache: nav.transferSize === 0 && nav.decodedBodySize > 0, otherPage,
+    protocol: nav.nextHopProtocol, size: nav.transferSize,
+    dnsEnd: nav.domainLookupEnd, connectEnd: nav.connectEnd, firstByte: nav.responseStart, lastByte: nav.responseEnd, paint: readPaint(),
+  }
+}
+
+// Cloudflare data centre codes to cities, from cloudflarestatus.com's
+// component list (2026-09-28). A code missing here is shown as the code.
+const COLO_CITY = new Map([
+  'AAEAnnaba|ABJAbidjan|ABQAlbuquerque|ACCAccra|ACXXingyi|ADBIzmir|ADDAddis Ababa|ADLAdelaide|AGRAgra|',
+  'AIPJalandhar|AKLAuckland|AKXAktobe|ALAAlmaty|ALGAlgiers|AMDAhmedabad|AMMAmman|AMSAmsterdam|ANCAnchorage|',
+  'ARIArica|ARNStockholm|ARUAracatuba|ASKYamoussoukro|ASUAsunción|ATHAthens|ATLAtlanta|AUSAustin|AVAAnshun|',
+  'BAHManama|BAQBarranquilla|BBIBhubaneswar|BCNBarcelona|BDQJamnagar|BEGBelgrade|BELBelém|BEYBeirut|',
+  'BGIBridgetown|BGRBangor|BGWBaghdad|BKKBangkok|BLRBangalore|BNANashville|BNEBrisbane|BODBordeaux|',
+  'BOGBogotá|BOMMumbai|BOSBoston|BRUBrussels|BSBBrasilia|BSRBasra|BTSBratislava|BUDBudapest|BUFBuffalo|',
+  'BWNBandar Seri Begawan|CAICairo|CANGuangzhou|CAWCampos dos Goytacazes|CBRCanberra|CCUKolkata|CDGParis|',
+  'CEBCebu|CFCCaçador|CGBCuiaba|CGDChangde|CGKJakarta|CGOZhengzhou|CGPChittagong|CGYCagayan de Oro|',
+  'CHCChristchurch|CJBCoimbatore|CKGChongqing|CLECleveland|CLOCali|CLTCharlotte|CMBColombo|CMHColumbus|',
+  'CNFBelo Horizonte|CNNKannur|CNXChiang Mai|COKKochi|CORCórdoba|CPHCopenhagen|CPTCape Town|CRKTarlac City|',
+  'CSXChangsha|CTUChengdu|CVGCincinnati|CWBCuritiba|CZLConstantine|CZXChangzhou|DACDhaka|DADDa Nang|',
+  'DARDar Es Salaam|DELNew Delhi|DENDenver|DFWDallas|DKRDakar|DLADouala|DLCDalian|DMEMoscow|DMMDammam|',
+  'DOHDoha|DPSDenpasar|DTWDetroit|DUBDublin|DURDurban|DUSDüsseldorf|DXBDubai|DYUDushanbe|EBBKampala|',
+  'EBLErbil|EVNYerevan|EWRNewark|EZEBuenos Aires|FCORome|FIHKinshasa|FLNFlorianopolis|FOCFuzhou|',
+  'FORFortaleza|FRAFrankfurt|FRUBishkek|FSDSioux Falls|FUKFukuoka|FUOFoshan|GBEGaborone|GDLGuadalajara|',
+  'GEOGeorgetown|GIGRio de Janeiro|GNDSt. George’s|GOTGothenburg|GRUSão Paulo|GUAGuatemala City|GUMHagatna|',
+  'GVAGeneva|GYDBaku|GYEGuayaquil|GYNGoiânia|HAKHaikou|HAMHamburg|HANHanoi|HBAHobart|HELHelsinki|HFAHaifa|',
+  'HGHShaoxing|HKGHong Kong|HNLHonolulu|HREHarare|HYDHyderabad|HYNTaizhou|IADAshburn|IAHHouston|ICNSeoul|',
+  'INDIndianapolis|ISBIslamabad|ISTIstanbul|ISUSulaymaniyah|IXCChandigarh|JAXJacksonville|',
+  'JDOJuazeiro do Norte|JEDJeddah|JHBJohor Bahru|JIBDjibouti City|JNBJohannesburg|JOGYogyakarta|',
+  'JOIJoinville|JRGSambalpur|JXGJiaxing|KBPKyiv|KCHKuching|KEFReykjavík|KGLKigali|KHHKaohsiung|KHIKarachi|',
+  'KHNXinyu|KINKingston|KIVChișinău|KIXOsaka|KMGKunming|KNUKanpur|KTMKathmandu|KULKuala Lumpur|KWEGuiyang|',
+  'KWIKuwait City|LADLuanda|LASLas Vegas|LAXLos Angeles|LCANicosia|LEDSaint Petersburg|LHELahore|LHRLondon|',
+  'LHWLanzhou|LIMLima|LISLisbon|LJULjubljana|LLKAstara|LLWLilongwe|LOSLagos|LPBLa Paz|LUHLudhiana|LUNLusaka|',
+  'LUXLuxembourg City|LYALuoyang|LYSLyon|MAAChennai|MADMadrid|MANManchester|MAOManaus|MBAMombasa|',
+  'MCIKansas City|MCTMuscat|MDEMedellín|MELMelbourne|MEMMemphis|MEXMexico City|MFMMacau|MIAMiami|',
+  'MLASanta Venera|MLEMalé|MLGMalang|MNLManila|MPMMaputo|MRSMarseille|MRUPort Louis|MSPMinneapolis|MSQMinsk|',
+  'MUCMunich|MXPMilan|NAGNagpur|NBONairobi|NJFNajaf|NOUNoumea|NQNNeuquén|NQZAstana|NRTTokyo|NVTTimbó|',
+  'OKANaha|OKCOklahoma City|OMAOmaha|ORDChicago|ORFNorfolk|ORNOran|OSLOslo|OTPBucharest|OUAOuagadougou|',
+  'PATPatna|PBHThimphu|PBMParamaribo|PDXPortland|PERPerth|PHLPhiladelphia|PHXPhoenix|PITPittsburgh|',
+  'PKXLangfang|PMOPalermo|PMWPalmas|PNHPhnom Penh|PNQPune|POAPorto Alegre|POSPort of Spain|PPTTahiti|',
+  'PRGPrague|PTYPanama City|QROQueretaro|QWJAmericana|RAORibeirao Preto|RDUDurham|RECRecife|RICRichmond|',
+  'RIXRiga|RUHRiyadh|RUNSaint-Denis|SANSan Diego|SAPSan Pedro Sula|SATSan Antonio|SCLSantiago|',
+  'SDQSanto Domingo|SEASeattle|SFOSan Francisco|SGNHo Chi Minh City|SHAShanghai|SINSingapore|SJCSan Jose|',
+  'SJKSão José dos Campos|SJOSan José|SJPSão José do Rio Preto|SJUSan Juan|SJWHengshui|SKGThessaloniki|',
+  'SKPSkopje|SLCSalt Lake City|SMFSacramento|SODSorocaba|SOFSofia|SSASalvador|STISantiago de los Caballeros|',
+  'STLSt. Louis|STRStuttgart|SUVSuva|SYDSydney|SZXShenzhen|TAOQingdao|TBSTbilisi|TENTongren|TGUTegucigalpa|',
+  'TIATirana|TLHTallahassee|TLLTallinn|TLVTel Aviv|TNAJinan|TNRAntananarivo|TPATampa|TPETaipei|TUNTunis|',
+  'TXLBerlin|TYNYangquan|UDIUberlândia|UDRUdaipur|UIOQuito|ULNUlaanbaatar|URTSurat Thani|VCPCampinas|',
+  'VIEVienna|VIXVitoria|VNOVilnius|VTEVientiane|WAWWarsaw|WDHWindhoek|WLGWellington|WROWroclaw|XAPChapeco|',
+  'XFNXiangyang|XIYBaoji|XNHNasiriyah|YHZHalifax|YULMontréal|YVRVancouver|YWGWinnipeg|YXESaskatoon|',
+  'YYCCalgary|YYZToronto|ZAGZagreb|ZDMRamallah|ZRHZurich',
+].join('').split('|').map(e => [e.slice(0, 3), e.slice(3)] as [string, string]))
+
+function countryName(code: string): string {
+  // XX is unknown and T1 is Tor: neither is a place.
+  if (!/^[A-Z]{2}$/.test(code) || code === 'XX' || code === 'T1') return ''
+  try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? '' } catch { return '' }
+}
+// The visitor's own address, shown back to them only, and only its start:
+// enough to make the point, not enough to read off a shared screen. The rest
+// is dropped here and never kept.
+function ipStart(ip: string): string {
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return ip.split('.').slice(0, 2).join('.')
+  if (/^[0-9a-f:]+$/i.test(ip) && ip.includes(':')) return ip.split(':').slice(0, 2).join(':')
+  return ''
+}
+function tlsName(v: string): string { return /^TLSv1\.[0-3]$/.test(v) ? `TLS ${v.slice(4)}` : '' }
+function httpName(v: string): string {
+  if (v === 'h3' || v === 'http/3') return 'HTTP/3'
+  if (v === 'h2' || v === 'http/2') return 'HTTP/2'
+  if (v === 'http/1.1') return 'HTTP/1.1'
+  return ''
+}
+function parseTrace(body: string): Edge | null {
+  const kv = new Map<string, string>()
+  for (const line of body.split('\n')) {
+    const eq = line.indexOf('=')
+    if (eq > 0) kv.set(line.slice(0, eq).trim(), line.slice(eq + 1).trim())
+  }
+  const colo = kv.get('colo') ?? ''
+  if (!/^[A-Z]{3}$/.test(colo)) return null
+  const kex = kv.get('kex') ?? ''
+  return {
+    colo, city: COLO_CITY.get(colo) ?? '', country: countryName(kv.get('loc') ?? ''), ip: ipStart(kv.get('ip') ?? ''),
+    tls: tlsName(kv.get('tls') ?? ''), kex: /^[A-Za-z0-9_-]{1,40}$/.test(kex) ? kex : '', http: httpName(kv.get('http') ?? ''),
+  }
+}
+function cacheKind(status: string): CacheKind {
+  if (status === 'HIT' || status === 'STALE' || status === 'UPDATING') return 'hit'
+  if (status === 'MISS' || status === 'EXPIRED' || status === 'DYNAMIC' || status === 'BYPASS' || status === 'REVALIDATED') return 'origin'
+  return ''
+}
+async function fetchWithTimeout(url: string, outer: AbortSignal, ms: number, method = 'GET'): Promise<Response> {
+  const ac = new AbortController()
+  const onAbort = () => ac.abort()
+  outer.addEventListener('abort', onAbort, { once: true })
+  const timer = setTimeout(() => ac.abort(), ms)
+  try {
+    return await fetch(url, { method, cache: 'no-store', signal: ac.signal })
+  } finally {
+    clearTimeout(timer)
+    outer.removeEventListener('abort', onAbort)
+  }
+}
+async function loadEdge(signal: AbortSignal): Promise<Edge | null> {
+  try {
+    const res = await fetchWithTimeout('/cdn-cgi/trace', signal, 2500)
+    return res.ok ? parseTrace(await res.text()) : null
+  } catch {
+    return null
+  }
+}
+// Which way the page itself came: from Cloudflare's copy or from the server.
+// Production sends no Server-Timing, so this asks again with a HEAD and reads
+// its copy's age. A copy older than this visit was already there when the page
+// was requested; a younger one was made by this very visit.
+async function loadCache(signal: AbortSignal): Promise<CacheFacts> {
+  try {
+    const res = await fetchWithTimeout('/', signal, 2500, 'HEAD')
+    const status = (res.headers.get('cf-cache-status') ?? '').toUpperCase()
+    const age = Number.parseInt(res.headers.get('age') ?? '', 10)
+    if (cacheKind(status) === 'hit') {
+      if (!Number.isFinite(age)) return NO_CACHE
+      return age > performance.now() / 1000 + 1 ? { cache: 'hit', cacheStatus: status, cacheAge: age } : { cache: 'origin', cacheStatus: '', cacheAge: 0 }
+    }
+    // Not cacheable right now: this visit went to the server too.
+    if (status === 'DYNAMIC' || status === 'BYPASS') return { cache: 'origin', cacheStatus: status, cacheAge: 0 }
+  } catch { /* no answer: say nothing about the cache */ }
+  return NO_CACHE
+}
+// Dev only. The dev server serves this page from localhost, so it measures one
+// real request to the live site from this machine instead (astro.config.mjs).
+interface Probe { dns: number; tcp: number; tls: number; ttfb: number; download: number; size: number; cache: string; age: number | null; trace: string }
+async function loadProbe(signal: AbortSignal): Promise<Pick<Facts, 'timing' | 'edge' | 'cache' | 'cacheStatus' | 'cacheAge'>> {
+  const none = { timing: null, edge: null, ...NO_CACHE }
+  if (!import.meta.env.DEV) return none
+  try {
+    const res = await fetchWithTimeout('/__hero-probe', signal, 12000)
+    if (!res.ok) return none
+    const p = await res.json() as Probe
+    const connect = p.tcp + p.tls
+    const dnsEnd = p.dns, connectEnd = dnsEnd + connect, firstByte = connectEnd + p.ttfb, lastByte = firstByte + p.download
+    const status = p.cache.toUpperCase()
+    return {
+      timing: {
+        dns: p.dns, connect, tls: p.tls, tcp: p.tcp, ttfb: p.ttfb, download: p.download,
+        reused: false, quic: false, fromCache: false, otherPage: false, protocol: 'http/1.1', size: p.size,
+        dnsEnd, connectEnd, firstByte, lastByte, paint: 0,
+      },
+      edge: parseTrace(p.trace), cache: cacheKind(status), cacheStatus: status, cacheAge: p.age ?? 0,
+    }
+  } catch {
+    return none
+  }
+}
+async function pingOnce(signal: AbortSignal): Promise<number> {
+  if (import.meta.env.DEV) {
+    // As in loadProbe: on the dev server, the dev server times the live site.
+    const res = await fetchWithTimeout('/__hero-probe?ping', signal, 8000)
+    const body = await res.json() as { ms?: unknown }
+    if (!res.ok || typeof body.ms !== 'number') throw new Error('no ping')
+    return body.ms
+  }
+  const t0 = performance.now()
+  await fetchWithTimeout('/', signal, 5000, 'HEAD')
+  return performance.now() - t0
+}
+// The browser and system a request announces in its User-Agent header,
+// which every server receives.
+function visitorDevice(): string {
+  const ua = navigator.userAgent
+  const browser = /Edg(e|A|iOS)?\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\/|FxiOS\//.test(ua) ? 'Firefox'
+    : /Chrome\/|CriOS\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : ''
+  const os = /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'macOS'
+    : /Windows/.test(ua) ? 'Windows' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : ''
+  return browser && os ? `${browser} on ${os}` : browser || os
+}
+
+// ---- Stories. A step is one message in the log and one move on the line:
+// flights of packets along routes, then its numbers land.
+interface Flight { route: string[]; pal: number; count: number }
+interface Step {
+  title: string
+  /** Shown when the step lands; '' for none. */
+  ms: string
+  text: string
+  detail: string
+  pal: number
+  flights: Flight[]
+  /** Screen ms the flights take. */
+  screen: number
+  /** The clock when the step lands: real ms since the page was requested. */
+  at: number | null
+  pulse?: string
+  /** Lights a route with no packets on it (a connection already open). */
+  glow?: string[]
+  chip?: [string, string]
+  fill?: boolean
+  hit?: boolean
+}
+interface Story {
+  kicker: string
+  headline: string
+  stations: Station[]
+  steps: Step[]
+  total: number | null
+  ping: string[]
+  pingText: string
+}
+type Line = Pick<Step, 'title' | 'ms' | 'text' | 'detail' | 'pal'>
+
+const HOST = 'apanjwani0.com'
+function fmtMs(ms: number): string { return `${Math.round(ms)} ms` }
+function fmtClock(ms: number): string { return ms < 1000 ? fmtMs(ms) : `${(ms / 1000).toFixed(2)} s` }
+function seconds(ms: number): string { return `${(Math.max(10, ms) / 1000).toFixed(2)} seconds` }
+function ago(s: number): string {
+  if (s < 90) return `${Math.round(s)} seconds`
+  if (s < 5400) return `${Math.round(s / 60)} minutes`
+  if (s < 172800) return `${Math.round(s / 3600)} hours`
+  return `${Math.round(s / 86400)} days`
+}
+function capital(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1) }
+// Screen time for a measured phase: tiny phases stay watchable, long ones
+// don't drag, and order and relative size stay true.
+function watch(ms: number): number { return clamp(1000 + 120 * Math.sqrt(Math.max(0, ms)), 1000, 3200) }
+function totalOf(t: Timing): number { return t.paint > t.lastByte ? t.paint : t.lastByte }
+const PQ = ' Its key exchange is built to resist future quantum computers.'
+
+function networkStory(f: Facts | null, touch: boolean): Story {
+  const t = f?.timing ?? null, e = f?.edge ?? null
+  const place = e?.city || e?.colo || ''
+  const edgeName = place ? `Cloudflare’s data centre in ${place}` : 'Cloudflare’s network'
+  const tlsBits = [e?.tls, e?.kex].filter(Boolean).join(' · ')
+  const who = [e?.country ? `in ${e.country}` : '', f?.device ? `on ${f.device}` : '', e?.ip ? `address starting ${e.ip}` : ''].filter(Boolean).join(' · ')
+  const stations: Station[] = [
+    { id: 'you', kind: touch ? 'phone' : 'laptop', label: 'you', sub: f?.device ?? '', info: who ? `You · ${who}` : 'You' },
+    { id: 'net', kind: 'router', label: 'your network', sub: '', info: 'Your network: the Wi-Fi or mobile data every request leaves through.' },
+    {
+      id: 'dns', kind: 'dns', label: 'DNS', sub: 'address book', branch: true,
+      info: t && t.dns >= 1 ? `DNS, the internet’s address book. It found ${HOST} in ${fmtMs(t.dns)}.` : 'DNS, the internet’s address book.',
+    },
+    {
+      id: 'edge', kind: 'edge', label: 'Cloudflare', sub: place, code: e?.colo ?? '', via: 'the internet',
+      info: ['Cloudflare', place && e?.colo !== place ? `${place} (${e?.colo})` : place, tlsBits, f?.cacheStatus ? `cache ${f.cacheStatus}` : ''].filter(Boolean).join(' · '),
+    },
+    { id: 'origin', kind: 'origin', label: 'the server', sub: 'builds this page', info: 'The server that builds this page.' },
+  ]
+  const story: Story = {
+    kicker: 'How this page reached you', headline: '', stations, steps: [], total: null,
+    ping: ['you', 'net', 'edge', 'net', 'you'], pingText: `A fresh round trip to ${place || 'Cloudflare'} and back, just now.`,
+  }
+  if (!f) return story
+  if (!t) {
+    story.headline = f.dev
+      ? `The dev server couldn’t reach ${HOST} just now, so there is nothing real to replay.`
+      : 'This browser keeps its timing to itself, so there is nothing real to replay.'
+    return story
+  }
+  const total = totalOf(t)
+  story.total = total
+  story.headline = t.fromCache
+    ? 'This page was already saved in your browser. Here’s how little it had to travel.'
+    : `${t.otherPage ? 'Your first page here' : 'This page'} reached you in ${seconds(total)}. Here’s that trip, slowed down.`
+  const steps = story.steps
+  const there: Flight = { route: ['you', 'net', 'edge'], pal: OUT, count: 1 }
+  const back: Flight = { route: ['edge', 'net', 'you'], pal: BACK, count: 1 }
+  const shake: Flight[] = [{ route: ['you', 'net', 'edge'], pal: SHAKE, count: 3 }, { route: ['edge', 'net', 'you'], pal: SHAKE, count: 3 }]
+
+  const said = [f.device, e?.ip ? `from an internet address starting ${e.ip}` : ''].filter(Boolean).join(', ')
+  steps.push({
+    title: e?.country ? `You, in ${e.country}` : 'You', ms: '', detail: '', pal: OUT, flights: [], screen: 900, at: 0, pulse: 'you',
+    text: said ? `${capital(said)}. Any website you open can see this much.` : `You asked for ${HOST}.`,
+  })
+  if (t.fromCache) {
+    steps.push({
+      title: 'Saved on your device', ms: fmtMs(total), detail: 'browser cache', pal: SHAKE, flights: [], screen: 1100, at: total, pulse: 'you',
+      text: 'Your browser had kept a copy of this page, so nothing had to cross the internet this time.', chip: ['you', 'saved copy'],
+    })
+    return story
+  }
+  // Under a millisecond is the browser's own cache answering, not a lookup.
+  if (t.dns >= 1) {
+    steps.push({
+      title: 'Finding the address', ms: fmtMs(t.dns), detail: 'DNS lookup', pal: OUT, screen: watch(t.dns), at: t.dnsEnd,
+      text: `Your browser asked DNS, the internet’s address book, where ${HOST} lives.`,
+      flights: [{ route: ['you', 'net', 'dns'], pal: OUT, count: 1 }, { route: ['dns', 'net', 'you'], pal: BACK, count: 1 }], chip: ['dns', fmtMs(t.dns)],
+    })
+  } else {
+    steps.push({
+      title: 'Address already known', ms: '0 ms', detail: 'DNS cache', pal: SHAKE, flights: [], screen: 900, at: t.dnsEnd, pulse: 'you',
+      text: `Your browser remembered where ${HOST} lives, so it skipped the lookup.`, chip: ['dns', 'remembered'],
+    })
+  }
+  const reach = place ? `Reaching ${place}` : 'Reaching Cloudflare'
+  const pq = /MLKEM|kyber/i.test(e?.kex ?? '') ? PQ : ''
+  if (t.reused) {
+    steps.push({
+      title: 'Line already open', ms: '0 ms', detail: 'connection reuse', pal: SHAKE, flights: [], screen: 1000, at: t.connectEnd,
+      text: `Your browser reused a connection it already had open to ${edgeName}.`, glow: ['you', 'net', 'edge'], chip: ['edge', 'reused'],
+    })
+  } else if (t.quic) {
+    steps.push({
+      title: reach, ms: fmtMs(t.connect), detail: ['QUIC', tlsBits].filter(Boolean).join(' · '), pal: SHAKE, flights: shake,
+      screen: watch(t.connect), at: t.connectEnd, chip: ['edge', fmtMs(t.connect)],
+      text: `Your request crossed the internet to ${edgeName}, and they agreed on encryption in the same exchange.${pq}`,
+    })
+  } else {
+    steps.push({
+      title: reach, ms: fmtMs(t.tcp), detail: 'TCP handshake', pal: OUT, flights: [there, back], screen: watch(t.tcp),
+      at: t.connectEnd - t.tls, chip: ['edge', fmtMs(t.tcp)], text: `Your request crossed the internet to ${edgeName}.`,
+    })
+    if (t.tls > 0) {
+      steps.push({
+        title: 'Locking the line', ms: fmtMs(t.tls), detail: tlsBits || 'TLS handshake', pal: SHAKE, flights: shake,
+        screen: watch(t.tls), at: t.connectEnd, chip: ['edge', fmtMs(t.connect)],
+        text: `Your browser and Cloudflare agreed on encryption, so nobody in between can read this page.${pq}`,
       })
     }
+  }
+  const status = f.cacheStatus
+  const first = ['first byte', status ? `cache ${status}` : ''].filter(Boolean).join(' · ')
+  if (f.cache === 'hit') {
+    steps.push({
+      title: place ? `${place} had it ready` : 'Cloudflare had it ready', ms: fmtMs(t.ttfb), detail: first, pal: OUT, flights: [there],
+      screen: watch(t.ttfb), at: t.firstByte, hit: true, chip: ['origin', 'not needed'],
+      text: `Cloudflare already had a copy of this page, saved ${ago(f.cacheAge)} ago, so the server that builds it wasn’t needed.`,
+    })
+  } else if (f.cache === 'origin') {
+    const why = status === 'EXPIRED' ? 'Cloudflare’s copy of this page had expired, so it asked the server that builds it for a fresh one.'
+      : status === 'REVALIDATED' ? 'Cloudflare checked its copy with the server that builds this page, and it was still fresh.'
+      : 'Cloudflare passed your request on to the server that builds this page.'
+    steps.push({
+      title: 'Building the page', ms: fmtMs(t.ttfb), detail: first, pal: OUT, screen: watch(t.ttfb), at: t.firstByte, text: why,
+      flights: [{ route: ['you', 'net', 'edge', 'origin'], pal: OUT, count: 1 }, { route: ['origin', 'edge'], pal: BACK, count: 1 }],
+      chip: ['origin', fmtMs(t.ttfb)],
+    })
+  } else {
+    steps.push({
+      title: 'Asking for the page', ms: fmtMs(t.ttfb), detail: first, pal: OUT, flights: [there], screen: watch(t.ttfb), at: t.firstByte,
+      text: 'Your browser asked for the page, and the first of it came back.',
+    })
+  }
+  const kb = t.size > 0 ? `${Math.max(1, Math.round(t.size / 1024))} KB` : ''
+  steps.push({
+    title: 'Delivered', ms: fmtMs(t.download), detail: httpName(t.protocol) || e?.http || '', pal: BACK, screen: watch(t.download) + 400,
+    at: t.lastByte, fill: true, flights: [{ route: ['edge', 'net', 'you'], pal: BACK, count: clamp(Math.round(4 + t.size / 3072), 4, 16) }],
+    text: `The page came back in small packets${kb ? `, ${kb} in all,` : ''} and your browser put it together.`,
   })
-  const links = computeAmbientLinks(pts)
-  // Adjacency for the burst walk below: which points a given point is
-  // directly wired to, built once alongside the links themselves.
-  const adj: number[][] = pts.map(() => [])
-  links.forEach(([a, b]) => { adj[a].push(b); adj[b].push(a) })
-  return { pts, links, adj }
-}
-function resizeAmbient(ambient: Ambient, w: number, h: number) {
-  for (const p of ambient.pts) { p.baseX = p.fx * w; p.baseY = p.fy * h; p.x = p.baseX; p.y = p.baseY }
-}
-// Near-layer points drift slowly on a fixed per-point orbit driven by
-// simTime — arithmetic only, no stored velocity to integrate or allocate.
-function driftAmbient(ambient: Ambient, simTime: number) {
-  for (const p of ambient.pts) {
-    if (!p.driftR) continue
-    p.x = p.baseX + Math.cos(simTime * 0.00012 + p.driftPhase) * p.driftR
-    p.y = p.baseY + Math.sin(simTime * 0.00009 + p.driftPhase) * p.driftR
-  }
-}
-function drawAmbient(ctx: CanvasRenderingContext2D, ambient: Ambient) {
-  ctx.lineWidth = 1
-  ctx.strokeStyle = 'rgba(150,160,182,0.1)'
-  ctx.beginPath()
-  for (const [a, b] of ambient.links) {
-    const pa = ambient.pts[a], pb = ambient.pts[b]
-    ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y)
-  }
-  ctx.stroke()
-  for (const p of ambient.pts) {
-    const layer = AMBIENT_LAYERS[p.layer]
-    ctx.fillStyle = layer.fill
-    ctx.beginPath(); ctx.arc(p.x, p.y, layer.r, 0, 6.3); ctx.fill()
-  }
+  const painted = t.paint > t.lastByte
+  steps.push({
+    title: painted ? 'On your screen' : 'All here', ms: `at ${fmtMs(total)}`, detail: painted ? 'first paint' : 'last byte', pal: SHAKE,
+    flights: [], screen: 900, at: total, pulse: 'you', chip: ['you', fmtClock(total)],
+    text: `From asking for ${HOST} to ${painted ? 'seeing it' : 'its last byte'}: ${seconds(total)}.`,
+  })
+  return story
 }
 
-// ---- Wires. Each main link is a gentle quadratic arc. Its control point is
-// computed on resize (layoutLinks) and read by BOTH the wire and every
-// packet on it, so a packet rides exactly the line drawn for it. Every arc
-// bows upward (leftward, for a vertical link), so all the diagram's wires
-// curve the same way.
-interface LinkCtrl { x: number; y: number; len: number }
-function makeLinkCtrl(): LinkCtrl[] { return LINKS.map(() => ({ x: 0, y: 0, len: 1 })) }
-function layoutLinks(state: HeroState) {
-  for (let i = 0; i < LINKS.length; i++) {
-    const a = state.nodePos[LINKS[i][0]], b = state.nodePos[LINKS[i][1]], c = state.linkCtrl[i]
-    const dx = b.x - a.x, dy = b.y - a.y
-    const len = Math.sqrt(dx * dx + dy * dy) || 1
-    let nx = -dy / len, ny = dx / len
-    if (ny > 0 || (ny === 0 && nx > 0)) { nx = -nx; ny = -ny }
-    const bulge = Math.min(30, len * 0.09)
-    c.x = (a.x + b.x) / 2 + nx * bulge; c.y = (a.y + b.y) / 2 + ny * bulge; c.len = len
-  }
-}
-// Where packet p is at progress t, written into out (no allocation): its
-// position, its heading (for the comet's tail) and the length of its hop. A
-// main packet rides its link's own arc, reversed for a reply; an ambient
-// packet runs straight along its hairline.
-interface PacketPoint { x: number; y: number; ang: number; len: number }
-function packetPoint(state: HeroState, p: Packet, t: number, out: PacketPoint): PacketPoint {
-  if (p.li >= 0) {
-    const L = LINKS[p.li], a = state.nodePos[L[0]], b = state.nodePos[L[1]], c = state.linkCtrl[p.li]
-    const u = p.rev ? 1 - t : t, v = 1 - u
-    out.x = v * v * a.x + 2 * v * u * c.x + u * u * b.x
-    out.y = v * v * a.y + 2 * v * u * c.y + u * u * b.y
-    const tx = v * (c.x - a.x) + u * (b.x - c.x), ty = v * (c.y - a.y) + u * (b.y - c.y)
-    out.ang = p.rev ? Math.atan2(-ty, -tx) : Math.atan2(ty, tx)
-    out.len = c.len
-    return out
-  }
-  const p0 = pointOf(state, p.kind, p.a), p1 = pointOf(state, p.kind, p.b)
-  const dx = p1.x - p0.x, dy = p1.y - p0.y
-  out.x = p0.x + dx * t; out.y = p0.y + dy * t
-  out.ang = Math.atan2(dy, dx); out.len = Math.sqrt(dx * dx + dy * dy) || 1
-  return out
-}
-
-// The cinematic follow: tight on whatever the lead packet is doing until
-// the request lands at the edge (state.camWide), then a damped pull out to
-// the wide shot. The followed point is held above the name block rather
-// than at dead centre, where the name would cover it. Between two hops the
-// target simply holds, so the camera never lurches back to 'you'.
-interface Camera { x: number; y: number; zoom: number; vx: number; vy: number; vz: number; tx: number; ty: number }
-const CAM_PT: PacketPoint = { x: 0, y: 0, ang: 0, len: 1 }
-function camZoom(state: HeroState): number { return state.phone ? 1.6 : 1.8 }
-// World y the camera must centre on for world point y to sit at the held
-// fraction of the screen's height, at zoom z.
-function camCentreY(state: HeroState, y: number, z: number): number { return y + (0.5 - (state.phone ? 0.22 : 0.34)) * state.h / z }
-function updateCamera(state: HeroState, dt: number) {
-  const cam = state.camera
-  let tx: number, ty: number, tz: number
-  if (state.camWide) {
-    tx = state.w / 2; ty = state.h / 2; tz = 1
-  } else {
-    const lp = state.leadPacket
-    if (lp && lp.active && lp.delay <= 0) { packetPoint(state, lp, clamp(lp.t, 0, 1), CAM_PT); cam.tx = CAM_PT.x; cam.ty = CAM_PT.y }
-    tz = camZoom(state); tx = cam.tx; ty = camCentreY(state, cam.ty, tz)
-  }
-  cam.x = smoothDamp(cam.x, tx, 0.42, dt, cam, 'vx')
-  cam.y = smoothDamp(cam.y, ty, 0.42, dt, cam, 'vy')
-  cam.zoom = smoothDamp(cam.zoom, tz, 0.55, dt, cam, 'vz')
-}
-
-// Packets as comets: a bright pre-rendered head plus a tail sprite
-// stretched (via drawImage's destination size, not re-rendered) to a length
-// that follows how fast this hop is actually moving. Additive ('lighter')
-// so overlapping light brightens instead of overpainting. Drawn BEFORE the
-// glyphs, so a packet arriving at a node slides in under its panel instead
-// of across it.
-const PT: PacketPoint = { x: 0, y: 0, ang: 0, len: 1 }
-function drawPackets(ctx: CanvasRenderingContext2D, state: HeroState) {
-  const { pool, sprites } = state
-  if (!sprites) return
-  ctx.globalCompositeOperation = 'lighter'
-  for (const p of pool) {
-    if (!p.active || p.delay > 0) continue
-    const t = clamp(p.t, 0, 1)
-    packetPoint(state, p, t, PT)
-    const pal = nearestPaletteIndex(p.color)
-    const tailLen = clamp((PT.len / p.dur) * 150, p.size * 2.4, 130)
-    const fade = t < 0.08 ? t / 0.08 : t > 0.85 ? (1 - t) / 0.15 : 1
-    ctx.save()
-    ctx.translate(PT.x, PT.y); ctx.rotate(PT.ang + Math.PI)
-    ctx.globalAlpha = fade
-    ctx.drawImage(sprites.tail[pal], 0, -p.size * 2, tailLen, p.size * 4)
-    ctx.restore()
-    const hs = p.size * 5.6
-    ctx.globalAlpha = fade
-    ctx.drawImage(sprites.head[pal], PT.x - hs / 2, PT.y - hs / 2, hs, hs)
-    ctx.globalAlpha = 1
-  }
-  ctx.globalCompositeOperation = 'source-over'
-}
-// Main-path links: bold with a soft glow, plus an additive flowing-dash
-// overlay while traffic is crossing, running the way that traffic went, so
-// it reads as light moving through the wire, not just a colour change.
-const DASH = [9, 11]
-const NO_DASH: number[] = []
-function drawLinks(ctx: CanvasRenderingContext2D, state: HeroState, simTime: number) {
-  ctx.lineWidth = state.phone ? 2 : 3
-  for (let i = 0; i < LINKS.length; i++) {
-    const a = state.nodePos[LINKS[i][0]], b = state.nodePos[LINKS[i][1]], c = state.linkCtrl[i]
-    const h = state.heat.link[LINK_KEYS[i]]
-    heatInto(MIX, REST, h)
-    ctx.shadowColor = rgbCss(MIX, 0.7 * h.heat)
-    ctx.shadowBlur = 4 + h.heat * 18
-    ctx.strokeStyle = rgbCss(MIX)
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(c.x, c.y, b.x, b.y); ctx.stroke()
-    if (h.heat > 0.1) {
-      ctx.shadowBlur = 0
-      ctx.globalCompositeOperation = 'lighter'
-      ctx.setLineDash(DASH)
-      ctx.lineDashOffset = -h.dir * simTime * 0.09
-      ctx.strokeStyle = rgbCss(HEAT_RGB, h.heat)
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(c.x, c.y, b.x, b.y); ctx.stroke()
-      ctx.setLineDash(NO_DASH)
-      ctx.globalCompositeOperation = 'source-over'
-    }
-  }
-  ctx.shadowBlur = 0
-}
-
-// ---- Labels are laid out on resize (wrapped to the room a node has, and
-// pulled in from the stage's edges as one block) and only drawn per frame.
-const MONO = 'ui-monospace,Menlo,Consolas,monospace'
-function layoutLabels(ctx: CanvasRenderingContext2D, state: HeroState, meta: NodeMetaEntry[]) {
-  const phone = state.phone
-  const font = `${phone ? 11 : 13}px ${MONO}`, subFont = `${phone ? 10 : 12}px ${MONO}`
-  for (const m of meta) {
-    const pos = state.nodePos[m.id]
-    ctx.font = subFont
-    const lines = [m.label, ...(m.sub ? wrapText(ctx, m.sub, phone ? state.w * 0.31 : 300) : [])]
-    let half = 0
-    for (let k = 0; k < lines.length; k++) {
-      ctx.font = k === 0 ? font : subFont
-      half = Math.max(half, ctx.measureText(lines[k]).width / 2 + 8)
-    }
-    const lead = phone ? 13 : 15, n = lines.length
-    const y = pos.labAbove
-      ? pos.y - GLYPH_TOP[m.kind] * pos.size - 8 - lead * (n - 1)
-      : pos.y + GLYPH_BOTTOM[m.kind] * pos.size + (phone ? 13 : 16)
-    pos.lab = {
-      lines, x: clamp(pos.x, half, Math.max(half, state.w - half)), y, lead,
-      // On a stage too short for the whole diagram above the text, a node
-      // can end up behind the name. Its glyph stays, dimmed by the scrim,
-      // but its label is not printed over the name.
-      hidden: !pos.labAbove && y + lead * (n - 1) > state.textTop - 4,
-      font, subFont,
-    }
-  }
-  state.coloFont = `600 ${Math.round(0.34 * state.nodePos.edge.size)}px ${MONO}`
-}
-function drawLabel(ctx: CanvasRenderingContext2D, lab: LabelInfo | undefined) {
-  if (!lab || lab.hidden) return
-  ctx.textAlign = 'center'
-  ctx.font = lab.font; ctx.fillStyle = 'rgba(221,230,242,0.92)'
-  ctx.fillText(lab.lines[0], lab.x, lab.y)
-  if (lab.lines.length < 2) return
-  ctx.font = lab.subFont; ctx.fillStyle = 'rgba(132,144,160,0.92)'
-  for (let k = 1; k < lab.lines.length; k++) ctx.fillText(lab.lines[k], lab.x, lab.y + lab.lead * k)
-}
-// One scratch object for every glyph call (see the Glyphs section).
-const G: GlyphScratch = { stroke: '', body: '', ink: '', lw: 2, heat: 0, fill: 0, simTime: 0, colo: '', coloFont: '' }
-const TINT: Rgb = [0, 0, 0]
-function drawGlyphs(ctx: CanvasRenderingContext2D, state: HeroState, meta: NodeMetaEntry[]) {
-  G.fill = state.downloadProgress; G.simTime = state.simTime; G.colo = state.colo; G.coloFont = state.coloFont
-  for (const m of meta) {
-    const pos = state.nodePos[m.id], h = state.heat.node[m.id]
-    heatInto(MIX, REST_GLYPH, h)
-    G.heat = h.heat
-    G.stroke = rgbCss(MIX)
-    G.body = rgbCss(mixInto(TINT, BODY, MIX, 0.07 + 0.12 * h.heat))
-    G.ink = rgbCss(mixInto(TINT, MIX, WHITE, 0.45))
-    G.lw = clamp(pos.size * 0.035, 1.4, 2.6)
-    GLYPH[m.kind](ctx, pos.x, pos.y, pos.size, G)
-    drawLabel(ctx, pos.lab)
-  }
-}
-
-// ---- Real numbers: Navigation Timing, normalised so every value below is a
-// plain millisecond duration whether the browser gives us the modern entry
-// (already relative) or the legacy `performance.timing` (epoch ms). Both
-// shapes are read through the same field names, so the delta maths below
-// works identically on either — the subtraction cancels out whether the
-// clock is relative-to-navigation-start or absolute epoch ms.
-interface TimingFields {
-  domainLookupStart: number; domainLookupEnd: number
-  connectStart: number; connectEnd: number
-  secureConnectionStart: number
-  requestStart: number; responseStart: number; responseEnd: number
-}
-function timingDelta(src: TimingFields, a: keyof TimingFields, b: keyof TimingFields): number {
-  return Math.max(0, (src[a] || 0) - (src[b] || 0))
-}
-// `performance.timing` (Navigation Timing Level 1) is deprecated in favour
-// of the PerformanceNavigationTiming entry read above, but a handful of old
-// or embedded browsers still expose only it. This is the one place that
-// reads it, re-typed through a plain shape with no deprecated members, so
-// the rest of the module — which shares TimingFields with the modern entry
-// — never touches the deprecated API itself.
-function legacyTiming(): TimingFields & { domContentLoadedEventEnd: number; navigationStart: number } {
-  return performance.timing as unknown as TimingFields & { domContentLoadedEventEnd: number; navigationStart: number }
-}
-function readPaint(): number {
-  try {
-    const paints = performance.getEntriesByType('paint')
-    const fcp = paints.find(p => p.name === 'first-contentful-paint')
-    if (fcp) return fcp.startTime
-    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-    if (nav && nav.domContentLoadedEventEnd > 0) return nav.domContentLoadedEventEnd
-  } catch { /* Performance API can throw in exotic embeds; treat as unmeasured. */ }
-  const t = legacyTiming()
-  return t.domContentLoadedEventEnd > 0 ? t.domContentLoadedEventEnd - t.navigationStart : 0
-}
-interface Timing {
-  dns: number; connect: number; tls: number; tcp: number
-  reused: boolean; quic: boolean
-  ttfb: number; download: number
-  painted: number; protocol: string; size: number; decoded: number
-  fromCache: boolean
-  // True when Navigation Timing describes a DIFFERENT route than the one
-  // showing: after an in-site ClientRouter swap to '/', the entry still
-  // describes the session's first hard load, which can be another page.
-  otherPage: boolean
-}
-function readTiming(): Timing {
-  let nav: PerformanceNavigationTiming | undefined
-  try { nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined } catch { /* see readPaint */ }
-  const src: TimingFields = nav ?? legacyTiming()
-  const connect = timingDelta(src, 'connectEnd', 'connectStart')
-  const tls = src.secureConnectionStart > 0 ? Math.max(0, src.connectEnd - src.secureConnectionStart) : 0
-  const size = nav?.transferSize ?? 0
-  const decoded = nav?.decodedBodySize ?? 0
-  const protocol = nav?.nextHopProtocol ?? ''
-  let otherPage = false
-  if (nav) {
-    try { otherPage = new URL(nav.name).pathname !== location.pathname } catch { /* a malformed entry name: assume this page */ }
-  }
+function internetStory(f: Facts | null, touch: boolean): Story {
+  const t = f?.timing ?? null
+  // This page's own total, when it describes this page crossing the internet.
+  const total = t && !t.otherPage && !t.fromCache ? totalOf(t) : null
+  const there = ['you', 'wifi', 'isp', 'server'], back = ['server', 'isp', 'wifi', 'you']
   return {
-    dns: timingDelta(src, 'domainLookupEnd', 'domainLookupStart'), connect, tls, tcp: Math.max(0, connect - tls),
-    // A connect of zero is a connection the browser already had open. Over
-    // HTTP/3 the transport and TLS handshakes are one QUIC exchange, so
-    // neither half is reported as zero-because-reused.
-    reused: connect <= 0, quic: protocol === 'h3',
-    ttfb: timingDelta(src, 'responseStart', 'requestStart'), download: timingDelta(src, 'responseEnd', 'responseStart'),
-    painted: readPaint(), protocol, size, decoded,
-    fromCache: size === 0 && decoded > 0,
-    otherPage,
+    kicker: 'How the internet works',
+    headline: f ? 'What happens after you press Enter? Here’s how a page like this one finds its way to you.' : '',
+    stations: [
+      { id: 'you', kind: touch ? 'phone' : 'laptop', label: 'you', sub: '', info: 'You, and the browser you are reading this in.' },
+      { id: 'wifi', kind: 'router', label: 'your Wi-Fi', sub: 'router', info: 'Your Wi-Fi router: the door every request leaves through.' },
+      { id: 'dns', kind: 'dns', label: 'DNS', sub: 'phone book', branch: true, info: `DNS, the internet’s phone book: it turns names like ${HOST} into numbers.` },
+      { id: 'isp', kind: 'isp', label: 'internet provider', sub: '', info: 'Your internet provider connects your home or phone to the rest of the internet.' },
+      { id: 'server', kind: 'origin', label: 'a server', sub: 'in a data centre', via: 'the internet', hops: true, info: 'A server: a computer in a data centre whose job is to answer requests.' },
+    ],
+    steps: f ? [
+      { title: 'You press Enter', ms: '', detail: '', pal: OUT, flights: [], screen: 1000, at: null, pulse: 'you', text: `Your browser wants ${HOST}. But computers find each other by number, not by name.` },
+      {
+        title: 'Looking up the number', ms: '', detail: 'DNS', pal: OUT, screen: 2200, at: null,
+        text: 'So it asks DNS, the internet’s phone book, which answers with the site’s number: its IP address.',
+        flights: [{ route: ['you', 'wifi', 'dns'], pal: OUT, count: 1 }, { route: ['dns', 'wifi', 'you'], pal: BACK, count: 1 }], chip: ['dns', 'found it'],
+      },
+      {
+        title: 'Knocking on the door', ms: '', detail: 'TCP', pal: OUT, screen: 3200, at: null,
+        text: 'The request leaves through your Wi-Fi, reaches your internet provider, and hops from network to network until it finds the server.',
+        flights: [{ route: there, pal: OUT, count: 1 }, { route: back, pal: BACK, count: 1 }],
+      },
+      {
+        title: 'A secret handshake', ms: '', detail: 'TLS', pal: SHAKE, screen: 3000, at: null,
+        text: 'Your browser and the server agree on a code only they know, so anyone in between sees only gibberish.',
+        flights: [{ route: there, pal: SHAKE, count: 3 }, { route: back, pal: SHAKE, count: 3 }],
+      },
+      { title: 'Asking for the page', ms: '', detail: 'HTTP request', pal: OUT, screen: 1800, at: null, text: 'Now your browser asks for the page itself, sent as small numbered packets.', flights: [{ route: there, pal: OUT, count: 1 }] },
+      {
+        title: 'The server answers', ms: '', detail: 'HTTP response', pal: BACK, screen: 2600, at: null, fill: true,
+        text: 'The server builds the page and sends it back the same way, packet by packet.', flights: [{ route: back, pal: BACK, count: 10 }],
+      },
+      {
+        title: 'Put back together', ms: total ? seconds(total) : '', detail: '', pal: SHAKE, flights: [], screen: 1000, at: null, pulse: 'you',
+        text: `Your browser puts the packets back in order and draws the page you’re reading.${total ? ` This one took ${seconds(total)}.` : ''}`,
+      },
+    ] : [],
+    total,
+    ping: [...there, ...back.slice(1)],
+    pingText: `A real round trip to ${HOST}, just now.`,
   }
 }
 
-// A phase's animation length from its real duration: tiny phases stay
-// visible, long ones don't drag, and order and relative size stay true.
-function dur(ms: number): number { return clamp(300 + 60 * Math.sqrt(Math.max(0, ms)), 300, 1600) }
-// No leg of a hop is faster than this, so a 2 ms phase split over four legs
-// is still something you can watch.
-const HOP_MIN = 210
-function legMs(ms: number, legs: number): number { return Math.max(HOP_MIN, dur(ms) / legs) }
-
-// A zero is a real answer, and each line says what it means.
-function fmtDns(ms: number): string { return ms <= 0 ? `${HOST} · cached` : `${HOST} in ${Math.round(ms)} ms` }
-function fmtConnect(t: Timing): string {
-  if (t.reused) return 'reused connection to the edge'
-  if (t.quic) return `QUIC to the edge in ${Math.round(t.connect)} ms`
-  return `connected to the edge in ${Math.round(t.tcp)} ms`
-}
-// The measured part leads and the sampled part trails, so the dim "(sample)"
-// after it covers only what came from the sample — and only when the edge
-// facts really are the sample (loadEdgeFacts failed), not the lab's old
-// always-on label.
-function fmtTls(t: Timing, edge: EdgeFacts): { text: string; note: string } {
-  const how = t.reused ? 'reused session' : t.quic ? 'inside the QUIC handshake' : t.tls > 0 ? `handshake in ${Math.round(t.tls)} ms` : ''
-  if (!how) return { text: 'none, this hop is plain HTTP', note: '' }
-  return { text: `${how} · ${edge.tls}, ${edge.kex}`, note: edge.sample ? 'sample' : '' }
-}
-function fmtHttp(t: Timing, edge: EdgeFacts, cache: string): string {
-  if (t.fromCache) return 'served from your browser cache, nothing sent'
-  const proto = t.protocol || edge.http
-  const cachePart = cache ? ` · cache ${cache}` : ''
-  return `${proto} · edge ${edge.colo}, ${edgePlace(edge)}${cachePart}`
-}
-function fmtBytes(t: Timing): string {
-  const bytes = t.fromCache ? 'from the browser cache' : `${Math.max(1, Math.round(t.size / 1024))} KB in ${Math.round(t.download)} ms`
-  return `first byte at ${Math.round(t.ttfb)} ms · ${bytes}`
-}
-function fmtPaint(ms: number): string { return `on screen at ${Math.round(ms)} ms` }
-function combineNotes(...parts: Array<string | false | '' | undefined>): string {
-  return parts.filter((p): p is string => Boolean(p)).join(', ')
-}
-const OTHER_PAGE_NOTE = 'first load this visit'
-
-// Trace rows, in their fixed order. The log entries below name rows by
-// index; the last row is the ping.
-const ROW_LABELS = ['dns', 'tcp', 'tls', 'http', 'bytes', 'paint', 'ping']
-const ROW_HTTP = 3, ROW_PAINT = 5, ROW_PING = 6
-
-// A flat timeline built per replay from this page's own timing: hop entries
-// (a packet leg to spawn) and fx entries (a pulse or a glow), sorted by
-// start, plus log entries (a trace row to type). The frame loop walks both
-// lists with one cursor each; there are no per-phase timers. Nothing
-// crosses the network that did not: a cached lookup lights the device, a
-// reused connection glows along the path it already holds.
-interface HopEvent { kind: 'hop'; start: number; a: NodeId; b: NodeId; color: Rgb; dur: number; size: number }
-interface FxEvent { kind: 'fx'; start: number; fx: 'local' | 'reuse' | 'hit' | 'pong'; text?: string }
-type TimelineEvent = HopEvent | FxEvent
-interface LogEntry { at: number; row: number }
-interface TimelineBuild { timeline: TimelineEvent[]; logs: LogEntry[]; respStart: number; respEnd: number }
-
-const GAP = 340, STAGGER = 70
-function buildTimeline(t: Timing, cacheIsHit: boolean): TimelineBuild {
-  let cursor = 600
-  const timeline: TimelineEvent[] = []
-  const logs: LogEntry[] = []
-  function route(ids: NodeId[], color: Rgb, ms: number, size: number, at: number): number {
-    let cur = at
-    for (let i = 0; i + 1 < ids.length; i++) {
-      timeline.push({ kind: 'hop', start: cur, a: ids[i], b: ids[i + 1], color, dur: ms, size: size || 3.4 })
-      cur += ms
-    }
-    return cur
-  }
-  // A TLS or QUIC flight is several records at once: three packets a little
-  // apart, each way.
-  function burst(ids: NodeId[], ms: number, at: number): number {
-    let last = at
-    for (let j = 0; j < 3; j++) last = route(ids, WHITE, ms, 2.6, at + j * STAGGER)
-    return last
-  }
-  function fx(at: number, name: FxEvent['fx']) { timeline.push({ kind: 'fx', start: at, fx: name }) }
-  function log(row: number) { logs.push({ at: cursor, row }); cursor += GAP }
-
-  if (t.dns > 0) {
-    const ld = legMs(t.dns, 4)
-    cursor = route(['you', 'network', 'dns'], AMBER, ld, 0, cursor)
-    cursor = route(['dns', 'network', 'you'], VIOLET, ld, 0, cursor)
-  } else { fx(cursor, 'local'); cursor += 380 }
-  log(0)
-
-  if (t.reused) {
-    fx(cursor, 'reuse'); cursor += 420; log(1); log(2)
-  } else if (t.quic) {
-    const lq = legMs(t.connect, 4)
-    cursor = burst(['you', 'network', 'edge'], lq, cursor)
-    cursor = burst(['edge', 'network', 'you'], lq, cursor)
-    log(1); log(2)
-  } else {
-    const lt = legMs(t.tcp, 4)
-    cursor = route(['you', 'network', 'edge'], AMBER, lt, 0, cursor)
-    cursor = route(['edge', 'network', 'you'], VIOLET, lt, 0, cursor)
-    log(1)
-    if (t.tls > 0) {
-      const ls = legMs(t.tls, 4)
-      cursor = burst(['you', 'network', 'edge'], ls, cursor)
-      cursor = burst(['edge', 'network', 'you'], ls, cursor)
-    }
-    log(2)
-  }
-
-  const miss = !cacheIsHit
-  if (t.fromCache) { fx(cursor, 'local'); cursor += 380 } else {
-    const lr = legMs(t.ttfb, miss ? 4 : 2)
-    cursor = route(['you', 'network', 'edge'], AMBER, lr, 0, cursor)
-    if (miss) { cursor = route(['edge', 'origin'], AMBER, lr, 0, cursor); cursor = route(['origin', 'edge'], VIOLET, lr, 0, cursor) }
-    else fx(cursor, 'hit')
-  }
-  log(ROW_HTTP)
-
-  // The response as a stream of small violet packets, pipelined rather than
-  // one after another; the count follows the real size, so a bigger page
-  // visibly reads as more traffic.
-  let respStart: number, respEnd: number
-  if (t.fromCache) { respStart = cursor; respEnd = cursor + 500; cursor = respEnd } else {
-    const n = clamp(Math.round(4 + Math.max(1, t.size / 1024) / 3), 4, 24)
-    const lb = legMs(t.download, 2), gap = clamp(dur(t.download) / n, 45, 110)
-    let end = cursor
-    for (let k = 0; k < n; k++) end = route(['edge', 'network', 'you'], VIOLET, lb, 2.4, cursor + k * gap)
-    respStart = cursor + 2 * lb; respEnd = end; cursor = end
-  }
-  log(4); log(ROW_PAINT); log(ROW_PING)
-  timeline.sort((x, y) => x.start - y.start)
-  return { timeline, logs, respStart, respEnd }
+// ---- DOM: the frame (what this is, top left) and the log (what is
+// happening, bottom right). No <style>: hero-network.css styles both.
+function part<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, name: string, text = ''): HTMLElementTagNameMap[K] {
+  const el = doc.createElement(tag)
+  el.dataset.part = name
+  if (text) el.textContent = text
+  return el
 }
 
-// ---- The instance's whole mutable state, one object so every helper above
-// takes (state, ...) rather than closing over private variables scattered
-// across create().
-interface RowDom { row: HTMLDivElement; typed: HTMLSpanElement; rest: HTMLSpanElement; note: HTMLSpanElement; text: string }
-interface HeroState {
-  dpr: number; w: number; h: number; phone: boolean; textTop: number
-  nodePos: Record<NodeId, NodePos>
-  linkCtrl: LinkCtrl[]
-  pool: Packet[]
-  pulses: Pulse[]
-  heat: { node: Record<NodeId, Heat>; link: Record<string, Heat> }
-  ambient: Ambient
-  sprites: Sprites | null
-  simTime: number
-  colo: string
-  coloFont: string
-  running: boolean
-  raf: number
-  lastT: number
-  destroyed: boolean
-  timing: Timing
-  cursor: number
-  timeline: TimelineEvent[] | null
-  logs: LogEntry[] | null
-  tIdx: number
-  lIdx: number
-  replaying: boolean
-  ambientAccum: number
-  ambientBurstAccum: number
-  keepAccum: number
-  pingBusy: boolean
-  cardId: NodeId | null
-  typing: { r: RowDom; shown: number; cps: number } | null
-  camera: Camera
-  camWide: boolean
-  leadPacket: Packet | null
-  downloadProgress: number
-  respStart: number
-  respEnd: number
-  edge: EdgeFacts
-  cache: string
-}
-
-function ambientTick(state: HeroState, dt: number) {
-  state.ambientAccum -= dt
-  if (state.ambientAccum > 0) return
-  const day = dayness(localMinutes())
-  state.ambientAccum = lerp(0.42, 0.18, day) + Math.random() * lerp(0.32, 0.14, day)
-  const links = state.ambient.links
-  const pick = links[(Math.random() * links.length) | 0]
-  // hourColor() with no scratch: this fires a few times a second at most,
-  // and the resulting colour is stored on the packet for its whole flight,
-  // so it must be an independent value rather than a buffer the next tick
-  // (or ambientBurstTick, below) overwrites out from under it.
-  spawnPacket(state.pool, 'ambient', pick[0], pick[1], hourColor(localMinutes()), lerp(1100, 650, day), 1.5)
-}
-// Occasional bursts: a short chain of ambient links carries several small
-// packets in quick succession, like a surge of traffic. Denser, faster and
-// amber by day; sparser, slower and violet by night, tinted by the real
-// hourColor.
-function ambientBurstTick(state: HeroState, dt: number) {
-  state.ambientBurstAccum -= dt
-  if (state.ambientBurstAccum > 0) return
-  const day = dayness(localMinutes())
-  state.ambientBurstAccum = lerp(11, 5, day) + Math.random() * 3
-  const adj = state.ambient.adj, n = state.ambient.pts.length
-  const start = (Math.random() * n) | 0
-  const chain = [start]
-  let cur = start, prev = -1
-  for (let step = 0; step < 3; step++) {
-    const nbrs = adj[cur]
-    if (!nbrs || !nbrs.length) break
-    let next = nbrs[(Math.random() * nbrs.length) | 0]
-    if (next === prev && nbrs.length > 1) next = nbrs[(nbrs.indexOf(next) + 1) % nbrs.length]
-    chain.push(next); prev = cur; cur = next
-  }
-  if (chain.length < 2) return
-  const hc = hourColor(localMinutes())
-  const base = day >= 0.5 ? AMBER : VIOLET
-  const color = mix3(base, hc, 0.4)
-  const count = Math.round(lerp(4, 9, day)), leg = lerp(760, 420, day), stagger = leg / 2.6
-  let t = 0
-  for (let k = 0; k < count; k++) {
-    const li = k % (chain.length - 1)
-    spawnPacket(state.pool, 'ambient', chain[li], chain[li + 1], color, leg, day >= 0.5 ? 1.7 : 1.3, t)
-    t += stagger
-  }
-}
-function keepaliveTick(state: HeroState, dt: number) {
-  if (state.replaying) return
-  state.keepAccum -= dt
-  if (state.keepAccum > 0) return
-  state.keepAccum = 3 + Math.random() * 3.5
-  const l = LINKS[(Math.random() * LINKS.length) | 0]
-  const out = Math.random() < 0.5
-  spawnPacket(state.pool, 'main', out ? l[0] : l[1], out ? l[1] : l[0], out ? AMBER : VIOLET, 550, 2)
-}
-
-// ---- DOM: everything below lives in `host` (the stage) except the readout,
-// which network.ts moves into env.text.content on phone/stack layouts. No
-// <style> element: all of this is styled from hero-network.css, scoped
-// under section[data-hero="network"].
-function buildStage(doc: Document, host: HTMLElement) {
-  const canvas = doc.createElement('canvas')
-  canvas.dataset.type = 'hero-canvas'
-  canvas.setAttribute('role', 'img')
-  canvas.setAttribute(
-    'aria-label',
-    'A live network diagram replaying this page load: your device, your router, a DNS resolver, the Cloudflare edge and the origin server, linked by animated request and response packets.',
-  )
-  host.appendChild(canvas)
-
-  const poster = doc.createElement('div')
-  poster.dataset.type = 'hero-poster'
-  host.appendChild(poster)
-
-  const ping = doc.createElement('button')
-  ping.type = 'button'
-  ping.dataset.type = 'hero-ping'
-  ping.setAttribute('aria-hidden', 'true')
-  ping.tabIndex = -1
-  host.appendChild(ping)
-
-  const nodesLayer = doc.createElement('div')
-  nodesLayer.dataset.type = 'hero-nodes'
-  host.appendChild(nodesLayer)
-
-  const card = doc.createElement('div')
-  card.dataset.type = 'hero-card'
-  card.setAttribute('aria-hidden', 'true')
-  host.appendChild(card)
-
-  return { canvas, poster, ping, nodesLayer, card }
-}
-function buildRow(doc: Document, label: string): RowDom {
-  const row = doc.createElement('div')
-  row.dataset.part = 'row'
-  const b = doc.createElement('b')
-  b.dataset.part = 'row-label'
-  b.textContent = label
-  const text = doc.createElement('span')
-  text.dataset.part = 'row-text'
-  const typed = doc.createElement('span')
-  typed.dataset.part = 'typed'
-  const rest = doc.createElement('span')
-  rest.dataset.part = 'rest'
-  const note = doc.createElement('span')
-  note.dataset.part = 'note'
-  text.append(typed, rest, note)
-  row.append(b, text)
-  return { row, typed, rest, note, text: '' }
-}
-function buildReadout(doc: Document) {
-  const readout = doc.createElement('div')
-  readout.dataset.type = 'hero-readout'
-  const trace = doc.createElement('div')
-  trace.dataset.part = 'trace'
-  const rows = ROW_LABELS.map(label => buildRow(doc, label))
-  for (const r of rows) trace.appendChild(r.row)
-  const replay = doc.createElement('button')
-  replay.type = 'button'
-  replay.dataset.part = 'replay'
-  replay.textContent = 'replay landing'
-  readout.append(trace, replay)
-  return { readout, replay, rows }
-}
+// Pacing, in screen ms: the headline reads first, each message is typed for
+// a beat, and a step dwells long enough to read.
+const INTRO = 1500, TYPE = 520, LEG_MIN = 240, READ = 34
+const POOL = 80, PULSES = 20
 
 export const create: HeroCreate = (host, env) => {
   const doc = host.ownerDocument
   const section = env.text.section
-  const reduced = env.reduced
-  const isTouch = env.isTouch
+  const generic = section.dataset.hero === 'internet'
+  const { reduced, isTouch } = env
   const dpr = clamp(env.dpr || 1, 1, 2)
+  const mono = getComputedStyle(section).getPropertyValue('--font-mono').trim() || 'ui-monospace, monospace'
+  const tell = (f: Facts | null) => (generic ? internetStory(f, isTouch) : networkStory(f, isTouch))
 
-  const stage = buildStage(doc, host)
-  const { readout, replay, rows } = buildReadout(doc)
-  // Desktop's default: absolutely positioned at the stage's bottom right,
-  // inside host. layout() below moves it into env.text.content — in flow,
-  // under the links — for the phone and stack layouts, and back again when
-  // the layout allows it.
-  host.appendChild(readout)
-  let readoutInContent = false
-  function placeReadout(inContent: boolean) {
-    if (inContent === readoutInContent) return
-    readoutInContent = inContent
-    if (inContent) {
-      const anchor = env.text.links ?? env.text.tagline
-      anchor.after(readout)
-    } else {
-      host.appendChild(readout)
-    }
+  const canvas = doc.createElement('canvas')
+  canvas.dataset.type = 'hero-canvas'
+  canvas.setAttribute('role', 'img')
+  const poster = doc.createElement('div')
+  poster.dataset.type = 'hero-poster'
+  const pingTarget = doc.createElement('button')
+  pingTarget.type = 'button'
+  pingTarget.dataset.type = 'hero-ping'
+  pingTarget.setAttribute('aria-hidden', 'true')
+  pingTarget.tabIndex = -1
+  const nodesLayer = doc.createElement('div')
+  nodesLayer.dataset.type = 'hero-nodes'
+  const card = doc.createElement('div')
+  card.dataset.type = 'hero-card'
+  card.setAttribute('aria-hidden', 'true')
+  const frame = doc.createElement('div')
+  frame.dataset.type = 'hero-frame'
+  const headline = part(doc, 'p', 'headline')
+  const replay = part(doc, 'button', 'replay', 'replay')
+  replay.type = 'button'
+  const clockEl = part(doc, 'span', 'clock')
+  const bar = part(doc, 'p', 'bar')
+  bar.append(replay, clockEl)
+  const kicker = part(doc, 'p', 'kicker')
+  frame.append(kicker, headline, bar)
+  const log = doc.createElement('div')
+  log.dataset.type = 'hero-log'
+  host.append(canvas, poster, pingTarget, nodesLayer, card, frame, log)
+
+  // The log sits at the stage's bottom right on desktop and moves into the
+  // text block, under the links, on a phone or when the name needs the width.
+  let logInContent = false
+  function placeLog(inContent: boolean) {
+    if (inContent === logInContent) return
+    logInContent = inContent
+    if (inContent) (env.text.links ?? env.text.tagline).after(log)
+    else host.appendChild(log)
   }
 
   let ctx: CanvasRenderingContext2D | null = null
-  try { ctx = stage.canvas.getContext('2d') } catch { /* an old or locked-down browser: fall back to the poster */ }
+  try { ctx = canvas.getContext('2d') } catch { /* an old or locked-down browser: the poster stands in */ }
   host.toggleAttribute('data-nw-fallback', !ctx)
+  const sprites = ctx ? makeSprites() : null
 
-  const state: HeroState = {
-    dpr, w: 0, h: 0, phone: false, textTop: 0,
-    nodePos: {} as Record<NodeId, NodePos>, linkCtrl: makeLinkCtrl(), pool: makePool(), pulses: makePulsePool(), heat: makeHeatMaps(), ambient: makeAmbient(),
-    sprites: ctx ? makeSprites() : null, simTime: 0, colo: SAMPLE_EDGE.colo, coloFont: '',
-    running: false, raf: 0, lastT: 0, destroyed: false,
-    timing: readTiming(), cursor: 0, timeline: null, logs: null, tIdx: 0, lIdx: 0, replaying: false,
-    ambientAccum: 0, ambientBurstAccum: 4 + Math.random() * 4, keepAccum: Math.random() * 3,
-    pingBusy: false, cardId: null, typing: null,
-    // Cinematic camera: a critically damped follow (see smoothDamp); tx/ty
-    // is the world point it is holding on.
-    camera: { x: 0, y: 0, zoom: 1, vx: 0, vy: 0, vz: 0, tx: 0, ty: 0 },
-    camWide: true, leadPacket: null, downloadProgress: 0, respStart: 0, respEnd: 0,
-    // A safe, honestly-labelled default until loadEdgeFacts/probeCacheStatus
-    // resolve, a few lines from here — see refreshEdgeDependent.
-    edge: SAMPLE_EDGE, cache: '',
+  let story = tell(null)
+  let facts: Facts | null = null
+  let links = linksOf(story.stations)
+  let hops = hopsOf(story.stations, links)
+  let pos: Pos[] = []
+  let labels: Label[] = []
+  const fonts: Fonts = { label: '', sub: '', chip: '', code: '' }
+  const nodeHeat = story.stations.map(heat)
+  const linkHeat = links.map(heat)
+  const chips = story.stations.map(() => '')
+  const pool: Packet[] = Array.from({ length: POOL }, () => ({ active: false, li: 0, rev: false, t: 0, dur: 1, pal: 0, size: 3, trail: false }))
+  const pulses: Pulse[] = Array.from({ length: PULSES }, () => ({ active: false, i: 0, t: 0, dur: 1, pal: 0, maxR: 1 }))
+  let stars: Star[] | null = null
+  let w = 0, h = 0, phone = false, textTop = 0
+  let time = 0, running = false, raf = 0, last = 0, destroyed = false
+  interface Sched { at: number; run: () => void }
+  let sched: Sched[] = [], si = 0, cursor = 0
+  let clockKeys: Array<[number, number]> = []
+  let fillWin: [number, number] | null = null
+  let fill = 0, playing = false, pinging = false, clockText = ''
+  let typing: HTMLElement | null = null
+
+  kicker.textContent = story.kicker
+  const indexOf = (id: string) => story.stations.findIndex(s => s.id === id)
+
+  // ---- Traffic.
+  function spawn(a: string, b: string, pal: number, dur: number, size: number, trail: boolean) {
+    const hop = hops.get(`${a}>${b}`)
+    if (!hop) return
+    const p = pool.find(q => !q.active)
+    if (!p) return
+    p.active = true; p.li = hop.li; p.rev = hop.rev; p.t = 0; p.dur = Math.max(1, dur); p.pal = pal; p.size = size; p.trail = trail
+  }
+  function ring(i: number, pal: number, big = false) {
+    const p = pulses.find(q => !q.active)
+    if (!p || !pos[i]) return
+    p.active = true; p.i = i; p.t = 0; p.pal = pal
+    p.dur = big ? 950 : 540
+    p.maxR = pos[i].s * (big ? 2.6 : 1.7) + (big ? 30 : 16)
+  }
+  function updateTraffic(dt: number) {
+    const k = Math.exp(-2.2 * dt)
+    for (const x of nodeHeat) x.heat *= k
+    for (const x of linkHeat) x.heat *= k
+    for (const p of pool) {
+      if (!p.active) continue
+      p.t += (dt * 1000) / p.dur
+      const l = links[p.li], from = p.rev ? l.b : l.a, to = p.rev ? l.a : l.b
+      bump(linkHeat[p.li], p.pal, p.rev ? -1 : 1)
+      if (p.t < 0.12) bump(nodeHeat[from], p.pal)
+      if (p.t < 1) continue
+      p.active = false
+      bump(nodeHeat[to], p.pal)
+      // Only a lead packet rings the station it reaches: a burst or a stream
+      // is many small packets, and a ring for each would bury the drawing.
+      if (p.size >= 3) ring(to, p.pal)
+      if (p.trail) { linkHeat[p.li].floor = TRAIL; nodeHeat[to].floor = TRAIL; nodeHeat[from].floor = TRAIL }
+    }
+    for (const p of pulses) if (p.active && (p.t += (dt * 1000) / p.dur) >= 1) p.active = false
   }
 
-  const meta = nodeMeta(isTouch, state.edge, state.cache)
+  // ---- The log.
+  function logTyping(pal: number) {
+    typing?.remove()
+    typing = part(doc, 'div', 'typing')
+    typing.dataset.tone = TONES[pal]
+    typing.append(doc.createElement('i'), doc.createElement('i'), doc.createElement('i'))
+    log.append(typing)
+  }
+  function logAdd(line: Line, landed: boolean): HTMLElement {
+    typing?.remove()
+    typing = null
+    log.querySelector('[data-part="hint"]')?.remove()
+    const msg = part(doc, 'div', 'msg')
+    msg.dataset.tone = TONES[line.pal]
+    const head = part(doc, 'p', 'msg-head')
+    const ms = part(doc, 'span', 'msg-ms', line.ms)
+    if (!landed) ms.dataset.pending = ''
+    head.append(part(doc, 'b', 'msg-title', line.title), ms)
+    msg.append(head, part(doc, 'p', 'msg-text', line.text))
+    if (line.detail) msg.append(part(doc, 'p', 'msg-detail', line.detail))
+    log.append(msg)
+    // The log shows its newest few; older ones scroll out of its top edge.
+    while (log.childElementCount > 9) log.firstElementChild?.remove()
+    return ms
+  }
+  function logHint() {
+    if (!facts) return
+    log.append(part(doc, 'p', 'hint', `${isTouch ? 'Tap' : 'Click'} anywhere to send a ping.`))
+  }
+  function setClock(text: string) {
+    if (text === clockText) return
+    clockText = text
+    clockEl.textContent = text
+  }
 
-  // ---- Trace rows: the whole log is built here (in buildReadout above),
-  // every row hidden, so the text block has its final height before the
-  // first line types (and before the first resize measures it).
-  const pingHint = `${isTouch ? 'tap' : 'click'} anywhere to send a ping`
-  function setRow(r: RowDom, text: string, noteText: string) {
-    r.text = text; r.typed.textContent = ''; r.rest.textContent = text
-    r.note.textContent = noteText ? ` (${noteText})` : ''
-    r.note.dataset.pending = ''
-    delete r.row.dataset.shown
+  // ---- The replay: a flat schedule built from the story, walked by one
+  // cursor per frame. No per-step timers.
+  function flights(ev: Sched[], list: Flight[], start: number, screen: number): number {
+    const legs = list.reduce((n, f) => n + f.route.length - 1, 0)
+    if (!legs) return start
+    const leg = Math.max(LEG_MIN, screen / legs)
+    let cur = start
+    for (const f of list) {
+      const gap = f.count > 1 ? Math.min(leg * 0.4, 120) : 0
+      const size = f.count > 1 ? 2.4 : 3.4
+      let end = cur
+      for (let k = 0; k < f.count; k++) {
+        let at = cur + k * gap
+        for (let i = 0; i + 1 < f.route.length; i++) {
+          const a = f.route[i], b = f.route[i + 1]
+          ev.push({ at, run: () => spawn(a, b, f.pal, leg, size, true) })
+          at += leg
+        }
+        end = at
+      }
+      cur = end
+    }
+    return cur
   }
-  function showRow(r: RowDom) {
-    r.row.dataset.shown = ''
-    r.typed.textContent = r.text; r.rest.textContent = ''
-    delete r.note.dataset.pending
-  }
-  function fillRows() {
-    const t = state.timing, tls = fmtTls(t, state.edge)
-    const otherNote = t.otherPage ? OTHER_PAGE_NOTE : ''
-    setRow(rows[0], fmtDns(t.dns), otherNote)
-    setRow(rows[1], fmtConnect(t), otherNote)
-    setRow(rows[2], tls.text, combineNotes(tls.note, otherNote))
-    setRow(rows[ROW_HTTP], fmtHttp(t, state.edge, state.cache), combineNotes(t.fromCache ? '' : (state.edge.sample ? 'sample' : ''), otherNote))
-    setRow(rows[4], fmtBytes(t), otherNote)
-    setRow(rows[ROW_PAINT], fmtPaint(t.painted), otherNote)
-    setRow(rows[ROW_PING], pingHint, '')
-    rows[ROW_PING].row.dataset.hint = ''
-  }
-  // First paint is often recorded after this module starts, so the paint
-  // row re-reads it at the moment it is written.
-  function refreshPaint() {
-    const p = readPaint()
-    if (p > 0 && p !== state.timing.painted) {
-      state.timing.painted = p
-      const note = state.timing.otherPage ? ` (${OTHER_PAGE_NOTE})` : ''
-      rows[ROW_PAINT].text = fmtPaint(p) + note
-      rows[ROW_PAINT].rest.textContent = rows[ROW_PAINT].text
+  function glow(route: string[]) {
+    for (let i = 0; i + 1 < route.length; i++) {
+      const hop = hops.get(`${route[i]}>${route[i + 1]}`)
+      if (!hop) continue
+      const l = links[hop.li]
+      for (const x of [linkHeat[hop.li], nodeHeat[l.a], nodeHeat[l.b]]) { bump(x, SHAKE); x.floor = TRAIL }
     }
   }
-  fillRows()
-
-  // A line types at a terminal's pace, and faster when the next row is due
-  // sooner, so every line finishes typing before the next begins.
-  const TYPE_CPS = 60
-  function startTyping(r: RowDom) {
-    // Two rows due in one frame (a slow frame, a tab resume): finish the
-    // one in flight rather than orphan it half-typed.
-    if (state.typing) showRow(state.typing.r)
-    r.row.dataset.shown = ''
-    const next = state.logs && state.lIdx < state.logs.length ? state.logs[state.lIdx].at - state.cursor : Infinity
-    state.typing = { r, shown: 0, cps: Math.max(TYPE_CPS, r.text.length / Math.max(0.12, (next * 0.85) / 1000)) }
+  function setChip(id: string, text: string) {
+    const i = indexOf(id)
+    if (i >= 0) chips[i] = text
   }
-  function advanceTyping(dt: number) {
-    const ty = state.typing
-    if (!ty) return
-    ty.shown += dt * ty.cps
-    const full = ty.r.text, n = Math.min(full.length, Math.floor(ty.shown))
-    ty.r.typed.textContent = full.slice(0, n); ty.r.rest.textContent = full.slice(n)
-    if (n >= full.length) { delete ty.r.note.dataset.pending; state.typing = null }
+  function plan() {
+    const ev: Sched[] = []
+    const keys: Array<[number, number]> = []
+    let win: [number, number] | null = null
+    let cur = INTRO, real = 0
+    story.steps.forEach((step, n) => {
+      ev.push({ at: cur, run: () => logTyping(step.pal) })
+      cur += TYPE
+      const msg: { ms: HTMLElement | null } = { ms: null }
+      ev.push({
+        at: cur,
+        run: () => {
+          msg.ms = logAdd(step, false)
+          if (step.pulse) ring(indexOf(step.pulse), step.pal, n === 0)
+          if (step.glow) glow(step.glow)
+          if (generic) setClock(`step ${n + 1} of ${story.steps.length}`)
+        },
+      })
+      const start = cur
+      const end = Math.max(flights(ev, step.flights, start, step.screen), step.flights.length ? start : start + step.screen)
+      if (step.at !== null) { keys.push([start, real], [end, step.at]); real = step.at }
+      if (step.fill) win = [start, end]
+      ev.push({
+        at: end,
+        run: () => {
+          if (msg.ms) delete msg.ms.dataset.pending
+          if (step.chip) setChip(step.chip[0], step.chip[1])
+          if (step.hit) ring(indexOf('edge'), SHAKE, true)
+        },
+      })
+      cur = end + clamp(step.text.length * READ - step.screen, 700, 2400)
+    })
+    ev.push({ at: cur, run: finish })
+    ev.sort((a, b) => a.at - b.at)
+    sched = ev; si = 0; cursor = 0; clockKeys = keys; fillWin = win
   }
-
-  // ---- Node buttons: invisible, focusable overlays so keyboard users reach
-  // the same info a hover gives a mouse. The glyphs themselves are
-  // canvas-drawn, so this is the only real DOM per node.
-  function nodeInfo(id: NodeId): string {
-    const t = state.timing
-    if (id === 'you') return `Your device · ${meta[0].sub}`
-    if (id === 'network') return 'Your router · every request leaves through it'
-    if (id === 'dns') return `DNS resolver · ${t.dns <= 0 ? 'answered from cache' : `answered in ${Math.round(t.dns)} ms`}`
-    if (id === 'edge') {
-      const cachePart = state.cache ? ` · cache ${state.cache}` : ''
-      const sample = state.edge.sample ? ' (sample)' : ''
-      return `Cloudflare edge ${state.edge.colo} · ${edgePlace(state.edge)}${cachePart}${sample}`
+  function clockAt(c: number): number {
+    if (!clockKeys.length || c <= clockKeys[0][0]) return 0
+    for (let i = 1; i < clockKeys.length; i++) {
+      const [t1, v1] = clockKeys[i]
+      if (c > t1) continue
+      const [t0, v0] = clockKeys[i - 1]
+      return t1 > t0 ? lerp(v0, v1, (c - t0) / (t1 - t0)) : v1
     }
-    return `Origin server · ${ORIGIN}`
+    return clockKeys[clockKeys.length - 1][1]
   }
-  const buttons = {} as Record<NodeId, HTMLButtonElement>
-  for (const m of meta) {
+  function finish() {
+    playing = false
+    setClock(story.total !== null && !generic ? fmtClock(story.total) : '')
+    logHint()
+  }
+  function resetScene() {
+    for (const x of nodeHeat) { x.heat = 0; x.floor = 0 }
+    for (const x of linkHeat) { x.heat = 0; x.floor = 0 }
+    chips.fill('')
+    for (const p of pool) p.active = false
+    for (const p of pulses) p.active = false
+    fill = 0
+    typing = null
+    log.replaceChildren()
+    setClock('')
+  }
+  function play() {
+    if (!facts) return
+    resetScene()
+    if (reduced || !ctx) { renderFinal(); return }
+    if (!story.steps.length) { finish(); return }
+    plan()
+    playing = true
+  }
+  // Reduced motion never runs the loop, so a replay resolves at once: every
+  // route it would light is lit, every chip set and every message shown.
+  function renderFinal() {
+    for (const step of story.steps) {
+      for (const f of step.flights) glowRoute(f.route, f.pal)
+      if (step.glow) glowRoute(step.glow, SHAKE)
+      if (step.chip) setChip(step.chip[0], step.chip[1])
+      logAdd(step, true)
+    }
+    fill = 1
+    finish()
+    draw()
+  }
+  function glowRoute(route: string[], pal: number) {
+    for (let i = 0; i + 1 < route.length; i++) {
+      const hop = hops.get(`${route[i]}>${route[i + 1]}`)
+      if (!hop) continue
+      const l = links[hop.li]
+      for (const x of [linkHeat[hop.li], nodeHeat[l.a], nodeHeat[l.b]]) { x.c = PALETTE[pal]; x.floor = 0.5 }
+    }
+  }
+  function advance(dt: number) {
+    cursor += dt * 1000
+    while (si < sched.length && cursor >= sched[si].at) sched[si++].run()
+    if (!playing) return
+    if (!generic && story.total !== null && clockKeys.length) setClock(`${fmtClock(clockAt(cursor))} of ${fmtClock(story.total)}`)
+    if (fillWin) fill = clamp((cursor - fillWin[0]) / Math.max(1, fillWin[1] - fillWin[0]), 0, 1)
+  }
+
+  // ---- Ping: a real request, timed, once the replay is over. The packet
+  // travels the measured round trip slowed to watchable, and the log answers
+  // when it lands, not when the request resolved.
+  function ping() {
+    if (!facts || playing || pinging) return
+    pinging = true
+    pingOnce(env.signal).then(landPing, () => landPing(-1))
+  }
+  function landPing(ms: number) {
+    if (destroyed) return
+    const line: Line = ms < 0
+      ? { title: 'Ping', ms: '', text: 'No answer this time.', detail: '', pal: OUT }
+      : { title: 'Ping', ms: fmtMs(ms), text: story.pingText, detail: 'HEAD /', pal: OUT }
+    if (reduced || !ctx || !running || ms < 0) {
+      pinging = false
+      logAdd(line, true)
+      logHint()
+      return
+    }
+    const route = story.ping, half = (route.length - 1) / 2
+    const leg = clamp((ms * 6) / (route.length - 1), LEG_MIN, 520)
+    let at = cursor + 30
+    sched.push({ at, run: () => logTyping(OUT) })
+    for (let i = 0; i + 1 < route.length; i++) {
+      const a = route[i], b = route[i + 1], pal = i < half ? OUT : BACK
+      sched.push({ at, run: () => spawn(a, b, pal, leg, 3, false) })
+      at += leg
+    }
+    sched.push({ at, run: () => { pinging = false; logAdd(line, true); logHint() } })
+  }
+  pingTarget.addEventListener('click', ping, { signal: env.signal })
+  replay.addEventListener('click', () => { play(); if (!running) start() }, { signal: env.signal })
+
+  // ---- Node buttons: invisible, focusable overlays, so a keyboard reaches
+  // what a hover shows. The glyphs themselves are drawn on the canvas.
+  const buttons = story.stations.map((st, i) => {
     const b = doc.createElement('button')
     b.type = 'button'
     b.dataset.type = 'hero-node-btn'
-    b.dataset.node = m.id
-    b.setAttribute('aria-label', nodeInfo(m.id))
-    b.addEventListener('mouseenter', () => showCard(m.id), { signal: env.signal })
-    b.addEventListener('mouseleave', () => hideCard(m.id), { signal: env.signal })
-    b.addEventListener('focus', () => showCard(m.id), { signal: env.signal })
-    b.addEventListener('blur', () => hideCard(m.id), { signal: env.signal })
-    stage.nodesLayer.appendChild(b)
-    buttons[m.id] = b
-  }
-  function showCard(id: NodeId) {
-    state.cardId = id
-    stage.card.textContent = nodeInfo(id)
-    const p = state.nodePos[id], cam = state.camera
+    b.dataset.node = st.id
+    b.addEventListener('mouseenter', () => showCard(i), { signal: env.signal })
+    b.addEventListener('mouseleave', () => hideCard(i), { signal: env.signal })
+    b.addEventListener('focus', () => showCard(i), { signal: env.signal })
+    b.addEventListener('blur', () => hideCard(i), { signal: env.signal })
+    nodesLayer.appendChild(b)
+    return b
+  })
+  let cardIndex = -1
+  function showCard(i: number) {
+    const p = pos[i]
     if (!p) return
-    // Node positions are world coordinates; the card lives in screen space,
-    // so it goes through the same camera the canvas does.
-    const z = cam.zoom, sx = (p.x - cam.x) * z + state.w / 2, sy = (p.y - cam.y) * z + state.h / 2, r = p.size * z
-    let left = sx + r + 14
-    const top = clamp(sy - 10, 8, Math.max(8, state.h - 60))
-    if (left + 230 > state.w) left = sx - r - 14 - 230
-    stage.card.style.left = `${clamp(left, 8, Math.max(8, state.w - 238))}px`
-    stage.card.style.top = `${top}px`
-    stage.card.dataset.shown = ''
+    cardIndex = i
+    card.textContent = story.stations[i].info
+    let left = p.x + p.s * 1.3 + 12
+    if (left + 240 > w) left = p.x - p.s * 1.3 - 12 - 240
+    card.style.left = `${clamp(left, 8, Math.max(8, w - 248))}px`
+    card.style.top = `${clamp(p.y - 12, 8, Math.max(8, h - 70))}px`
+    card.dataset.shown = ''
   }
-  function hideCard(id: NodeId) { if (state.cardId === id) { state.cardId = null; delete stage.card.dataset.shown } }
+  function hideCard(i: number) { if (cardIndex === i) { cardIndex = -1; delete card.dataset.shown } }
+  function refreshText() {
+    kicker.textContent = story.kicker
+    headline.textContent = story.headline
+    headline.toggleAttribute('data-ready', Boolean(story.headline))
+    story.stations.forEach((st, i) => buttons[i].setAttribute('aria-label', st.info))
+    canvas.setAttribute('aria-label', `A diagram of ${generic ? 'how a web page reaches you' : 'how this page reached you'}: ${story.stations.map(s => (s.sub ? `${s.label} (${s.sub})` : s.label)).join(', ')}, joined by moving packets.`)
+    if (cardIndex >= 0) showCard(cardIndex)
+  }
 
-  // Positions, wires, labels and hit areas, from the stage size and, on a
-  // phone, the measured top of the text block. The readout used to be a
-  // child of the same `.nw-hero` the name and tagline lived in, so its
-  // offsetTop measured the log's own overflow above that block for free;
-  // here it can live in a different parent (host on desktop), so instead of
-  // an offset trick this takes the plain top edge of whichever of the two —
-  // the content block or the readout — currently extends highest.
+  // ---- Layout: the name makes room for the log, then the line fills the band
+  // between the frame and whichever text block reaches highest.
   function layout() {
     env.text.name.style.fontSize = ''
     env.text.tagline.style.maxWidth = ''
     let stacked = false
     const hostRect = host.getBoundingClientRect()
-    if (!state.phone) {
-      placeReadout(false)
-      const nameRect = env.text.name.getBoundingClientRect()
-      const readoutRect = readout.getBoundingClientRect()
-      const room = readoutRect.left - 40 - nameRect.left
+    if (!phone) {
+      placeLog(false)
+      const nameRect = env.text.name.getBoundingClientRect(), logRect = log.getBoundingClientRect()
+      const room = logRect.left - 40 - nameRect.left
       if (nameRect.width > room) {
         const fit = (parseFloat(getComputedStyle(env.text.name).fontSize) * room) / nameRect.width * 0.99
         if (fit >= 48) env.text.name.style.fontSize = `${fit}px`
         else stacked = true
       }
       if (!stacked) {
-        const taglineRect = env.text.tagline.getBoundingClientRect()
-        env.text.tagline.style.maxWidth = `min(46ch, ${Math.max(160, readoutRect.left - 40 - taglineRect.left)}px)`
+        const tagRect = env.text.tagline.getBoundingClientRect()
+        env.text.tagline.style.maxWidth = `min(46ch, ${Math.max(160, logRect.left - 40 - tagRect.left)}px)`
       }
-      placeReadout(stacked)
+      placeLog(stacked)
     } else {
-      placeReadout(true)
+      placeLog(true)
     }
-    const contentRect = env.text.content.getBoundingClientRect()
-    const contentTop = contentRect.top - hostRect.top
-    let textTop = contentTop
-    if (!state.phone && !stacked) {
-      const readoutTop = readout.getBoundingClientRect().top - hostRect.top
-      textTop = Math.min(contentTop, readoutTop)
-    }
-    state.textTop = textTop
-    state.nodePos = layoutPositions(state.w, state.h, state.phone, state.textTop)
-    layoutLinks(state)
-    if (ctx) layoutLabels(ctx, state, meta)
-    for (const m of meta) {
-      const pos = state.nodePos[m.id]
-      const hit = pos.size * 1.7
-      const btn = buttons[m.id]
-      btn.style.left = `${pos.x}px`; btn.style.top = `${pos.y}px`
-      btn.style.width = `${hit}px`; btn.style.height = `${hit}px`
-      btn.style.margin = `${-hit / 2}px 0 0 ${-hit / 2}px`
-    }
+    textTop = env.text.content.getBoundingClientRect().top - hostRect.top
+    if (!phone && !stacked) textTop = Math.min(textTop, log.getBoundingClientRect().top - hostRect.top)
+    const top = frame.getBoundingClientRect().bottom - hostRect.top + (phone ? 10 : 20)
+    fonts.label = `${phone ? 11 : 13}px ${mono}`
+    fonts.sub = `${phone ? 10 : 12}px ${mono}`
+    fonts.chip = `600 ${phone ? 10 : 12}px ${mono}`
+    const { step } = lineX(w, phone, story.stations.filter(s => !s.branch).length)
+    const lead = phone ? 13 : 15
+    const lines = ctx ? labelLines(ctx, story.stations, fonts, phone ? step * 0.96 : Math.min(step * 0.9, 230)) : story.stations.map(s => [s.label])
+    // Each block also reserves its chip's line.
+    const block = (branch: boolean) => Math.max(0, ...lines.map((l, i) => (Boolean(story.stations[i].branch) === branch ? lead * (l.length + 1) : 0)))
+    pos = layoutLine(story.stations, w, top, textTop - (phone ? 6 : 12), phone, block(true) + 10, block(false) + (phone ? 14 : 17))
+    fonts.code = `600 ${Math.round(0.34 * (pos[indexOf('edge')]?.s ?? 30))}px ${mono}`
+    if (ctx) labels = layoutLabels(ctx, story.stations, pos, lines, fonts, lead, w, textTop, phone)
+    buttons.forEach((b, i) => {
+      const p = pos[i], hit = p.s * 2.2
+      b.style.left = `${p.x}px`; b.style.top = `${p.y}px`
+      b.style.width = `${hit}px`; b.style.height = `${hit}px`
+      b.style.margin = `${-hit / 2}px 0 0 ${-hit / 2}px`
+    })
+    if (cardIndex >= 0) showCard(cardIndex)
   }
-  function resize(w: number, h: number) {
-    state.w = w; state.h = h; state.phone = w <= 520
-    section.toggleAttribute('data-nw-phone', state.phone)
+  function resize(width: number, height: number) {
+    const ow = w, oh = h
+    w = width; h = height; phone = w <= 520
+    section.toggleAttribute('data-nw-phone', phone)
     if (ctx) {
-      stage.canvas.width = Math.max(1, Math.round(w * state.dpr))
-      stage.canvas.height = Math.max(1, Math.round(h * state.dpr))
+      canvas.width = Math.max(1, Math.round(w * dpr))
+      canvas.height = Math.max(1, Math.round(h * dpr))
     }
+    if (!stars) stars = makeStars(Math.round(clamp((w * h) / 9000, 50, 170) * (env.lowPower ? 0.6 : 1)), w, h)
+    else if (ow && oh) for (const st of stars) { st.x *= w / ow; st.y *= h / oh }
     layout()
-    resizeAmbient(state.ambient, w, h)
-    // Keep the wide shot actually wide across a resize, but only while
-    // wide, so a resize mid-replay does not fight the follow camera.
-    if (state.camWide) { state.camera.x = w / 2; state.camera.y = h / 2; state.camera.zoom = 1 }
-    if (state.cardId) showCard(state.cardId)
     renderNow()
   }
   // The name's web font changes the text block's height once it loads.
-  if (doc.fonts && doc.fonts.ready) {
-    doc.fonts.ready.then(() => { if (!state.destroyed && state.w) { layout(); renderNow() } }).catch(() => { /* font load failures don't affect layout correctness */ })
-  }
+  doc.fonts?.ready.then(() => { if (!destroyed && w) { layout(); renderNow() } }).catch(() => { /* layout stays correct without it */ })
 
-  // ---- Drawing: canvas is HiDPI-scaled once per frame, cleared in that
-  // plain space, THEN the camera is applied so world content draws in world
-  // px regardless of zoom. The invisible node-button layer gets the
-  // identical CSS transform, so hit areas track the camera too.
+  // ---- Drawing.
+  const PT = { x: 0, y: 0, ang: 0, len: 1 }
+  function packetPoint(p: Packet) {
+    const l = links[p.li], a = pos[p.rev ? l.b : l.a], b = pos[p.rev ? l.a : l.b]
+    const dx = b.x - a.x, dy = b.y - a.y, t = clamp(p.t, 0, 1)
+    PT.x = a.x + dx * t; PT.y = a.y + dy * t; PT.ang = Math.atan2(dy, dx); PT.len = Math.sqrt(dx * dx + dy * dy) || 1
+  }
+  function drawLinks(c: CanvasRenderingContext2D) {
+    for (let li = 0; li < links.length; li++) {
+      const l = links[li], a = pos[l.a], b = pos[l.b], x = linkHeat[li]
+      mixInto(MIX, REST, x.c, Math.max(x.heat, x.floor))
+      c.lineWidth = phone ? 1.6 : 2.2
+      c.strokeStyle = rgbCss(MIX)
+      c.shadowColor = rgbCss(MIX, 0.7 * x.heat)
+      c.shadowBlur = x.heat > 0.05 ? 4 + x.heat * 16 : 0
+      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke()
+      c.shadowBlur = 0
+      // Light running through the wire the way the traffic went.
+      if (x.heat > 0.1) {
+        c.globalCompositeOperation = 'lighter'
+        c.setLineDash([9, 11]); c.lineDashOffset = -x.dir * time * 0.09
+        c.strokeStyle = rgbCss(x.c, x.heat)
+        c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke()
+        c.setLineDash([]); c.globalCompositeOperation = 'source-over'
+      }
+      if (l.hops) drawHops(c, li, a, b)
+      const len = Math.hypot(b.x - a.x, b.y - a.y)
+      if (l.via && len > 150) {
+        c.font = fonts.sub; c.textAlign = 'center'; c.fillStyle = SUB; c.globalAlpha = 0.75
+        c.fillText(l.via, (a.x + b.x) / 2, (a.y + b.y) / 2 + (phone ? 14 : 18))
+        c.globalAlpha = 1
+      }
+    }
+  }
+  // Three relays along the internet's stretch, each flashing as a packet
+  // passes it: the network-to-network handing-along the step describes.
+  function drawHops(c: CanvasRenderingContext2D, li: number, a: Pos, b: Pos) {
+    for (const u of [0.25, 0.5, 0.75]) {
+      let lit = 0, pal = 0
+      for (const p of pool) {
+        if (!p.active || p.li !== li) continue
+        const at = p.rev ? 1 - p.t : p.t, d = 1 - Math.abs(at - u) / 0.08
+        if (d > lit) { lit = d; pal = p.pal }
+      }
+      mixInto(MIX, REST_GLYPH, PALETTE[pal], clamp(lit, 0, 1))
+      c.fillStyle = rgbCss(MIX)
+      c.beginPath(); c.arc(lerp(a.x, b.x, u), lerp(a.y, b.y, u), (phone ? 2.4 : 3.2) + lit * 1.6, 0, 6.3); c.fill()
+    }
+  }
+  // Comets: a head plus a tail stretched to how fast the hop moves. Additive,
+  // and drawn before the glyphs, so a packet slides in under a station.
+  function drawPackets(c: CanvasRenderingContext2D) {
+    if (!sprites) return
+    c.globalCompositeOperation = 'lighter'
+    for (const p of pool) {
+      if (!p.active) continue
+      packetPoint(p)
+      const t = clamp(p.t, 0, 1)
+      const fade = t < 0.08 ? t / 0.08 : t > 0.85 ? (1 - t) / 0.15 : 1
+      const tail = clamp((PT.len / p.dur) * 150, p.size * 2.4, 130)
+      c.globalAlpha = fade
+      c.save(); c.translate(PT.x, PT.y); c.rotate(PT.ang + Math.PI)
+      c.drawImage(sprites.tail[p.pal], 0, -p.size * 2, tail, p.size * 4)
+      c.restore()
+      const hs = p.size * 5.6
+      c.drawImage(sprites.head[p.pal], PT.x - hs / 2, PT.y - hs / 2, hs, hs)
+    }
+    c.globalAlpha = 1
+    c.globalCompositeOperation = 'source-over'
+  }
+  function drawStations(c: CanvasRenderingContext2D) {
+    G.time = time; G.codeFont = fonts.code
+    story.stations.forEach((st, i) => {
+      const p = pos[i], x = nodeHeat[i], lvl = Math.max(x.heat, x.floor)
+      mixInto(MIX, REST_GLYPH, x.c, lvl)
+      G.heat = x.heat
+      G.stroke = rgbCss(MIX)
+      G.body = rgbCss(mixInto(TINT, BODY, MIX, 0.07 + 0.12 * lvl))
+      G.ink = rgbCss(mixInto(TINT, MIX, WHITE, 0.45))
+      G.lw = clamp(p.s * 0.035, 1.4, 2.6)
+      G.fill = st.id === 'you' ? fill : 0
+      G.code = st.code ?? ''
+      GLYPH[st.kind](c, p.x, p.y, p.s, G)
+      const lab = labels[i]
+      if (!lab || lab.hidden) return
+      c.textAlign = 'center'
+      c.font = fonts.label; c.fillStyle = LABEL
+      c.fillText(lab.lines[0], lab.x, lab.y)
+      c.font = fonts.sub; c.fillStyle = SUB
+      for (let k = 1; k < lab.lines.length; k++) c.fillText(lab.lines[k], lab.x, lab.y + lab.lead * k)
+      if (!chips[i]) return
+      c.font = fonts.chip; c.fillStyle = CHIP
+      const half = c.measureText(chips[i]).width / 2 + 4
+      c.fillText(chips[i], clamp(lab.x, half, Math.max(half, w - half)), lab.y + lab.lead * lab.lines.length)
+    })
+  }
+  function drawPulses(c: CanvasRenderingContext2D) {
+    c.globalCompositeOperation = 'lighter'
+    c.lineWidth = 2.2
+    for (const p of pulses) {
+      if (!p.active || !pos[p.i]) continue
+      const q = pos[p.i], t = clamp(p.t, 0, 1)
+      c.strokeStyle = rgbCss(PALETTE[p.pal], (1 - t) * 0.85)
+      c.beginPath(); c.arc(q.x, q.y, lerp(q.s * 0.9, p.maxR, t), 0, 6.3); c.stroke()
+    }
+    c.globalCompositeOperation = 'source-over'
+  }
   function draw() {
-    if (!ctx) return
-    ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0)
-    ctx.clearRect(0, 0, state.w, state.h)
-    const cam = state.camera
-    ctx.translate(state.w / 2, state.h / 2)
-    ctx.scale(cam.zoom, cam.zoom)
-    ctx.translate(-cam.x, -cam.y)
-    drawAmbient(ctx, state.ambient)
-    drawLinks(ctx, state, state.simTime)
-    drawPackets(ctx, state)
-    drawGlyphs(ctx, state, meta)
-    drawPulses(ctx, state.pulses, state.nodePos)
-    stage.nodesLayer.style.transform = `translate(${state.w / 2}px, ${state.h / 2}px) scale(${cam.zoom}) translate(${-cam.x}px, ${-cam.y}px)`
+    if (!ctx || !pos.length) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, w, h)
+    if (stars) drawStars(ctx, stars, time, phone ? 80 : 120)
+    drawLinks(ctx)
+    drawPackets(ctx)
+    drawStations(ctx)
+    drawPulses(ctx)
   }
-  function renderNow() { if (!state.running) draw() }
+  function renderNow() { if (!running) draw() }
 
-  // Builds (or rebuilds, for the replay button) the timeline from this
-  // page's own timing. "This is you": a ripple opens the run from the node
-  // the whole diagram is about, with the camera close on it.
-  function startReplay() {
-    const built = buildTimeline(state.timing, state.cache === 'HIT')
-    state.timeline = built.timeline; state.logs = built.logs
-    state.tIdx = 0; state.lIdx = 0; state.cursor = 0; state.replaying = true; state.typing = null
-    state.respStart = built.respStart; state.respEnd = built.respEnd; state.downloadProgress = 0
-    state.leadPacket = null; state.camWide = false
-    fillRows()
-    if (ctx) {
-      const you = state.nodePos.you, cam = state.camera, z = camZoom(state)
-      spawnPulse(state.pulses, 'you', WHITE, 950, you.size * 2.6 + 30)
-      cam.tx = you.x; cam.ty = you.y
-      cam.x = you.x; cam.y = camCentreY(state, you.y, z); cam.zoom = z; cam.vx = cam.vy = cam.vz = 0
-    }
-  }
-  // Reduced motion never runs the loop, so the whole replay resolves at
-  // once: every hop's heat is applied in order (last write wins, which is
-  // the state an animated run settles into) and every row is shown.
-  function renderFinalState() {
-    const built = buildTimeline(state.timing, state.cache === 'HIT')
-    state.downloadProgress = 1
-    state.camWide = true
-    const cam = state.camera
-    cam.x = state.w / 2; cam.y = state.h / 2; cam.zoom = 1; cam.vx = cam.vy = cam.vz = 0
-    for (const e of built.timeline) {
-      if (e.kind === 'fx') continue
-      const l = LINK_OF[`${e.a}>${e.b}`]
-      const lh = l ? state.heat.link[l.key] : undefined
-      if (lh) { lh.heat = 0.55; lh.r = e.color[0]; lh.g = e.color[1]; lh.b = e.color[2] }
-      for (const id of [e.a, e.b]) {
-        const nh = state.heat.node[id]
-        if (nh) { nh.heat = 0.5; nh.r = e.color[0]; nh.g = e.color[1]; nh.b = e.color[2] }
-      }
-    }
-    fillRows(); refreshPaint()
-    for (const r of rows) showRow(r)
+  function loop(now: number) {
+    if (!running) return
+    raf = requestAnimationFrame(loop)
+    const dt = last ? Math.min((now - last) / 1000, 0.25) : 1 / 60
+    last = now
+    time += dt * 1000
+    if (stars) driftStars(stars, w, h, dt)
+    updateTraffic(dt)
+    advance(dt)
     draw()
   }
-  function runFx(e: FxEvent) {
-    const you = state.nodePos.you, edge = state.nodePos.edge
-    if (e.fx === 'local') { bumpHeat(state.heat.node.you, WHITE); spawnPulse(state.pulses, 'you', WHITE, 700, you.size * 1.8 + 20) }
-    else if (e.fx === 'reuse') {
-      bumpHeat(state.heat.link[LINK_KEYS[0]], WHITE, 1); bumpHeat(state.heat.link[LINK_KEYS[2]], WHITE, 1)
-      bumpHeat(state.heat.node.edge, WHITE); spawnPulse(state.pulses, 'edge', WHITE, 600, edge.size * 1.7 + 16)
-    } else if (e.fx === 'hit') { bumpHeat(state.heat.node.edge, AMBER); spawnPulse(state.pulses, 'edge', WHITE, 650, edge.size * 1.9 + 18) }
-    else if (e.fx === 'pong') { state.pingBusy = false; setPing(e.text ?? '', false) }
-  }
-  function advanceTimeline(dt: number) {
-    if (!state.timeline || !state.logs) return
-    state.cursor += dt * 1000
-    const tl = state.timeline
-    while (state.tIdx < tl.length && state.cursor >= tl[state.tIdx].start) {
-      const e = tl[state.tIdx]
-      state.tIdx += 1
-      if (e.kind === 'fx') { runFx(e); continue }
-      // The lead packet is the newest hop, furthest along the route; the
-      // camera (updateCamera) follows it.
-      const np = spawnPacket(state.pool, 'main', e.a, e.b, e.color, e.dur, e.size)
-      if (np) state.leadPacket = np
-    }
-    while (state.lIdx < state.logs.length && state.cursor >= state.logs[state.lIdx].at) {
-      const row = state.logs[state.lIdx].row
-      state.lIdx += 1
-      // The request has landed at the edge: the route is decided and
-      // nothing is left to chase, so the camera pulls out for the response.
-      if (row === ROW_HTTP) state.camWide = true
-      if (row === ROW_PAINT) refreshPaint()
-      startTyping(rows[row])
-    }
-    if (state.respEnd > state.respStart) {
-      state.downloadProgress = clamp((state.cursor - state.respStart) / (state.respEnd - state.respStart), 0, 1)
-    }
-    if (state.replaying && state.lIdx >= state.logs.length && !state.typing) state.replaying = false
-  }
-
-  function loop(tsNow: number) {
-    if (!state.running) return
-    state.raf = requestAnimationFrame(loop)
-    const dt = state.lastT ? Math.min((tsNow - state.lastT) / 1000, 0.25) : 1 / 60
-    state.lastT = tsNow
-    state.simTime += dt * 1000
-    decayAllHeat(state.heat, dt)
-    updatePackets(state, dt)
-    updatePulses(state.pulses, dt)
-    updateCamera(state, dt)
-    driftAmbient(state.ambient, state.simTime)
-    advanceTimeline(dt)
-    advanceTyping(dt)
-    ambientTick(state, dt)
-    ambientBurstTick(state, dt)
-    keepaliveTick(state, dt)
-    draw()
-  }
-
-  // ---- Ping: a real request, timed. One at a time, and not while the
-  // landing is still replaying (its last row is the ping's own). Same-origin
-  // HEAD on '/': edge-cached and not counted as a visit by src/lib/visits.ts.
-  function setPing(text: string, instant: boolean) {
-    const r = rows[ROW_PING]
-    delete r.row.dataset.hint
-    r.text = text; r.note.textContent = ''
-    if (instant) showRow(r); else startTyping(r)
-  }
-  function finishPing(ms: number) {
-    if (state.destroyed) return
-    const text = ms < 0 ? 'no answer this time' : `answered in ${Math.round(ms)} ms`
-    if (reduced || !ctx || !state.running || ms < 0) {
-      state.pingBusy = false
-      setPing(text, reduced || !state.running)
-      if (ctx && ms >= 0) {
-        bumpHeat(state.heat.node.edge, VIOLET)
-        bumpHeat(state.heat.link[LINK_KEYS[0]], VIOLET, -1)
-        bumpHeat(state.heat.link[LINK_KEYS[2]], VIOLET, -1)
-        renderNow()
-      }
-      return
-    }
-    // The packet travels the measured round trip (clamped to watchable),
-    // and the row updates when it lands, not when the fetch resolved.
-    const leg = clamp(ms / 4, HOP_MIN, 500)
-    let t = state.cursor + 30
-    const tl = state.timeline
-    if (!tl) return
-    const legsOut: Array<[NodeId, NodeId]> = [['you', 'network'], ['network', 'edge']]
-    for (const [a, b] of legsOut) { tl.push({ kind: 'hop', start: t, a, b, color: AMBER, dur: leg, size: 3 }); t += leg }
-    const legsBack: Array<[NodeId, NodeId]> = [['edge', 'network'], ['network', 'you']]
-    for (const [a, b] of legsBack) { tl.push({ kind: 'hop', start: t, a, b, color: VIOLET, dur: leg, size: 3 }); t += leg }
-    tl.push({ kind: 'fx', start: t, fx: 'pong', text })
-  }
-  function ping() {
-    if (state.pingBusy || state.replaying || (!state.timeline && ctx && !reduced)) return
-    state.pingBusy = true
-    const t0 = performance.now()
-    fetch('/', { method: 'HEAD', cache: 'no-store', signal: env.signal })
-      .then(() => finishPing(performance.now() - t0))
-      .catch(() => finishPing(-1))
-  }
-  function onReplay() {
-    if (reduced || !ctx) { renderFinalState(); return }
-    startReplay()
-    if (!state.running) start()
-  }
-  stage.ping.addEventListener('click', ping, { signal: env.signal })
-  replay.addEventListener('click', onReplay, { signal: env.signal })
-
   function start() {
-    if (state.destroyed) return
-    if (reduced || !ctx) { renderFinalState(); return }
-    if (!state.timeline) startReplay()
-    if (!state.running) { state.running = true; state.lastT = 0; state.raf = requestAnimationFrame(loop) }
+    if (destroyed) return
+    if (reduced || !ctx) { renderNow(); return }
+    if (!running) { running = true; last = 0; raf = requestAnimationFrame(loop) }
   }
   function stop() {
-    state.running = false
-    if (state.raf) { cancelAnimationFrame(state.raf); state.raf = 0 }
+    running = false
+    if (raf) { cancelAnimationFrame(raf); raf = 0 }
   }
   function destroy() {
-    state.destroyed = true
+    destroyed = true
     stop()
     section.removeAttribute('data-nw-phone')
     env.text.name.style.fontSize = ''
     env.text.tagline.style.maxWidth = ''
-    readout.remove()
+    log.remove()
     host.removeAttribute('data-nw-fallback')
     host.replaceChildren()
   }
 
-  // ---- Edge facts + cache status: kicked off once, here, and applied
-  // in place when they resolve (see the module doc comment at the top of
-  // this file). Both fetches carry env.signal, so destroy() cancels them.
-  function refreshEdgeDependent() {
-    const edgeEntry = meta.find(m => m.id === 'edge')
-    if (edgeEntry) edgeEntry.sub = edgeSub(state.edge, state.cache)
-    buttons.edge.setAttribute('aria-label', nodeInfo('edge'))
-    if (state.cardId === 'edge') showCard('edge')
-    if (ctx) layoutLabels(ctx, state, meta)
-    if (reduced || !ctx) {
-      // renderFinalState() shows every row at once and never advances
-      // lIdx, so that isn't a usable "nothing shown yet" signal here: redo
-      // what it did, with the freshly arrived facts.
-      fillRows()
-      for (const r of rows) showRow(r)
-    } else if (state.lIdx === 0 && !state.typing) {
-      // Only rewrite rows nobody has seen yet: fillRows() hides every row
-      // again, which would be a visible regression on a row already shown.
-      fillRows()
-    }
-    renderNow()
-  }
-  let navEntry: PerformanceNavigationTiming | undefined
-  try { navEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined } catch { /* see readPaint */ }
+  refreshText()
+  // ---- Facts: fetched once, then the story is told again with them and the
+  // replay starts. Every fetch carries env.signal, so destroy() cancels it.
   void (async () => {
-    const fromServerTiming = readCfCacheStatusFromServerTiming(navEntry)
-    const [edge, cacheVal] = await Promise.all([
-      loadEdgeFacts(env.signal),
-      fromServerTiming ? Promise.resolve(fromServerTiming) : probeCacheStatus(env.signal),
-    ])
-    if (state.destroyed) return
-    state.edge = edge
-    state.cache = cacheVal
-    state.colo = edge.colo
-    refreshEdgeDependent()
+    const device = visitorDevice()
+    let loaded: Facts
+    if (import.meta.env.DEV) {
+      loaded = { ...(await loadProbe(env.signal)), device, dev: true }
+    } else {
+      const timing = readTiming()
+      const own = timing && !timing.otherPage && !timing.fromCache
+      const [edge, cache] = await Promise.all([loadEdge(env.signal), own ? loadCache(env.signal) : Promise.resolve(NO_CACHE)])
+      loaded = { timing, edge, ...cache, device, dev: false }
+    }
+    if (destroyed) return
+    facts = loaded
+    story = tell(facts)
+    links = linksOf(story.stations)
+    hops = hopsOf(story.stations, links)
+    refreshText()
+    if (import.meta.env.DEV && !generic && facts.timing) {
+      frame.append(part(doc, 'p', 'note', 'Dev server: measured from this machine.'))
+    }
+    if (w) layout()
+    play()
+    renderNow()
   })()
 
   const instance: HeroInstance = { start, stop, resize, destroy }

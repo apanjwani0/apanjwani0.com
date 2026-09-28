@@ -1,15 +1,11 @@
-/* Network hero (?hero=network): a live diagram replaying how this page load
-   reached the visitor. Everything is scoped under the section's own
-   [data-hero="network"], so another live hero can share the same
-   [data-type="hero-stage"]/[data-type="hero-content"] shells.
-   Canvas-drawn colours (glyphs, packets, wires) are data, chosen in
-   network.ts, and stay literal there — this file only styles real DOM. */
+/* The network heroes (?hero=network and ?hero=internet on the dev server): a
+   metro line of how a page reaches you, over a drift of stars, drawn by
+   src/components/home/hero/network.ts. Scoped under the section's
+   [data-hero]. Canvas colours are data in network.ts; this file styles only
+   the real DOM: the frame (top left), the log (bottom right), the node
+   buttons and the hover card. */
 
-section[data-type="hero"][data-hero="network"] div[data-type="hero-stage"] {
-  touch-action: none;
-}
-
-section[data-type="hero"][data-hero="network"] [data-type="hero-canvas"] {
+section[data-type="hero"][data-hero] [data-type="hero-canvas"] {
   position: absolute;
   inset: 0;
   display: block;
@@ -17,32 +13,28 @@ section[data-type="hero"][data-hero="network"] [data-type="hero-canvas"] {
   height: 100%;
 }
 
-/* Shown only when a 2D context could not be created (see network.ts). A
-   plain gradient rather than a frozen frame: there is nothing to freeze. */
-section[data-type="hero"][data-hero="network"] [data-type="hero-poster"] {
+/* Shown only when a 2D context could not be created. */
+section[data-type="hero"][data-hero] [data-type="hero-poster"] {
   position: absolute;
   inset: 0;
   display: none;
   background:
     radial-gradient(55% 50% at 20% 24%, color-mix(in srgb, var(--color-day) 26%, transparent), transparent 62%),
     radial-gradient(60% 55% at 78% 30%, color-mix(in srgb, var(--color-accent) 28%, transparent), transparent 62%),
-    radial-gradient(70% 60% at 50% 70%, color-mix(in srgb, var(--color-text) 8%, transparent), transparent 70%),
     var(--color-bg);
 }
 
-section[data-type="hero"][data-hero="network"] div[data-type="hero-stage"][data-nw-fallback] [data-type="hero-canvas"] {
+section[data-type="hero"][data-hero] div[data-type="hero-stage"][data-nw-fallback] [data-type="hero-canvas"] {
   display: none;
 }
 
-section[data-type="hero"][data-hero="network"] div[data-type="hero-stage"][data-nw-fallback] [data-type="hero-poster"] {
+section[data-type="hero"][data-hero] div[data-type="hero-stage"][data-nw-fallback] [data-type="hero-poster"] {
   display: block;
 }
 
-/* The full-stage ping target. It sits at the base of the stage's own
-   stacking context (z-index 0, from the shared stage rule), so the
-   server-rendered content block (z-index 1) — including the social
-   links — always wins a click over it. */
-section[data-type="hero"][data-hero="network"] [data-type="hero-ping"] {
+/* The full-stage ping target, at the base of the stage's stacking context,
+   so the text block (z-index 1) and its links always win a click. */
+section[data-type="hero"][data-hero] [data-type="hero-ping"] {
   position: absolute;
   inset: 0;
   display: block;
@@ -53,189 +45,111 @@ section[data-type="hero"][data-hero="network"] [data-type="hero-ping"] {
   border: 0;
 }
 
-section[data-type="hero"][data-hero="network"] [data-type="hero-nodes"] {
+section[data-type="hero"][data-hero] [data-type="hero-nodes"] {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  transform-origin: 0 0;
 }
 
-section[data-type="hero"][data-hero="network"] [data-type="hero-node-btn"] {
+section[data-type="hero"][data-hero] [data-type="hero-node-btn"] {
   position: absolute;
   top: 0;
   left: 0;
-  width: 46px;
-  height: 46px;
-  margin: -23px 0 0 -23px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
   pointer-events: auto;
-  cursor: pointer;
+  cursor: help;
 }
 
-section[data-type="hero"][data-hero="network"] [data-type="hero-node-btn"]:focus-visible {
+section[data-type="hero"][data-hero] [data-type="hero-node-btn"]:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
-  border-radius: 50%;
 }
 
-section[data-type="hero"][data-hero="network"] [data-type="hero-card"] {
+section[data-type="hero"][data-hero] [data-type="hero-card"] {
   position: absolute;
   z-index: 5;
-  max-width: 230px;
-  padding: 0.55em 0.75em;
+  max-width: 240px;
+  padding: var(--space-sm) var(--space-lg);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-bg) 92%, transparent);
   color: var(--color-text);
+  font-family: var(--font-mono);
   font-size: var(--text-label);
-  line-height: 1.4;
+  line-height: 1.45;
   pointer-events: none;
   opacity: 0;
-  transform: translateY(2px);
-  transition: opacity 0.12s ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
-section[data-type="hero"][data-hero="network"] [data-type="hero-card"][data-shown] {
+section[data-type="hero"][data-hero] [data-type="hero-card"][data-shown] {
   opacity: 1;
-  transform: translateY(0);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  section[data-type="hero"][data-hero="network"] [data-type="hero-card"] {
-    transition: none;
-  }
-}
-
-/* The scrim that sits between the canvas and the text (was the lab's
-   .nw-hero::before). It must paint BEHIND the server-rendered name,
-   tagline, links and readout, which is why each of those gets its own
-   position:relative + z-index:1 below — a plain in-flow child of a
-   positioned box paints before a positioned sibling with z-index 0. */
-section[data-type="hero"][data-hero="network"] div[data-type="hero-content"] {
-  position: absolute; /* already true from home.css; restated so ::before below has a containing block */
-}
-
-section[data-type="hero"][data-hero="network"] div[data-type="hero-content"]::before {
-  content: "";
+/* ── The frame: what the drawing is, before it plays ── */
+section[data-type="hero"][data-hero] [data-type="hero-frame"] {
   position: absolute;
-  left: -12%;
-  right: -12%;
-  bottom: -18%;
-  top: -85%;
-  z-index: 0;
-  background: radial-gradient(
-    75% 105% at 24% 100%,
-    color-mix(in srgb, var(--color-bg) 94%, transparent),
-    color-mix(in srgb, var(--color-bg) 70%, transparent) 55%,
-    transparent 78%
-  );
-}
-
-/* Phone's content spans the full device width (the trace log runs edge to
-   edge), so a corner-anchored radial leaves the far side of every long log
-   line barely dimmed. A full-width linear replacement fixes that; it starts
-   just above the name rather than far up the stage, since on a phone the
-   whole diagram sits above the text and a scrim reaching into it would only
-   dim the row of nodes nearest the name. */
-section[data-type="hero"][data-hero="network"][data-nw-phone] div[data-type="hero-content"]::before {
-  left: -6%;
-  right: -6%;
-  top: -14%;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    color-mix(in srgb, var(--color-bg) 82%, transparent) 16%,
-    color-mix(in srgb, var(--color-bg) 96%, transparent) 48%
-  );
-}
-
-section[data-type="hero"][data-hero="network"] h1,
-section[data-type="hero"][data-hero="network"] p[data-type="tagline"],
-section[data-type="hero"][data-hero="network"] [data-type="hero-readout"] {
-  position: relative;
-  z-index: 1;
-}
-
-/* The shared --text-hero-name token is a hair larger than this hero was
-   tuned at (clamp(3rem, 9vw, 7.5rem) vs the lab's clamp(3rem, 7vw + .5rem,
-   7rem)): the trace log sits beside the name on desktop, and the lab's
-   narrower clamp is what leaves it room before the stack layout kicks in. */
-section[data-type="hero"][data-hero="network"] h1 {
-  font-size: clamp(3rem, calc(7vw + 0.5rem), 7rem);
-}
-
-/* The readout (trace rows + replay). It lives in host (the stage) on
-   desktop, absolutely positioned at the stage's bottom right, and moves
-   into the content block — in flow, under the links — on phone and stack
-   layouts (network.ts decides which, on resize). Pointer-events are off by
-   default so a click passes through to the ping target or the page below;
-   only the replay button opts back in. */
-section[data-type="hero"][data-hero="network"] [data-type="hero-readout"] {
-  pointer-events: none;
-  font-family: var(--font-mono);
-}
-
-section[data-type="hero"][data-hero="network"] div[data-type="hero-stage"] > [data-type="hero-readout"] {
-  position: absolute;
+  top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-section));
+  left: clamp(20px, 4.5vw, 64px);
   right: clamp(20px, 4.5vw, 64px);
-  bottom: max(28px, clamp(20px, 5vh, 48px));
   z-index: 1;
-  width: max-content;
-  max-width: min(30rem, 46vw);
+  max-width: 34rem;
+  pointer-events: none;
+  text-shadow: 0 1px 14px color-mix(in srgb, var(--color-bg) 95%, transparent);
 }
 
-section[data-type="hero"][data-hero="network"] div[data-type="hero-content"] > [data-type="hero-readout"] {
-  margin-top: 0.9em;
+section[data-type="hero"][data-hero][data-nw-phone] [data-type="hero-frame"] {
+  top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-lg));
 }
 
-section[data-type="hero"][data-hero="network"] [data-part="trace"] {
+/* Dev server only: clear the hero-switch pill that sits under the nav. */
+main:has(nav[data-type="hero-switch"]) section[data-type="hero"][data-hero] [data-type="hero-frame"] {
+  top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-section) + var(--space-xl));
+}
+
+section[data-type="hero"][data-hero] [data-part="kicker"] {
+  margin: 0;
+  font-family: var(--font-mono);
   font-size: var(--text-label);
-  line-height: 1.6;
-  color: color-mix(in srgb, var(--color-text) 60%, var(--color-muted));
-  text-shadow: 0 1px 12px color-mix(in srgb, var(--color-bg) 95%, transparent);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-day);
 }
 
-/* Every row exists from the start and is only hidden, and the untyped rest
-   of a line keeps its space while it types: the block never changes height,
-   so the name above it (in flow on a phone) never jumps. */
-section[data-type="hero"][data-hero="network"] [data-part="row"] {
-  display: grid;
-  grid-template-columns: 6ch 1fr;
-  visibility: hidden;
-}
-
-section[data-type="hero"][data-hero="network"] [data-part="row"][data-shown] {
-  visibility: visible;
-}
-
-section[data-type="hero"][data-hero="network"] [data-part="row-label"] {
+section[data-type="hero"][data-hero] [data-part="headline"] {
+  min-height: 2.7em;
+  margin: var(--space-xs) 0 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-lead);
+  line-height: 1.35;
   color: var(--color-text);
-  font-weight: 500;
+  text-wrap: balance;
+  opacity: 0;
+  transition: opacity var(--motion-page) var(--ease-out);
 }
 
-section[data-type="hero"][data-hero="network"] [data-part="rest"] {
-  visibility: hidden;
+section[data-type="hero"][data-hero] [data-part="headline"][data-ready] {
+  opacity: 1;
 }
 
-section[data-type="hero"][data-hero="network"] [data-part="note"] {
-  color: color-mix(in srgb, var(--color-muted) 80%, transparent);
-}
-
-section[data-type="hero"][data-hero="network"] [data-part="note"][data-pending] {
-  visibility: hidden;
-}
-
-section[data-type="hero"][data-hero="network"] [data-part="row"][data-hint] [data-part="row-text"],
-section[data-type="hero"][data-hero="network"] [data-part="row"][data-hint] [data-part="note"] {
+section[data-type="hero"][data-hero] [data-part="bar"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  margin: var(--space-lg) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
   color: var(--color-muted);
 }
 
-section[data-type="hero"][data-hero="network"] [data-part="replay"] {
-  display: inline-block;
-  margin-top: 0.6em;
+section[data-type="hero"][data-hero] [data-part="clock"] {
+  font-variant-numeric: tabular-nums;
+}
+
+section[data-type="hero"][data-hero] [data-part="replay"] {
   pointer-events: auto;
   appearance: none;
   cursor: pointer;
@@ -245,14 +159,200 @@ section[data-type="hero"][data-hero="network"] [data-part="replay"] {
   color: var(--color-text);
   font: 500 var(--text-label) / 1 var(--font-mono);
   letter-spacing: 0.03em;
-  padding: 0.55em 0.9em;
+  padding: var(--space-sm) var(--space-lg);
 }
 
-section[data-type="hero"][data-hero="network"] [data-part="replay"]:hover {
+section[data-type="hero"][data-hero] [data-part="replay"]:hover {
   border-color: var(--color-day);
 }
 
-section[data-type="hero"][data-hero="network"] [data-part="replay"]:focus-visible {
+section[data-type="hero"][data-hero] [data-part="replay"]:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+section[data-type="hero"][data-hero] [data-part="note"] {
+  margin: var(--space-xs) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--color-muted);
+}
+
+/* ── The log: what is happening, one message per step, like a chat ──
+   A fixed height with the newest message at the bottom, so the page never
+   shifts; older messages slide up and fade out of its top edge. */
+section[data-type="hero"][data-hero] [data-type="hero-log"] {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--space-lg);
+  height: clamp(9rem, 26vh, 16rem);
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, transparent, var(--color-bg) 34%);
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--color-bg) 95%, transparent);
+}
+
+section[data-type="hero"][data-hero] div[data-type="hero-stage"] > [data-type="hero-log"] {
+  position: absolute;
+  right: clamp(20px, 4.5vw, 64px);
+  bottom: max(28px, clamp(20px, 5vh, 48px));
+  z-index: 1;
+  width: min(24rem, 36vw);
+}
+
+section[data-type="hero"][data-hero] div[data-type="hero-content"] > [data-type="hero-log"] {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 8.5rem;
+  margin-top: var(--space-xl);
+}
+
+section[data-type="hero"][data-hero] [data-part="msg"],
+section[data-type="hero"][data-hero] [data-part="typing"],
+section[data-type="hero"][data-hero] [data-part="hint"] {
+  flex: none;
+  animation: hero-msg-in var(--motion-page) var(--ease-out) both;
+}
+
+@keyframes hero-msg-in {
+  from { opacity: 0; transform: translateY(0.5rem); }
+}
+
+section[data-type="hero"][data-hero] [data-part="msg-head"] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--color-text);
+}
+
+/* Each message's dot is its step's colour on the line: amber out, violet
+   back, white for a handshake. */
+section[data-type="hero"][data-hero] [data-part="msg-head"]::before,
+section[data-type="hero"][data-hero] [data-part="typing"]::before {
+  content: "";
+  flex: none;
+  align-self: center;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+section[data-type="hero"][data-hero] [data-tone="out"] { --tone: var(--color-day); }
+section[data-type="hero"][data-hero] [data-tone="back"] { --tone: var(--color-accent); }
+section[data-type="hero"][data-hero] [data-tone="shake"] { --tone: var(--color-text); }
+
+section[data-type="hero"][data-hero] [data-part="msg-title"] {
+  font-weight: 500;
+}
+
+section[data-type="hero"][data-hero] [data-part="msg-ms"] {
+  margin-left: auto;
+  color: var(--color-day);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+section[data-type="hero"][data-hero] [data-part="msg-ms"][data-pending] {
+  visibility: hidden;
+}
+
+section[data-type="hero"][data-hero] [data-part="msg-text"] {
+  margin: var(--space-2xs) 0 0;
+  padding-left: calc(0.45rem + var(--space-md));
+  font-family: var(--font-serif);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--color-text) 72%, var(--color-muted));
+}
+
+section[data-type="hero"][data-hero] [data-part="msg-detail"] {
+  margin: var(--space-2xs) 0 0;
+  padding-left: calc(0.45rem + var(--space-md));
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--color-muted);
+}
+
+section[data-type="hero"][data-hero] [data-part="typing"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  height: 1.2em;
+}
+
+section[data-type="hero"][data-hero] [data-part="typing"]::before {
+  margin-right: var(--space-sm);
+}
+
+section[data-type="hero"][data-hero] [data-part="typing"] i {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: var(--color-muted);
+  animation: hero-typing 0.9s var(--ease-in-out) infinite;
+}
+
+section[data-type="hero"][data-hero] [data-part="typing"] i:nth-child(2) { animation-delay: 0.15s; }
+section[data-type="hero"][data-hero] [data-part="typing"] i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes hero-typing {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+section[data-type="hero"][data-hero] [data-part="hint"] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--color-muted);
+}
+
+/* The scrim between the canvas and the name. It paints behind the name,
+   tagline, links and an in-flow log, which each get position + z-index. */
+section[data-type="hero"][data-hero] div[data-type="hero-content"]::before {
+  content: "";
+  position: absolute;
+  left: -12%;
+  right: -12%;
+  bottom: -18%;
+  top: -60%;
+  z-index: 0;
+  background: radial-gradient(
+    75% 105% at 24% 100%,
+    color-mix(in srgb, var(--color-bg) 94%, transparent),
+    color-mix(in srgb, var(--color-bg) 70%, transparent) 55%,
+    transparent 78%
+  );
+}
+
+/* A phone's text block spans the width, so a full-width linear scrim that
+   starts just above the name replaces the corner radial. */
+section[data-type="hero"][data-hero][data-nw-phone] div[data-type="hero-content"]::before {
+  left: -6%;
+  right: -6%;
+  top: -12%;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--color-bg) 82%, transparent) 16%,
+    color-mix(in srgb, var(--color-bg) 96%, transparent) 48%
+  );
+}
+
+section[data-type="hero"][data-hero] h1,
+section[data-type="hero"][data-hero] p[data-type="tagline"] {
+  position: relative;
+  z-index: 1;
+}
+
+/* A hair smaller than the shared --text-hero-name, so the log keeps its room
+   beside the name on a laptop before the stacked layout kicks in. */
+section[data-type="hero"][data-hero] h1 {
+  font-size: clamp(3rem, calc(7vw + 0.5rem), 7rem);
 }

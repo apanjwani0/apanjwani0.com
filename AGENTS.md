@@ -32,7 +32,7 @@ dev-only and writes `src/config/*.ts`, which ships through git.
   (save allowlist).
 - `src/layouts/` — `Base.astro` and `ToolBase.astro`; `src/components/`
   (`home/`, `tools/`, `games/`). `src/components/home/hero/` holds the network
-  hero candidate.
+  hero candidates.
 - `src/middleware.ts` — security headers, the CSP nonce, `Cache-Control`, the
   visit counter and the origin lock.
 - `src/lib/caa.ts` — the CAA vocabulary shared by DNS Sightline and Chainsaw.
@@ -614,43 +614,58 @@ clicked card's title, with `html[data-vt-source]` clearing the source page's h1
 
 ## Home hero candidates (dev only, 2026-09)
 
-**Production renders the classic hero.** On the dev server, `/?hero=network`
-(or the pill `nav[data-type="hero-switch"]` that only the dev server renders)
-shows the network hero: a replay of how this page load reached the visitor. The
-owner picked that concept on 2026-09-28 and is still reviewing it. It must never
-show the host provider, runtime or origin details.
+**Production renders the classic hero.** On the dev server, the pill
+`nav[data-type="hero-switch"]` (dev only) switches to two stories drawn by one
+engine, `src/components/home/hero/network.ts`: a metro line of stations over a
+drifting starfield, a frame at the top left saying what it shows, and a
+chat-like log at the bottom right. The owner picked the network concept on
+2026-09-28 and is comparing the two:
+
+- `/?hero=network` replays **this** page load, slowed down: device, DNS,
+  Cloudflare's data centre (by city), the server, with each step's real
+  timing.
+- `/?hero=internet` explains how any page reaches anyone, in plain words.
 
 Liquid light, monsoon and the Hero Lab prototypes moved out of the repo to
 `~/Projects/screensavers/` (2026-09-28), kept for future macOS screen savers.
 
+- **Real data only, never a sample** (owner, 2026-09-28). The replay reads
+  Navigation Timing, `/cdn-cgi/trace` (country, data centre, TLS) and one HEAD
+  of `/` (whether Cloudflare's copy predates the visit, from its `age`). A fact
+  it cannot measure is left out. On the dev server the page comes from
+  localhost, so `/__hero-probe` (dev-server middleware in `astro.config.mjs`,
+  loopback only) measures one real request to the live site instead.
+- **Never the host**: no provider, runtime or anything else about the origin,
+  which is what helps someone reach it around Cloudflare. The visitor's own
+  address appears only as its first two groups, and is never kept.
 - **The switch is dev-only by construction.** `src/pages/index.astro` reads the
   query as `import.meta.env.DEV ? … : null`, anything else falls back to
   `classic`, and a classic page ships no hero script.
-- **Text is server-rendered and shared.** Both heroes render the same h1,
+- **Text is server-rendered and shared.** Every hero renders the same h1,
   tagline and social links. The live hero reads them through `env.text` and
   never draws its own copy. It drops the avatar and the StarField and puts
-  `data-theme="dark"` on its section, because the canvas is dark at every hour.
+  `data-theme="dark"` on its section, because the canvas is dark.
 - **The contract** is `src/components/home/hero/types.ts`: `create(host, env)`
   returns `{ start, stop, resize, destroy }`. `mount.ts` is the only caller. It
   loads the hero as its own chunk, mounts on `astro:page-load`, destroys on
   `astro:before-swap`, and runs the hero only while the tab is visible and the
   stage is on screen. Every document or window listener the hero adds takes
-  `env.signal`. `day.ts` is the owner's clock (IST). Styles: `home.css` plus
-  `hero-network.css`.
+  `env.signal`. Styles: `home.css` plus `hero-network.css`.
 - **No tools or games in the hero** (the owner's rule): not in the copy, not as
   a link or a hover affordance, not even by name. The site nav keeps "tools"
   and "games" for search reach, and the meta description still lists them.
-- **The test hook is DEV-gated**: `?at=HH:MM` pins the clock.
 - **Looping motion is allowed here and nowhere else.** It still stops when the
-  hero is hidden or off screen, and renders one still frame under
-  `prefers-reduced-motion`.
+  hero is hidden or off screen, and renders the finished replay as one still
+  frame under `prefers-reduced-motion`.
 
 `security:smoke` holds the switch to dev, the fallback to classic, the hero to
 no tools or games (the tagline, the section markup, and every string literal and
-stylesheet the hero ships), the hook to the DEV gate, and the hero to its own
-chunk. **When the owner approves network,** make it the page's only hero: delete
-the switch and the classic markup in the same change, and update this section
-and the StarField note.
+stylesheet the hero ships), `network.ts`'s strings to no host or runtime name,
+the dev hooks (`location.search`, `/__hero-probe`) to the DEV gate, the probe to
+loopback-only dev middleware, and the hero to its own chunk. **When the owner
+picks a story,** make it the page's only hero: delete the switch, the other
+story and the classic markup in the same change, and update this section and
+the StarField note.
 
 ## Skills & Commands
 

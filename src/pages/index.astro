@@ -20,10 +20,11 @@ const heroTagline =
   'I build software for a living and for fun: payments at scale by day, my own apps by night.'
 
 // Which hero renders. Production always renders the classic one. The dev
-// server also takes ?hero=network, so the owner can review the network hero on
-// the real page before it replaces the classic one. `import.meta.env.DEV` is a
-// build-time constant, so a production build never reads the query.
-const HEROES = ['classic', 'network'] as const
+// server also takes ?hero=network (a replay of this page load) and
+// ?hero=internet (how any page load works), so the owner can compare them on
+// the real page before one replaces the classic hero. `import.meta.env.DEV` is
+// a build-time constant, so a production build never reads the query.
+const HEROES = ['classic', 'network', 'internet'] as const
 type Hero = (typeof HEROES)[number]
 const requestedHero = import.meta.env.DEV ? Astro.url.searchParams.get('hero') : null
 const hero: Hero = HEROES.find(h => h === requestedHero) ?? 'classic'

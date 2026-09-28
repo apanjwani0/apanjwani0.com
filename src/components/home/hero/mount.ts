@@ -15,8 +15,10 @@
  */
 import type { HeroCreate, HeroEnv, HeroId, HeroInstance } from './types'
 
+// Both stories are one engine, so both load the same chunk.
 const LOADERS: Record<HeroId, () => Promise<{ create: HeroCreate }>> = {
   network: () => import('./network'),
+  internet: () => import('./network'),
 }
 
 interface Mounted {

@@ -8988,10 +8988,10 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
 
 /* ─────  Home hero candidates: the dev-only ?hero= switch  ─────
 
-   The network hero is under review on the real page before it replaces the
-   classic one (liquid light and monsoon moved out of the repo, 2026-09-28).
-   Production renders the classic hero whatever the query says, and three
-   things about that must not drift while it waits:
+   Two network heroes (a replay of this page load, and how any page load
+   works) are under review on the real page before one replaces the classic
+   hero. Production renders the classic hero whatever the query says, and four
+   things about that must not drift while they wait:
 
    1. The switch reads its query only under `import.meta.env.DEV`, a
       build-time constant, and falls back to the classic hero. The pill that
@@ -9002,8 +9002,13 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
       page's markup, and every string literal and stylesheet the live hero
       ships. The meta description and keywords are deliberately outside the
       rule.
-   3. The test hook the hero keeps (`?at=`) is dev-only: every read of
-      `location.search` in its modules sits behind the same constant. */
+   3. Dev hooks stay dev-only: every read of `location.search`, and every
+      call to the dev server's live-site probe (`/__hero-probe`), sits behind
+      the same constant, and the probe itself exists only in the dev server's
+      middleware, for loopback callers.
+   4. The hero never names the host provider or the runtime (owner,
+      2026-09-27): that is what helps someone reach the origin around
+      Cloudflare. */
 {
   const styleUrl = n => new URL(`../src/styles/${n}`, import.meta.url)
   const homeSrc = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf-8')
@@ -9053,7 +9058,7 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   }
   const heroDir = new URL('../src/components/home/hero/', import.meta.url)
   const heroFiles = (await readdir(heroDir, { recursive: true })).filter(f => f.endsWith('.ts'))
-  for (const need of ['types.ts', 'day.ts', 'mount.ts', 'network.ts']) {
+  for (const need of ['types.ts', 'mount.ts', 'network.ts']) {
     assert.ok(heroFiles.includes(need), `src/components/home/hero/${need} exists — has the hero moved?`)
   }
   for (const file of heroFiles) {
@@ -9064,26 +9069,37 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
     // ── 3. Test hooks are dev-only ── (whole comment lines dropped, so a
     // docblock naming the constant cannot stand in for the gate itself)
     const live = code.split('\n').filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n')
-    for (const m of live.matchAll(/\blocation\.search\b/g)) {
+    for (const m of live.matchAll(/\blocation\.search\b|\/__hero-probe\b/g)) {
       assert.ok(live.slice(Math.max(0, m.index - 240), m.index).includes('import.meta.env.DEV'),
-        `src/components/home/hero/${file} reads location.search outside an import.meta.env.DEV gate — a test hook would ship`)
+        `src/components/home/hero/${file} uses ${m[0]} outside an import.meta.env.DEV gate — a dev hook would ship`)
+    }
+    // ── 4. Nothing about the host ── (network.ts is where every string on
+    // screen comes from; mount.ts's astro:* event names never reach it)
+    for (const literal of file === 'network.ts' ? literalsOf(code) : []) {
+      assert.doesNotMatch(literal, /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy|kubernetes|aws|azure|gcp|hetzner|digitalocean|vultr|linode|node\.?js|astro)\b/i,
+        `src/components/home/hero/${file} ships a string naming the host or runtime: "${literal.slice(0, 80)}"`)
     }
   }
+  const astroConfig = await readFile(new URL('../astro.config.mjs', import.meta.url), 'utf-8')
+  const probeMount = astroConfig.match(/configureServer\(server\) \{\s*server\.middlewares\.use\('\/__hero-probe', async \(req, res\) => \{([\s\S]*?)\n    \}\);/)
+  assert.ok(probeMount, 'the live-site probe is mounted only as dev-server middleware (configureServer), never as a route')
+  assert.match(probeMount[1], /if \(req\.method !== 'GET' \|\| !isLoopback\)/, 'the probe answers loopback GETs only')
+  assert.equal((astroConfig.match(/__hero-probe/g) ?? []).length, 1, 'the probe is mounted once')
   for (const sheet of ['hero-network.css', 'home.css']) {
     const css = (await readFile(styleUrl(sheet), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
     assert.doesNotMatch(css.replace(/\[data-type="[^"]*"\]/g, ''), banned, `${sheet} puts no tools or games into the hero`)
   }
   // The live hero loads only through mount.ts's per-hero dynamic import.
   const mountSrc = await readFile(new URL('mount.ts', heroDir), 'utf-8')
-  for (const id of ['network']) {
-    assert.match(mountSrc, new RegExp(`${id}: \\(\\) => import\\('\\./${id}'\\)`), `${id} is its own lazily imported chunk`)
+  for (const id of ['network', 'internet']) {
+    assert.match(mountSrc, new RegExp(`${id}: \\(\\) => import\\('\\./network'\\)`), `${id} loads the network chunk lazily`)
   }
   for (const file of heroFiles.filter(f => f !== 'mount.ts')) {
     const code = await readFile(new URL(file, heroDir), 'utf-8')
     assert.doesNotMatch(code, /from '\.\.?\/network(\/index)?'|import\('\.\.?\/network(\/index)?'\)/, `${file} does not pull the hero into another chunk`)
   }
 }
-console.log('home hero: the ?hero= switch is dev-only and classic by default, no hero names tools or games, and its test hooks compile out of production')
+console.log('home hero: the ?hero= switch is dev-only and classic by default, no hero names tools or games or the host, and its dev hooks compile out of production')
 
 /* ══════════════  UI refresh · anchor regions for items B–G  ══════════════
 
