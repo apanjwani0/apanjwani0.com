@@ -23,7 +23,7 @@
  * index as JSON from /search.json and may import the `IndexEntry` TYPE only.
  */
 
-import { getGames, getLearnings, getPosts, getProjects, getSite, getTools, isBlogsPublic, type Site } from './config'
+import { getGames, getLearnings, getPosts, getProjects, getSite, getTools, isBlogsPublic, isProjectsPublic, type Site } from './config'
 import { isPlayableGame } from './games'
 import { isPublishedLearning } from './learnings'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from './driftfield'
@@ -78,12 +78,12 @@ export async function loadSiteConfigs(locals: unknown): Promise<SiteConfigs> {
 
 /**
  * The section hubs, in the order the sitemap has always listed them. Every one
- * is a route that always exists; `/blogs` alone is gated, by the one predicate
- * that decides whether that section is public.
+ * is a route that always exists; `/blogs` and `/projects` are gated, each by the
+ * one predicate that decides whether that section is public.
  */
 const SECTIONS: readonly { path: string; title: string; gated?: (site: Site) => boolean }[] = [
   { path: '/', title: 'Home' },
-  { path: '/projects', title: 'Projects' },
+  { path: '/projects', title: 'Projects', gated: isProjectsPublic },
   { path: '/blogs', title: 'Blogs', gated: isBlogsPublic },
   { path: '/learnings', title: 'Learnings' },
   { path: '/games', title: 'Games' },
@@ -107,6 +107,8 @@ function realPages(c: SiteConfigs) {
     // noindex; external and disabled 404). The Driftfield hub is one of these.
     tools: c.tools.filter(t => t.status === 'live'),
     modes: isDriftfieldPublic(c.tools) ? DRIFTFIELD_MODES : [],
+    // A hidden /projects lists no cards anywhere, not even in the palette.
+    projects: isProjectsPublic(c.site) ? c.projects : [],
   }
 }
 
@@ -192,7 +194,7 @@ export function buildSiteIndex(c: SiteConfigs): IndexEntry[] {
     ...pages.modes.map((m): IndexEntry => ({
       k: 'mode', t: m.title, u: `/tools/${DRIFTFIELD_SLUG}/${m.slug}`, d: summarize(m.description), w: words(m.keywords), s: m.slug,
     })),
-    ...c.projects.map((p, i): IndexEntry => ({
+    ...pages.projects.map((p, i): IndexEntry => ({
       k: 'project', t: p.title, u: `/projects#${anchors[i]}`, d: summarize(p.description), w: words(p.tags.join(', '), p.keywords), s: anchors[i],
     })),
   ]

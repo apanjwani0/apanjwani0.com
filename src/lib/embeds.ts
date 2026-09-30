@@ -38,6 +38,7 @@ export const EMBED_TAGS: Record<string, string> = {
   // Figures — neither a game nor a Driftfield mode. These exist only to be
   // embedded in an article, which is why EMBED_TAGS is the wider list.
   'diagram-atlas': 'diagram-atlas-figure',
+  'internet-atlas': 'internet-atlas-figure',
 }
 
 /**
@@ -53,7 +54,7 @@ export const EMBED_TAGS: Record<string, string> = {
  * on a timer. `security:smoke` derives this set from the components' own sources
  * in both directions, so it cannot drift from what they actually render.
  */
-export const EMBED_NO_CHROME: ReadonlySet<string> = new Set(['diagram-atlas'])
+export const EMBED_NO_CHROME: ReadonlySet<string> = new Set(['diagram-atlas', 'internet-atlas'])
 
 /**
  * The tag to mount for a slug, or undefined when nothing is wired.

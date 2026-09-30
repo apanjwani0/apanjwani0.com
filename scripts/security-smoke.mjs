@@ -27,7 +27,7 @@ import { games } from '../src/config/games.ts'
 import { tools } from '../src/config/tools.ts'
 import { SERVER_TOOLS, isServerTool } from '../src/lib/tools.ts'
 import { site } from '../src/config/site.ts'
-import { isBlogsPublic, navLinks } from '../src/lib/config.ts'
+import { isBlogsPublic, isProjectsPublic, navLinks } from '../src/lib/config.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
 import {
   DAILY_MAX_ENTRIES_PER_DAY,
@@ -680,6 +680,22 @@ for (const drop of [{ published: false }, { content: '' }, { content: '   ' }]) 
       `an article with ${JSON.stringify(drop)} is still linked from "${embed}"`,
     )
   }
+}
+
+// `sections.projects` is the same kind of gate (hidden by the owner on
+// 2026-09-30): the nav and footer drop the link, and the route keeps answering,
+// with a noindex and no ItemList, for anyone who types it.
+{
+  const hidden = { ...site, sections: { ...site.sections, projects: false } }
+  const shown = { ...site, sections: { ...site.sections, projects: true } }
+  assert.equal(isProjectsPublic(hidden), false, 'sections.projects false means hidden')
+  assert.equal(isProjectsPublic(shown), true, 'sections.projects true means public')
+  assert.ok(!navLinks(hidden).some(i => /^\/projects(\/|$)/.test(i.href)), 'a hidden projects section is still in the nav and footer')
+  assert.ok(navLinks(shown).some(i => /^\/projects(\/|$)/.test(i.href)), 'a public projects section is missing from the nav — the filter is unconditional')
+  const projectsPage = await readFile(new URL('../src/pages/projects.astro', import.meta.url), 'utf-8')
+  assert.match(projectsPage, /const listed = isProjectsPublic\(site\)/, 'the projects page reads the one predicate')
+  assert.match(projectsPage, /noindex=\{!listed\}/, 'the projects page is noindex while hidden')
+  assert.match(projectsPage, /\{listed && projects\.length > 0 && <script/, 'a hidden projects page claims no ItemList')
 }
 
 // A hidden section is hidden in every signal at once. `sections.blogs` is the
@@ -2841,7 +2857,8 @@ console.log('projects link only at pages this site serves')
 {
   const { GET: sitemapGET } = await import('../src/pages/sitemap.xml.ts')
 
-  const sectionSite = on => ({ ...site, sections: { ...site.sections, blogs: on } })
+  // Both gated sections flip together, so each is checked in both states.
+  const sectionSite = on => ({ ...site, sections: { ...site.sections, blogs: on, projects: on } })
   const localsFor = s => ({
     runtime: {
       env: {
@@ -2882,7 +2899,7 @@ console.log('projects link only at pages this site serves')
     }
   }
   assert.ok(
-    checkedHubs >= 9,
+    checkedHubs >= 8,
     `expected both flag states to contribute nav hubs, checked ${checkedHubs} — `
     + 'if navLinks stopped returning internal hrefs this guard asserts nothing',
   )
@@ -2899,6 +2916,8 @@ console.log('projects link only at pages this site serves')
     !hidden.has(`${base}/blogs`),
     'sections.blogs=false must drop the /blogs hub from the sitemap',
   )
+  assert.ok(shown.has(`${base}/projects`), 'sections.projects=true must put the /projects hub back in the sitemap')
+  assert.ok(!hidden.has(`${base}/projects`), 'sections.projects=false must drop the /projects hub from the sitemap')
   // The hub carries the newest post date, the same freshness signal /learnings
   // gets — the orphaned `latestPostDate` is what that line was computed for.
   assert.match(
@@ -2908,10 +2927,10 @@ console.log('projects link only at pages this site serves')
   )
   // Gating the hub must not have disturbed anything else in the document.
   assert.ok(shown.has(`${base}/blogs/a-local-post`), 'gating the hub dropped the posts too')
-  for (const hub of ['/', '/projects', '/learnings', '/games', '/tools']) {
+  for (const hub of ['/', '/learnings', '/games', '/tools']) {
     assert.ok(
       hidden.has(hub === '/' ? `${base}/` : `${base}${hub}`),
-      `hiding blogs must not remove ${hub} from the sitemap`,
+      `hiding blogs and projects must not remove ${hub} from the sitemap`,
     )
   }
 }
@@ -7151,6 +7170,90 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
     'a horizontally scrollable region must be reachable without a pointer',
   )
 }
+/* ─────  The Internet Atlas: eight stops, each with what goes wrong  ─────
+
+   The figure for /learnings/how-the-internet-works (2026-09-30), built on the
+   Diagram Atlas's pattern, so it is held to the same silent failures: a beat
+   lighting an id that is not in its SVG, a token off the viewBox, a legend row
+   left empty, a pinned marker naming no view. Two more of its own: its example
+   addresses come only from the ranges reserved for documentation, so no figure
+   shows a real address, and like the hero it names no host or runtime. It shares
+   the Diagram Atlas's stylesheet vocabulary, so that import is held in place. */
+{
+  const { INTERNET_VIEWS, internetView } = await import('../src/components/games/internet-atlas/atlas.ts')
+  const article = learnings.find(l => l.embed === 'internet-atlas')
+  assert.ok(article, 'the internet atlas has no article to be the figure for')
+
+  // Every view gets its own pinned figure in the article, and none twice.
+  const pinned = [...article.content.matchAll(/^[ \t]*\{\{embed:([a-z0-9-]+)\}\}[ \t]*$/gm)].map(m => m[1])
+  for (const id of pinned) assert.ok(INTERNET_VIEWS.some(v => v.id === id), `the article pins "${id}", which is not a view — it would render the full picker`)
+  assert.deepEqual([...pinned].sort(), INTERNET_VIEWS.map(v => v.id).sort(), 'every stop must get its own figure in the article, and none twice')
+
+  // A full legend on every view, in the same shape.
+  const shape = Object.keys(INTERNET_VIEWS[0]).sort().join(',')
+  for (const v of INTERNET_VIEWS) {
+    assert.equal(Object.keys(v).sort().join(','), shape, `view "${v.id}" has a different shape to the others`)
+    for (const field of ['id', 'question', 'title', 'what', 'does', 'breaks', 'svg']) {
+      assert.ok(typeof v[field] === 'string' && v[field].trim().length > 0, `view "${v.id}" ships an empty ${field}`)
+    }
+    assert.ok(v.question.endsWith('?'), `view "${v.id}"'s button label must be a question`)
+    assert.ok(v.breaks.length > 40, `view "${v.id}"'s "if it goes wrong" line is too short to be a real claim`)
+    assert.ok(v.steps.length >= 3, `view "${v.id}" shows movement and needs beats`)
+  }
+  assert.equal(new Set(INTERNET_VIEWS.map(v => v.id)).size, INTERNET_VIEWS.length, 'two views share an id')
+
+  // Every beat lights something that is in its SVG, and every token is on screen.
+  for (const v of INTERNET_VIEWS) {
+    const ids = new Set([...v.svg.matchAll(/id="([^"]+)"/g)].map(m => m[1]))
+    assert.equal(ids.size, (v.svg.match(/id="/g) ?? []).length, `view "${v.id}" reuses an id`)
+    v.steps.forEach((step, i) => {
+      assert.ok(step.on.length > 0, `view "${v.id}" beat ${i} lights nothing`)
+      for (const id of step.on) assert.ok(ids.has(id), `view "${v.id}" beat ${i} lights "#${id}", which is not in its SVG`)
+      assert.ok(step.say.trim().length > 0, `view "${v.id}" beat ${i} has no caption`)
+      if (step.token) {
+        assert.ok(step.token[0] >= 10 && step.token[0] <= 670 && step.token[1] >= 10 && step.token[1] <= 354,
+          `view "${v.id}" beat ${i} puts its token at ${step.token}, outside the viewBox`)
+      }
+    })
+  }
+
+  // Example addresses are from the documentation ranges only, and nothing names the host.
+  const figureText = INTERNET_VIEWS.flatMap(v => [v.svg, v.what, v.does, v.breaks, ...v.steps.map(s => s.say)]).join('\n')
+  for (const ip of figureText.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) ?? []) {
+    assert.match(ip, /^(192\.168\.|203\.0\.113\.)/, `the figure shows ${ip}, which is not a documentation address`)
+  }
+  for (const text of [figureText, article.content, article.summary]) {
+    assert.doesNotMatch(text, /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy|kubernetes|aws|azure|gcp|hetzner|digitalocean|vultr|linode|node\.?js|astro)\b/i,
+      'the internet article and its figure never name the host or the runtime')
+  }
+
+  // Selection cannot land on nothing, including a prototype key.
+  assert.equal(internetView('dns').id, 'dns')
+  assert.equal(internetView('not-a-view').id, INTERNET_VIEWS[0].id)
+  assert.equal(internetView('constructor').id, INTERNET_VIEWS[0].id, 'prototype keys are not views')
+
+  // The component: registered under the tag EMBED_TAGS names, no second copy of
+  // the claims, playback that follows visibility and reduced motion, a clock
+  // torn down on unmount, and a stage a keyboard can scroll.
+  const iaSrc = await readFile(new URL('../src/components/games/internet-atlas/InternetAtlas.ts', import.meta.url), 'utf-8')
+  assert.match(iaSrc, /customElements\.define\('internet-atlas-figure'/, 'the element registers under its EMBED_TAGS tag')
+  assert.equal(EMBED_TAGS['internet-atlas'], 'internet-atlas-figure')
+  for (const v of INTERNET_VIEWS) assert.ok(!iaSrc.includes(v.breaks), `view "${v.id}"'s claim is duplicated in the component`)
+  assert.ok(/IntersectionObserver/.test(iaSrc) && /private autoplay\(\)[\s\S]*?this\.visible/.test(iaSrc), 'playback follows visibility')
+  const iaSelect = iaSrc.slice(iaSrc.indexOf('private select('), iaSrc.indexOf('private autoplay('))
+  assert.ok(!/\bthis\.play\(\)/.test(iaSelect), 'select() reaches playback through autoplay(), never play() directly')
+  assert.ok(/prefers-reduced-motion/.test(iaSrc), 'no autoplay for a reader who asked for less motion')
+  assert.ok(/disconnectedCallback/.test(iaSrc) && /clearInterval/.test(iaSrc), 'the beat clock is torn down on unmount')
+  assert.ok(/data-type="at-stage" tabindex="0"/.test(iaSrc), 'the scrollable stage is reachable without a pointer')
+
+  // Its styles: its own sheet, plus the Diagram Atlas's shared vocabulary.
+  const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
+  assert.match(embedCss, /@import '\.\.\/components\/games\/internet-atlas\/internet-atlas\.css';/, 'the internet atlas stylesheet is loaded')
+  assert.match(embedCss, /@import '\.\.\/components\/games\/diagram-atlas\/diagram-atlas\.css';/,
+    'the internet atlas draws with the at-* vocabulary from diagram-atlas.css, so that import must stay')
+}
+console.log('internet atlas: every stop has a full legend and its own pinned figure, every beat lights a real element, and no figure shows a real address or names the host')
+
 /* ─────  the house article format: many figures, and a cost that follows them  ──
 
    `{{embed:view}}` lets one article carry a figure every few lines
@@ -8849,11 +8952,14 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
    oracle: it reads each kind's predicate directly and shares no code with
    src/lib/site-index.ts, so the new route must equal it BYTE FOR BYTE across
    blogs on and off, Driftfield live and wip, and fixtures carrying a wip tool
-   and a draft article. The palette's index is held to the same pages.
+   and a draft article. The palette's index and /llms.txt are held to the same
+   pages.
    (mutations: let site-index list wip tools → fails; drop the modes from
-   buildSiteIndex → fails) */
+   buildSiteIndex → fails; drop a kind from llms.txt → fails; stop escaping its
+   link text → fails) */
 {
   const { GET } = await import('../src/pages/sitemap.xml.ts')
+  const { GET: llmsGET } = await import('../src/pages/llms.txt.ts')
   const { buildSiteIndex, indexablePaths, loadSiteConfigs, projectAnchors } = await import('../src/lib/site-index.ts')
   const { DRIFTFIELD_SLUG, isDriftfieldPublic } = await import('../src/lib/driftfield.ts')
   const { escapeHtml } = await import('../src/lib/escape.ts')
@@ -8866,7 +8972,7 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
     const latestPost = ps.reduce((max, p) => (p.date > max ? p.date : max), '')
     const latestLearning = published.reduce((max, l) => (l.date > max ? l.date : max), '')
     const pages = [
-      { loc: '/' }, { loc: '/projects' },
+      { loc: '/' }, ...(isProjectsPublic(s) ? [{ loc: '/projects' }] : []),
       ...(blogsPublic ? [{ loc: '/blogs', lastmod: latestPost || undefined }] : []),
       { loc: '/learnings', lastmod: latestLearning || undefined }, { loc: '/games' }, { loc: '/tools' },
       ...(blogsPublic ? ps : []).filter(p => !/^https?:\/\//i.test(p.href))
@@ -8885,13 +8991,13 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
   for (const blogs of [true, false]) {
     for (const df of ['live', 'wip']) {
       const fx = {
-        site: { ...site, sections: { ...site.sections, blogs } },
+        site: { ...site, sections: { ...site.sections, blogs, projects: blogs } },
         tools: [...tools.map(t => (t.slug === DRIFTFIELD_SLUG ? { ...t, status: df } : t)), tool('zz-wip', 'wip'), tool('zz-canary', 'live')],
         learnings: [...learnings, learning('zz-draft', false), learning('zz-empty', true, '  '), learning('zz-canary-article', true)],
         blogs: [...posts, { title: 'x', href: '/blogs/tabs-&-spaces', date: '2026-01-02', summary: 's' }, { title: 'y', href: 'https://example.com/p', date: '2027-02-02', summary: 's' }],
       }
       const locals = { runtime: { env: { SITE_CONFIG: { get: async key => fx[key] ?? null } } } }
-      const at = `(blogs ${blogs}, driftfield ${df})`
+      const at = `(blogs and projects ${blogs}, driftfield ${df})`
       const configs = await loadSiteConfigs(locals)
       const xml = await (await GET({ locals })).text()
       assert.ok(xml.includes('/tools/zz-canary<') && xml.includes('/learnings/zz-canary-article<'), `the fixture config was read ${at}`)
@@ -8903,18 +9009,32 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
       const entryPaths = [...new Set(buildSiteIndex(configs).map(e => e.u.split('#')[0]))].sort()
       assert.deepEqual(entryPaths, [...new Set(indexablePaths(configs).map(p => p.path))].sort(),
         `every index entry points at an indexable page and every indexable page has an entry ${at}`)
+      const md = await (await llmsGET({ locals })).text()
+      const mdLinks = [...md.matchAll(/^- \[(?:\\.|[^\\\]])*\]\(([^)\s]+)\)/gm)].map(m => m[1]).filter(u => u.startsWith(`${base}/`))
+      assert.deepEqual(mdLinks.sort(), buildSiteIndex(configs).map(e => `${base}${e.u}`).sort(), `llms.txt lists exactly the site index ${at}`)
       fixtures += 1
     }
   }
   assert.equal(fixtures, 4)
-  const entries = buildSiteIndex(await loadSiteConfigs({}))
-  const projectEntries = entries.filter(e => e.k === 'project')
+  {
+    const nasty = { slug: 'zz-nasty', title: 'Evil](https://evil.example)\n# Injected [x]', description: 'one\n\n## two', status: 'live' }
+    const fx = { tools: [...tools, nasty] }
+    const md = await (await llmsGET({ locals: { runtime: { env: { SITE_CONFIG: { get: async key => fx[key] ?? null } } } } })).text()
+    assert.ok(md.includes('\n- [Evil\\](https://evil.example) # Injected \\[x\\]](https://apanjwani0.com/tools/zz-nasty): one\n'),
+      'a hostile title stays inside its own link text in llms.txt')
+    assert.equal(/^#+ (Injected|two)/m.test(md), false, 'no config value starts a heading in llms.txt')
+  }
+  // Project cards are listed only while /projects is public (sections.projects).
+  const defaults = await loadSiteConfigs({})
+  const withProjects = on => buildSiteIndex({ ...defaults, site: { ...defaults.site, sections: { ...defaults.site.sections, projects: on } } })
+  const projectEntries = withProjects(true).filter(e => e.k === 'project')
   assert.ok(projectEntries.length > 0 && projectEntries.every(e => /^\/projects#[a-z0-9-]+$/.test(e.u) && e.u === `/projects#${e.s}`),
     'a project entry points at its own card on /projects')
+  assert.equal(withProjects(false).filter(e => e.k === 'project').length, 0, 'a hidden /projects puts no project card in the palette')
   assert.deepEqual(projectAnchors([{ title: 'Sort' }, { title: 'sort' }, { title: '!!!' }]), ['sort', 'sort-2', 'project'],
     'project anchors are unique and never empty')
 }
-console.log('ui refresh: spacing rungs increase in order, the head bootstrap matches resolveTheme across the truth table and is the one inline script, a swap keeps the client state, and the sitemap equals both the route it replaced and the palette index')
+console.log('ui refresh: spacing rungs increase in order, the head bootstrap matches resolveTheme across the truth table and is the one inline script, a swap keeps the client state, and the sitemap equals both the route it replaced and the palette index, and llms.txt lists the same pages')
 
 /* ── The kit parse is bounded, and its export writes nothing hostile ───────
    A ?t= value is whatever a link says, and a stored kit is whatever a page
@@ -8985,6 +9105,167 @@ console.log('ui refresh: spacing rungs increase in order, the head bootstrap mat
   assert.equal(fuzzyScore('x'.repeat(65), 'x'.repeat(100)), null, 'an over-long query is refused before any quadratic work')
 }
 console.log('ui refresh: the kit parse is bounded and its bookmarks export writes only escaped https tool links; the 404 suggests what a typo meant and nothing to a scanner')
+
+/* ─────  Home hero: the replay of this page load  ─────
+
+   The home page has one hero, network.ts, which replays this page load (the
+   owner picked it on 2026-09-30 and retired the switch, the classic hero and
+   the internet explainer). Five things about it must not drift:
+
+   1. One hero and no switch: the page reads no query string, its one bundled
+      script is the hero's mount, and everything in the text block is lifted
+      above the scrim that darkens the canvas behind the name.
+   2. No tools or games in the hero (owner, 2026-09-27: not in the copy, not a
+      link, not a "discover" affordance). This is checked over the tagline, the
+      page's markup, and every string literal and stylesheet the live hero
+      ships. The meta description and keywords are deliberately outside the
+      rule.
+   3. Dev hooks stay dev-only: every read of `location.search`, and every
+      call to the dev server's live-site probe (`/__hero-probe`), sits behind
+      the same constant, and the probe itself exists only in the dev server's
+      middleware, for loopback callers.
+   4. The hero never names the host provider or the runtime (owner,
+      2026-09-27): that is what helps someone reach the origin around
+      Cloudflare.
+   5. Nothing blinks or pulses on the clock except the stars' slow twinkle:
+      blinking has read as the page flickering twice. */
+{
+  const styleUrl = n => new URL(`../src/styles/${n}`, import.meta.url)
+  const homeSrc = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf-8')
+  const [frontmatter, template] = homeSrc.split(/^---$/m).slice(1)
+
+  // ── 1. One hero, no switch, and its text above the scrim ──
+  assert.doesNotMatch(frontmatter, /searchParams/, 'the home page reads no query string: there is one hero and no switch')
+  assert.doesNotMatch(template, /hero-switch/, 'no hero switch is left in the markup')
+  assert.match(template, /<section data-type="hero"[^>]*\bdata-hero="network"/, 'the hero section names the network hero')
+  const pageScripts = [...template.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  assert.equal(pageScripts.length, 1, 'the page has one bundled script…')
+  assert.match(pageScripts[0][1], /initHero\(\)/, '…and it mounts the hero')
+  // The scrim behind the name paints over any child of the text block that is
+  // not lifted above it; the social links once sat under it, nearly invisible.
+  // The children are read from the markup, so a new one needs its own rule.
+  const textBlock = template.match(/<div data-type="hero-content">\n([\s\S]*?)\n\s*<\/div>/)
+  assert.ok(textBlock, 'the hero text block is found')
+  const blockLines = textBlock[1].split('\n').filter(l => l.trim())
+  const childIndent = Math.min(...blockLines.map(l => l.match(/^\s*/)[0].length))
+  const textChildren = blockLines
+    .filter(l => l.match(/^\s*/)[0].length === childIndent && /^\s*<\w/.test(l))
+    .map(l => l.match(/^\s*<(\w+)(?:[^>]*?\bdata-type="([^"]+)")?/))
+    .map(([, tag, type]) => (type ? `${tag}[data-type="${type}"]` : tag))
+  assert.ok(textChildren.length >= 3, `the text block holds the name, the tagline and the links (found ${textChildren.join(', ')})`)
+  const heroCssRules = [...(await readFile(styleUrl('hero-network.css'), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)]
+  const liftedSelectors = heroCssRules
+    .filter(([, , body]) => /position:\s*relative/.test(body) && /z-index:\s*1\b/.test(body))
+    .flatMap(([, sel]) => sel.split(',').map(s => s.trim()))
+  for (const child of textChildren) {
+    assert.ok(liftedSelectors.some(sel => sel.endsWith(` ${child}`)), `${child} in the hero text block is lifted above the scrim (position: relative; z-index: 1)`)
+  }
+
+  // ── 2. No tools or games anywhere in the hero ──
+  const banned = /\b(tools?|games?)\b|\/(tools|games)\b/i
+  const tagline = frontmatter.match(/const heroTagline =\s*'([^']*)'/)
+  assert.ok(tagline, 'the hero line is one literal')
+  assert.doesNotMatch(tagline[1], banned, 'the hero line names no tools or games')
+  const section = template.match(/<section data-type="hero"[\s\S]*?<\/section>/)
+  assert.ok(section, 'the hero section is found')
+  // The whole template, not just the section, so markup added after it is
+  // covered too. Only the <Base> tag is exempt, for its meta keywords.
+  const markup = template.replace(/<Base\b[^>]*>/, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  assert.doesNotMatch(markup, banned, 'the home page markup links and names no tools or games')
+  // Every string literal the live hero ships, comments dropped first, so a
+  // docblock may still say why the rule exists.
+  const literalsOf = (code) => {
+    const out = []
+    for (let i = 0; i < code.length; i += 1) {
+      const c = code[i]
+      if (c === '/' && code[i + 1] === '/') { i = code.indexOf('\n', i); if (i < 0) break; continue }
+      if (c === '/' && code[i + 1] === '*') { i = code.indexOf('*/', i + 2) + 1; if (i <= 0) break; continue }
+      if (c === "'" || c === '"' || c === '`') {
+        let j = i + 1
+        while (j < code.length && code[j] !== c) j += code[j] === '\\' ? 2 : 1
+        out.push(code.slice(i + 1, j))
+        i = j
+      }
+    }
+    return out
+  }
+  const heroDir = new URL('../src/components/home/hero/', import.meta.url)
+  const heroFiles = (await readdir(heroDir, { recursive: true })).filter(f => f.endsWith('.ts'))
+  for (const need of ['types.ts', 'mount.ts', 'network.ts']) {
+    assert.ok(heroFiles.includes(need), `src/components/home/hero/${need} exists — has the hero moved?`)
+  }
+  for (const file of heroFiles) {
+    const code = await readFile(new URL(file, heroDir), 'utf-8')
+    for (const literal of literalsOf(code)) {
+      assert.doesNotMatch(literal, banned, `src/components/home/hero/${file} ships a string naming tools or games: "${literal.slice(0, 80)}"`)
+    }
+    // ── 3. Test hooks are dev-only ── (whole comment lines dropped, so a
+    // docblock naming the constant cannot stand in for the gate itself)
+    const live = code.split('\n').filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n')
+    for (const m of live.matchAll(/\blocation\.search\b|\/__hero-probe\b/g)) {
+      assert.ok(live.slice(Math.max(0, m.index - 240), m.index).includes('import.meta.env.DEV'),
+        `src/components/home/hero/${file} uses ${m[0]} outside an import.meta.env.DEV gate — a dev hook would ship`)
+    }
+    // ── 4. Nothing about the host ── (network.ts is where every string on
+    // screen comes from; mount.ts's astro:* event names never reach it)
+    for (const literal of file === 'network.ts' ? literalsOf(code) : []) {
+      assert.doesNotMatch(literal, /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy|kubernetes|aws|azure|gcp|hetzner|digitalocean|vultr|linode|node\.?js|astro)\b/i,
+        `src/components/home/hero/${file} ships a string naming the host or runtime: "${literal.slice(0, 80)}"`)
+    }
+  }
+  const astroConfig = await readFile(new URL('../astro.config.mjs', import.meta.url), 'utf-8')
+  const probeMount = astroConfig.match(/configureServer\(server\) \{\s*server\.middlewares\.use\('\/__hero-probe', async \(req, res\) => \{([\s\S]*?)\n    \}\);/)
+  assert.ok(probeMount, 'the live-site probe is mounted only as dev-server middleware (configureServer), never as a route')
+  assert.match(probeMount[1], /if \(req\.method !== 'GET' \|\| !isLoopback\)/, 'the probe answers loopback GETs only')
+  assert.equal((astroConfig.match(/__hero-probe/g) ?? []).length, 1, 'the probe is mounted once')
+  for (const sheet of ['hero-network.css', 'home.css']) {
+    const css = (await readFile(styleUrl(sheet), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.doesNotMatch(css.replace(/\[data-type="[^"]*"\]/g, ''), banned, `${sheet} puts no tools or games into the hero`)
+  }
+  // The hero loads only through mount.ts's dynamic import, as its own chunk.
+  const mountSrc = await readFile(new URL('mount.ts', heroDir), 'utf-8')
+  assert.match(mountSrc, /network: \(\) => import\('\.\/network'\)/, 'the hero loads the network chunk lazily')
+  for (const file of heroFiles.filter(f => f !== 'mount.ts')) {
+    const code = await readFile(new URL(file, heroDir), 'utf-8')
+    assert.doesNotMatch(code, /from '\.\.?\/network(\/index)?'|import\('\.\.?\/network(\/index)?'\)/, `${file} does not pull the hero into another chunk`)
+  }
+  // ── 5. Nothing blinks or pulses ── Blinking read as the page flickering,
+  // twice: status lights blinking at rest (2026-09-28), then the same lights
+  // blinking while traffic crossed and a glow that breathed (2026-09-30). The
+  // one clock-driven brightness the owner keeps is the stars' slow twinkle.
+  const networkSrc = await readFile(new URL('network.ts', heroDir), 'utf-8')
+  const starsFn = networkSrc.match(/function drawStars\([\s\S]*?\n\}\n/)
+  assert.ok(starsFn, 'drawStars is found in network.ts')
+  const clocked = [...networkSrc.replace(starsFn[0], '').matchAll(/Math\.(sin|cos)\(([^()]|\([^()]*\))*\btime\b/g)].map(m => m[0])
+  assert.deepEqual(clocked, [], `the hero oscillates on the clock outside the stars' twinkle, which reads as flicker: ${clocked.join(' | ')}`)
+  // …and no constellation line pops. A star that drifts off one edge
+  // reappears at the other; a line still drawn to it vanished or appeared in
+  // one frame, about once a second at 14 px/s (the third flicker report,
+  // 2026-09-30). Drift the real stars for a minute and count those jumps.
+  const { makeStars, driftStars, lineAlpha } = await import('../src/components/home/hero/network.ts')
+  const realRandom = Math.random
+  let seed = 7
+  Math.random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
+  try {
+    for (const [w, h, reach] of [[1440, 900, 120], [375, 812, 80]]) {
+      const stars = makeStars(Math.round(Math.min(Math.max((w * h) / 9000, 50), 170)), w, h)
+      const near = stars.filter(st => st.z >= 0.62)
+      const lines = () => near.flatMap((a, i) => near.slice(i + 1).map(b => lineAlpha(a, b, reach, w, h)))
+      let before = lines(), pops = 0
+      for (let frame = 0; frame < 30 * 60; frame++) {
+        driftStars(stars, w, h, 1 / 30)
+        const after = lines()
+        pops += after.filter((v, k) => Math.abs(v - before[k]) > 0.02).length
+        before = after
+      }
+      assert.equal(pops, 0, `${w}×${h}: ${pops} constellation lines changed by more than 0.02 alpha in one frame over a minute of drift`)
+    }
+    assert.equal(lineAlpha({ x: -8, y: 100, z: 1, ph: 0 }, { x: 20, y: 100, z: 1, ph: 0 }, 120, 1440, 900), 0, 'a line to a star past the edge is invisible')
+  } finally {
+    Math.random = realRandom
+  }
+}
+console.log('home hero: one hero and no switch, its text sits above the scrim, nothing blinks, it names no tools or games or the host, and its dev hooks compile out of production')
 
 /* ══════════════  UI refresh · anchor regions for items B–G  ══════════════
 

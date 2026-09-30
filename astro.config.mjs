@@ -5,6 +5,9 @@ import node from '@astrojs/node';
 // import cloudflare from '@astrojs/cloudflare';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { request } from 'node:https';
+import { connect } from 'node:http2';
+import { promises as dns } from 'node:dns';
 
 /** @param {unknown} data */
 function generateSite(data) {
@@ -237,6 +240,107 @@ const adminSavePlugin = {
 // Adapter is the ONLY deployment-specific line — swap here, nowhere else.
 // Node (Docker/Pi/VPS): node({ mode: 'standalone' })
 // Cloudflare Workers:   cloudflare()
+// Dev only: the network hero replays a real page load, but on the dev server
+// the page comes from localhost. So the dev server measures one real request
+// to the live site from this machine instead (DNS, TCP, TLS, first byte and
+// body, plus the edge's own trace), and the review shows real numbers, never
+// a sample. `?ping` times one HEAD over a kept-open HTTP/2 connection, like
+// the hero's click-to-ping. Loopback callers only, so a dev server started with
+// --host is not an open measuring proxy. configureServer never runs in a
+// production build.
+const PROBE_HOST = 'apanjwani0.com';
+
+async function probeVisit() {
+  const t0 = performance.now();
+  const [address] = await dns.resolve4(PROBE_HOST);
+  const tDns = performance.now();
+  let tConnect = tDns;
+  let tTls = tDns;
+  /** @type {any} */
+  const res = await new Promise((resolve, reject) => {
+    const req = request({
+      host: address, servername: PROBE_HOST, path: '/', agent: false, timeout: 6000,
+      headers: { host: PROBE_HOST, 'accept-encoding': 'br, gzip', 'user-agent': 'portfolio-dev-probe' },
+    });
+    req.on('socket', (socket) => {
+      socket.once('connect', () => { tConnect = performance.now(); });
+      socket.once('secureConnect', () => { tTls = performance.now(); });
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+    req.on('response', resolve);
+    req.end();
+  });
+  const tFirst = performance.now();
+  let size = 0;
+  for await (const chunk of res) size += chunk.length;
+  const tLast = performance.now();
+  const age = Number.parseInt(String(res.headers.age ?? ''), 10);
+  const trace = await fetch(`https://${PROBE_HOST}/cdn-cgi/trace`, { signal: AbortSignal.timeout(4000) })
+    .then((r) => (r.ok ? r.text() : ''))
+    .catch(() => '');
+  return {
+    dns: tDns - t0, tcp: tConnect - tDns, tls: tTls - tConnect, ttfb: tFirst - tTls, download: tLast - tFirst,
+    size, cache: String(res.headers['cf-cache-status'] ?? ''), age: Number.isFinite(age) ? age : null, trace,
+  };
+}
+
+// The browser pings over the HTTP/2 connection its page load already opened,
+// so this keeps one open and times a HEAD on it; a new connection's first HEAD
+// is untimed. Not HTTP/1.1: Node closes that connection after the edge's HEAD
+// reply (it carries no length), so every timing would include a handshake.
+/** @type {import('node:http2').ClientHttp2Session | undefined} */
+let probeSession;
+/** @param {import('node:http2').ClientHttp2Session} session */
+function probeHead(session) {
+  return new Promise((resolve, reject) => {
+    const req = session.request({ ':method': 'HEAD', ':path': '/' });
+    req.setTimeout(6000, () => req.close());
+    req.on('response', () => { resolve(undefined); req.close(); });
+    req.on('error', reject);
+    req.on('close', () => reject(new Error('closed')));
+    req.end();
+  });
+}
+async function probePing() {
+  let session = probeSession;
+  if (!session || session.closed || session.destroyed) {
+    const fresh = connect(`https://${PROBE_HOST}`);
+    fresh.on('error', () => {});
+    fresh.on('goaway', () => { if (probeSession === fresh) probeSession = undefined; });
+    fresh.unref();
+    probeSession = session = fresh;
+    await probeHead(fresh);
+  }
+  const t0 = performance.now();
+  await probeHead(session);
+  return { ms: performance.now() - t0 };
+}
+
+/** @type {import('vite').Plugin} */
+const heroProbePlugin = {
+  name: 'hero-probe',
+  configureServer(server) {
+    server.middlewares.use('/__hero-probe', async (req, res) => {
+      const remote = req.socket.remoteAddress ?? '';
+      const isLoopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+      if (req.method !== 'GET' || !isLoopback) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      try {
+        const body = (req.url ?? '').includes('ping') ? await probePing() : await probeVisit();
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(body));
+      } catch {
+        res.writeHead(502, { 'cache-control': 'no-store' });
+        res.end();
+      }
+    });
+  },
+};
+
 export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
@@ -254,6 +358,6 @@ export default defineConfig({
   security: { checkOrigin: false },
   devToolbar: { enabled: false },
   vite: {
-    plugins: [adminSavePlugin],
+    plugins: [adminSavePlugin, heroProbePlugin],
   },
 });

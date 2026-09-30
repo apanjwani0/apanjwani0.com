@@ -1,16 +1,8 @@
 # portfolio-apanjwani0
 
-Personal portfolio dashboard — built with [Astro](https://astro.build) (SSR) and [Oat UI](https://oat.ink).
-
-## Stack
-
-| Layer | Tool |
-|---|---|
-| Framework | Astro (SSR, `output: 'server'`) |
-| Adapter | `@astrojs/node` (Docker/VPS) · swappable to `@astrojs/cloudflare` |
-| UI | [Oat UI](https://github.com/knadh/oat) — vendored as flat CSS + JS |
-| Config | Runtime JSON files (`data/`) or Cloudflare KV, with TypeScript fallback |
-| Admin | Password-protected `/admin` panel — edit all content without a redeploy |
+The source of [apanjwani0.com](https://apanjwani0.com): a server-rendered
+[Astro](https://astro.build) site on [Oat UI](https://oat.ink), with browser
+tools and games. The rules for working in it are in [AGENTS.md](AGENTS.md).
 
 ## Run locally
 
@@ -19,44 +11,33 @@ npm install
 npm run dev        # http://localhost:4321
 ```
 
-Set `ADMIN_SECRET` in `.env` (copy `.env.sample`) to enable the admin panel. Leave it unset to bypass auth in dev.
+Content lives in `src/config/*.ts`. The dev server's `/admin` page edits those
+files; commit them to publish. `/admin` does not exist in production. Leave
+`ADMIN_SECRET` unset for an open local `/admin`, or set it in `.env` (see
+`.env.sample`) to require a password.
 
-## Docker
-
-```bash
-# Build
-docker build -t portfolio:latest .
-
-# Run
-ADMIN_SECRET=your_secret docker compose up
-```
-
-The `data/` directory is mounted as a volume — content saved via `/admin` persists across restarts.
-
-## Deploy to VPS / cloud registry
+## Before committing
 
 ```bash
-# Build multi-platform image and push
-DOCKER_IMAGE=ghcr.io/your-username/portfolio:latest ./scripts/deploy-cloud.sh
-
-# Then deploy to a server
-./scripts/deploy-cloud.sh ghcr.io/your-username/portfolio:latest user@your-server
+npm run build && npm run check && npm run security:smoke && npm run poker:check && npm run boot:check
 ```
 
-## Deploy to Raspberry Pi
+## Deploy
 
-```bash
-./scripts/deploy-rpi.sh pi@raspberrypi.local
-```
+A push to `main` builds the Docker image (pushed to GHCR) and restarts the
+container on the production host, an OCI VM behind Cloudflare, through a
+self-hosted runner (`.github/workflows/deploy.yml`). Work lands on `develop`
+first and reaches `main` by PR. `data/` is a mounted volume holding analytics
+counts and the daily leaderboards.
 
-## Deploy to Cloudflare Workers
+Other targets:
 
-1. Swap the adapter in `astro.config.mjs` (one line — see comment in file)
-2. Create KV namespace: `npx wrangler kv namespace create SITE_CONFIG`
-3. Add IDs to `wrangler.jsonc`
-4. `npx wrangler secret put ADMIN_SECRET`
-5. `npm run build && npx wrangler deploy`
-
-## Content
-
-All personal data lives in `src/config/*.ts` — these are the bundled defaults and the git source of truth. In production, `/admin` writes to Cloudflare KV or `data/*.json`; changes take effect on the next request without a redeploy.
+- **Any Docker host**: `docker build -t portfolio:latest . && docker compose up`
+- **A VPS through a registry**:
+  `DOCKER_IMAGE=ghcr.io/<user>/portfolio:latest ./scripts/deploy-cloud.sh`, then
+  `./scripts/deploy-cloud.sh <image> user@host`
+- **Raspberry Pi**: `./scripts/deploy-rpi.sh pi@raspberrypi.local`
+- **Cloudflare Workers**: swap the adapter in `astro.config.mjs`, run
+  `npx wrangler kv namespace create SITE_CONFIG`, add its id to
+  `wrangler.jsonc`, then `npm run build && npx wrangler deploy`. Link Peek and
+  Chainsaw use Node sockets and would need another transport there.

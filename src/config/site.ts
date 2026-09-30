@@ -33,7 +33,7 @@ export const site = {
     "linkedin": "https://www.linkedin.com/in/apanjwani0"
   },
   "sections": {
-    "projects": true,
+    "projects": false,
     "blogs": false,
     "experience": false
   }
