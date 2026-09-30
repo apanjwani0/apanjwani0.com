@@ -4,7 +4,7 @@ export const prerender = false
 import Base from '../layouts/Base.astro'
 import { getSite, getLearnings } from '../lib/config'
 import { itemListJsonLd } from '../lib/jsonld'
-import { isPublishedLearning } from '../lib/learnings'
+import { isPublishedLearning, readingTime } from '../lib/learnings'
 import { render } from '../lib/markdown'
 import { formatDisplayDate } from '../lib/date'
 
@@ -29,21 +29,21 @@ const ldJson = itemListJsonLd(
   wide
   starfield={false}
   title="learnings"
-  description="Long-form explainers with the simulation running in the page — the history and mechanics behind ideas most people have only seen the output of."
-  keywords="interactive explainers, cellular automata, generative systems, computer science history, learn by simulation"
+  description="Short, visual explainers of how things work, with interactive diagrams you can play with while you read."
+  keywords="interactive explainers, how things work, visual explanations, how the internet works, system diagrams"
 >
   {ordered.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <h1>learnings</h1>
   <p data-type="page-intro">
-    Things I found worth understanding properly, written up with the simulation
-    running in the page. Read the story, then poke at the thing itself.
+    Short, visual explainers of how things work. Each one has diagrams you can
+    play with while you read.
   </p>
   {ordered.length === 0 && <p>Nothing published yet — the first pieces are being written.</p>}
   <ul data-type="card-grid" data-variant="list">
     {ordered.map(l => (
       <li>
         <div data-type="writing-row">
-          <time data-type="writing-date" datetime={l.date}>{formatDisplayDate(l.date)}</time>
+          <span data-type="writing-date"><time datetime={l.date}>{formatDisplayDate(l.date)}</time> · {readingTime(l.content)} min read</span>
           <h2 data-type="card-title">
             <a href={`/learnings/${l.slug}`}>{l.title}</a>
           </h2>

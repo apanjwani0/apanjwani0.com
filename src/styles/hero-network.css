@@ -1,9 +1,8 @@
-/* The network heroes (?hero=network and ?hero=internet on the dev server): a
-   metro line of how a page reaches you, over a drift of stars, drawn by
-   src/components/home/hero/network.ts. Scoped under the section's
-   [data-hero]. Canvas colours are data in network.ts; this file styles only
-   the real DOM: the frame (top left), the log (bottom right), the node
-   buttons and the hover card. */
+/* The home hero: a metro line of how this page reached you, over a drift of
+   stars, drawn by src/components/home/hero/network.ts. Scoped under the
+   section's [data-hero]. Canvas colours are data in network.ts; this file
+   styles only the real DOM: the frame (top left), the log (bottom right), the
+   node buttons and the card a stop opens. */
 
 section[data-type="hero"][data-hero] [data-type="hero-canvas"] {
   position: absolute;
@@ -68,25 +67,52 @@ section[data-type="hero"][data-hero] [data-type="hero-node-btn"]:focus-visible {
   outline-offset: 3px;
 }
 
+/* What a stop is, then what it did on this visit. network.ts positions it
+   from its measured size, beside the stop on a laptop and above it on a
+   phone. */
 section[data-type="hero"][data-hero] [data-type="hero-card"] {
   position: absolute;
   z-index: 5;
-  max-width: 240px;
-  padding: var(--space-sm) var(--space-lg);
+  width: max-content;
+  max-width: min(17rem, calc(100% - 16px));
+  padding: var(--space-md) var(--space-lg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
-  color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  line-height: 1.45;
+  background: color-mix(in srgb, var(--color-bg) 94%, transparent);
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--motion-fast) var(--ease-out);
+  transform: translateY(0.25rem);
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
 }
 
 section[data-type="hero"][data-hero] [data-type="hero-card"][data-shown] {
   opacity: 1;
+  transform: none;
+}
+
+section[data-type="hero"][data-hero] [data-part="stop-name"] {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-day);
+}
+
+section[data-type="hero"][data-hero] [data-part="stop-what"] {
+  margin: var(--space-xs) 0 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+section[data-type="hero"][data-hero] [data-part="stop-now"] {
+  margin: var(--space-sm) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  line-height: 1.45;
+  color: var(--color-muted);
 }
 
 /* ── The frame: what the drawing is, before it plays ── */
@@ -105,18 +131,22 @@ section[data-type="hero"][data-hero][data-nw-phone] [data-type="hero-frame"] {
   top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-lg));
 }
 
-/* Dev server only: clear the hero-switch pill that sits under the nav. */
-main:has(nav[data-type="hero-switch"]) section[data-type="hero"][data-hero] [data-type="hero-frame"] {
-  top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-section) + var(--space-xl));
-}
-
+/* The frame's title, a step up from a label so it reads as the heading
+   (owner, 2026-09-30). Balanced, so a phone's two lines break evenly. */
 section[data-type="hero"][data-hero] [data-part="kicker"] {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: 0.14em;
+  font-size: var(--text-sm);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+  text-wrap: balance;
   color: var(--color-day);
+}
+
+/* One line on a phone, so the diagram keeps its room. */
+section[data-type="hero"][data-hero][data-nw-phone] [data-part="kicker"] {
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
 }
 
 section[data-type="hero"][data-hero] [data-part="headline"] {
@@ -346,13 +376,8 @@ section[data-type="hero"][data-hero][data-nw-phone] div[data-type="hero-content"
 }
 
 section[data-type="hero"][data-hero] h1,
-section[data-type="hero"][data-hero] p[data-type="tagline"] {
+section[data-type="hero"][data-hero] p[data-type="tagline"],
+section[data-type="hero"][data-hero] nav[data-type="hero-links"] {
   position: relative;
   z-index: 1;
-}
-
-/* A hair smaller than the shared --text-hero-name, so the log keeps its room
-   beside the name on a laptop before the stacked layout kicks in. */
-section[data-type="hero"][data-hero] h1 {
-  font-size: clamp(3rem, calc(7vw + 0.5rem), 7rem);
 }

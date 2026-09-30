@@ -19,7 +19,8 @@ experience / blogs / learnings / games / tools sections.
   (github.com/apanjwani0/oat) and copy `dist/oat.min.*` into `public/`. No
   React/Vue/Svelte.
 - **TypeScript** throughout; `@astrojs/check` for type checking.
-- **marked** + **dompurify** for markdown; **html2canvas** for tools.
+- **marked** + **dompurify** for markdown; **html2canvas** for tools;
+  **gifenc** for GIF export; **cytoscape** for the Flowmap and Draftboard graphs.
 
 **Content**: `src/config/*.ts` holds the interfaces and default data. The
 accessors in `src/lib/config.ts` read a KV override (Workers) or
@@ -31,8 +32,8 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - `src/pages/` — routes; `admin.astro` (config editor) and `api/admin/save.ts`
   (save allowlist).
 - `src/layouts/` — `Base.astro` and `ToolBase.astro`; `src/components/`
-  (`home/`, `tools/`, `games/`). `src/components/home/hero/` holds the network
-  hero candidates.
+  (`home/`, `tools/`, `games/`). `src/components/home/hero/` holds the home
+  hero.
 - `src/middleware.ts` — security headers, the CSP nonce, `Cache-Control`, the
   visit counter and the origin lock.
 - `src/lib/caa.ts` — the CAA vocabulary shared by DNS Sightline and Chainsaw.
@@ -43,6 +44,28 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - `src/styles/theme.css` — design tokens, the single source of truth.
 - `astro.config.mjs` — the adapter and the Vite middleware that persists
   `/admin` saves.
+
+## Current state (2026-09-30)
+
+- **Live** = `origin/main` (last merge 2026-09-26, PR #22). Branch flow:
+  feature → `develop` → `main`, by PR. Local `main` is stale (2026-07-07);
+  compare against `origin/main`.
+- **Merged into `develop`, not live:** PRs #23–#25 (boot-check signals, DNS
+  Sightline follow-ups, the UI refresh foundation), 17 commits ahead of
+  `origin/main`. `develop` → `main` ships them along with the hero.
+- **In flight:** `feat/home-hero` — the network replay as the only home hero
+  (picked 2026-09-30, replacing the classic one), `/llms.txt`, and the
+  AI-crawler `robots.txt`. 11 commits ahead of `origin/develop`, 6 of them not
+  yet pushed, plus the uncommitted finalisation of the hero.
+- **Also uncommitted on this branch (2026-09-30):** Projects hidden
+  (`sections.projects`), the learnings hub's plain intro and read times, and the
+  new article `/learnings/how-the-internet-works`, built from the approved
+  brief `docs/plans/internet-article.md`. The owner has not yet reviewed it.
+- **Owner's pending moves:** (1) test the finished hero, then push
+  `feat/home-hero`, PR it into `develop`, and `develop` → `main` to go live;
+  (2) close the origin lock (see *Origin exposure*) — until then port 80 on
+  the origin is reachable around Cloudflare.
+- The 2-hourly autonomous pass is disabled (last run 2026-08-20).
 
 ## Build / Test / Run
 
@@ -59,6 +82,8 @@ npm run poker:check    # poker engine checks
 npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
 npm run origin:check   # assert the DEPLOYED edge posture against production
+npm run trainer:catalogue   # poker trainer asset sheet -> docs/poker-assets.html (gitignored)
+node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc encoder
 ```
 
 **The gate before any commit: `build`, `check` (0 errors), `security:smoke`,
@@ -66,14 +91,14 @@ npm run origin:check   # assert the DEPLOYED edge posture against production
 
 - `check` is stricter than `build`: Astro's build parser tolerates things
   `astro check` can't parse. Two known traps build green: a `{/* … */}`
-  comment between a component's attributes (hid every type error in that file),
+  comment between a component's attributes (hides every type error in that file),
   and `const f = (a) => ({…})` followed by a bare `{` block (phantom parse
   errors).
 - `boot:check` starts the built server with the Dockerfile's own command on a
   loopback port and requires a full 200 page from `/`. Neither `build` nor
-  `check` starts the server, and a dependency mismatch once shipped an origin
-  that crashed on boot. It deletes `ASTRO_NODE_LOGGING` from the child's env on
-  purpose: that variable skips the branch that crashed. The Dockerfile's final
+  `check` starts the server, so a dependency mismatch can ship an origin that
+  crashes on boot. It deletes `ASTRO_NODE_LOGGING` from the child's env on
+  purpose: that variable skips the boot path that crashes on a mismatch. The Dockerfile's final
   stage runs it too (after `npm ci --omit=dev` and the `USER` switch), so a
   server that can't start fails the image build and the old container keeps
   serving. A local `node_modules` older than the lockfile fails it; run
@@ -182,8 +207,8 @@ the deployed half.
 
 `isAdminRequestAllowed()` returns `import.meta.env.DEV` and nothing else, so
 `/admin` and every `/api/admin/*` route answer 404 in production. `ADMIN_SECRET`
-is dev-only and never passed to the container. Don't reintroduce an IP
-allowlist: it authenticated a header the caller chooses.
+is dev-only and never passed to the container. Never add an IP allowlist: it
+authenticates a header the caller chooses.
 
 ### Never authorize on a client-controlled value
 
@@ -489,18 +514,20 @@ fixture is the worked example.
 - **SSR everywhere**, `/tools` included: KV reads and the middleware headers
   need it.
 - **SEO support copy is off.** `seoContent` still renders when set, but every
-  entry ships empty: the generated how-to and FAQ filler was judged boring, a
-  deliberate SEO trade-off. Anything added there must earn its place like an
-  article.
-- **StarField** runs only behind the home page's classic hero. Keep it off tool
-  and game detail pages (CPU) and the four card hubs (dots land in card copy). A
-  new listing page passes `starfield={false}`, since `Base.astro` defaults it on.
+  entry ships empty: generated how-to and FAQ filler is boring, and dropping it
+  is a deliberate SEO trade-off. Anything added there must earn its place like
+  an article.
+- **StarField** runs behind the plain pages that keep `Base.astro`'s default
+  (the 404, blogs, a learning with no figure). Keep it off tool and game detail
+  pages (CPU), the four card hubs (dots land in card copy) and the home page,
+  whose hero draws its own stars. A new listing page passes `starfield={false}`.
 - **Tool and game detail pages** pass `loadFonts={false}` (no CLS, no
   render-blocking font request) and `clientRouter={false}` (no router bundle) to
   `Head`.
 - **No JS framework.**
-- **Heavy dependencies load per route.** `cytoscape` is imported inside
-  `connectedCallback` in `Flowmap.ts` and nowhere else. Every Cytoscape layout
+- **Heavy dependencies load per route.** `cytoscape` is only ever a dynamic
+  `import()`: in `Flowmap.ts`'s `connectedCallback`, and in `Draftboard.ts`
+  when the Map view first opens. Never import it statically. Every Cytoscape layout
   needs `nodeDimensionsIncludeLabels: true`, or labelled nodes pile up.
 - **Client mounting with ClientRouter.** Bundled scripts run once per session,
   so anything that mounts does it inside
@@ -615,51 +642,66 @@ B (theme toggle everywhere), C (command palette, `?` sheet, smart 404), D
 (toolkit: stars, shelf, `/tools/kit`, bookmarks export), E (shells, nav, motion,
 the home hero seam), F (hub thumbnails and share cards) and G (one control kit)
 are designed, not built. The plan (`ui-refresh/ui-plan.md`, the worker brief and
-item A's report) is only on the `wip/ui-refresh-notes` branch: read it before
-building any of them, and keep that branch. Until they are built, `kit.ts`,
+item A's report) is only on the remote branch `origin/wip/ui-refresh-notes`:
+read it before building any of them, and keep that branch. Until they are built, `kit.ts`,
 `fuzzy.ts` and `shortcuts.ts` have no UI caller; `security:smoke` covers them so they don't rot, and each
 item's assertions go in its labelled region at the end of that script. Planned
 names nothing renders yet: `button[data-type="kit-star"]`,
 `section[data-type="kit-shelf"]`, `div[data-type="detail-actions"]`, and badges
-(`[data-type="badge"][data-tone]`, only in `src/styles/controls.css`). The
+(`[data-type="badge"][data-tone]`, planned for a `src/styles/controls.css` that
+does not exist yet). The
 view-transition plan: `vt-title` is the page h1 and, during a navigation, the
 clicked card's title, with `html[data-vt-source]` clearing the source page's h1
 (two elements with one name abort the transition); `vt-nav` is the fixed nav;
 `vt-thumb` is optional. No stylesheet declares `view-transition-name` yet.
 
-## Home hero candidates (dev only, 2026-09)
+## Home hero (2026-09)
 
-**Production renders the classic hero.** On the dev server, the pill
-`nav[data-type="hero-switch"]` (dev only) switches to two stories drawn by one
-engine, `src/components/home/hero/network.ts`: a metro line of stations over a
-drifting starfield, a frame at the top left saying what it shows, and a
-chat-like log at the bottom right. The owner picked the network concept on
-2026-09-28 and is comparing the two:
+The home page has one hero, `src/components/home/hero/network.ts`. It replays
+**this** page load, slowed down, as a metro line of stations over a drifting
+starfield: your device, your network, the ISP, DNS on a branch, Cloudflare's
+data centre (by city) and the server. A frame at the top left says what it
+shows, and a chat-like log at the bottom right tells each step with its real
+timing. The owner picked it on 2026-09-30 and retired the dev switch, the
+classic hero and the "how the internet works" story, whose topic becomes a
+learnings article. The frame, the name block and the log are the keepers; the
+line itself may be swapped later through the same contract.
 
-- `/?hero=network` replays **this** page load, slowed down: device, DNS,
-  Cloudflare's data centre (by city), the server, with each step's real
-  timing.
-- `/?hero=internet` explains how any page reaches anyone, in plain words.
-
-Liquid light, monsoon and the Hero Lab prototypes moved out of the repo to
-`~/Projects/screensavers/` (2026-09-28), kept for future macOS screen savers.
+Liquid light, monsoon and the Hero Lab prototypes live in
+`~/Projects/screensavers/` (kept for future macOS screen savers), not here.
 
 - **Real data only, never a sample** (owner, 2026-09-28). The replay reads
   Navigation Timing, `/cdn-cgi/trace` (country, data centre, TLS) and one HEAD
   of `/` (whether Cloudflare's copy predates the visit, from its `age`). A fact
-  it cannot measure is left out. On the dev server the page comes from
-  localhost, so `/__hero-probe` (dev-server middleware in `astro.config.mjs`,
-  loopback only) measures one real request to the live site instead.
+  it cannot measure is left out: the ISP station carries no number, because
+  nothing times that hop apart from the rest. On the dev server the page comes
+  from localhost, so `/__hero-probe` (dev-server middleware in
+  `astro.config.mjs`, loopback only) measures one real request to the live
+  site instead.
 - **Never the host**: no provider, runtime or anything else about the origin,
   which is what helps someone reach it around Cloudflare. The visitor's own
   address appears only as its first two groups, and is never kept.
-- **The switch is dev-only by construction.** `src/pages/index.astro` reads the
-  query as `import.meta.env.DEV ? … : null`, anything else falls back to
-  `classic`, and a classic page ships no hero script.
-- **Text is server-rendered and shared.** Every hero renders the same h1,
-  tagline and social links. The live hero reads them through `env.text` and
-  never draws its own copy. It drops the avatar and the StarField and puts
-  `data-theme="dark"` on its section, because the canvas is dark.
+- **Every stop explains itself** on hover, focus or tap, for someone who has
+  never heard of DNS: a card says what the stop is and what it did on this
+  visit (measured, or nothing), the stop is spotlit, and it acts out its own
+  leg of the trip. A pointer must rest on a stop briefly, so one crossing the
+  line opens nothing. Acting out waits for the replay and pings to finish and
+  never runs under reduced motion.
+- **Plain, explanatory copy** (owner, 2026-09-30): full, simple sentences a
+  beginner can follow, in the frame, the log and the cards alike. No clipped
+  one-liners or clever phrasing.
+- **Nothing blinks or pulses.** Blinking read as the page flickering twice, so
+  the status lights stay lit, the spotlight's glow is steady and its veil eases
+  in and out. The stars' slow twinkle is the only brightness driven by the
+  clock (asserted); they drift at 14 px/s.
+- **A short phone scrolls.** When the frame, the line and the text block
+  cannot share one screen, the hero grows taller rather than squeezing the
+  line into the name; a line still too short drops its sub-lines before any
+  label.
+- **Text is server-rendered.** The page renders the h1, tagline and social
+  links; the hero reads them through `env.text` and never draws its own copy.
+  The section carries `data-theme="dark"` because the canvas is dark, and the
+  page passes `starfield={false}` because the hero draws its own stars.
 - **The contract** is `src/components/home/hero/types.ts`: `create(host, env)`
   returns `{ start, stop, resize, destroy }`. `mount.ts` is the only caller. It
   loads the hero as its own chunk, mounts on `astro:page-load`, destroys on
@@ -673,14 +715,13 @@ Liquid light, monsoon and the Hero Lab prototypes moved out of the repo to
   hero is hidden or off screen, and renders the finished replay as one still
   frame under `prefers-reduced-motion`.
 
-`security:smoke` holds the switch to dev, the fallback to classic, the hero to
-no tools or games (the tagline, the section markup, and every string literal and
-stylesheet the hero ships), `network.ts`'s strings to no host or runtime name,
-the dev hooks (`location.search`, `/__hero-probe`) to the DEV gate, the probe to
-loopback-only dev middleware, and the hero to its own chunk. **When the owner
-picks a story,** make it the page's only hero: delete the switch, the other
-story and the classic markup in the same change, and update this section and
-the StarField note.
+`security:smoke` holds the page to one hero with no switch and no query string,
+every child of the hero's text block above the scrim (read from the markup),
+no clock-driven oscillation outside the stars' twinkle, the hero to no tools or
+games (the tagline, the section markup, and every string
+literal and stylesheet the hero ships), `network.ts`'s strings to no host or
+runtime name, the dev hooks (`location.search`, `/__hero-probe`) to the DEV
+gate, the probe to loopback-only dev middleware, and the hero to its own chunk.
 
 ## Skills & Commands
 
@@ -719,19 +760,22 @@ Every content section is manageable through `/admin` in dev. To add one:
 Current config keys: `site`, `projects`, `experience`, `blogs`, `learnings`,
 `games`, `tools`
 
-### Hiding a section: `sections.blogs`
+### Hiding a section: `sections.blogs`, `sections.projects`
 
-Blogs ships hidden. `isBlogsPublic()` (`src/lib/config.ts`) reads
-`site.sections.blogs`, and the nav and footer (`navLinks`), the sitemap, the
-hub's `ItemList` and the `noindex` on both blog routes all read it. Hidden, not
-deleted: both routes still answer 200. Flip the flag to restore the section;
-make the routes 404 to retire it.
+Blogs and Projects ship hidden (Projects since 2026-09-30, the owner's call).
+`isBlogsPublic()` and `isProjectsPublic()` (`src/lib/config.ts`) read
+`site.sections.<name>`, and `GATED_SECTIONS` there maps each path to its
+predicate. The nav and footer (`navLinks`), the sitemap, the site index (the
+palette and `/llms.txt`, project cards included), the hub's `ItemList` and the
+`noindex` on the routes all read it. Hidden, not deleted: the routes still
+answer 200 when typed. Flip the flag to restore the section; make the routes 404
+to retire it.
 
 - **Gate a signal, never delete it**, and assert a reversible switch in both
   states. `security:smoke` derives from `navLinks()` that every hub the nav
   advertises has a sitemap entry for that flag state.
-- `Site['sections']` is `Record<string, boolean>`: the `as const` literal type
-  made the flag unchangeable in the checker's eyes.
+- Keep `Site['sections']` as `Record<string, boolean>`: an `as const` literal
+  type makes the flag unchangeable in the checker's eyes.
 - Check what a fixture depends on before removing its data. The sitemap
   escaping assertion turns blogs on explicitly for that reason.
 
@@ -823,6 +867,14 @@ own chrome and runs the same `mountGame()` dispatch `/games/[slug]` uses.
   never animate and behavioural ones must; every beat lights an element that
   exists, tokens stay inside the viewBox, and only the activity view may show
   two tokens. All asserted.
+- `internet-atlas` (`src/components/games/internet-atlas/`) is the same kind of
+  figure for `/learnings/how-the-internet-works`: eight stops, each with a legend
+  saying what it is, what it does on this trip and what happens when it goes
+  wrong. Every view animates. It draws with the `at-*` vocabulary styled in
+  `diagram-atlas.css`, and its clock is a copy of the Diagram Atlas's (fold the
+  two into one engine if a third figure arrives). Its example addresses come
+  only from the documentation ranges, and it never names the host. All
+  asserted, like the Diagram Atlas.
 
 ## Code graph (graphify)
 
@@ -836,13 +888,14 @@ committed; the rest is gitignored. Keep `.gitignore` comments on their own lines
 ## The 2-hourly autonomous pass
 
 `portfolio-2h-pass` (its prompt is at
-`~/.claude/scheduled-tasks/portfolio-2h-pass/SKILL.md`) runs 3–4 roles in
-parallel every two hours, with every fourth run an audit. The roster and the
+`~/.claude/scheduled-tasks/portfolio-2h-pass/SKILL.md`; **disabled**, last run
+2026-08-20) runs 3–4 roles in parallel every two hours, with every fourth run
+an audit. The roster and the
 selection rule are in `.claude/scheduled/portfolio-roles.md`, the ledger in
 `.claude/scheduled/portfolio-pass-log.md`.
 
-- Roles rotate by a PASS counter in the ledger, not by judgement or clock slot;
-  both starved the roles whose neglect a screenshot doesn't show.
+- Roles rotate by a PASS counter in the ledger, never by judgement or clock
+  slot: both starve the roles whose neglect a screenshot doesn't show.
 - The selection rule has one copy, in the roster. The prompt must not restate
   it.
 - The ledger is read top-200 lines only: an entry is capped at 12 lines, and
@@ -851,8 +904,8 @@ selection rule are in `.claude/scheduled/portfolio-roles.md`, the ledger in
 It commits to `develop` behind the full gate and never pushes or touches
 `main`. It can't start the dev server, so a route that needs an in-site
 click-through goes in the ledger's `## Verification queue`, drained with
-`/browser-debug` in a session with the owner. Don't run it alongside the older
-daily `daily-portfolio-improvement` task.
+`/browser-debug` in a session with the owner. Run only one autonomous
+portfolio task at a time.
 
 ## Coming-soon pages have a working ask
 

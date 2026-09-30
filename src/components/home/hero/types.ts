@@ -1,15 +1,15 @@
 /**
- * The contract the home heroes behind the dev-only `?hero=` switch follow
- * (src/pages/index.astro), and the one mount that runs them (mount.ts).
- * `network` replays this page load and `internet` explains any page load;
- * both are network.ts.
+ * The contract the home hero follows (network.ts, the replay of this page
+ * load), and the one mount that runs it (mount.ts). The drawing is the part
+ * that may be swapped later: another hero implements the same create() and
+ * gets the same stage, text and lifecycle.
  *
  * It is the Hero Lab's module contract carried over, with one change: the
  * name, the tagline and the social links are server-rendered, so they are in
  * the HTML before any script runs and for a visitor with none. A hero reads
  * them from `env.text` and never draws its own copy.
  */
-export type HeroId = 'network' | 'internet'
+export type HeroId = 'network'
 
 export interface HeroText {
   /** `section[data-type="hero"]`, the full-bleed hero. */

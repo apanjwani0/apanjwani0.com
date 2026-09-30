@@ -100,11 +100,11 @@
      different optimal sizes, and one token cannot serve both. */
   --text-prose: 1.1875rem;                      /* 19px article body */
   --text-prose-lead: clamp(1.25rem, 3vw, 1.45rem); /* article standfirst */
-  --text-display: clamp(2rem, 7vw, 3.5rem);   /* home hero name  */
-  --text-lead: clamp(1rem, 2.7vw, 1.3rem);    /* home tagline    */
+  --text-lead: clamp(1rem, 2.7vw, 1.3rem);    /* lead line: the hero's headline */
   --text-label: clamp(0.72rem, 2vw, 0.8rem);  /* mono nav + small links */
-  --text-hero-name: clamp(3rem, 9vw, 7.5rem);         /* live home hero name (?hero=) */
-  --text-hero-line: clamp(0.85rem, 1.6vw, 1.05rem);   /* live home hero tagline      */
+  /* The name leaves the hero's log its room beside it on a laptop. */
+  --text-hero-name: clamp(3rem, calc(7vw + 0.5rem), 7rem);  /* home hero name    */
+  --text-hero-line: clamp(0.85rem, 1.6vw, 1.05rem);         /* home hero tagline */
   --text-wordmark: clamp(1.05rem, 1rem + 0.6vw, 1.2rem);  /* header wordmark — fluid 1.05→1.2 */
 
   /* ── Spacing ───────────────────────────────────────────────

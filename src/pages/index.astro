@@ -2,7 +2,6 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
-import Avatar from '../components/Avatar.astro'
 import { getSite } from '../lib/config'
 import { personJsonLd, webSiteJsonLd } from '../lib/jsonld'
 import { safeExternalUrl } from '../lib/security'
@@ -17,18 +16,8 @@ const cspNonce = (Astro.locals as any).cspNonce
 // anywhere in the hero (2026-09-27), so the line names neither; the meta
 // description below still does, because search is where that list helps.
 const heroTagline =
-  'I build software for a living and for fun: payments at scale by day, my own apps by night.'
+  'I build payment systems for a living, and my own apps for fun.'
 
-// Which hero renders. Production always renders the classic one. The dev
-// server also takes ?hero=network (a replay of this page load) and
-// ?hero=internet (how any page load works), so the owner can compare them on
-// the real page before one replaces the classic hero. `import.meta.env.DEV` is
-// a build-time constant, so a production build never reads the query.
-const HEROES = ['classic', 'network', 'internet'] as const
-type Hero = (typeof HEROES)[number]
-const requestedHero = import.meta.env.DEV ? Astro.url.searchParams.get('hero') : null
-const hero: Hero = HEROES.find(h => h === requestedHero) ?? 'classic'
-const liveHero = hero === 'classic' ? undefined : hero
 // The home page has no page title, so without this it would fall back to the bare
 // role line (`site.tagline`) as its meta/OG/Twitter description — a thin snippet
 // for the most-linked page. This describes what the site actually offers.
@@ -58,16 +47,16 @@ const siteLd = webSiteJsonLd({
 })
 ---
 
-<Base bare starfield={!liveHero} description={homeDescription} keywords={`${site.name}, ${site.handle}, portfolio, software engineer, developer tools, browser games`}>
+<Base bare starfield={false} description={homeDescription} keywords={`${site.name}, ${site.handle}, portfolio, software engineer, developer tools, browser games`}>
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={siteLd} />
 
-  {/* A live hero draws on a canvas that is dark at every hour, so it pins the
-      dark palette for its own subtree whatever theme the visitor stored. */}
-  <section data-type="hero" aria-label="Introduction" data-hero={liveHero} data-theme={liveHero && 'dark'}>
-    {liveHero && <div data-type="hero-stage"></div>}
+  {/* The hero replays this page load on a canvas that is dark at every hour,
+      so it pins the dark palette for its own subtree whatever theme the
+      visitor stored, and draws its own stars instead of the StarField. */}
+  <section data-type="hero" aria-label="Introduction" data-hero="network" data-theme="dark">
+    <div data-type="hero-stage"></div>
     <div data-type="hero-content">
-      {!liveHero && <Avatar src={site.avatar} alt={`Portrait of ${site.name}`} />}
       <h1>{site.name}</h1>
       <p data-type="tagline">{heroTagline}</p>
       <nav data-type="hero-links" aria-label="Social profiles">
@@ -77,19 +66,8 @@ const siteLd = webSiteJsonLd({
     </div>
   </section>
 
-  {import.meta.env.DEV && (
-    <nav data-type="hero-switch" aria-label="Hero preview (dev server only)">
-      <span>hero</span>
-      {HEROES.map(h => (
-        <a href={`/?hero=${h}`} aria-current={h === hero ? 'page' : undefined}>{h}</a>
-      ))}
-    </nav>
-  )}
-
-  {liveHero && (
-    <script>
-      import { initHero } from '../components/home/hero/mount'
-      initHero()
-    </script>
-  )}
+  <script>
+    import { initHero } from '../components/home/hero/mount'
+    initHero()
+  </script>
 </Base>

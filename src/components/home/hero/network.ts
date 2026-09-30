@@ -1,21 +1,18 @@
 /**
- * The network heroes: how a web page reaches you, drawn as one metro line
- * over an endless drift of stars. One engine and two stories, picked by the
- * section's data-hero (the dev-only switch in src/pages/index.astro):
+ * The home hero: how this website got to your device, drawn as one metro
+ * line over an endless drift of stars. It replays THIS page load, slowed
+ * down, from the browser's own Navigation Timing, Cloudflare's
+ * /cdn-cgi/trace and one HEAD of '/'. Real data only (owner, 2026-09-28): a fact the page cannot measure
+ * is left out, never filled in with a sample. On the dev server the page
+ * comes from localhost, so the same facts come from one real request to the
+ * live site that the dev server makes (/__hero-probe, in astro.config.mjs).
  *
- *  - `network` replays THIS page load, slowed down, from the browser's own
- *    Navigation Timing, Cloudflare's /cdn-cgi/trace and one HEAD of '/'.
- *    Real data only (owner, 2026-09-28): a fact the page cannot measure is
- *    left out, never filled in with a sample. On the dev server the page
- *    comes from localhost, so the same facts come from one real request to
- *    the live site that the dev server makes (/__hero-probe, in
- *    astro.config.mjs).
- *  - `internet` explains how any page reaches anyone, in plain words, on the
- *    same stage. Its only number is this page's own total.
+ * Every stop explains itself on hover, focus or tap, in plain words for
+ * someone who has never heard of DNS, and acts out its own job on the line.
  *
- * Neither ever names the host provider, the runtime or anything else about
- * the origin (owner, 2026-09-27): that is what helps someone reach it around
- * Cloudflare. AGENTS.md's Home hero candidates section has the contract.
+ * It never names the host provider, the runtime or anything else about the
+ * origin (owner, 2026-09-27): that is what helps someone reach it around
+ * Cloudflare. AGENTS.md's Home hero section has the contract.
  */
 import type { HeroCreate, HeroInstance } from './types'
 
@@ -48,12 +45,13 @@ const BODY = hexRgb('#0b0f19')
 const SCREEN_BG = '#070a12'
 const SCREEN_INK = '#dde6f2'
 const LED_ON = 'rgba(130,255,170,0.95)'
-const LED_OFF = 'rgba(80,110,95,0.35)'
 const STAR = 'rgb(200,210,230)'
 const CONSTELLATION = 'rgb(150,160,182)'
 const LABEL = 'rgba(221,230,242,0.92)'
 const SUB = 'rgba(132,144,160,0.92)'
 const CHIP = rgbCss(AMBER, 0.95)
+// Drawn over the diagram while a stop's card is open, so that stop stands out.
+const VEIL = 'rgba(7,10,18,0.58)'
 // Scratch colours, refilled every frame instead of allocated.
 const MIX: Rgb = [0, 0, 0]
 const TINT: Rgb = [0, 0, 0]
@@ -90,25 +88,25 @@ interface Station {
   kind: Kind
   label: string
   sub: string
-  /** Hover and screen-reader text. */
-  info: string
+  /** What this stop is, in plain words: the hover card and the screen-reader text. */
+  what: string
+  /** What happened here on this visit, from the measured facts; '' when nothing was measured. */
+  now: string
   /** Off the line, above it: a question asked on the way (DNS). */
   branch?: boolean
   /** Written inside the edge's hexagon: the data centre's code. */
   code?: string
   /** Names the stretch of line arriving at this station. */
   via?: string
-  /** Draws that stretch as network hops handing the packets along. */
-  hops?: boolean
 }
 // A branch hangs off the main station before it; every other station joins
 // the main station before it.
-interface Link { a: number; b: number; via: string; hops: boolean }
+interface Link { a: number; b: number; via: string }
 function linksOf(stations: Station[]): Link[] {
   const links: Link[] = []
   let prev = -1
   stations.forEach((s, i) => {
-    if (prev >= 0) links.push({ a: prev, b: i, via: s.via ?? '', hops: Boolean(s.hops) })
+    if (prev >= 0) links.push({ a: prev, b: i, via: s.via ?? '' })
     if (!s.branch) prev = i
   })
   return links
@@ -193,8 +191,8 @@ function layoutLabels(ctx: CanvasRenderingContext2D, stations: Station[], pos: P
 
 // ---- Glyphs: solid panels with a crisp outline, centred at (x, y) with
 // half-extent s. G is one scratch object refilled per station per frame.
-interface GlyphScratch { stroke: string; body: string; ink: string; lw: number; heat: number; fill: number; time: number; code: string; codeFont: string }
-const G: GlyphScratch = { stroke: '', body: '', ink: '', lw: 2, heat: 0, fill: 0, time: 0, code: '', codeFont: '' }
+interface GlyphScratch { stroke: string; body: string; ink: string; lw: number; fill: number; code: string; codeFont: string }
+const G: GlyphScratch = { stroke: '', body: '', ink: '', lw: 2, fill: 0, code: '', codeFont: '' }
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, r: number) {
   ctx.beginPath()
@@ -213,13 +211,11 @@ function panel(ctx: CanvasRenderingContext2D, g: GlyphScratch) {
 function detailStroke(ctx: CanvasRenderingContext2D, g: GlyphScratch) {
   ctx.lineWidth = g.lw * 0.6; ctx.globalAlpha = 0.7; ctx.strokeStyle = g.stroke; ctx.stroke(); ctx.globalAlpha = 1
 }
-// Status LEDs stay lit at rest and flicker only while traffic crosses: blinking
-// with nothing happening read as the page flickering (owner, 2026-09-28).
-function ledOn(g: GlyphScratch, i: number): boolean {
-  return g.heat <= 0.3 || Math.sin(g.time * 0.038 + i * 1.7) > -0.2
-}
-function led(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, on: boolean) {
-  ctx.fillStyle = on ? LED_ON : LED_OFF
+// Status LEDs are always lit and never blink: blinking read as the page
+// flickering, first at rest (owner, 2026-09-28) and then while traffic
+// crossed (2026-09-30). The glyph's outline shows the traffic instead.
+function led(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.fillStyle = LED_ON
   ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.fill()
 }
 function screenBar(ctx: CanvasRenderingContext2D, f: number, th: number, x: number, y: number, w: number, h: number) {
@@ -282,7 +278,7 @@ function drawRouter(ctx: CanvasRenderingContext2D, x: number, y: number, s: numb
   for (let i = 0; i < 3; i++) ctx.rect(x + 0.3 * s + i * 0.2 * s, y - 0.09 * s, 0.13 * s, 0.18 * s)
   detailStroke(ctx, g)
   const lr = Math.max(1.1, 0.055 * s)
-  for (let i = 0; i < 4; i++) led(ctx, x - 0.72 * s + i * 0.16 * s, y, lr, ledOn(g, i))
+  for (let i = 0; i < 4; i++) led(ctx, x - 0.72 * s + i * 0.16 * s, y, lr)
 }
 function drawDns(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, g: GlyphScratch) {
   const r = 0.85 * s, cy = 0.5 * r, cx = Math.sqrt(r * r - cy * cy)
@@ -322,7 +318,7 @@ function drawRack(ctx: CanvasRenderingContext2D, x: number, y: number, s: number
   }
   detailStroke(ctx, g)
   const lr = Math.max(1.1, 0.055 * s)
-  for (let u = 0; u < 4; u++) led(ctx, x - 0.36 * s, y - s + (u + 0.5) * 0.5 * s, lr, ledOn(g, u))
+  for (let u = 0; u < 4; u++) led(ctx, x - 0.36 * s, y - s + (u + 0.5) * 0.5 * s, lr)
 }
 // A radio mast: the internet provider every home and phone connects through.
 function drawTower(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, g: GlyphScratch) {
@@ -348,30 +344,44 @@ const GLYPH: Record<Kind, (ctx: CanvasRenderingContext2D, x: number, y: number, 
 // ---- Space: an endless, slow drift of stars in depth, the nearer ones
 // joined into constellations that form and dissolve as they pass each other.
 // Sorted nearest first, so the constellation pass walks only a prefix.
-interface Star { x: number; y: number; z: number; ph: number }
-const DRIFT = 7
+// Exported for security:smoke, which drifts them and counts lines that pop.
+export interface Star { x: number; y: number; z: number; ph: number }
+// px/s for the nearest stars; the owner asked for twice the first 7 (2026-09-30).
+const DRIFT = 14
 const NEAR = 0.62
-function makeStars(n: number, w: number, h: number): Star[] {
+// A line fades out over this many px as either star nears an edge.
+const EDGE = 40
+export function makeStars(n: number, w: number, h: number): Star[] {
   return Array.from({ length: n }, () => ({ x: Math.random() * w, y: Math.random() * h, z: 0.2 + 0.8 * Math.random() ** 1.6, ph: Math.random() * 6.28 }))
     .sort((a, b) => b.z - a.z)
 }
-function driftStars(stars: Star[], w: number, h: number, dt: number) {
+export function driftStars(stars: Star[], w: number, h: number, dt: number) {
   for (const st of stars) {
     st.x -= DRIFT * st.z * dt
     st.y -= DRIFT * 0.2 * st.z * dt
     if (st.x < -8) { st.x += w + 16; st.y = Math.random() * h } else if (st.y < -8) st.y += h + 16
   }
 }
-function drawStars(ctx: CanvasRenderingContext2D, stars: Star[], time: number, reach: number) {
+// How visible the constellation line between two stars is. It fades with
+// distance and near the canvas edges: a star that drifts off one edge
+// reappears at the other, and a line still drawn to it would vanish or appear
+// in one frame. At 14 px/s that was one pop every second or so, and it read as
+// the page flickering (owner, 2026-09-30).
+export function lineAlpha(a: Star, b: Star, reach: number, w: number, h: number): number {
+  const d = Math.hypot(a.x - b.x, a.y - b.y)
+  if (d > reach) return 0
+  const edge = (s: Star) => clamp(Math.min(s.x, w - s.x, s.y, h - s.y) / EDGE, 0, 1)
+  const f = 1 - d / reach
+  return 0.2 * f * f * edge(a) * edge(b)
+}
+function drawStars(ctx: CanvasRenderingContext2D, stars: Star[], time: number, reach: number, w: number, h: number) {
   ctx.strokeStyle = CONSTELLATION; ctx.lineWidth = 1
-  const r2 = reach * reach
   for (let i = 0; i < stars.length && stars[i].z >= NEAR; i++) {
     const a = stars[i]
     for (let j = i + 1; j < stars.length && stars[j].z >= NEAR; j++) {
-      const b = stars[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy
-      if (d2 > r2) continue
-      const f = 1 - Math.sqrt(d2) / reach
-      ctx.globalAlpha = 0.2 * f * f
+      const b = stars[j], alpha = lineAlpha(a, b, reach, w, h)
+      if (alpha <= 0) continue
+      ctx.globalAlpha = alpha
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
     }
   }
@@ -618,7 +628,7 @@ interface Step {
   /** Screen ms the flights take. */
   screen: number
   /** The clock when the step lands: real ms since the page was requested. */
-  at: number | null
+  at: number
   pulse?: string
   /** Lights a route with no packets on it (a connection already open). */
   glow?: string[]
@@ -647,101 +657,132 @@ function ago(s: number): string {
   if (s < 172800) return `${Math.round(s / 3600)} hours`
   return `${Math.round(s / 86400)} days`
 }
-function capital(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1) }
 // Screen time for a measured phase: tiny phases stay watchable, long ones
 // don't drag, and order and relative size stay true.
 function watch(ms: number): number { return clamp(1000 + 120 * Math.sqrt(Math.max(0, ms)), 1000, 3200) }
 function totalOf(t: Timing): number { return t.paint > t.lastByte ? t.paint : t.lastByte }
-const PQ = ' Its key exchange is built to resist future quantum computers.'
+const PQ = ' The way they agreed on the key is designed to stay safe even against future quantum computers.'
 
 function networkStory(f: Facts | null, touch: boolean): Story {
   const t = f?.timing ?? null, e = f?.edge ?? null
   const place = e?.city || e?.colo || ''
   const edgeName = place ? `Cloudflare’s data centre in ${place}` : 'Cloudflare’s network'
   const tlsBits = [e?.tls, e?.kex].filter(Boolean).join(' · ')
-  const who = [e?.country ? `in ${e.country}` : '', f?.device ? `on ${f.device}` : '', e?.ip ? `address starting ${e.ip}` : ''].filter(Boolean).join(' · ')
+  const you = [
+    e?.country ? `You are in ${e.country}.` : '',
+    f?.device ? `You are using ${f.device}.` : '',
+    e?.ip ? `Your IP address starts with ${e.ip}.` : '',
+  ].filter(Boolean).join(' ')
+  const colo = e?.colo && e.colo !== place ? ` (${e.colo})` : ''
+  const copy = f?.cache === 'hit' ? `, using a copy it saved ${ago(f.cacheAge)} ago` : f?.cache === 'origin' ? ', after getting a fresh copy from the server' : ''
+  // Every line is plain and explanatory, written for someone who has never
+  // heard of DNS (owner, 2026-09-30): what the stop is, then what it did on
+  // this visit, and only what was measured.
   const stations: Station[] = [
-    { id: 'you', kind: touch ? 'phone' : 'laptop', label: 'you', sub: f?.device ?? '', info: who ? `You · ${who}` : 'You' },
-    { id: 'net', kind: 'router', label: 'your network', sub: '', info: 'Your network: the Wi-Fi or mobile data every request leaves through.' },
     {
-      id: 'dns', kind: 'dns', label: 'DNS', sub: 'address book', branch: true,
-      info: t && t.dns >= 1 ? `DNS, the internet’s address book. It found ${HOST} in ${fmtMs(t.dns)}.` : 'DNS, the internet’s address book.',
+      id: 'you', kind: touch ? 'phone' : 'laptop', label: 'you', sub: f?.device ?? '', now: you,
+      what: 'This is your device. Your browser asked for this website, and it shows the page on your screen.',
+    },
+    {
+      id: 'net', kind: 'router', label: 'your network', sub: 'Wi-Fi or mobile data', now: '',
+      what: 'This is your Wi-Fi router, or your phone’s mobile data. Everything your device sends to the internet goes through it first.',
+    },
+    {
+      id: 'isp', kind: 'isp', label: 'ISP', sub: 'internet provider', now: '',
+      what: 'ISP means internet service provider: the company you pay for internet at home or on your phone. Its network connects you to the rest of the internet.',
+    },
+    {
+      id: 'dns', kind: 'dns', label: 'DNS', sub: 'finds the address', branch: true,
+      what: `Computers find each other using numbers called IP addresses, not names. DNS works like a phone book: your browser gives it the name ${HOST} and gets back its IP address.`,
+      now: !t ? '' : t.dns >= 1 ? `This time, it found the address in ${fmtMs(t.dns)}.` : 'This time, your browser already knew the address, so it did not ask.',
     },
     {
       id: 'edge', kind: 'edge', label: 'Cloudflare', sub: place, code: e?.colo ?? '', via: 'the internet',
-      info: ['Cloudflare', place && e?.colo !== place ? `${place} (${e?.colo})` : place, tlsBits, f?.cacheStatus ? `cache ${f.cacheStatus}` : ''].filter(Boolean).join(' · '),
+      what: 'Cloudflare runs data centres in cities around the world, and this website uses it. Your request goes to one of them, usually one near you. It can answer with a copy of the page that it saved earlier.',
+      now: place ? `This time, the data centre in ${place}${colo} answered${copy}.` : '',
     },
-    { id: 'origin', kind: 'origin', label: 'the server', sub: 'builds this page', info: 'The server that builds this page.' },
+    {
+      // 'server', not 'the server': on a phone it sits a few pixels from
+      // 'Cloudflare', and the two read as one phrase.
+      id: 'origin', kind: 'origin', label: 'server', sub: 'builds this page',
+      what: 'The server is the computer that builds the pages of this website. Cloudflare only asks it for a page when it does not already have a recent copy.',
+      now: f?.cache === 'hit' ? 'This time it was not needed, because Cloudflare already had a copy.' : f?.cache === 'origin' ? 'This time Cloudflare asked it for a fresh copy of the page.' : '',
+    },
   ]
   const story: Story = {
-    kicker: 'How this page reached you', headline: '', stations, steps: [], total: null,
-    ping: ['you', 'net', 'edge', 'net', 'you'], pingText: `A fresh round trip to ${place || 'Cloudflare'} and back, just now.`,
+    kicker: 'How this website got to your device', headline: '', stations, steps: [], total: null,
+    ping: ['you', 'net', 'isp', 'edge', 'isp', 'net', 'you'],
+    pingText: `Your browser sent a small test message, called a ping, to ${place ? `the data centre in ${place}` : 'Cloudflare'} and got a reply. The number is how long that round trip took.`,
   }
   if (!f) return story
   if (!t) {
     story.headline = f.dev
-      ? `The dev server couldn’t reach ${HOST} just now, so there is nothing real to replay.`
-      : 'This browser keeps its timing to itself, so there is nothing real to replay.'
+      ? `The dev server could not reach ${HOST}, so there is nothing to replay.`
+      : 'Your browser did not share its timing data, so there is nothing to replay.'
     return story
   }
   const total = totalOf(t)
   story.total = total
   story.headline = t.fromCache
-    ? 'This page was already saved in your browser. Here’s how little it had to travel.'
-    : `${t.otherPage ? 'Your first page here' : 'This page'} reached you in ${seconds(total)}. Here’s that trip, slowed down.`
+    ? 'Your browser loaded this page from a copy it saved earlier, so it did not need to download it again.'
+    : `${t.otherPage ? 'The first page you opened on this site' : 'This page'} took ${seconds(total)} to load. The animation below replays it slowly.`
   const steps = story.steps
-  const there: Flight = { route: ['you', 'net', 'edge'], pal: OUT, count: 1 }
-  const back: Flight = { route: ['edge', 'net', 'you'], pal: BACK, count: 1 }
-  const shake: Flight[] = [{ route: ['you', 'net', 'edge'], pal: SHAKE, count: 3 }, { route: ['edge', 'net', 'you'], pal: SHAKE, count: 3 }]
+  const there: Flight = { route: ['you', 'net', 'isp', 'edge'], pal: OUT, count: 1 }
+  const back: Flight = { route: ['edge', 'isp', 'net', 'you'], pal: BACK, count: 1 }
+  const shake: Flight[] = [{ route: there.route, pal: SHAKE, count: 3 }, { route: back.route, pal: SHAKE, count: 3 }]
 
-  const said = [f.device, e?.ip ? `from an internet address starting ${e.ip}` : ''].filter(Boolean).join(', ')
   steps.push({
     title: e?.country ? `You, in ${e.country}` : 'You', ms: '', detail: '', pal: OUT, flights: [], screen: 900, at: 0, pulse: 'you',
-    text: said ? `${capital(said)}. Any website you open can see this much.` : `You asked for ${HOST}.`,
+    text: [
+      f.device ? `You opened ${HOST} in ${f.device}.` : `You opened ${HOST}.`,
+      e?.ip ? `Your IP address starts with ${e.ip}.` : '',
+      e?.ip || e?.country ? 'Every website you visit can see these details.' : '',
+    ].filter(Boolean).join(' '),
   })
   if (t.fromCache) {
     steps.push({
-      title: 'Saved on your device', ms: fmtMs(total), detail: 'browser cache', pal: SHAKE, flights: [], screen: 1100, at: total, pulse: 'you',
-      text: 'Your browser had kept a copy of this page, so nothing had to cross the internet this time.', chip: ['you', 'saved copy'],
+      title: 'Loaded from your device', ms: fmtMs(total), detail: 'browser cache', pal: SHAKE, flights: [], screen: 1100, at: total, pulse: 'you',
+      text: 'Your browser had saved a copy of this page earlier, so it did not need to download it again.', chip: ['you', 'saved copy'],
     })
     return story
   }
   // Under a millisecond is the browser's own cache answering, not a lookup.
   if (t.dns >= 1) {
     steps.push({
-      title: 'Finding the address', ms: fmtMs(t.dns), detail: 'DNS lookup', pal: OUT, screen: watch(t.dns), at: t.dnsEnd,
-      text: `Your browser asked DNS, the internet’s address book, where ${HOST} lives.`,
-      flights: [{ route: ['you', 'net', 'dns'], pal: OUT, count: 1 }, { route: ['dns', 'net', 'you'], pal: BACK, count: 1 }], chip: ['dns', fmtMs(t.dns)],
+      title: 'Looking up the address', ms: fmtMs(t.dns), detail: 'DNS lookup', pal: OUT, screen: watch(t.dns), at: t.dnsEnd,
+      text: `Your browser asked DNS for the IP address of ${HOST}. DNS is like a phone book that turns website names into numbers.`,
+      flights: [{ route: ['you', 'net', 'isp', 'dns'], pal: OUT, count: 1 }, { route: ['dns', 'isp', 'net', 'you'], pal: BACK, count: 1 }], chip: ['dns', fmtMs(t.dns)],
     })
   } else {
     steps.push({
       title: 'Address already known', ms: '0 ms', detail: 'DNS cache', pal: SHAKE, flights: [], screen: 900, at: t.dnsEnd, pulse: 'you',
-      text: `Your browser remembered where ${HOST} lives, so it skipped the lookup.`, chip: ['dns', 'remembered'],
+      text: `Your browser already knew the IP address of ${HOST} from before, so it did not need to look it up.`, chip: ['dns', 'remembered'],
     })
   }
-  const reach = place ? `Reaching ${place}` : 'Reaching Cloudflare'
+  const reach = `Connecting to ${place || 'Cloudflare'}`
   const pq = /MLKEM|kyber/i.test(e?.kex ?? '') ? PQ : ''
   if (t.reused) {
     steps.push({
-      title: 'Line already open', ms: '0 ms', detail: 'connection reuse', pal: SHAKE, flights: [], screen: 1000, at: t.connectEnd,
-      text: `Your browser reused a connection it already had open to ${edgeName}.`, glow: ['you', 'net', 'edge'], chip: ['edge', 'reused'],
+      title: 'Connection already open', ms: '0 ms', detail: 'connection reuse', pal: SHAKE, flights: [], screen: 1000, at: t.connectEnd,
+      text: `Your browser already had a connection open to ${edgeName}, so it used that one.`, glow: there.route, chip: ['edge', 'reused'],
     })
   } else if (t.quic) {
     steps.push({
       title: reach, ms: fmtMs(t.connect), detail: ['QUIC', tlsBits].filter(Boolean).join(' · '), pal: SHAKE, flights: shake,
       screen: watch(t.connect), at: t.connectEnd, chip: ['edge', fmtMs(t.connect)],
-      text: `Your request crossed the internet to ${edgeName}, and they agreed on encryption in the same exchange.${pq}`,
+      text: `Your request went through your internet provider to ${edgeName}. In the same step, the two sides set up encryption, so no one in between can read what they send.${pq}`,
     })
   } else {
     steps.push({
       title: reach, ms: fmtMs(t.tcp), detail: 'TCP handshake', pal: OUT, flights: [there, back], screen: watch(t.tcp),
-      at: t.connectEnd - t.tls, chip: ['edge', fmtMs(t.tcp)], text: `Your request crossed the internet to ${edgeName}.`,
+      at: t.connectEnd - t.tls, chip: ['edge', fmtMs(t.tcp)],
+      text: `Your request went through your router and your internet provider, then across the internet to ${edgeName}.`,
     })
     if (t.tls > 0) {
       steps.push({
-        title: 'Locking the line', ms: fmtMs(t.tls), detail: tlsBits || 'TLS handshake', pal: SHAKE, flights: shake,
+        title: 'Setting up encryption', ms: fmtMs(t.tls), detail: tlsBits || 'TLS handshake', pal: SHAKE, flights: shake,
         screen: watch(t.tls), at: t.connectEnd, chip: ['edge', fmtMs(t.connect)],
-        text: `Your browser and Cloudflare agreed on encryption, so nobody in between can read this page.${pq}`,
+        text: `Your browser and Cloudflare agreed on a secret key. From here on, everything they send is encrypted, so no one in between can read it.${pq}`,
       })
     }
   }
@@ -749,86 +790,48 @@ function networkStory(f: Facts | null, touch: boolean): Story {
   const first = ['first byte', status ? `cache ${status}` : ''].filter(Boolean).join(' · ')
   if (f.cache === 'hit') {
     steps.push({
-      title: place ? `${place} had it ready` : 'Cloudflare had it ready', ms: fmtMs(t.ttfb), detail: first, pal: OUT, flights: [there],
+      title: 'Cloudflare had a copy', ms: fmtMs(t.ttfb), detail: first, pal: OUT, flights: [there],
       screen: watch(t.ttfb), at: t.firstByte, hit: true, chip: ['origin', 'not needed'],
-      text: `Cloudflare already had a copy of this page, saved ${ago(f.cacheAge)} ago, so the server that builds it wasn’t needed.`,
+      text: `Cloudflare already had a copy of this page, saved ${ago(f.cacheAge)} ago, so it did not need to ask the server.`,
     })
   } else if (f.cache === 'origin') {
-    const why = status === 'EXPIRED' ? 'Cloudflare’s copy of this page had expired, so it asked the server that builds it for a fresh one.'
-      : status === 'REVALIDATED' ? 'Cloudflare checked its copy with the server that builds this page, and it was still fresh.'
-      : 'Cloudflare passed your request on to the server that builds this page.'
+    const why = status === 'EXPIRED' ? 'Cloudflare’s copy of this page was out of date, so it asked the server to build a fresh one.'
+      : status === 'REVALIDATED' ? 'Cloudflare checked with the server that its copy of this page was still up to date. It was.'
+      : 'Cloudflare passed your request to the server, and the server built the page.'
     steps.push({
       title: 'Building the page', ms: fmtMs(t.ttfb), detail: first, pal: OUT, screen: watch(t.ttfb), at: t.firstByte, text: why,
-      flights: [{ route: ['you', 'net', 'edge', 'origin'], pal: OUT, count: 1 }, { route: ['origin', 'edge'], pal: BACK, count: 1 }],
+      flights: [{ route: [...there.route, 'origin'], pal: OUT, count: 1 }, { route: ['origin', 'edge'], pal: BACK, count: 1 }],
       chip: ['origin', fmtMs(t.ttfb)],
     })
   } else {
     steps.push({
       title: 'Asking for the page', ms: fmtMs(t.ttfb), detail: first, pal: OUT, flights: [there], screen: watch(t.ttfb), at: t.firstByte,
-      text: 'Your browser asked for the page, and the first of it came back.',
+      text: 'Your browser asked for the page, and the first part of it arrived.',
     })
   }
   const kb = t.size > 0 ? `${Math.max(1, Math.round(t.size / 1024))} KB` : ''
   steps.push({
-    title: 'Delivered', ms: fmtMs(t.download), detail: httpName(t.protocol) || e?.http || '', pal: BACK, screen: watch(t.download) + 400,
-    at: t.lastByte, fill: true, flights: [{ route: ['edge', 'net', 'you'], pal: BACK, count: clamp(Math.round(4 + t.size / 3072), 4, 16) }],
-    text: `The page came back in small packets${kb ? `, ${kb} in all,` : ''} and your browser put it together.`,
+    title: 'The page arrives', ms: fmtMs(t.download), detail: httpName(t.protocol) || e?.http || '', pal: BACK, screen: watch(t.download) + 400,
+    at: t.lastByte, fill: true, flights: [{ route: back.route, pal: BACK, count: clamp(Math.round(4 + t.size / 3072), 4, 16) }],
+    text: `The page came back in small pieces called packets${kb ? `, ${kb} in total` : ''}. Your browser put them back together.`,
   })
   const painted = t.paint > t.lastByte
   steps.push({
-    title: painted ? 'On your screen' : 'All here', ms: `at ${fmtMs(total)}`, detail: painted ? 'first paint' : 'last byte', pal: SHAKE,
+    title: painted ? 'On your screen' : 'Fully downloaded', ms: `at ${fmtMs(total)}`, detail: painted ? 'first paint' : 'last byte', pal: SHAKE,
     flights: [], screen: 900, at: total, pulse: 'you', chip: ['you', fmtClock(total)],
-    text: `From asking for ${HOST} to ${painted ? 'seeing it' : 'its last byte'}: ${seconds(total)}.`,
+    text: `From opening ${HOST} to ${painted ? 'seeing it on your screen' : 'receiving the whole page'} took ${seconds(total)}.`,
   })
   return story
 }
 
-function internetStory(f: Facts | null, touch: boolean): Story {
-  const t = f?.timing ?? null
-  // This page's own total, when it describes this page crossing the internet.
-  const total = t && !t.otherPage && !t.fromCache ? totalOf(t) : null
-  const there = ['you', 'wifi', 'isp', 'server'], back = ['server', 'isp', 'wifi', 'you']
-  return {
-    kicker: 'How the internet works',
-    headline: f ? 'What happens after you press Enter? Here’s how a page like this one finds its way to you.' : '',
-    stations: [
-      { id: 'you', kind: touch ? 'phone' : 'laptop', label: 'you', sub: '', info: 'You, and the browser you are reading this in.' },
-      { id: 'wifi', kind: 'router', label: 'your Wi-Fi', sub: 'router', info: 'Your Wi-Fi router: the door every request leaves through.' },
-      { id: 'dns', kind: 'dns', label: 'DNS', sub: 'phone book', branch: true, info: `DNS, the internet’s phone book: it turns names like ${HOST} into numbers.` },
-      { id: 'isp', kind: 'isp', label: 'internet provider', sub: '', info: 'Your internet provider connects your home or phone to the rest of the internet.' },
-      { id: 'server', kind: 'origin', label: 'a server', sub: 'in a data centre', via: 'the internet', hops: true, info: 'A server: a computer in a data centre whose job is to answer requests.' },
-    ],
-    steps: f ? [
-      { title: 'You press Enter', ms: '', detail: '', pal: OUT, flights: [], screen: 1000, at: null, pulse: 'you', text: `Your browser wants ${HOST}. But computers find each other by number, not by name.` },
-      {
-        title: 'Looking up the number', ms: '', detail: 'DNS', pal: OUT, screen: 2200, at: null,
-        text: 'So it asks DNS, the internet’s phone book, which answers with the site’s number: its IP address.',
-        flights: [{ route: ['you', 'wifi', 'dns'], pal: OUT, count: 1 }, { route: ['dns', 'wifi', 'you'], pal: BACK, count: 1 }], chip: ['dns', 'found it'],
-      },
-      {
-        title: 'Knocking on the door', ms: '', detail: 'TCP', pal: OUT, screen: 3200, at: null,
-        text: 'The request leaves through your Wi-Fi, reaches your internet provider, and hops from network to network until it finds the server.',
-        flights: [{ route: there, pal: OUT, count: 1 }, { route: back, pal: BACK, count: 1 }],
-      },
-      {
-        title: 'A secret handshake', ms: '', detail: 'TLS', pal: SHAKE, screen: 3000, at: null,
-        text: 'Your browser and the server agree on a code only they know, so anyone in between sees only gibberish.',
-        flights: [{ route: there, pal: SHAKE, count: 3 }, { route: back, pal: SHAKE, count: 3 }],
-      },
-      { title: 'Asking for the page', ms: '', detail: 'HTTP request', pal: OUT, screen: 1800, at: null, text: 'Now your browser asks for the page itself, sent as small numbered packets.', flights: [{ route: there, pal: OUT, count: 1 }] },
-      {
-        title: 'The server answers', ms: '', detail: 'HTTP response', pal: BACK, screen: 2600, at: null, fill: true,
-        text: 'The server builds the page and sends it back the same way, packet by packet.', flights: [{ route: back, pal: BACK, count: 10 }],
-      },
-      {
-        title: 'Put back together', ms: total ? seconds(total) : '', detail: '', pal: SHAKE, flights: [], screen: 1000, at: null, pulse: 'you',
-        text: `Your browser puts the packets back in order and draws the page you’re reading.${total ? ` This one took ${seconds(total)}.` : ''}`,
-      },
-    ] : [],
-    total,
-    ping: [...there, ...back.slice(1)],
-    pingText: `A real round trip to ${HOST}, just now.`,
-  }
+// What each stop acts out when its card opens: its own leg of the trip.
+const DEMOS: Record<string, Flight[]> = {
+  you: [{ route: ['you', 'net'], pal: OUT, count: 1 }],
+  net: [{ route: ['you', 'net', 'isp'], pal: OUT, count: 1 }],
+  isp: [{ route: ['net', 'isp', 'edge'], pal: OUT, count: 1 }],
+  dns: [{ route: ['you', 'net', 'isp', 'dns'], pal: OUT, count: 1 }, { route: ['dns', 'isp', 'net', 'you'], pal: BACK, count: 1 }],
+  edge: [{ route: ['edge', 'isp', 'net', 'you'], pal: BACK, count: 3 }],
+  origin: [{ route: ['edge', 'origin'], pal: OUT, count: 1 }, { route: ['origin', 'edge'], pal: BACK, count: 1 }],
 }
 
 // ---- DOM: the frame (what this is, top left) and the log (what is
@@ -843,16 +846,19 @@ function part<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, name
 // Pacing, in screen ms: the headline reads first, each message is typed for
 // a beat, and a step dwells long enough to read.
 const INTRO = 1500, TYPE = 520, LEG_MIN = 240, READ = 34
+// How long a pointer rests on a stop before its card opens.
+const HOVER = 140
+// The height a phone keeps between the frame and the text block for the line
+// and its labels, sub-lines included.
+const PHONE_BAND = 230
 const POOL = 80, PULSES = 20
 
 export const create: HeroCreate = (host, env) => {
   const doc = host.ownerDocument
   const section = env.text.section
-  const generic = section.dataset.hero === 'internet'
   const { reduced, isTouch } = env
   const dpr = clamp(env.dpr || 1, 1, 2)
   const mono = getComputedStyle(section).getPropertyValue('--font-mono').trim() || 'ui-monospace, monospace'
-  const tell = (f: Facts | null) => (generic ? internetStory(f, isTouch) : networkStory(f, isTouch))
 
   const canvas = doc.createElement('canvas')
   canvas.dataset.type = 'hero-canvas'
@@ -866,9 +872,15 @@ export const create: HeroCreate = (host, env) => {
   pingTarget.tabIndex = -1
   const nodesLayer = doc.createElement('div')
   nodesLayer.dataset.type = 'hero-nodes'
+  // The card repeats the focused button's label for sighted readers, so it is
+  // hidden from screen readers, which get the label itself.
   const card = doc.createElement('div')
   card.dataset.type = 'hero-card'
   card.setAttribute('aria-hidden', 'true')
+  const cardTitle = part(doc, 'p', 'stop-name')
+  const cardWhat = part(doc, 'p', 'stop-what')
+  const cardNow = part(doc, 'p', 'stop-now')
+  card.append(cardTitle, cardWhat, cardNow)
   const frame = doc.createElement('div')
   frame.dataset.type = 'hero-frame'
   const headline = part(doc, 'p', 'headline')
@@ -881,10 +893,11 @@ export const create: HeroCreate = (host, env) => {
   frame.append(kicker, headline, bar)
   const log = doc.createElement('div')
   log.dataset.type = 'hero-log'
-  // Both describe whoever is looking, a crawler included, so neither may
+  // All three describe whoever is looking, a crawler included, so none may
   // become the page's search snippet.
   frame.setAttribute('data-nosnippet', '')
   log.setAttribute('data-nosnippet', '')
+  card.setAttribute('data-nosnippet', '')
   host.append(canvas, poster, pingTarget, nodesLayer, card, frame, log)
 
   // The log sits at the stage's bottom right on desktop and moves into the
@@ -902,7 +915,7 @@ export const create: HeroCreate = (host, env) => {
   host.toggleAttribute('data-nw-fallback', !ctx)
   const sprites = ctx ? makeSprites() : null
 
-  let story = tell(null)
+  let story = networkStory(null, isTouch)
   let facts: Facts | null = null
   let links = linksOf(story.stations)
   let hops = hopsOf(story.stations, links)
@@ -923,6 +936,10 @@ export const create: HeroCreate = (host, env) => {
   let fillWin: [number, number] | null = null
   let fill = 0, playing = false, pinging = false, clockText = ''
   let typing: HTMLElement | null = null
+  // The stop whose card is open: it glows and the rest of the drawing dims.
+  // `veil` is how far the drawing has stepped back, eased in and out so that
+  // a pointer crossing the line never flashes it; `lit` is the stop it lights.
+  let cardIndex = -1, veil = 0, lit = -1, hoverTimer = 0
 
   kicker.textContent = story.kicker
   const indexOf = (id: string) => story.stations.findIndex(s => s.id === id)
@@ -940,7 +957,9 @@ export const create: HeroCreate = (host, env) => {
     if (!p || !pos[i]) return
     p.active = true; p.i = i; p.t = 0; p.pal = pal
     p.dur = big ? 950 : 540
-    p.maxR = pos[i].s * (big ? 2.6 : 1.7) + (big ? 30 : 16)
+    // A stop at the stage's edge rings inside it rather than off it.
+    const q = pos[i], edge = Math.min(q.x, w - q.x) - 4
+    p.maxR = Math.max(q.s * 1.3, Math.min(q.s * (big ? 2.6 : 1.7) + (big ? 30 : 16), edge))
   }
   function updateTraffic(dt: number) {
     const k = Math.exp(-2.2 * dt)
@@ -990,7 +1009,9 @@ export const create: HeroCreate = (host, env) => {
   }
   function logHint() {
     if (!facts) return
-    log.append(part(doc, 'p', 'hint', `${isTouch ? 'Tap' : 'Click'} anywhere to send a ping.`))
+    log.append(part(doc, 'p', 'hint', isTouch
+      ? 'Tap any stop to learn what it does. Tap anywhere else to send a ping and time the reply.'
+      : 'Hover over any stop to learn what it does. Click anywhere else to send a ping and time the reply.'))
   }
   function setClock(text: string) {
     if (text === clockText) return
@@ -1000,7 +1021,7 @@ export const create: HeroCreate = (host, env) => {
 
   // ---- The replay: a flat schedule built from the story, walked by one
   // cursor per frame. No per-step timers.
-  function flights(ev: Sched[], list: Flight[], start: number, screen: number): number {
+  function flights(ev: Sched[], list: Flight[], start: number, screen: number, trail = true): number {
     const legs = list.reduce((n, f) => n + f.route.length - 1, 0)
     if (!legs) return start
     const leg = Math.max(LEG_MIN, screen / legs)
@@ -1013,7 +1034,7 @@ export const create: HeroCreate = (host, env) => {
         let at = cur + k * gap
         for (let i = 0; i + 1 < f.route.length; i++) {
           const a = f.route[i], b = f.route[i + 1]
-          ev.push({ at, run: () => spawn(a, b, f.pal, leg, size, true) })
+          ev.push({ at, run: () => spawn(a, b, f.pal, leg, size, trail) })
           at += leg
         }
         end = at
@@ -1049,12 +1070,12 @@ export const create: HeroCreate = (host, env) => {
           msg.ms = logAdd(step, false)
           if (step.pulse) ring(indexOf(step.pulse), step.pal, n === 0)
           if (step.glow) glow(step.glow)
-          if (generic) setClock(`step ${n + 1} of ${story.steps.length}`)
         },
       })
       const start = cur
       const end = Math.max(flights(ev, step.flights, start, step.screen), step.flights.length ? start : start + step.screen)
-      if (step.at !== null) { keys.push([start, real], [end, step.at]); real = step.at }
+      keys.push([start, real], [end, step.at])
+      real = step.at
       if (step.fill) win = [start, end]
       ev.push({
         at: end,
@@ -1082,7 +1103,7 @@ export const create: HeroCreate = (host, env) => {
   }
   function finish() {
     playing = false
-    setClock(story.total !== null && !generic ? fmtClock(story.total) : '')
+    setClock(story.total !== null ? fmtClock(story.total) : '')
     logHint()
   }
   function resetScene() {
@@ -1132,7 +1153,7 @@ export const create: HeroCreate = (host, env) => {
     cursor += dt * 1000
     while (si < sched.length && cursor >= sched[si].at) sched[si++].run()
     if (!playing) return
-    if (!generic && story.total !== null && clockKeys.length) setClock(`${fmtClock(clockAt(cursor))} of ${fmtClock(story.total)}`)
+    if (story.total !== null && clockKeys.length) setClock(`${fmtClock(clockAt(cursor))} of ${fmtClock(story.total)}`)
     if (fillWin) fill = clamp((cursor - fillWin[0]) / Math.max(1, fillWin[1] - fillWin[0]), 0, 1)
   }
 
@@ -1148,7 +1169,7 @@ export const create: HeroCreate = (host, env) => {
     // A replay started while the request was out: it has cleared the log.
     if (destroyed || playing) return
     const line: Line = ms < 0
-      ? { title: 'Ping', ms: '', text: 'No answer this time.', detail: '', pal: OUT }
+      ? { title: 'Ping', ms: '', text: 'Your browser sent a small test message, but no reply came back.', detail: '', pal: OUT }
       : { title: 'Ping', ms: fmtMs(ms), text: story.pingText, detail: 'HEAD /', pal: OUT }
     if (reduced || !ctx || !running || ms < 0) {
       pinging = false
@@ -1167,43 +1188,93 @@ export const create: HeroCreate = (host, env) => {
     }
     sched.push({ at, run: () => { pinging = false; logAdd(line, true); logHint() } })
   }
-  pingTarget.addEventListener('click', ping, { signal: env.signal })
+  pingTarget.addEventListener('click', () => { closeCard(); ping() }, { signal: env.signal })
   replay.addEventListener('click', () => { play(); if (!running) start() }, { signal: env.signal })
 
-  // ---- Node buttons: invisible, focusable overlays, so a keyboard reaches
-  // what a hover shows. The glyphs themselves are drawn on the canvas.
+  // ---- Stops explain themselves. Each glyph has an invisible, focusable
+  // button over it, so a keyboard reaches what a hover or a tap shows: a card
+  // saying what the stop is and what it did on this visit, while the stop
+  // stays lit, the rest of the drawing steps back, and the stop acts out its
+  // own leg of the trip.
+  const on = { signal: env.signal }
   const buttons = story.stations.map((st, i) => {
     const b = doc.createElement('button')
     b.type = 'button'
     b.dataset.type = 'hero-node-btn'
     b.dataset.node = st.id
-    b.addEventListener('mouseenter', () => showCard(i), { signal: env.signal })
-    b.addEventListener('mouseleave', () => hideCard(i), { signal: env.signal })
-    b.addEventListener('focus', () => showCard(i), { signal: env.signal })
-    b.addEventListener('blur', () => hideCard(i), { signal: env.signal })
+    // A pointer has to rest on a stop for a moment: one passing over the
+    // line on its way elsewhere opens nothing.
+    b.addEventListener('mouseenter', () => { clearTimeout(hoverTimer); hoverTimer = window.setTimeout(() => openCard(i), HOVER) }, on)
+    b.addEventListener('mouseleave', () => { clearTimeout(hoverTimer); closeCard(i) }, on)
+    b.addEventListener('focus', () => openCard(i), on)
+    b.addEventListener('blur', () => closeCard(i), on)
+    // A touch screen has no hover, and Safari never focuses a tapped button.
+    b.addEventListener('click', () => openCard(i, true), on)
     nodesLayer.appendChild(b)
     return b
   })
-  let cardIndex = -1
-  function showCard(i: number) {
-    const p = pos[i]
-    if (!p) return
+  let actedAt = -Infinity, actedBy = -1
+  function openCard(i: number, again = false) {
+    const st = story.stations[i]
+    if (destroyed || !st || !pos[i]) return
+    const fresh = cardIndex !== i
     cardIndex = i
-    card.textContent = story.stations[i].info
-    let left = p.x + p.s * 1.3 + 12
-    if (left + 240 > w) left = p.x - p.s * 1.3 - 12 - 240
-    card.style.left = `${clamp(left, 8, Math.max(8, w - 248))}px`
-    card.style.top = `${clamp(p.y - 12, 8, Math.max(8, h - 70))}px`
+    lit = i
+    cardTitle.textContent = st.label
+    cardWhat.textContent = st.what
+    cardNow.textContent = st.now
+    cardNow.hidden = !st.now
+    placeCard(i)
     card.dataset.shown = ''
+    if (fresh || again) actOut(i)
+    renderNow()
   }
-  function hideCard(i: number) { if (cardIndex === i) { cardIndex = -1; delete card.dataset.shown } }
+  function closeCard(i = cardIndex) {
+    if (i < 0 || cardIndex !== i) return
+    cardIndex = -1
+    delete card.dataset.shown
+    renderNow()
+  }
+  function placeCard(i: number) {
+    const p = pos[i], st = story.stations[i]
+    const cw = card.offsetWidth, ch = card.offsetHeight
+    let left: number, top: number
+    if (phone) {
+      // Too narrow to sit beside a stop: above it, or below when there is no room.
+      left = p.x - cw / 2
+      top = p.y - GLYPH_TOP[st.kind] * p.s - 14 - ch
+      if (top < 8) top = p.y + GLYPH_BOTTOM[st.kind] * p.s + 14
+    } else {
+      const reach = p.s * 1.4 + 14
+      left = p.x + reach
+      if (left + cw > w - 8) left = p.x - reach - cw
+      top = p.y - ch / 2
+    }
+    // Never under the name, which paints above the whole stage.
+    card.style.left = `${clamp(left, 8, Math.max(8, w - cw - 8))}px`
+    card.style.top = `${clamp(top, 8, Math.max(8, textTop - ch - 8))}px`
+  }
+  // Only between replays and pings, whose packets it would muddle, and never
+  // under reduced motion. A second tap on the same stop plays it again.
+  function actOut(i: number) {
+    const now = performance.now()
+    if (reduced || !running || playing || pinging || (i === actedBy && now - actedAt < 1200)) return
+    actedAt = now; actedBy = i
+    ring(i, OUT)
+    const demo = DEMOS[story.stations[i].id]
+    if (!demo) return
+    const ev: Sched[] = []
+    flights(ev, demo, cursor + 80, 1300, false)
+    sched = sched.slice(si).concat(ev).sort((a, b) => a.at - b.at)
+    si = 0
+  }
   function refreshText() {
     kicker.textContent = story.kicker
     headline.textContent = story.headline
     headline.toggleAttribute('data-ready', Boolean(story.headline))
-    story.stations.forEach((st, i) => buttons[i].setAttribute('aria-label', st.info))
-    canvas.setAttribute('aria-label', `A diagram of ${generic ? 'how a web page reaches you' : 'how this page reached you'}: ${story.stations.map(s => (s.sub ? `${s.label} (${s.sub})` : s.label)).join(', ')}, joined by moving packets.`)
-    if (cardIndex >= 0) showCard(cardIndex)
+    story.stations.forEach((st, i) => buttons[i].setAttribute('aria-label', `${st.label}: ${st.what}${st.now ? ` ${st.now}` : ''}`))
+    canvas.setAttribute('aria-label', `A diagram of how this website got to your device: ${story.stations.map(s => (s.sub ? `${s.label} (${s.sub})` : s.label)).join(', ')}, joined by moving packets.`)
+    if (cardIndex >= 0) openCard(cardIndex)
   }
 
   // ---- Layout: the name makes room for the log, then the line fills the band
@@ -1229,6 +1300,11 @@ export const create: HeroCreate = (host, env) => {
       placeLog(stacked)
     } else {
       placeLog(true)
+      // A short phone cannot fit the frame, the line and the text block in one
+      // screen, so the hero grows taller and the line keeps its room.
+      section.style.minHeight = ''
+      const need = Math.ceil(frame.getBoundingClientRect().bottom - hostRect.top + PHONE_BAND + env.text.content.getBoundingClientRect().height)
+      if (need > section.getBoundingClientRect().height) section.style.minHeight = `${need}px`
     }
     textTop = env.text.content.getBoundingClientRect().top - hostRect.top
     if (!phone && !stacked) textTop = Math.min(textTop, log.getBoundingClientRect().top - hostRect.top)
@@ -1238,19 +1314,25 @@ export const create: HeroCreate = (host, env) => {
     fonts.chip = `600 ${phone ? 10 : 12}px ${mono}`
     const { step } = lineX(w, phone, story.stations.filter(s => !s.branch).length)
     const lead = phone ? 13 : 15
-    const lines = ctx ? labelLines(ctx, story.stations, fonts, phone ? step * 0.96 : Math.min(step * 0.9, 230)) : story.stations.map(s => [s.label])
-    // Each block also reserves its chip's line.
-    const block = (branch: boolean) => Math.max(0, ...lines.map((l, i) => (Boolean(story.stations[i].branch) === branch ? lead * (l.length + 1) : 0)))
-    pos = layoutLine(story.stations, w, top, textTop - (phone ? 6 : 12), phone, block(true) + 10, block(false) + (phone ? 14 : 17))
+    const full = ctx ? labelLines(ctx, story.stations, fonts, phone ? step * 0.96 : Math.min(step * 0.9, 230)) : story.stations.map(s => [s.label])
+    const place = (lines: string[][]) => {
+      // Each block also reserves its chip's line.
+      const block = (branch: boolean) => Math.max(0, ...lines.map((l, i) => (Boolean(story.stations[i].branch) === branch ? lead * (l.length + 1) : 0)))
+      pos = layoutLine(story.stations, w, top, textTop - (phone ? 6 : 12), phone, block(true) + 10, block(false) + (phone ? 14 : 17))
+      if (ctx) labels = layoutLabels(ctx, story.stations, pos, lines, fonts, lead, w, textTop, phone)
+    }
+    place(full)
+    // A band too short for the sub-lines (a small phone) keeps just the names,
+    // rather than hiding whole labels behind the text block.
+    if (labels.some(l => l.hidden)) place(full.map(l => l.slice(0, 1)))
     fonts.code = `600 ${Math.round(0.34 * (pos[indexOf('edge')]?.s ?? 30))}px ${mono}`
-    if (ctx) labels = layoutLabels(ctx, story.stations, pos, lines, fonts, lead, w, textTop, phone)
     buttons.forEach((b, i) => {
       const p = pos[i], hit = p.s * 2.2
       b.style.left = `${p.x}px`; b.style.top = `${p.y}px`
       b.style.width = `${hit}px`; b.style.height = `${hit}px`
       b.style.margin = `${-hit / 2}px 0 0 ${-hit / 2}px`
     })
-    if (cardIndex >= 0) showCard(cardIndex)
+    if (cardIndex >= 0) placeCard(cardIndex)
   }
   function resize(width: number, height: number) {
     const ow = w, oh = h
@@ -1293,28 +1375,12 @@ export const create: HeroCreate = (host, env) => {
         c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke()
         c.setLineDash([]); c.globalCompositeOperation = 'source-over'
       }
-      if (l.hops) drawHops(c, li, a, b)
       const len = Math.hypot(b.x - a.x, b.y - a.y)
       if (l.via && len > 150) {
         c.font = fonts.sub; c.textAlign = 'center'; c.fillStyle = SUB; c.globalAlpha = 0.75
         c.fillText(l.via, (a.x + b.x) / 2, (a.y + b.y) / 2 + (phone ? 14 : 18))
         c.globalAlpha = 1
       }
-    }
-  }
-  // Three relays along the internet's stretch, each flashing as a packet
-  // passes it: the network-to-network handing-along the step describes.
-  function drawHops(c: CanvasRenderingContext2D, li: number, a: Pos, b: Pos) {
-    for (const u of [0.25, 0.5, 0.75]) {
-      let lit = 0, pal = 0
-      for (const p of pool) {
-        if (!p.active || p.li !== li) continue
-        const at = p.rev ? 1 - p.t : p.t, d = 1 - Math.abs(at - u) / 0.08
-        if (d > lit) { lit = d; pal = p.pal }
-      }
-      mixInto(MIX, REST_GLYPH, PALETTE[pal], clamp(lit, 0, 1))
-      c.fillStyle = rgbCss(MIX)
-      c.beginPath(); c.arc(lerp(a.x, b.x, u), lerp(a.y, b.y, u), (phone ? 2.4 : 3.2) + lit * 1.6, 0, 6.3); c.fill()
     }
   }
   // Comets: a head plus a tail stretched to how fast the hop moves. Additive,
@@ -1338,31 +1404,52 @@ export const create: HeroCreate = (host, env) => {
     c.globalAlpha = 1
     c.globalCompositeOperation = 'source-over'
   }
+  // `focus` (0 to 1) lights a stop amber, eased with the veil.
+  function drawStation(c: CanvasRenderingContext2D, i: number, focus: number) {
+    const st = story.stations[i], p = pos[i], x = nodeHeat[i]
+    const base = Math.max(x.heat, x.floor), lvl = Math.max(base, 0.9 * focus)
+    mixInto(MIX, REST_GLYPH, x.c, base)
+    if (focus > 0) mixInto(MIX, MIX, AMBER, 0.85 * focus)
+    G.stroke = rgbCss(MIX)
+    G.body = rgbCss(mixInto(TINT, BODY, MIX, 0.07 + 0.12 * lvl))
+    G.ink = rgbCss(mixInto(TINT, MIX, WHITE, 0.45))
+    G.lw = clamp(p.s * 0.035, 1.4, 2.6)
+    G.fill = st.id === 'you' ? fill : 0
+    G.code = st.code ?? ''
+    GLYPH[st.kind](c, p.x, p.y, p.s, G)
+    const lab = labels[i]
+    if (!lab || lab.hidden) return
+    c.textAlign = 'center'
+    c.font = fonts.label; c.fillStyle = LABEL
+    c.fillText(lab.lines[0], lab.x, lab.y)
+    c.font = fonts.sub; c.fillStyle = SUB
+    for (let k = 1; k < lab.lines.length; k++) c.fillText(lab.lines[k], lab.x, lab.y + lab.lead * k)
+    if (!chips[i]) return
+    c.font = fonts.chip; c.fillStyle = CHIP
+    const half = c.measureText(chips[i]).width / 2 + 4
+    c.fillText(chips[i], clamp(lab.x, half, Math.max(half, w - half)), lab.y + lab.lead * lab.lines.length)
+  }
   function drawStations(c: CanvasRenderingContext2D) {
-    G.time = time; G.codeFont = fonts.code
-    story.stations.forEach((st, i) => {
-      const p = pos[i], x = nodeHeat[i], lvl = Math.max(x.heat, x.floor)
-      mixInto(MIX, REST_GLYPH, x.c, lvl)
-      G.heat = x.heat
-      G.stroke = rgbCss(MIX)
-      G.body = rgbCss(mixInto(TINT, BODY, MIX, 0.07 + 0.12 * lvl))
-      G.ink = rgbCss(mixInto(TINT, MIX, WHITE, 0.45))
-      G.lw = clamp(p.s * 0.035, 1.4, 2.6)
-      G.fill = st.id === 'you' ? fill : 0
-      G.code = st.code ?? ''
-      GLYPH[st.kind](c, p.x, p.y, p.s, G)
-      const lab = labels[i]
-      if (!lab || lab.hidden) return
-      c.textAlign = 'center'
-      c.font = fonts.label; c.fillStyle = LABEL
-      c.fillText(lab.lines[0], lab.x, lab.y)
-      c.font = fonts.sub; c.fillStyle = SUB
-      for (let k = 1; k < lab.lines.length; k++) c.fillText(lab.lines[k], lab.x, lab.y + lab.lead * k)
-      if (!chips[i]) return
-      c.font = fonts.chip; c.fillStyle = CHIP
-      const half = c.measureText(chips[i]).width / 2 + 4
-      c.fillText(chips[i], clamp(lab.x, half, Math.max(half, w - half)), lab.y + lab.lead * lab.lines.length)
-    })
+    G.codeFont = fonts.code
+    for (let i = 0; i < story.stations.length; i++) drawStation(c, i, 0)
+  }
+  // While a card is open the drawing steps back behind a veil, and its stop
+  // is drawn again on top, lit, over a steady glow, with the packets it sent.
+  // Nothing here pulses: a glow that breathes reads as the page flickering.
+  function drawSpotlight(c: CanvasRenderingContext2D, i: number, a: number) {
+    c.globalAlpha = a
+    c.fillStyle = VEIL; c.fillRect(0, 0, w, h)
+    const p = pos[i]
+    if (sprites) {
+      const r = p.s * 3.4
+      c.globalCompositeOperation = 'lighter'
+      c.globalAlpha = 0.26 * a
+      c.drawImage(sprites.head[OUT], p.x - r, p.y - r, 2 * r, 2 * r)
+      c.globalCompositeOperation = 'source-over'
+    }
+    c.globalAlpha = 1
+    drawPackets(c)
+    drawStation(c, i, a)
   }
   function drawPulses(c: CanvasRenderingContext2D) {
     c.globalCompositeOperation = 'lighter'
@@ -1379,26 +1466,36 @@ export const create: HeroCreate = (host, env) => {
     if (!ctx || !pos.length) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, w, h)
-    if (stars) drawStars(ctx, stars, time, phone ? 80 : 120)
+    if (stars) drawStars(ctx, stars, time, phone ? 80 : 120, w, h)
     drawLinks(ctx)
     drawPackets(ctx)
     drawStations(ctx)
+    if (veil > 0.01 && lit >= 0) drawSpotlight(ctx, lit, veil)
     drawPulses(ctx)
   }
-  function renderNow() { if (!running) draw() }
+  // Without the loop (reduced motion, or a hidden tab) the veil has no frames
+  // to ease over, so it is simply on or off.
+  function renderNow() {
+    if (running) return
+    veil = cardIndex >= 0 ? 1 : 0
+    draw()
+  }
 
   function loop(now: number) {
     if (!running) return
     raf = requestAnimationFrame(loop)
-    // ponytail: between replays only the stars move (7 px/s at most), so idle
+    // ponytail: between replays only the stars move (14 px/s at most), so idle
     // frames are drawn at ~30 fps instead of the display's 60–120.
-    if (!playing && !pinging && last && now - last < 30) return
+    const want = cardIndex >= 0 ? 1 : 0
+    const busy = playing || pinging || veil !== want || pool.some(p => p.active)
+    if (!busy && last && now - last < 30) return
     const dt = last ? Math.min((now - last) / 1000, 0.25) : 1 / 60
     last = now
     time += dt * 1000
     if (stars) driftStars(stars, w, h, dt)
     updateTraffic(dt)
     advance(dt)
+    veil = Math.abs(want - veil) < 0.01 ? want : veil + (want - veil) * Math.min(1, dt * 9)
     draw()
   }
   function start() {
@@ -1413,7 +1510,9 @@ export const create: HeroCreate = (host, env) => {
   function destroy() {
     destroyed = true
     stop()
+    clearTimeout(hoverTimer)
     section.removeAttribute('data-nw-phone')
+    section.style.minHeight = ''
     env.text.name.style.fontSize = ''
     env.text.tagline.style.maxWidth = ''
     log.remove()
@@ -1437,12 +1536,12 @@ export const create: HeroCreate = (host, env) => {
     }
     if (destroyed) return
     facts = loaded
-    story = tell(facts)
+    story = networkStory(facts, isTouch)
     links = linksOf(story.stations)
     hops = hopsOf(story.stations, links)
     refreshText()
-    if (import.meta.env.DEV && !generic && facts.timing) {
-      frame.append(part(doc, 'p', 'note', 'Dev server: measured from this machine.'))
+    if (import.meta.env.DEV && facts.timing) {
+      frame.append(part(doc, 'p', 'note', 'Dev server: these timings were measured from this computer.'))
     }
     if (w) layout()
     play()

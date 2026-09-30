@@ -1,6 +1,9 @@
-/* Home — single full-bleed interactive space hero. Nav and starfield styles
-   (shared across all pages now) live in shared.css; this file owns only the
-   hero-specific content layout. */
+/* Home: one full-bleed hero that replays this page load. The canvas, the
+   frame, the log and the hover card are in hero-network.css; this file owns
+   the section and the server-rendered text over it: the name, the tagline and
+   the links at the bottom left. The section carries data-theme="dark",
+   because the canvas is dark at every hour, so the tokens below resolve to
+   the dark palette whatever theme a visitor stored. */
 
 section[data-type="hero"] {
   position: relative;
@@ -8,45 +11,57 @@ section[data-type="hero"] {
   min-height: 100vh;
   min-height: 100svh;
   margin: 0;
-  display: grid;
-  place-items: center;
-  padding: clamp(1.5rem, 5vw, 3rem);
-  /* drags pass through to the canvas; links re-enable below */
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--color-bg);
+  /* The stage takes pointers; the links re-enable them below. */
   pointer-events: none;
 }
 
+div[data-type="hero-stage"] {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+}
+
 div[data-type="hero-content"] {
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: clamp(0.85rem, 2.5vw, 1.3rem);
-  max-width: 42rem;
+  align-items: flex-start;
+  padding: 0 clamp(20px, 4.5vw, 64px) max(28px, clamp(20px, 5vh, 48px));
 }
 
 section[data-type="hero"] h1 {
-  font-family: var(--font-serif);
-  font-size: var(--text-display);
-  font-weight: 600;
-  line-height: 1.08;
-  letter-spacing: normal;
   margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-hero-name);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
   color: var(--color-text);
+  text-shadow:
+    0 2px 28px color-mix(in srgb, var(--color-bg) 90%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-bg) 70%, transparent);
 }
 
 section[data-type="hero"] p[data-type="tagline"] {
-  font-family: var(--font-serif);
-  font-size: var(--text-lead);
-  line-height: 1.6;
-  margin: 0;
-  max-width: 34rem;
-  color: var(--color-muted);
+  margin: 0.5em 0 0;
+  max-width: 44ch;
+  font-family: var(--font-mono);
+  font-size: var(--text-hero-line);
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--color-text) 75%, var(--color-muted));
+  text-shadow: 0 1px 14px color-mix(in srgb, var(--color-bg) 85%, transparent);
 }
 
 nav[data-type="hero-links"] {
   display: flex;
   gap: clamp(1rem, 4vw, 1.75rem);
-  margin-top: 0.4rem;
+  margin-top: 1.1em;
 }
 
 nav[data-type="hero-links"] a {
@@ -59,104 +74,9 @@ nav[data-type="hero-links"] a {
   text-decoration-color: var(--color-accent);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.35em;
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--color-bg) 90%, transparent);
 }
 
 nav[data-type="hero-links"] a:hover {
   text-decoration-thickness: 2px;
-}
-
-/* ── Live hero: the dev server's ?hero=network ───────────────────────────────
-   src/components/home/hero/ draws it. The section carries data-hero and
-   data-theme="dark", because the canvas is dark at every hour, so the tokens
-   below resolve to the dark palette whatever theme a visitor stored. The
-   canvas lives in the stage. The server-rendered name, tagline and links sit
-   over it at the bottom left, as they did in the Hero Lab. The hero's own
-   rules are in hero-network.css. */
-section[data-type="hero"][data-hero] {
-  display: block;
-  padding: 0;
-  overflow: hidden;
-  isolation: isolate;
-  background: var(--color-bg);
-}
-
-div[data-type="hero-stage"] {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  /* The section passes pointers through to the canvas; the stage takes them. */
-  pointer-events: auto;
-}
-
-section[data-type="hero"][data-hero] div[data-type="hero-content"] {
-  position: absolute;
-  inset: auto 0 0 0;
-  z-index: 1;
-  max-width: none;
-  align-items: flex-start;
-  text-align: left;
-  gap: 0;
-  padding: 0 clamp(20px, 4.5vw, 64px) max(28px, clamp(20px, 5vh, 48px));
-}
-
-section[data-type="hero"][data-hero] h1 {
-  font-size: var(--text-hero-name);
-  line-height: 1.02;
-  letter-spacing: -0.01em;
-  text-shadow:
-    0 2px 28px color-mix(in srgb, var(--color-bg) 90%, transparent),
-    0 1px 2px color-mix(in srgb, var(--color-bg) 70%, transparent);
-}
-
-section[data-type="hero"][data-hero] p[data-type="tagline"] {
-  margin-top: 0.5em;
-  max-width: 44ch;
-  font-family: var(--font-mono);
-  font-size: var(--text-hero-line);
-  line-height: 1.5;
-  color: color-mix(in srgb, var(--color-text) 75%, var(--color-muted));
-  text-shadow: 0 1px 14px color-mix(in srgb, var(--color-bg) 85%, transparent);
-}
-
-section[data-type="hero"][data-hero] nav[data-type="hero-links"] {
-  margin-top: 1.1em;
-}
-
-section[data-type="hero"][data-hero] nav[data-type="hero-links"] a {
-  text-shadow: 0 1px 12px color-mix(in srgb, var(--color-bg) 90%, transparent);
-}
-
-/* Dev server only: the pill that switches between the classic and live heroes. */
-nav[data-type="hero-switch"] {
-  position: fixed;
-  top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-md));
-  left: 50%;
-  z-index: 60;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px 3px 3px 12px;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  color: var(--color-muted);
-  background: var(--color-bg-blur);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-}
-
-nav[data-type="hero-switch"] a {
-  padding: 0.45em 0.9em;
-  color: var(--color-muted);
-  text-decoration: none;
-  border-radius: var(--radius-pill);
-}
-
-nav[data-type="hero-switch"] a:hover {
-  color: var(--color-text);
-}
-
-nav[data-type="hero-switch"] a[aria-current="page"] {
-  color: var(--color-bg);
-  background: linear-gradient(90deg, var(--color-day), var(--color-accent));
 }

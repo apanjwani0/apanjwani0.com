@@ -5,8 +5,8 @@
  * no-op when the same section already has its hero. The hero is destroyed on
  * `astro:before-swap`.
  *
- * The hero is its own chunk, imported only by the page that shows it, so a
- * visitor to the classic hero downloads none of it.
+ * The hero is its own chunk, imported only by the home page, so no other page
+ * downloads any of it.
  *
  * The document-level listeners are registered once behind `wired`, the
  * singleton shape nav-ui.ts uses. Everything per mount (visibility, the
@@ -15,10 +15,8 @@
  */
 import type { HeroCreate, HeroEnv, HeroId, HeroInstance } from './types'
 
-// Both stories are one engine, so both load the same chunk.
 const LOADERS: Record<HeroId, () => Promise<{ create: HeroCreate }>> = {
   network: () => import('./network'),
-  internet: () => import('./network'),
 }
 
 interface Mounted {

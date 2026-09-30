@@ -24,9 +24,11 @@ npm run build && npm run check && npm run security:smoke && npm run poker:check 
 
 ## Deploy
 
-A push to `main` builds the Docker image and restarts the container on the
-production host (`.github/workflows/deploy.yml`). `data/` is a mounted volume
-holding analytics counts and the daily leaderboards.
+A push to `main` builds the Docker image (pushed to GHCR) and restarts the
+container on the production host, an OCI VM behind Cloudflare, through a
+self-hosted runner (`.github/workflows/deploy.yml`). Work lands on `develop`
+first and reaches `main` by PR. `data/` is a mounted volume holding analytics
+counts and the daily leaderboards.
 
 Other targets:
 
