@@ -1,7 +1,7 @@
 # PR #27 follow-ups
 
-What the 2026-10-01 release review of PR #27 left open once its fixes landed
-on `fix/release-review`. Delete each item as it ships, and this file with the
+What the 2026-10-01 release reviews of PR #27 and the page audit left open
+once their fixes landed (PRs #28 and #29). Delete each item as it ships, and this file with the
 last one. Line numbers are as of `9433d9a`.
 
 ## After #27 merges
@@ -26,6 +26,21 @@ last one. Line numbers are as of `9433d9a`.
   - `ROOT_BOOT_JS` survives in the client chunk as a dead statement; move it
     to a server-only module.
 
+- **Copy the audit flagged** (left unchanged):
+  - Nine meta descriptions run over 160 characters, so results truncate them:
+    Token Bench (216), Cron Whisperer (207) and DNS Sightline (195) longest.
+  - Both learnings article titles run over 65 characters, and the hub's title
+    is a bare `learnings · Aman Panjwani`.
+- **The home share image is a WebP portrait**, which some apps (LinkedIn)
+  handle poorly. A 1200×630 PNG card would fix it.
+- **Oat's files revalidate on every page view** (`/oat.min.*` is not hashed).
+  A Cloudflare Cache Rule giving them a long edge and browser TTL fixes it;
+  serving them through Vite does not (see AGENTS.md *Stack*).
+- **Self-hosting the Google Fonts** removes one render-blocking request.
+- **Game and article pages load every game's CSS** (about 91 KB), because
+  `games-embed.css` is the one list of component stylesheets. Splitting it
+  means changing that rule.
+
 ## Deferred: separate PRs
 
 - **The SPF walk collects terms without a bound** (`analyze.ts:602-636`). A
@@ -39,8 +54,6 @@ last one. Line numbers are as of `9433d9a`.
 - **CAA in RFC 3597 `\#` hex form reads as no CAA** (`analyze.ts:1074-1079`).
 - **The Records table says "No records of any queried type"** when lookups got
   no answer (`panels.ts:151`).
-- **A single tool-side failure hides `zone-servfail`** (`analyze.ts:357`,
-  `:1620`).
 - **Chainsaw's `aia-available` quotes the raw URL** (`chainsaw/analyze.ts:518`).
   Name it only when `csLinkableUrl` accepts it.
 - **Dead code:**
@@ -50,5 +63,3 @@ last one. Line numbers are as of `9433d9a`.
 - **Hidden sections are listed in two places:** `GATED_SECTIONS`
   (`config.ts:138`) and `SECTIONS[].gated` (`site-index.ts:84`). Merge them
   into one `isSectionPublic(site, path)`.
-- **Project entries link to `/projects#<anchor>`** (`site-index.ts:197`), but
-  cards render no ids. It's dormant while Projects is hidden.

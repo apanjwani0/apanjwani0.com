@@ -53,27 +53,24 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - **Live** = `origin/main` (last merge 2026-09-26, PR #22). Branch flow:
   feature → `develop` → `main`, by PR. Local `main` is stale (2026-07-07);
   compare against `origin/main`.
-- **Merged into `develop`, not live:** PRs #23–#26, 30 commits ahead of
-  `origin/main`:
+- **Merged into `develop`, not live:** PRs #23–#26 and #28–#29, 35 commits
+  ahead of `origin/main`:
   - boot-check signals;
   - the DNS Sightline follow-ups;
   - the UI refresh foundation;
   - the home hero (the network replay only), with `/llms.txt`, the AI-crawler
     `robots.txt`, Projects hidden and the new article
-    `/learnings/how-the-internet-works`.
-- **PR #27 (`develop` → `main`) is open, and held** for the fixes from its
-  2026-10-01 review, among them a live DNS Sightline bug and the hero's layout
-  on short screens.
-- **The review's fixes** (`fix/release-review`, PR #28) are merged into
-  `develop`. A second review pass, plus a page-by-page SEO and performance
-  audit, is on `fix/pr27-review-2`, cut from `origin/develop`; its PR goes into
-  `develop`, then #27 ships everything. What the reviews left open (post-deploy
-  checks, the owner's calls, deferred bugs) is in
+    `/learnings/how-the-internet-works`;
+  - two review passes over all of it, a page-by-page SEO and performance
+    audit, and the hubs' shared card layout and sky.
+- **PR #27 (`develop` → `main`) ships everything.** It was reviewed and the
+  full gate passed on `develop` on 2026-10-01. What the reviews left open
+  (post-deploy checks, the owner's calls, deferred bugs) is in
   `docs/plans/release-followups.md`.
 - **Owner's pending moves:**
-  1. Merge `fix/pr27-review-2` into `develop`, then #27.
-  2. Run the post-deploy checks in `docs/plans/release-followups.md`.
-  3. Close the origin lock (see *Origin exposure*). Until then port 80 on the
+  1. Merge #27, then purge the Cloudflare cache and run the post-deploy checks
+     in `docs/plans/release-followups.md`.
+  2. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
 
