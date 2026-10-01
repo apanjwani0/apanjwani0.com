@@ -7,6 +7,7 @@ import { getProjects, getSite, isProjectsPublic } from '../lib/config'
 import { getProjectStats } from '../lib/github'
 import { itemListJsonLd } from '../lib/jsonld'
 import { safeExternalUrl } from '../lib/security'
+import { projectAnchors } from '../lib/site-index'
 
 const site = await getSite(Astro.locals)
 const projects = await getProjects(Astro.locals)
@@ -15,6 +16,8 @@ const projects = await getProjects(Astro.locals)
 const listed = isProjectsPublic(site)
 const stats    = await getProjectStats(projects)
 const cspNonce = (Astro.locals as any).cspNonce
+// The ids the site index links to (`/projects#<id>`), from the same function.
+const anchors = projectAnchors(projects)
 
 // Structured item map for the listing, matching /tools and /games — search
 // engines get an explicit, ordered list of what's on the page.
@@ -42,6 +45,6 @@ const ldJson = itemListJsonLd(
     and side projects that exist mostly because I got curious.
   </p>
   <div data-type="card-grid">
-    {projects.map(p => <ProjectCard project={p} stats={stats[p.url]} />)}
+    {projects.map((p, i) => <ProjectCard project={p} stats={stats[p.url]} id={anchors[i]} />)}
   </div>
 </Base>

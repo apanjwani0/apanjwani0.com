@@ -601,8 +601,10 @@ async function pingOnce(signal: AbortSignal): Promise<number> {
     if (!res.ok || typeof body.ms !== 'number') throw new Error('no ping')
     return body.ms
   }
+  // The trace is answered by the data centre itself, never the server, so the
+  // number is the round trip the log names and a click never costs a page render.
   const t0 = performance.now()
-  await fetchWithTimeout('/', signal, 5000, 'HEAD')
+  await fetchWithTimeout('/cdn-cgi/trace', signal, 5000)
   return performance.now() - t0
 }
 // The browser and system a request announces in its User-Agent header,
@@ -937,7 +939,7 @@ export const create: HeroCreate = (host, env) => {
   let sched: Sched[] = [], si = 0, cursor = 0
   let clockKeys: Array<[number, number]> = []
   let fillWin: [number, number] | null = null
-  let fill = 0, playing = false, pinging = false, clockText = ''
+  let fill = 0, playing = false, pinging = false, pingSeq = 0, clockText = ''
   let typing: HTMLElement | null = null
   // The stop whose card is open: it glows and the rest of the drawing dims.
   // `veil` is how far the drawing has stepped back, eased in and out so that
@@ -1123,6 +1125,7 @@ export const create: HeroCreate = (host, env) => {
     // A ping still animating loses its landing to the new schedule, so it must
     // not keep the next ping locked out.
     pinging = false
+    pingSeq += 1
     typing = null
     log.replaceChildren()
     setClock('')
@@ -1162,14 +1165,16 @@ export const create: HeroCreate = (host, env) => {
   function ping() {
     if (!facts || playing || pinging) return
     pinging = true
-    pingOnce(env.signal).then(landPing, () => landPing(-1))
+    const seq = ++pingSeq
+    pingOnce(env.signal).then(ms => landPing(seq, ms), () => landPing(seq, -1))
   }
-  function landPing(ms: number) {
-    // A replay started while the request was out: it has cleared the log.
-    if (destroyed || playing) return
+  function landPing(seq: number, ms: number) {
+    // A replay started while the request was out: it has cleared the log, and
+    // a ping sent after it owns the next line.
+    if (destroyed || playing || seq !== pingSeq) return
     const line: Line = ms < 0
       ? { title: 'Ping', ms: '', text: 'Your browser sent a small test message, but no reply came back.', detail: '', pal: OUT }
-      : { title: 'Ping', ms: fmtMs(ms), text: story.pingText, detail: 'HEAD /', pal: OUT }
+      : { title: 'Ping', ms: fmtMs(ms), text: story.pingText, detail: 'GET /cdn-cgi/trace', pal: OUT }
     if (reduced || !ctx || !running || ms < 0) {
       pinging = false
       logAdd(line, true)

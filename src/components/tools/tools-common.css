@@ -1,5 +1,6 @@
 /* Shared primitives for every /tools detail page. Imported once by
-   tools/[slug].astro AHEAD of the per-tool stylesheets, so the whole hub shares
+   tools/[slug].astro, which links only the page's own tool stylesheet, AFTER
+   this file. The hub shares
    one keyboard-focus ring and one <kbd> treatment instead of each tool
    redefining them. Tokens only (theme.css) — no hardcoded colours/fonts/sizes.
 
@@ -115,6 +116,35 @@ div[data-tool="token-bench"] button:hover {
   border-color: var(--color-muted);
 }
 
+/* ── Pane action buttons (Copy, Clear, …) ─────────────────────────────────
+   JSON Tidy and List Forge both render `div[data-group="pane-actions"]`. These
+   rules lived unscoped in json-tidy.css and reached List Forge only because
+   every tool sheet shared one page bundle; with each page linking its own
+   sheet they live here, where both tools load them. */
+div[data-group="pane-actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+div[data-group="pane-actions"] button {
+  padding: 0.26rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+div[data-group="pane-actions"] button:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+
 /* …and the dead state the chrome above was missing entirely. games-common.css
    has carried this floor since the games lane was unified; the tools lane never
    got it, so a disabled button in these ten tools rendered byte-identically to a
@@ -212,7 +242,7 @@ section[data-type="sg-card"] h2 {
    tools-lane rule into the sheet the whole site loads.
 
    Hoisted from TWO byte-identical unscoped copies, in audio-transcriber.css and
-   draftboard.css. Per-tool sheets share one page bundle, so an unscoped rule in
+   draftboard.css. Per-tool sheets then shared one page bundle, so an unscoped rule in
    either reached all eleven: nine tools were styled by files they have nothing
    to do with, and deleting either copy — a change that reads as tidying one
    tool — would have restyled the other nine. `security:smoke` now derives which
@@ -235,4 +265,11 @@ div[data-type="tool-header"] p {
   margin: 0;
   color: var(--color-muted);
   font-size: var(--text-sm);
+}
+
+/* Pane action buttons, dead state (after the lane floor, which holds the
+   hover/disabled ordering for the file). */
+div[data-group="pane-actions"] button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
 }

@@ -16,8 +16,9 @@ experience / blogs / learnings / games / tools sections.
   deployment-specific file.
 - **Oat UI**: a forked WebComponents design system, vendored as
   `public/oat.min.{css,js}`. To update it, run `make` in the fork
-  (github.com/apanjwani0/oat) and copy `dist/oat.min.*` into `public/`. No
-  React/Vue/Svelte.
+  (github.com/apanjwani0/oat) and copy `dist/oat.min.*` into `public/`. Keep
+  it out of Vite: its CSS minifier merges Oat's `@layer` blocks and restyles
+  buttons. No React/Vue/Svelte.
 - **TypeScript** throughout; `@astrojs/check` for type checking.
 - **marked** + **dompurify** for markdown; **html2canvas** for tools;
   **gifenc** for GIF export; **cytoscape** for the Flowmap and Draftboard graphs.
@@ -61,12 +62,14 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - **PR #27 (`develop` → `main`) is open, and held** for the fixes from its
   2026-10-01 review, among them a live DNS Sightline bug and the hero's layout
   on short screens.
-- **In flight:** `fix/release-review`, cut from `origin/develop`, holds every
-  fix the review asked for. Its PR goes into `develop`; then #27 ships
-  everything. What the review left open (post-deploy checks, the owner's
-  calls, deferred bugs) is in `docs/plans/release-followups.md`.
+- **The review's fixes** (`fix/release-review`, PR #28) are merged into
+  `develop`. A second review pass, plus a page-by-page SEO and performance
+  audit, is on `fix/pr27-review-2`, cut from `origin/develop`; its PR goes into
+  `develop`, then #27 ships everything. What the reviews left open (post-deploy
+  checks, the owner's calls, deferred bugs) is in
+  `docs/plans/release-followups.md`.
 - **Owner's pending moves:**
-  1. Merge `fix/release-review` into `develop`, then #27.
+  1. Merge `fix/pr27-review-2` into `develop`, then #27.
   2. Run the post-deploy checks in `docs/plans/release-followups.md`.
   3. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
@@ -460,6 +463,15 @@ fixture is the worked example.
   `data-tool="<dir-name>"`. That root supplies the workbench width
   (`--tool-width`), the gutter, the focus ring and `<kbd>` styling. A tool styles
   its internals, never its own container width. Asserted.
+- **A tool page links only its own stylesheet**, `tools/<slug>/<slug>.css`,
+  through a `?url` glob in `tools/[slug].astro`, after `tools-common.css`. A
+  static import of a per-tool sheet, in the route or in a tool module, puts it
+  in every tool page's head: Astro hoists the CSS of every module a page's
+  script can reach. Asserted.
+- **No bundled script is inlined.** Vite inlines a small `<script>` chunk by
+  default, with no nonce, and the CSP refuses it; `assetsInlineLimit` in
+  `astro.config.mjs` keeps every script a file, and every `?url`-linked
+  stylesheet too (a data: stylesheet is refused the same way). Asserted.
 - **A tool's claims live in a module, not in the component**
   (`webhook-inspector/signature.ts`, `cron-whisperer/schedule.ts` and
   `crontab.ts`, `token-bench/diagnose.ts`, `chainsaw/analyze.ts`,
@@ -676,7 +688,9 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 
 - **Real data only, never a sample** (owner, 2026-09-28). The replay reads
   Navigation Timing, `/cdn-cgi/trace` (country, data centre, TLS) and one HEAD
-  of `/` (whether Cloudflare's copy predates the visit, from its `age`). A fact
+  of `/` (whether Cloudflare's copy predates the visit, from its `age`). The
+  click-to-ping times a GET of `/cdn-cgi/trace`, which the data centre answers
+  itself, so a ping is the edge round trip and never an origin render. A fact
   it cannot measure is left out: the ISP station carries no number, because
   nothing times that hop apart from the rest. On the dev server the page comes
   from localhost, so `/__hero-probe` (dev-server middleware in

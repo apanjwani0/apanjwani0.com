@@ -15,8 +15,15 @@ function createNonce(): string {
  */
 const REROUTED_ERROR_STATUSES = [404, 500]
 
-function isReroutedByAstro(response: Response): boolean {
-  return response.body === null && REROUTED_ERROR_STATUSES.includes(response.status)
+/**
+ * Astro never reroutes an endpoint's response (renderEndpoint sets
+ * skipErrorReroute), so a bodyless API 404 gets no second pass and keeps the
+ * CSP this pass sets.
+ * ponytail: every endpoint that can answer bodyless lives under /api/; one
+ * placed elsewhere must join this test.
+ */
+function isReroutedByAstro(response: Response, pathname: string): boolean {
+  return response.body === null && REROUTED_ERROR_STATUSES.includes(response.status) && !pathname.startsWith('/api/')
 }
 
 function buildCsp(nonce: string): string {
@@ -69,7 +76,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // and the head bootstrap — the one inline script on every page — would be
   // refused on every such page. So this pass leaves CSP to the re-render,
   // which sets the matching one.
-  if (!isReroutedByAstro(response)) {
+  if (!isReroutedByAstro(response, pathname)) {
     response.headers.set('Content-Security-Policy', buildCsp(cspNonce))
   }
 

@@ -54,6 +54,9 @@ const ogImage = ogImageMeta(site, ogCard, toolTitle)
       clientRouter={false}
       theme={site.theme}
     />
+    {/* Page-specific stylesheets (a tool page's own sheet), in the head so
+        nothing paints before they arrive. */}
+    <slot name="head" />
   </head>
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>

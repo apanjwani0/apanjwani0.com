@@ -12,26 +12,18 @@ import { validateSession } from '../../lib/session'
 import { getSessionToken } from '../../lib/security'
 import { learningsAboutEmbed } from '../../lib/learnings'
 import '../../styles/seo-support.css'
-import '../../components/tools/tools-common.css'
-import '../../components/tools/draftboard/draftboard.css'
-import '../../components/tools/audio-transcriber/audio-transcriber.css'
-import '../../components/tools/wallpaper-forge/wallpaper-forge.css'
-import '../../components/tools/json-tidy/json-tidy.css'
-import '../../components/tools/list-forge/list-forge.css'
-import '../../components/tools/epoch-wizard/epoch-wizard.css'
-import '../../components/tools/chroma-lab/chroma-lab.css'
-import '../../components/tools/codec-forge/codec-forge.css'
-import '../../components/tools/hash-smith/hash-smith.css'
-import '../../components/tools/cron-whisperer/cron-whisperer.css'
-import '../../components/tools/regex-lab/regex-lab.css'
-import '../../components/tools/webhook-inspector/webhook-inspector.css'
-import '../../components/tools/link-peek/link-peek.css'
-import '../../components/tools/chainsaw/chainsaw.css'
-import '../../components/tools/dns-sightline/dns-sightline.css'
-import '../../components/tools/token-bench/token-bench.css'
-import '../../components/tools/flowmap/flowmap.css'
+import toolsCommonCss from '../../components/tools/tools-common.css?url'
 
 const { slug } = Astro.params
+
+// Each tool's own stylesheet, linked on that tool's page only. A static import
+// put all of them in every tool page's render-blocking bundle, and importing
+// one from the tool's module does not help: Astro hoists the CSS of every
+// module the page's script can import. `?url` hands back a hashed file without
+// adding it to the page. Both links go in the head, tools-common.css first:
+// a page-level import would be injected at the END of the head, after them.
+const TOOL_CSS = import.meta.glob<string>('../../components/tools/*/*.css', { query: '?url', import: 'default', eager: true })
+const toolCss = TOOL_CSS[`../../components/tools/${slug}/${slug}.css`]
 
 // Tools that have moved elsewhere keep their old URL alive with a permanent
 // redirect, so existing links and search results don't 404. Type Trial graduated
@@ -122,6 +114,8 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
 >
   <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <link slot="head" rel="stylesheet" href={toolsCommonCss} />
+  {toolCss && <link slot="head" rel="stylesheet" href={toolCss} />}
   <Breadcrumbs items={crumbs} inset />
   {slug === 'draftboard' && (
     <draftboard-tool data-tool="draftboard">
