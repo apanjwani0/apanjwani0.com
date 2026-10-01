@@ -15,6 +15,7 @@
  * Cloudflare. AGENTS.md's Home hero section has the contract.
  */
 import type { HeroCreate, HeroInstance } from './types'
+import { drawStars, driftStars, makeStars, starCount, type SkyColors, type Star } from '../../../lib/sky'
 
 type Rgb = [number, number, number]
 
@@ -341,57 +342,9 @@ const GLYPH: Record<Kind, (ctx: CanvasRenderingContext2D, x: number, y: number, 
   laptop: drawLaptop, phone: drawPhone, router: drawRouter, dns: drawDns, edge: drawHex, origin: drawRack, isp: drawTower,
 }
 
-// ---- Space: an endless, slow drift of stars in depth, the nearer ones
-// joined into constellations that form and dissolve as they pass each other.
-// Sorted nearest first, so the constellation pass walks only a prefix.
-// Exported for security:smoke, which drifts them and counts lines that pop.
-export interface Star { x: number; y: number; z: number; ph: number }
-// px/s for the nearest stars; the owner asked for twice the first 7 (2026-09-30).
-const DRIFT = 14
-const NEAR = 0.62
-// A line fades out over this many px as either star nears an edge.
-const EDGE = 40
-export function makeStars(n: number, w: number, h: number): Star[] {
-  return Array.from({ length: n }, () => ({ x: Math.random() * w, y: Math.random() * h, z: 0.2 + 0.8 * Math.random() ** 1.6, ph: Math.random() * 6.28 }))
-    .sort((a, b) => b.z - a.z)
-}
-export function driftStars(stars: Star[], w: number, h: number, dt: number) {
-  for (const st of stars) {
-    st.x -= DRIFT * st.z * dt
-    st.y -= DRIFT * 0.2 * st.z * dt
-    if (st.x < -8) { st.x += w + 16; st.y = Math.random() * h } else if (st.y < -8) st.y += h + 16
-  }
-}
-// How visible the constellation line between two stars is. It fades with
-// distance and near the canvas edges: a star that drifts off one edge
-// reappears at the other, and a line still drawn to it would vanish or appear
-// in one frame. At 14 px/s that was one pop every second or so, and it read as
-// the page flickering (owner, 2026-09-30).
-export function lineAlpha(a: Star, b: Star, reach: number, w: number, h: number): number {
-  const d = Math.hypot(a.x - b.x, a.y - b.y)
-  if (d > reach) return 0
-  const edge = (s: Star) => clamp(Math.min(s.x, w - s.x, s.y, h - s.y) / EDGE, 0, 1)
-  const f = 1 - d / reach
-  return 0.2 * f * f * edge(a) * edge(b)
-}
-function drawStars(ctx: CanvasRenderingContext2D, stars: Star[], time: number, reach: number, w: number, h: number) {
-  ctx.strokeStyle = CONSTELLATION; ctx.lineWidth = 1
-  for (let i = 0; i < stars.length && stars[i].z >= NEAR; i++) {
-    const a = stars[i]
-    for (let j = i + 1; j < stars.length && stars[j].z >= NEAR; j++) {
-      const b = stars[j], alpha = lineAlpha(a, b, reach, w, h)
-      if (alpha <= 0) continue
-      ctx.globalAlpha = alpha
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
-    }
-  }
-  ctx.fillStyle = STAR
-  for (const st of stars) {
-    ctx.globalAlpha = (0.15 + 0.65 * st.z) * (0.8 + 0.2 * Math.sin(time * 0.0011 * (0.6 + st.z) + st.ph))
-    ctx.beginPath(); ctx.arc(st.x, st.y, 0.45 + 1.35 * st.z * st.z, 0, 6.2832); ctx.fill()
-  }
-  ctx.globalAlpha = 1
-}
+// ---- Space: the sky (src/lib/sky.ts), drawn behind the line in the hero's
+// own star colours.
+const SKY: SkyColors = { star: STAR, line: CONSTELLATION }
 
 // ---- Traffic: fixed pools of packets (comets on a wire) and pulses (a ring
 // from a station), reused every frame. Heat is how lit a wire or a station
@@ -1360,7 +1313,7 @@ export const create: HeroCreate = (host, env) => {
       canvas.width = Math.max(1, Math.round(w * dpr))
       canvas.height = Math.max(1, Math.round(h * dpr))
     }
-    if (!stars) stars = makeStars(Math.round(clamp((w * h) / 9000, 50, 170) * (env.lowPower ? 0.6 : 1)), w, h)
+    if (!stars) stars = makeStars(starCount(w, h, env.lowPower), w, h)
     else if (ow && oh) for (const st of stars) { st.x *= w / ow; st.y *= h / oh }
     layout()
     renderNow()
@@ -1484,7 +1437,7 @@ export const create: HeroCreate = (host, env) => {
     if (!ctx || !pos.length) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, w, h)
-    if (stars) drawStars(ctx, stars, time, phone ? 80 : 120, w, h)
+    if (stars) drawStars(ctx, stars, time, phone ? 80 : 120, w, h, SKY)
     drawLinks(ctx)
     drawPackets(ctx)
     drawStations(ctx)

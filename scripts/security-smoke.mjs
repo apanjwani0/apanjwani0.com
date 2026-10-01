@@ -9395,11 +9395,16 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   // twice: status lights blinking at rest (2026-09-28), then the same lights
   // blinking while traffic crossed and a glow that breathed (2026-09-30). The
   // one clock-driven brightness the owner keeps is the stars' slow twinkle.
+  // The twinkle lives in src/lib/sky.ts, shared with the hubs' sky; the hero
+  // and the hubs' mount may not add a clock-driven oscillation of their own.
   const networkSrc = await readFile(new URL('network.ts', heroDir), 'utf-8')
-  const starsFn = networkSrc.match(/function drawStars\([\s\S]*?\n\}\n/)
-  assert.ok(starsFn, 'drawStars is found in network.ts')
-  const clocked = [...networkSrc.replace(starsFn[0], '').matchAll(/Math\.(sin|cos)\(([^()]|\([^()]*\))*\btime\b/g)].map(m => m[0])
-  assert.deepEqual(clocked, [], `the hero oscillates on the clock outside the stars' twinkle, which reads as flicker: ${clocked.join(' | ')}`)
+  const skySrc = await readFile(new URL('../src/lib/sky.ts', import.meta.url), 'utf-8')
+  const skyUiSrc = await readFile(new URL('../src/lib/sky-ui.ts', import.meta.url), 'utf-8')
+  const starsFn = skySrc.match(/export function drawStars\([\s\S]*?\n\}\n/)
+  assert.ok(starsFn, 'drawStars is found in src/lib/sky.ts')
+  const clockedIn = src => [...src.matchAll(/Math\.(sin|cos)\(([^()]|\([^()]*\))*\btime\b/g)].map(m => m[0])
+  const clocked = [...clockedIn(networkSrc), ...clockedIn(skySrc.replace(starsFn[0], '')), ...clockedIn(skyUiSrc)]
+  assert.deepEqual(clocked, [], `the sky or the hero oscillates on the clock outside the stars' twinkle, which reads as flicker: ${clocked.join(' | ')}`)
   // The stylesheets too: the log's typing dots pulsed forever in CSS while
   // this check read only the script (found in the PR #27 review).
   for (const sheet of ['hero-network.css', 'home.css']) {
@@ -9418,14 +9423,14 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   // reappears at the other; a line still drawn to it vanished or appeared in
   // one frame, about once a second at 14 px/s (the third flicker report,
   // 2026-09-30). Drift the real stars for a minute and count those jumps.
-  const { makeStars, driftStars, lineAlpha } = await import('../src/components/home/hero/network.ts')
+  const { makeStars, driftStars, lineAlpha, starCount, SKY_NEAR } = await import('../src/lib/sky.ts')
   const realRandom = Math.random
   let seed = 7
   Math.random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
   try {
     for (const [w, h, reach] of [[1440, 900, 120], [375, 812, 80]]) {
-      const stars = makeStars(Math.round(Math.min(Math.max((w * h) / 9000, 50), 170)), w, h)
-      const near = stars.filter(st => st.z >= 0.62)
+      const stars = makeStars(starCount(w, h, false), w, h)
+      const near = stars.filter(st => st.z >= SKY_NEAR)
       const lines = () => near.flatMap((a, i) => near.slice(i + 1).map(b => lineAlpha(a, b, reach, w, h)))
       let before = lines(), pops = 0
       for (let frame = 0; frame < 30 * 60; frame++) {
@@ -9441,6 +9446,30 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
     Math.random = realRandom
   }
 }
+/* ─────  The hubs' sky  ─────
+   The home hero's drifting stars behind the tools, games and learnings hubs
+   (owner, 2026-10-01). It must stay a light backdrop: only those hubs render
+   it, it pauses while the tab is hidden, gives reduced motion one still frame,
+   caps the canvas at 1.5 device pixels, and the cards it sits behind are
+   opaque, so no star lands in a card's copy. */
+{
+  const pagesDir = new URL('../src/pages/', import.meta.url)
+  const withSky = []
+  for (const rel of (await readdir(pagesDir, { recursive: true })).filter(f => f.endsWith('.astro'))) {
+    if (/^\s*sky\s*$/m.test(await readFile(new URL(rel, pagesDir), 'utf-8'))) withSky.push(rel)
+  }
+  assert.deepEqual(withSky.sort(), ['games.astro', 'learnings.astro', 'tools/index.astro'], 'the sky is drawn behind the three hubs and nowhere else')
+  const skyUi = await readFile(new URL('../src/lib/sky-ui.ts', import.meta.url), 'utf-8')
+  assert.match(skyUi, /const run = !reduced && !document\.hidden/, 'the sky loop runs only with motion allowed and the tab visible')
+  assert.match(skyUi, /Math\.min\(window\.devicePixelRatio \|\| 1, 1\.5\)/, 'the sky canvas is capped at 1.5 device pixels')
+  assert.match(skyUi, /if \(last && now - last < FRAME_MS\) return/, 'the sky draws at a capped frame rate')
+  const nav = await readFile(new URL('../src/lib/nav-ui.ts', import.meta.url), 'utf-8')
+  assert.match(nav, /import\('\.\/sky-ui'\)/, 'the sky loads as its own chunk, only where a page renders it')
+  const shared = (await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+  const card = shared.match(/\[data-type="card-grid"\] > \* \{([^}]*)\}/)?.[1] ?? ''
+  assert.match(card, /background:\s*var\(--color-surface\)/, 'listing cards are opaque, so the sky never shows through their copy')
+}
+
 console.log('home hero: one hero and no switch, its text sits above the scrim, nothing blinks, it names no tools or games or the host, and its dev hooks compile out of production')
 
 /* ══════════════  UI refresh · anchor regions for items B–G  ══════════════

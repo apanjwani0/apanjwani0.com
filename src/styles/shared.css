@@ -343,23 +343,80 @@ p[data-type="page-intro"] {
 /* `position: relative` is load-bearing, not tidiness: it is the containing
    block for the stretched card link below. Without it the link's ::after
    escapes to the nearest positioned ancestor and covers the whole page. */
+/* The surface is opaque so the hubs' sky (src/lib/sky-ui.ts) never shows
+   through a card's copy. */
 [data-type="card-grid"] > * {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
   margin: 0;
   padding: var(--space-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  transition: border-color 0.15s ease;
+  background: var(--color-surface);
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    transform var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out);
   position: relative;
 }
 
-/* Card lights up on hover AND when a control inside it takes keyboard focus, so
-   the whole card responds to keyboard users the same way it does to the mouse. */
+/* Card lights up and lifts on hover AND when a control inside it takes
+   keyboard focus, so the whole card responds to keyboard users the same way it
+   does to the mouse. */
 [data-type="card-grid"] > *:hover,
 [data-type="card-grid"] > *:focus-within {
   border-color: var(--color-muted);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-2px);
+}
+
+/* ── Card anatomy, the same on every hub ───────────────────────────────────
+   card-head (the title, with any badges on the right), then card-desc
+   (clamped to three lines, so a row of cards lines up and the titles stay easy
+   to scan), then an optional card-meta pinned to the bottom edge. */
+div[data-type="card-head"] {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-md);
+  flex-wrap: wrap;
+}
+
+span[data-type="card-badges"] {
+  display: flex;
+  gap: var(--space-2xs);
+  flex-shrink: 0;
+}
+
+span[data-type="card-badges"]:empty {
+  display: none;
+}
+
+[data-type="card-desc"] {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+/* A summary rendered from markdown arrives as a paragraph; inline, it is one
+   run of text the clamp can count. */
+[data-type="card-desc"] p {
+  display: inline;
+  margin: 0;
+}
+
+p[data-type="card-meta"] {
+  margin: auto 0 0;
+  padding-top: var(--space-xs);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 /* Listing card titles are real headings (<h2>/<h3>) so screen readers can jump
@@ -376,9 +433,10 @@ p[data-type="page-intro"] {
    Set it here; never in a per-hub or per-tool sheet. */
 [data-type="card-title"] {
   margin: 0;
-  font-size: inherit;
+  font-size: var(--text-card);
   font-weight: 600;
   line-height: inherit;
+  text-wrap: balance;
 }
 
 /* The whole card is the click target. The card frame already lights up on
