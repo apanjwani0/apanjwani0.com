@@ -6242,6 +6242,10 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
     'redir.com': ['"v=spf1 redirect=b.net"'],
     'redirall.com': ['"v=spf1 redirect=b.net -all"'],
     'open.com': ['"v=spf1 +all"'],
+    // What an unlisted sender gets through a redirect: +all, or a permerror.
+    'redirpass.com': ['"v=spf1 redirect=pass.net"'],
+    'pass.net': ['"v=spf1 +all"'],
+    'redirgone.com': ['"v=spf1 redirect=gone.net"'],
     'noall.com': ['"v=spf1 ip4:1.2.3.4"'],
     'void.com': ['"v=spf1 include:gone1.net include:gone2.net include:gone3.net -all"'],
   }
@@ -6671,6 +6675,8 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgSpfFindings(nearReport, 'near.com'),
       sg.sgSpfFindings(loopReport, 'loop.com'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('open.com', spfLookup), 'open.com'),
+      sg.sgSpfFindings(await sg.sgAnalyzeSpf('redirpass.com', spfLookup), 'redirpass.com'),
+      sg.sgSpfFindings(await sg.sgAnalyzeSpf('redirgone.com', spfLookup), 'redirgone.com'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('noall.com', spfLookup), 'noall.com'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('a.net', spfLookup), 'a.net'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('nothing.com', spfLookup), 'nothing.com'),
@@ -6961,6 +6967,12 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
 }
 console.log('dns sightline: the resolver diff ignores TTL and order, the SPF walk matches an independent oracle and terminates on a hostile zone, CAA issuewild replaces issue, every finding cites its record, and the only hosts reachable are the three allowlisted resolvers')
 
+/* The host and runtime names nothing public may carry: they are what helps
+   someone reach the origin around Cloudflare. Bare "node" cannot join the
+   list, because the diagram article says "A node is a thing the order can be",
+   so the runtime's phrase form stands in for it ("node server" once shipped). */
+const HOST_NAMES = /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy|kubernetes|aws|azure|gcp|hetzner|digitalocean|vultr|linode|node\.?js|node\s+(server|runtime|app)s?|astro)\b/i
+
 /* ─────  The Diagram Atlas: seven notations, and what each one cannot say  ─────
 
    Shipped 2026-09-25 as the figure for /learnings/how-to-think-on-paper. The
@@ -7166,9 +7178,27 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
     `the legibility floor is ${floor[1]}rem — below ~34rem the 680-unit viewBox renders labels under 8px`,
   )
   assert.ok(
-    /data-type="at-stage" tabindex="0"/.test(atSrc),
-    'a horizontally scrollable region must be reachable without a pointer',
+    /data-type="at-stage" tabindex="0" role="region" aria-label="[^"]+"/.test(atSrc),
+    'a horizontally scrollable region must be reachable without a pointer, and named',
   )
+  assert.match(atSrc, /private autoplay\(\)[\s\S]*?'aria-live', 'off'[\s\S]*?this\.play\(\)/,
+    'autoplay silences the caption, or a screen reader hears it change every beat')
+
+  /* ── 8. Nothing names the host. ──
+     A deployment view invites drawing the real stack, and this one did, with the
+     provider and runtime on the machine's label. That is what helps someone reach
+     the origin around Cloudflare, so HOST_NAMES runs over every string a view
+     carries (walked, not listed: the svg, the legend, each beat's caption and any
+     field added later) and over every field of the article. */
+  const strings = o => typeof o === 'string' ? [o] : Object.values(o ?? {}).flatMap(strings)
+  for (const v of ATLAS_VIEWS) {
+    for (const s of strings(v)) {
+      assert.doesNotMatch(s, HOST_NAMES, `view "${v.id}" names the host or runtime: "${s.match(HOST_NAMES)?.[0]}"`)
+    }
+  }
+  for (const s of strings(article)) {
+    assert.doesNotMatch(s, HOST_NAMES, `the diagram article names the host or runtime: "${s.match(HOST_NAMES)?.[0]}"`)
+  }
 }
 /* ─────  The Internet Atlas: eight stops, each with what goes wrong  ─────
 
@@ -7223,7 +7253,7 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
     assert.match(ip, /^(192\.168\.|203\.0\.113\.)/, `the figure shows ${ip}, which is not a documentation address`)
   }
   for (const text of [figureText, article.content, article.summary]) {
-    assert.doesNotMatch(text, /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy|kubernetes|aws|azure|gcp|hetzner|digitalocean|vultr|linode|node\.?js|astro)\b/i,
+    assert.doesNotMatch(text, HOST_NAMES,
       'the internet article and its figure never name the host or the runtime')
   }
 
@@ -7244,7 +7274,9 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
   assert.ok(!/\bthis\.play\(\)/.test(iaSelect), 'select() reaches playback through autoplay(), never play() directly')
   assert.ok(/prefers-reduced-motion/.test(iaSrc), 'no autoplay for a reader who asked for less motion')
   assert.ok(/disconnectedCallback/.test(iaSrc) && /clearInterval/.test(iaSrc), 'the beat clock is torn down on unmount')
-  assert.ok(/data-type="at-stage" tabindex="0"/.test(iaSrc), 'the scrollable stage is reachable without a pointer')
+  assert.ok(/data-type="at-stage" tabindex="0" role="region" aria-label="[^"]+"/.test(iaSrc), 'the scrollable stage is reachable without a pointer, and named')
+  assert.match(iaSrc, /private autoplay\(\)[\s\S]*?'aria-live', 'off'[\s\S]*?this\.play\(\)/,
+    'autoplay silences the caption, or a screen reader hears it change every beat')
 
   // Its styles: its own sheet, plus the Diagram Atlas's shared vocabulary.
   const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
@@ -7328,7 +7360,7 @@ console.log('internet atlas: every stop has a full legend and its own pinned fig
 }
 console.log('learnings format: figures are visibility-gated and motion-safe, and the read time is derived from the content')
 
-console.log('diagram atlas: seven views, every beat lights an element that exists, the structural notations refuse to animate, and the prose still says seven')
+console.log('diagram atlas: seven views, every beat lights an element that exists, the structural notations refuse to animate, the prose still says seven, and nothing names the host')
 
 /* ─────  CAA x issuer: the finding neither tool can make alone  ─────────────
 
@@ -8256,8 +8288,17 @@ console.log('pr 19 review: a retired learning answers 301 to the hub, the publis
    transport, the real pick and the real walks run. `fault(resolver, name,
    type)` says what one resolver does with one question — a DNS status number
    (0 is an empty NOERROR, 2 SERVFAIL, 3 NXDOMAIN) or 'unreachable' — and a name
-   missing from the zone is NXDOMAIN. */
+   missing from the zone is NXDOMAIN. Like a recursive resolver, a question at
+   an alias is answered with the CNAME chain and then the target's records,
+   unless the name holds records of that type itself. */
 const SG_STUB_TYPES = { A: 1, NS: 2, CNAME: 5, SOA: 6, MX: 15, TXT: 16, AAAA: 28, CAA: 257 }
+const sgStubAnswer = (zone, name, type, depth = 0) => {
+  const rrs = zone[name] ?? {}
+  const own = (rrs[type] ?? []).map(data => ({ name: `${name}.`, type: SG_STUB_TYPES[type], TTL: 300, data }))
+  if (own.length || type === 'CNAME' || !rrs.CNAME || depth > 8) return own
+  const target = rrs.CNAME[0].toLowerCase().replace(/\.+$/, '')
+  return [{ name: `${name}.`, type: SG_STUB_TYPES.CNAME, TTL: 300, data: rrs.CNAME[0] }, ...sgStubAnswer(zone, target, type, depth + 1)]
+}
 const sgStubDoh = (zone, fault) => async input => {
   const u = new URL(String(input))
   const resolver = u.hostname.includes('cloudflare') ? 'cloudflare' : u.hostname.includes('google') ? 'google' : 'quad9'
@@ -8268,7 +8309,7 @@ const sgStubDoh = (zone, fault) => async input => {
   const body = typeof f === 'number'
     ? { Status: f, Answer: [] }
     : name in zone
-      ? { Status: 0, Answer: (zone[name][type] ?? []).map(data => ({ name: `${name}.`, type: SG_STUB_TYPES[type], TTL: 300, data })) }
+      ? { Status: 0, Answer: sgStubAnswer(zone, name, type) }
       : { Status: 3, Answer: [] }
   return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/dns-json' } })
 }
@@ -8278,6 +8319,23 @@ const sgInspectOver = async (zone, fault, name = 'example.test') => {
   globalThis.fetch = sgStubDoh(zone, fault)
   try { return await sgInspect(name) } finally { globalThis.fetch = realFetch }
 }
+
+/* cname-coexists counts only records the inspected name owns. The answer to
+   "A for www.github.com" is the CNAME and then github.com's own addresses, and
+   the live tool read those as an A record beside the CNAME, so it reported
+   "CNAME alongside A, MX, TXT, NS" for nearly every alias (PR #27 review). */
+{
+  const apex = { A: ['93.184.216.34'], MX: ['10 mail.example.test.'], NS: ['a.ns.test.'], TXT: ['"v=spf1 -all"'] }
+  const alias = await sgInspectOver({ 'example.test': apex, 'www.example.test': { CNAME: ['example.test.'] } }, null, 'www.example.test')
+  assert.equal(alias.cname.target, 'example.test', 'the fixture is an alias onto the apex')
+  assert.ok(alias.answers.A.some(a => a.records.length > 0), 'and the stub answers the alias like a recursive resolver, with the target\'s addresses')
+  assert.deepEqual(alias.cname.coexisting, [], 'records the alias target owns are not records beside the CNAME')
+  assert.ok(!alias.findings.some(f => f.id === 'cname-coexists'), 'www CNAME apex is a clean alias')
+  const both = await sgInspectOver({ 'example.test': apex, 'www.example.test': { CNAME: ['example.test.'], TXT: ['"verify=1"'] } }, null, 'www.example.test')
+  assert.deepEqual(both.cname.coexisting, ['TXT'], 'a record the aliased name owns itself still counts')
+  assert.ok(both.findings.some(f => f.id === 'cname-coexists'), '…and still raises cname-coexists')
+}
+console.log('dns sightline: a CNAME is reported alongside only the records its own name holds, not the ones its target answers with')
 
 /* ─────  DNS Sightline follow-ups: one test for "did it answer", and whose failure it was  ─────
 
@@ -8570,6 +8628,10 @@ console.log('dns sightline follow-ups: sgUnanswered is the only test of an answe
     'loop-a.test': ['"v=spf1 redirect=loop-b.test"'],
     'loop-b.test': ['"v=spf1 redirect=loop-a.test"'],
     'first-all.test': ['"v=spf1 -all +all"'],
+    'redir-pass.test': ['"v=spf1 redirect=pass.test"'],
+    'pass.test': ['"v=spf1 ip4:192.0.2.1 +all"'],
+    'redir-two.test': ['"v=spf1 redirect=two.test"'],
+    'two.test': ['"v=spf1 -all"', '"v=spf1 ~all"'],
   }
   const spfLookup = async (name, type) => (name === 'stalled.test' ? noAnswer(name, type) : answer(name, type, spfZone[name] ?? []))
   const spfOf = async domain => {
@@ -8588,6 +8650,17 @@ console.log('dns sightline follow-ups: sgUnanswered is the only test of an answe
   assert.ok(open.report.terms.some(t => t.kind === 'redirect'), 'and the finding cites the redirect it followed')
   assert.equal((await spfOf('redir-gone.test')).report.fallthrough, 'error', 'a redirect to no SPF record is a permerror, not a missing all')
   assert.equal((await spfOf('loop-a.test')).report.fallthrough, 'error')
+  // …and each says so. #24 computed these two fallthroughs and no finding read
+  // them, so a redirect to +all or to nothing went unreported (PR #27 review).
+  const findingOf = async (domain, id) => sg.sgSpfFindings((await spfOf(domain)).report, domain).find(f => f.id === id)
+  const passed = await findingOf('redir-pass.test', 'spf-all-pass')
+  assert.ok(passed?.evidence.includes('v=spf1 ip4:192.0.2.1 +all'), 'a redirect to +all is spf-all-pass, citing the record that holds the +all')
+  for (const [domain, line] of [['redir-gone.test', 'redirect=gone.test has no SPF record'], ['redir-two.test', 'two.test publishes 2 SPF records']]) {
+    const broken = await findingOf(domain, 'spf-redirect-permerror')
+    assert.ok(broken?.evidence.some(e => e.startsWith(line)), `${domain}: a redirect that breaks is a permerror finding citing "${line}…"`)
+  }
+  const looped = (await spfOf('loop-a.test')).ids
+  assert.ok(looped.includes('spf-loop') && !looped.includes('spf-redirect-permerror'), 'a redirect loop is reported once, as the loop')
   const firstAll = await spfOf('first-all.test')
   assert.equal(firstAll.report.all, '-', 'mechanisms after the first all are never tested (RFC 7208 §5.1)')
   assert.equal(firstAll.ids.includes('spf-all-pass'), false)
@@ -8736,8 +8809,9 @@ console.log('dns sightline follow-ups: no finding rests on a lookup that got no 
    fail; the mutation is named in the block's own comment. */
 
 /* ── A rerouted error page carries the nonce its CSP names ──────────────────
-   A route that answers a BODYLESS 404/500 is re-rendered through 404.astro with
-   the middleware run a second time, and Astro's mergeResponses keeps the FIRST
+   A route that answers a BODYLESS 404/500 is re-rendered through its error page
+   (404.astro or 500.astro; a route that throws gets 500.astro too) with the
+   middleware run a second time, and Astro's mergeResponses keeps the FIRST
    pass's headers — so a CSP set on that pass names nonce A over a body rendered
    under nonce B, and the head bootstrap is refused on every such page
    (/zz and /tools/zz both take that path). The middleware leaves CSP to the
@@ -8764,6 +8838,16 @@ console.log('dns sightline follow-ups: no finding rests on a lookup that got no 
   const originCheck = await readFile(new URL('./origin-check.sh', import.meta.url), 'utf-8')
   assert.ok(/for path in \/zz \/tools\/zz \/a\/b\/c; do/.test(originCheck) && originCheck.includes('[[ $hdr == "$body" ]]'),
     'origin-check compares the header nonce with the body nonce on /zz, /tools/zz and /a/b/c')
+
+  // A page that throws is a 500 the edge never keeps. Astro renders /500 for
+  // it; with no 500.astro that path fell through to [slug].astro, whose
+  // bodyless 404 was cached for five minutes as a blank page (PR #27 review).
+  // (mutation: drop the >= 500 branch, or delete 500.astro → fails)
+  const errorPage = await readFile(new URL('../src/pages/500.astro', import.meta.url), 'utf-8').catch(() => '')
+  assert.match(errorPage, /export const prerender = false/, 'src/pages/500.astro renders on demand, or /500 falls through to [slug].astro')
+  assert.match(errorPage, /<Base\b[^>]*\bnoindex\b/, 'the 500 page is noindex')
+  assert.doesNotMatch(errorPage, /Astro\.props/, 'the 500 page never renders the error it is handed: an exception\'s message never reaches a response')
+  assert.match(code, /else if \(response\.status >= 500\) \{\s*response\.headers\.set\('Cache-Control', 'no-store'\)/, 'any 5xx is sent no-store')
 }
 console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard at source, statuses held to astro\'s own list, and the deployed probe in origin-check)')
 
@@ -9127,8 +9211,9 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
    4. The hero never names the host provider or the runtime (owner,
       2026-09-27): that is what helps someone reach the origin around
       Cloudflare.
-   5. Nothing blinks or pulses on the clock except the stars' slow twinkle:
-      blinking has read as the page flickering twice. */
+   5. Nothing blinks or pulses on the clock, in script or stylesheet, except
+      the stars' slow twinkle: blinking has read as the page flickering
+      twice. Nor does the stage ever flash empty on a resize. */
 {
   const styleUrl = n => new URL(`../src/styles/${n}`, import.meta.url)
   const homeSrc = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf-8')
@@ -9209,7 +9294,7 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
     // ── 4. Nothing about the host ── (network.ts is where every string on
     // screen comes from; mount.ts's astro:* event names never reach it)
     for (const literal of file === 'network.ts' ? literalsOf(code) : []) {
-      assert.doesNotMatch(literal, /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy|kubernetes|aws|azure|gcp|hetzner|digitalocean|vultr|linode|node\.?js|astro)\b/i,
+      assert.doesNotMatch(literal, HOST_NAMES,
         `src/components/home/hero/${file} ships a string naming the host or runtime: "${literal.slice(0, 80)}"`)
     }
   }
@@ -9238,6 +9323,20 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   assert.ok(starsFn, 'drawStars is found in network.ts')
   const clocked = [...networkSrc.replace(starsFn[0], '').matchAll(/Math\.(sin|cos)\(([^()]|\([^()]*\))*\btime\b/g)].map(m => m[0])
   assert.deepEqual(clocked, [], `the hero oscillates on the clock outside the stars' twinkle, which reads as flicker: ${clocked.join(' | ')}`)
+  // The stylesheets too: the log's typing dots pulsed forever in CSS while
+  // this check read only the script (found in the PR #27 review).
+  for (const sheet of ['hero-network.css', 'home.css']) {
+    const css = (await readFile(styleUrl(sheet), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.doesNotMatch(css, /\binfinite\b/, `${sheet} runs an animation forever, which reads as the page flickering`)
+  }
+  // …and the stage never shows empty. A resize resets the canvas, which
+  // clears it, and the loop draws idle frames only every other frame, so
+  // resize() must draw at once: an early return in renderNow() while the loop
+  // ran flashed a blank stage on every rotation and window drag.
+  const fnBody = name => networkSrc.match(new RegExp(`\\n  function ${name}\\([^)]*\\) \\{\\n([\\s\\S]*?)\\n  \\}\\n`))?.[1] ?? ''
+  assert.match(fnBody('resize'), /canvas\.width[\s\S]*\brenderNow\(\)/, 'resize() redraws after it resets the canvas')
+  assert.ok(/^\s*draw\(\)$/m.test(fnBody('renderNow')) && !/\breturn\b/.test(fnBody('renderNow')),
+    'renderNow() draws every time it is called, whether or not the loop is running')
   // …and no constellation line pops. A star that drifts off one edge
   // reappears at the other; a line still drawn to it vanished or appeared in
   // one frame, about once a second at 14 px/s (the third flicker report,

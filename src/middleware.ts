@@ -61,13 +61,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   response.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=(self)')
   // A route that answers with a BODYLESS 404 or 500 is not the response the
-  // visitor gets: Astro re-renders src/pages/404.astro for it, running this
-  // middleware a second time with a fresh nonce, then merges the two responses
-  // keeping THIS pass's headers (mergeResponses in
-  // astro/dist/core/errors/default-handler.js). A CSP set here would pair nonce
-  // A in the header with a body rendered under nonce B, and the head bootstrap
-  // — the one inline script on every page — would be refused on every such
-  // 404. So this pass leaves CSP to the re-render, which sets the matching one.
+  // visitor gets: Astro re-renders the matching error page (src/pages/404.astro
+  // or 500.astro) for it, running this middleware a second time with a fresh
+  // nonce, then merges the two responses keeping THIS pass's headers
+  // (mergeResponses in astro/dist/core/errors/default-handler.js). A CSP set
+  // here would pair nonce A in the header with a body rendered under nonce B,
+  // and the head bootstrap — the one inline script on every page — would be
+  // refused on every such page. So this pass leaves CSP to the re-render,
+  // which sets the matching one.
   if (!isReroutedByAstro(response)) {
     response.headers.set('Content-Security-Policy', buildCsp(cspNonce))
   }
@@ -106,6 +107,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
         // including the owner who just created it. The scanner-absorption win
         // below is not worth making that depend on every future route
         // remembering to set its own header.
+        response.headers.set('Cache-Control', 'no-store')
+      } else if (response.status >= 500) {
+        // A fault is never cached: the edge would serve it to everyone in the
+        // colo after the fault is gone.
         response.headers.set('Cache-Control', 'no-store')
       } else if (isGet && response.status === 404) {
         // Vulnerability scanners generate the bulk of this site's origin

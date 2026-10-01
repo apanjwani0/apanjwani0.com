@@ -1,0 +1,17 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+
+// Astro renders this page for a route that threw. Without it, the path /500
+// fell through to [slug].astro, whose bodyless 404 was cached at the edge as a
+// blank page. The error itself is never shown: an exception's message never
+// reaches a response. The middleware sends no-store for any 5xx.
+---
+
+<Base title="500" description="Something went wrong on this site's side." noindex>
+  <section aria-labelledby="err-title">
+    <h1 id="err-title">Something went wrong on this site's side.</h1>
+    <p>The page could not be built just now. Try again in a moment, or go back to the <a href="/">home page</a>.</p>
+  </section>
+</Base>

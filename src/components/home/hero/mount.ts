@@ -41,7 +41,6 @@ function teardown() {
   for (const observer of observers) observer.disconnect()
   if (!instance) return
   try {
-    instance.stop()
     instance.destroy()
   } catch (err) {
     console.error(err)
@@ -68,7 +67,6 @@ async function mount() {
     ;({ create } = await LOADERS[id]())
   } catch (err) {
     console.error(err)
-    section.dataset.heroFailed = ''
     return
   }
   // A navigation during the import already tore this mount down.
@@ -96,7 +94,6 @@ async function mount() {
   } catch (err) {
     console.error(err)
     host.replaceChildren()
-    section.dataset.heroFailed = ''
     return
   }
   mounted.instance = instance

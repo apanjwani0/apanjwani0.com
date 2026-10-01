@@ -29,7 +29,7 @@ export interface HeroEnv {
   reduced: boolean
   /** `pointer: coarse`. */
   isTouch: boolean
-  /** A touch device or at most four cores: the hero starts at a lower resolution. */
+  /** A touch device or at most four cores: the hero should do less (the network hero draws fewer stars). */
   lowPower: boolean
   /** `devicePixelRatio`, capped at 2. */
   dpr: number
@@ -42,11 +42,11 @@ export interface HeroEnv {
 export interface HeroInstance {
   /** Begin or resume animation: on mount, and when the tab or the hero is visible again. */
   start(): void
-  /** Pause every rAF and timer: the tab is hidden, the hero is off screen, or it is about to go. */
+  /** Pause every rAF and timer: the tab is hidden or the hero is off screen. */
   stop(): void
   /** CSS px of the stage. Called once right after create, then on every resize. */
   resize(width: number, height: number): void
-  /** Remove listeners, free the GPU context, and empty the host. */
+  /** Stop for good: remove listeners, free the GPU context, and empty the host. */
   destroy(): void
 }
 

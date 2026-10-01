@@ -40,31 +40,36 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - `src/lib/site-index.ts` — the site's real pages, derived once for the
   sitemap, `/llms.txt`, the command palette and the 404.
 - `src/lib/theme.ts`, `src/lib/site-ui.ts`, `src/lib/kit.ts`,
-  `src/lib/fuzzy.ts`, `src/lib/shortcuts.ts` — see *UI refresh*.
+  `src/lib/fuzzy.ts` — see *UI refresh*.
 - `src/styles/theme.css` — design tokens, the single source of truth.
 - `astro.config.mjs` — the adapter and the Vite middleware that persists
   `/admin` saves.
 
-## Current state (2026-09-30)
+## Current state (2026-10-01)
 
 - **Live** = `origin/main` (last merge 2026-09-26, PR #22). Branch flow:
   feature → `develop` → `main`, by PR. Local `main` is stale (2026-07-07);
   compare against `origin/main`.
-- **Merged into `develop`, not live:** PRs #23–#25 (boot-check signals, DNS
-  Sightline follow-ups, the UI refresh foundation), 17 commits ahead of
-  `origin/main`. `develop` → `main` ships them along with the hero.
-- **In flight:** `feat/home-hero` — the network replay as the only home hero
-  (picked 2026-09-30, replacing the classic one), `/llms.txt`, and the
-  AI-crawler `robots.txt`. 11 commits ahead of `origin/develop`, 6 of them not
-  yet pushed, plus the uncommitted finalisation of the hero.
-- **Also uncommitted on this branch (2026-09-30):** Projects hidden
-  (`sections.projects`), the learnings hub's plain intro and read times, and the
-  new article `/learnings/how-the-internet-works`, built from the approved
-  brief `docs/plans/internet-article.md`. The owner has not yet reviewed it.
-- **Owner's pending moves:** (1) test the finished hero, then push
-  `feat/home-hero`, PR it into `develop`, and `develop` → `main` to go live;
-  (2) close the origin lock (see *Origin exposure*) — until then port 80 on
-  the origin is reachable around Cloudflare.
+- **Merged into `develop`, not live:** PRs #23–#26, 30 commits ahead of
+  `origin/main`:
+  - boot-check signals;
+  - the DNS Sightline follow-ups;
+  - the UI refresh foundation;
+  - the home hero (the network replay only), with `/llms.txt`, the AI-crawler
+    `robots.txt`, Projects hidden and the new article
+    `/learnings/how-the-internet-works`.
+- **PR #27 (`develop` → `main`) is open, and held** for the fixes from its
+  2026-10-01 review, among them a live DNS Sightline bug and the hero's layout
+  on short screens.
+- **In flight:** `fix/release-review`, cut from `origin/develop`, holds every
+  fix the review asked for. Its PR goes into `develop`; then #27 ships
+  everything. What the review left open (post-deploy checks, the owner's
+  calls, deferred bugs) is in `docs/plans/release-followups.md`.
+- **Owner's pending moves:**
+  1. Merge `fix/release-review` into `develop`, then #27.
+  2. Run the post-deploy checks in `docs/plans/release-followups.md`.
+  3. Close the origin lock (see *Origin exposure*). Until then port 80 on the
+     origin is reachable around Cloudflare.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
 
 ## Build / Test / Run
@@ -128,14 +133,14 @@ without touching the build:
    `public, max-age=0, s-maxage=600, stale-while-revalidate=86400`; admin and
    logged-in responses get `no-store`; non-API 404s get
    `public, max-age=0, s-maxage=300`, because scanners make most origin
-   traffic.
+   traffic; any 5xx gets `no-store`, so the edge never keeps a fault.
 
 - `max-age=0` is deliberate: browser-cached HTML can't be purged. Keep
   Cloudflare's Browser Cache TTL on "Respect Existing Headers" or it overrides
   this.
 - The middleware's branch order is asserted: admin first, then responses that
-  set their own `Cache-Control`, then `/api/*` → `no-store`, and only then the
-  404 rule. An API 404 is often a resource that exists a moment later; don't
+  set their own `Cache-Control`, then `/api/*` → `no-store`, then 5xx →
+  `no-store`, and only then the 404 rule. An API 404 is often a resource that exists a moment later; don't
   reorder.
 - After a deploy, pages serve the cached copy until the TTL. Purge via
   Cloudflare → Caching → Configuration → Purge Everything. Check with
@@ -420,15 +425,17 @@ The CSP is `script-src 'self' 'nonce-…'` with a fresh nonce per response, and
 exactly one inline script ships: the head bootstrap (`ROOT_BOOT_JS`,
 `src/lib/theme.ts`).
 
-- Astro re-renders a bodyless 404 or 500 through `404.astro` with a second
-  nonce and keeps the first pass's headers. So the middleware leaves CSP to the
+- Astro re-renders a bodyless 404 or 500 through its error page (`404.astro`
+  or `500.astro`, which also renders for a route that throws) with a second
+  nonce and keeps the first pass's headers. Without `500.astro`, `/500` falls
+  through to `[slug].astro` and a crash reads as a cached, blank 404. So the middleware leaves CSP to the
   re-render for the statuses Astro reroutes (`isReroutedByAstro`, held to
   Astro's `REROUTABLE_STATUS_CODES`), and `origin:check` compares header and
   body nonces in production.
 - ClientRouter re-inserts a changed inline script under a nonce the live page
   refuses, so the bootstrap is a constant with nothing interpolated. **Don't add
   a second inline script**: data goes in a JSON-LD block or a fetched file (the
-  palette index is `/search.json`), behaviour in a bundled module.
+  palette's index is planned as `/search.json`), behaviour in a bundled module.
 
 ### Unguessable ids are a security control
 
@@ -615,12 +622,9 @@ Modules, none with DOM access at module scope:
   `parseKitParam` (the only `?t=` parser, for route and client alike),
   `bookmarksFile`.
 - `src/lib/site-index.ts` (server-only) — `indexablePaths` (what the sitemap
-  serialises) and `buildSiteIndex` (the palette's entries), asserted to be the
-  same pages.
+  serialises) and `buildSiteIndex` (what `/llms.txt` lists, and the planned
+  palette's entries), asserted to be the same pages.
 - `src/lib/fuzzy.ts` — `fuzzyScore`, `suggestPaths`, `isScannerPath`.
-- `src/lib/shortcuts.ts` — global and per-page shortcuts. `/` and `?` never
-  fire from a typing target; ⌘K/Ctrl+K works everywhere except inside
-  `[data-keys="own"]`.
 - `src/lib/site-ui.ts` — `initSiteUI()`, called once by both shells. It wires
   the swap patch, watches the theme preference, and calls four empty entry
   points owned by the paused items (`initThemeUI`, `initFindUI`, `initKitUI`,
@@ -643,8 +647,8 @@ B (theme toggle everywhere), C (command palette, `?` sheet, smart 404), D
 the home hero seam), F (hub thumbnails and share cards) and G (one control kit)
 are designed, not built. The plan (`ui-refresh/ui-plan.md`, the worker brief and
 item A's report) is only on the remote branch `origin/wip/ui-refresh-notes`:
-read it before building any of them, and keep that branch. Until they are built, `kit.ts`,
-`fuzzy.ts` and `shortcuts.ts` have no UI caller; `security:smoke` covers them so they don't rot, and each
+read it before building any of them, and keep that branch. Until they are built, `kit.ts`
+and `fuzzy.ts` have no UI caller; `security:smoke` covers them so they don't rot, and each
 item's assertions go in its labelled region at the end of that script. Planned
 names nothing renders yet: `button[data-type="kit-star"]`,
 `section[data-type="kit-shelf"]`, `div[data-type="detail-actions"]`, and badges
@@ -693,11 +697,11 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 - **Nothing blinks or pulses.** Blinking read as the page flickering twice, so
   the status lights stay lit, the spotlight's glow is steady and its veil eases
   in and out. The stars' slow twinkle is the only brightness driven by the
-  clock (asserted); they drift at 14 px/s.
-- **A short phone scrolls.** When the frame, the line and the text block
-  cannot share one screen, the hero grows taller rather than squeezing the
-  line into the name; a line still too short drops its sub-lines before any
-  label.
+  clock (asserted in the script and the stylesheets); they drift at 14 px/s.
+- **A short screen scrolls**, at any width: a phone either way up, or a short
+  laptop window. When the frame, the line and the text block cannot share one
+  screen, the hero grows taller rather than squeezing the line into the name;
+  a line still too short drops its sub-lines before any label.
 - **Text is server-rendered.** The page renders the h1, tagline and social
   links; the hero reads them through `env.text` and never draws its own copy.
   The section carries `data-theme="dark"` because the canvas is dark, and the
@@ -717,7 +721,8 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 
 `security:smoke` holds the page to one hero with no switch and no query string,
 every child of the hero's text block above the scrim (read from the markup),
-no clock-driven oscillation outside the stars' twinkle, the hero to no tools or
+no clock-driven oscillation outside the stars' twinkle and no endless CSS
+animation, a resize that redraws at once, the hero to no tools or
 games (the tagline, the section markup, and every string
 literal and stylesheet the hero ships), `network.ts`'s strings to no host or
 runtime name, the dev hooks (`location.search`, `/__hero-probe`) to the DEV
@@ -798,10 +803,9 @@ kind has one predicate, and every consumer reads it:
   `driftfield` tools entry is `live`. The hub, every mode route, the sitemap and
   `scripts/generate-og.mjs` read it; it is stricter than `/tools/[slug]`.
 
-The sitemap (`indexablePaths`), the palette index (`buildSiteIndex`),
-`/llms.txt` and the 404's suggestions all derive from `src/lib/site-index.ts`,
-asserted to agree. A
-project entry is the one hand-written on-site URL: any `apanjwani0.com` link in
+The sitemap (`indexablePaths`) and `/llms.txt` (`buildSiteIndex`) derive from
+`src/lib/site-index.ts`, asserted to agree; the planned palette and smart 404
+will read it too. A project entry is the one hand-written on-site URL: any `apanjwani0.com` link in
 `src/config/projects.ts` must match a shape in `projectPathShapes` and pass that
 kind's predicate.
 
@@ -866,7 +870,8 @@ own chrome and runs the same `mountGame()` dispatch `/games/[slug]` uses.
   `atlas.ts`, and every view has a full legend. Structural views (class, ER)
   never animate and behavioural ones must; every beat lights an element that
   exists, tokens stay inside the viewBox, and only the activity view may show
-  two tokens. All asserted.
+  two tokens. Its deployment view draws a generic stack and never names the
+  host: its machine label once did. All asserted.
 - `internet-atlas` (`src/components/games/internet-atlas/`) is the same kind of
   figure for `/learnings/how-the-internet-works`: eight stops, each with a legend
   saying what it is, what it does on this trip and what happens when it goes

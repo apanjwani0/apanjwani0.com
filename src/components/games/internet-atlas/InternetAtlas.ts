@@ -59,7 +59,7 @@ class InternetAtlasFigure extends HTMLElement {
             (v, i) => `<button type="button" data-view="${v.id}" aria-pressed="${i === 0}">${v.question}</button>`,
           ).join('')}
         </div>`}
-        <div data-type="at-stage" tabindex="0"></div>
+        <div data-type="at-stage" tabindex="0" role="region" aria-label="Diagram"></div>
         <p data-type="at-caption" aria-live="polite"></p>
         <div data-type="at-transport" role="group" aria-label="Playback">
           <button type="button" data-action="play" aria-pressed="false">Play</button>
@@ -76,8 +76,9 @@ class InternetAtlasFigure extends HTMLElement {
     this.addEventListener('click', this.onClick)
     this.select((pinned ?? INTERNET_VIEWS[0]).id)
 
-    this.io = new IntersectionObserver(([entry]) => {
-      this.visible = entry.isIntersecting
+    // The last entry is the latest: a quick scroll can queue both crossings.
+    this.io = new IntersectionObserver((entries) => {
+      this.visible = entries[entries.length - 1].isIntersecting
       if (this.visible) this.autoplay()
       else this.pause()
     })
@@ -98,6 +99,8 @@ class InternetAtlasFigure extends HTMLElement {
       this.select(viewId)
       return
     }
+    // A caption the reader asked for is read out; autoplay turns that off.
+    if (btn.dataset.action) this.caption.setAttribute('aria-live', 'polite')
     if (btn.dataset.action === 'play') {
       this.pausedByReader = this.playing
       this.playing ? this.pause() : this.play()
@@ -138,6 +141,8 @@ class InternetAtlasFigure extends HTMLElement {
   private autoplay() {
     if (!this.visible || this.pausedByReader) return
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    // A caption that changes by itself every beat would talk over the page.
+    this.caption.setAttribute('aria-live', 'off')
     this.play()
   }
 
