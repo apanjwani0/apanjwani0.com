@@ -128,10 +128,22 @@ export function isBlogsPublic(site: Site): boolean {
   return site.sections.blogs === true
 }
 
+/** The same rule for `/projects`, hidden by the owner on 2026-09-30: the page
+ *  still answers when typed, with a noindex, but nothing links to it. */
+export function isProjectsPublic(site: Site): boolean {
+  return site.sections.projects === true
+}
+
+// Every section a flag can hide, by its path, with the predicate that decides.
+const GATED_SECTIONS: ReadonlyArray<readonly [RegExp, (site: Site) => boolean]> = [
+  [/^\/blogs(\/|$)/, isBlogsPublic],
+  [/^\/projects(\/|$)/, isProjectsPublic],
+]
+
 export function navLinks(site: Site): NavItem[] {
   return site.nav
     .flatMap(item => item.children ?? [item])
-    .filter(item => isBlogsPublic(site) || !/^\/blogs(\/|$)/.test(item.href))
+    .filter(item => GATED_SECTIONS.every(([path, isPublic]) => isPublic(site) || !path.test(item.href)))
 }
 
 export async function getSite(locals: unknown): Promise<Site> {

@@ -1,6 +1,16 @@
 User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
 Disallow: /admin
 Disallow: /api/
+
+# Crawlers that only collect AI training data. Search and AI answers stay
+# open: OAI-SearchBot, ChatGPT-User, Claude-SearchBot and Claude-User follow
+# the group above. The owner's choice, 2026-09-28.
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: CCBot
+User-agent: Applebot-Extended
+Disallow: /
 
 Sitemap: https://apanjwani0.com/sitemap.xml

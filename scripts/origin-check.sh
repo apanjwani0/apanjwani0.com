@@ -84,6 +84,34 @@ cf_status=$(printf '%s' "$site_head" | tr -d '\r' \
   && ok "cf-cache-status: $cf_status" \
   || bad "no cf-cache-status — the response never went through Cloudflare"
 
+printf '\n\033[1mError pages carry the nonce their CSP names\033[0m\n'
+# A route that answers a BODYLESS 404 is re-rendered through 404.astro with the
+# middleware run a second time, and Astro keeps the first pass's headers. If
+# that pass set CSP, the header names one nonce and the body carries another,
+# and the head bootstrap — the one inline script on every page — is refused,
+# so a stored light theme silently stops applying on every such page. /zz and
+# /tools/zz take that path (a dynamic route returns the bodyless 404); /a/b/c
+# matches no route and renders once, the control. Asked of production because
+# the edge caches 404s: a mismatched pair would be served to everyone.
+for path in /zz /tools/zz /a/b/c; do
+  resp=$(curl -sS -m 15 -D - "$SITE$path" 2>/dev/null)
+  code=$(printf '%s' "$resp" | awk 'NR==1{print $2}')
+  hdr=$(printf '%s' "$resp" | tr -d '\r' \
+        | awk -F': ' 'tolower($1)=="content-security-policy"{print $2}' \
+        | grep -o "'nonce-[^']*'" | head -1 | sed -e "s/^'nonce-//" -e "s/'\$//")
+  body=$(printf '%s' "$resp" | grep -o '<script nonce="[^"]*"' | head -1 \
+         | sed -e 's/^<script nonce="//' -e 's/"$//')
+  if [[ -z $hdr ]]; then
+    bad "$path ($code): no nonce in the Content-Security-Policy header"
+  elif [[ -z $body ]]; then
+    bad "$path ($code): no nonce'd script in the body — the head bootstrap is missing"
+  elif [[ $hdr == "$body" ]]; then
+    ok "$path ($code): header and body nonce match"
+  else
+    bad "$path ($code): header nonce ${hdr:0:8}… ≠ body nonce ${body:0:8}… — the bootstrap is refused here"
+  fi
+done
+
 if [[ $direct_code == 404 || $direct_code == 200 ]]; then
   printf '\n\033[1mCloudflare ranges to allow (everything else denied)\033[0m\n'
   # Fetched one at a time on purpose: the v4 list ships without a trailing

@@ -112,7 +112,9 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
   clientRouter={false}
   ogCard={ogCard}
 >
-  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  {/* A coming-soon page is noindex, so it claims no playable game either. The
+      breadcrumb stays: it pairs with the visible trail below. */}
+  {GameTag && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
   {GameTag && (

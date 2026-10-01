@@ -48,7 +48,7 @@ export function registerDailyStreaks(): void {
 function paintStreaks(): void {
   for (const slug of DAILY_SLUGS) {
     const link = document.querySelector(`[data-type="card-grid"] a[href="/games/${slug}"]`)
-    const stats = link?.closest('article')?.querySelector('[data-type="project-stats"]')
+    const stats = link?.closest('li')?.querySelector('[data-type="card-badges"]')
     if (!stats) continue
     const n = currentStreak(readDailyStreak(slug), TODAY[slug]())
     let badge = stats.querySelector<HTMLElement>('[data-type="game-badge"][data-streak]')

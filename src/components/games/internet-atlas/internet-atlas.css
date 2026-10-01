@@ -1,0 +1,38 @@
+/* Internet Atlas — the figure for /learnings/how-the-internet-works.
+ *
+ * It shares the Diagram Atlas's figure vocabulary (at-*, data-node, data-edge,
+ * data-token), styled in diagram-atlas.css; games-embed.css loads both, and
+ * security:smoke holds that import in place. This file adds only what the
+ * eight stops need that the seven notations did not. As there, px inside the
+ * <svg> is a viewBox user unit, not a typographic size. */
+
+/* The stop's name in the legend. */
+[data-type="at-panel"] dd[data-field="title"] {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+}
+
+/* A data centre on the map lights like any other node. */
+[data-node="site"][data-on] circle {
+  stroke: var(--color-accent);
+  stroke-width: 2.5;
+}
+
+/* The broken link in the routing view, shown only on the beats that light it. */
+[data-node="cut"] {
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
+[data-node="cut"]:not([data-on]) {
+  opacity: 0;
+}
+
+[data-node="cut"] text {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* The packet that never arrived. */
+[data-node="lost"] rect {
+  stroke-dasharray: 4 4;
+}

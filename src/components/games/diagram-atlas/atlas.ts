@@ -267,10 +267,10 @@ const CLS = [
 
 /* ══ 6. Deployment ══ */
 
-/** A dashed machine boundary with the thing that runs inside it. */
-function machine(id: string, x: number, y: number, w: number, h: number, name: string, inner: string[]): string {
+/** A dashed machine boundary with the things that run inside it, `gap` apart. */
+function machine(id: string, x: number, y: number, w: number, h: number, name: string, inner: string[], gap = 12): string {
   const body = inner
-    .map((t, i) => box({ x: x + 14, y: y + 40 + i * 52, w: w - 28, h: 40, text: t, kind: 'process' }))
+    .map((t, i) => box({ x: x + 14, y: y + 40 + i * (40 + gap), w: w - 28, h: 40, text: t, kind: 'process' }))
     .join('')
   return (
     `<g id="${id}" data-node="machine">` +
@@ -284,11 +284,12 @@ function machine(id: string, x: number, y: number, w: number, h: number, name: s
 const DEP = [
   machine('d1', 20, 96, 150, 100, 'device', ['browser']),
   machine('d2', 200, 96, 150, 100, 'Cloudflare', ['edge cache']),
-  machine('d3', 380, 40, 170, 212, 'OCI VM · Docker', ['node server', 'postgres']),
+  // The web server sits on the https line (y 146), with room for the arrow down.
+  machine('d3', 380, 86, 170, 166, 'cloud server', ['web server', 'database'], 32),
   machine('d4', 580, 96, 90, 100, 'provider', ['payments']),
   edge({ id: 'de1', d: 'M170 146 H200', text: 'https', tx: 185, ty: 132 }),
   edge({ id: 'de2', d: 'M350 146 H394', text: 'https', tx: 372, ty: 132 }),
-  edge({ id: 'de3', d: 'M465 176 V192', text: '5432', tx: 497, ty: 188 }),
+  edge({ id: 'de3', d: 'M465 166 V198', text: 'sql', tx: 490, ty: 186 }),
   edge({ id: 'de4', d: 'M550 156 H580', text: 'https', tx: 565, ty: 142 }),
 ].join('')
 
@@ -422,13 +423,13 @@ export const ATLAS_VIEWS: readonly AtlasView[] = [
     notation: 'Deployment diagram',
     node: 'a process, inside the machine that hosts it',
     arrow: '…talks to, over this protocol',
-    blind: 'What is inside any of those boxes. Four processes here are the whole of the class diagram and the whole of the schema.',
+    blind: 'What is inside any of those boxes. The whole of the class diagram and the whole of the schema live inside them.',
     svg: DEP,
     steps: [
       { on: ['d1'], say: 'A dashed boundary is a machine, not a step.' },
       { on: ['de1', 'd2'], say: 'The arrow is a network hop. Say it as "talks to".' },
-      { on: ['de2', 'd3'], say: 'Into the container on the VM.' },
-      { on: ['de3'], say: 'Postgres is on the same machine — the arrow never crosses the boundary.' },
+      { on: ['de2', 'd3'], say: 'Into the web server, a program running on the cloud server.' },
+      { on: ['de3'], say: 'The database is on the same machine — the arrow never crosses the boundary.' },
       { on: ['de4', 'd4'], say: 'And out to the provider, which is somebody else’s box entirely.' },
     ],
   },

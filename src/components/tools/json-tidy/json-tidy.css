@@ -121,34 +121,6 @@ span[data-type="jt-pane-title"] {
   color: var(--color-muted);
 }
 
-div[data-group="pane-actions"] {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-div[data-group="pane-actions"] button {
-  padding: 0.26rem 0.7rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, opacity 0.15s;
-}
-
-div[data-group="pane-actions"] button:hover:not(:disabled) {
-  color: var(--color-text);
-  border-color: var(--color-muted);
-}
-
-div[data-group="pane-actions"] button:disabled {
-  opacity: var(--opacity-disabled);
-  cursor: not-allowed;
-}
-
 /* ── Input editor ────────────────────────────────────────── */
 textarea[data-type="jt-input"] {
   display: block;

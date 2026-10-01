@@ -27,7 +27,7 @@ import { games } from '../src/config/games.ts'
 import { tools } from '../src/config/tools.ts'
 import { SERVER_TOOLS, isServerTool } from '../src/lib/tools.ts'
 import { site } from '../src/config/site.ts'
-import { isBlogsPublic, navLinks } from '../src/lib/config.ts'
+import { isBlogsPublic, isProjectsPublic, navLinks } from '../src/lib/config.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
 import {
   DAILY_MAX_ENTRIES_PER_DAY,
@@ -680,6 +680,22 @@ for (const drop of [{ published: false }, { content: '' }, { content: '   ' }]) 
       `an article with ${JSON.stringify(drop)} is still linked from "${embed}"`,
     )
   }
+}
+
+// `sections.projects` is the same kind of gate (hidden by the owner on
+// 2026-09-30): the nav and footer drop the link, and the route keeps answering,
+// with a noindex and no ItemList, for anyone who types it.
+{
+  const hidden = { ...site, sections: { ...site.sections, projects: false } }
+  const shown = { ...site, sections: { ...site.sections, projects: true } }
+  assert.equal(isProjectsPublic(hidden), false, 'sections.projects false means hidden')
+  assert.equal(isProjectsPublic(shown), true, 'sections.projects true means public')
+  assert.ok(!navLinks(hidden).some(i => /^\/projects(\/|$)/.test(i.href)), 'a hidden projects section is still in the nav and footer')
+  assert.ok(navLinks(shown).some(i => /^\/projects(\/|$)/.test(i.href)), 'a public projects section is missing from the nav — the filter is unconditional')
+  const projectsPage = await readFile(new URL('../src/pages/projects.astro', import.meta.url), 'utf-8')
+  assert.match(projectsPage, /const listed = isProjectsPublic\(site\)/, 'the projects page reads the one predicate')
+  assert.match(projectsPage, /noindex=\{!listed\}/, 'the projects page is noindex while hidden')
+  assert.match(projectsPage, /\{listed && projects\.length > 0 && <script/, 'a hidden projects page claims no ItemList')
 }
 
 // A hidden section is hidden in every signal at once. `sections.blogs` is the
@@ -2841,7 +2857,8 @@ console.log('projects link only at pages this site serves')
 {
   const { GET: sitemapGET } = await import('../src/pages/sitemap.xml.ts')
 
-  const sectionSite = on => ({ ...site, sections: { ...site.sections, blogs: on } })
+  // Both gated sections flip together, so each is checked in both states.
+  const sectionSite = on => ({ ...site, sections: { ...site.sections, blogs: on, projects: on } })
   const localsFor = s => ({
     runtime: {
       env: {
@@ -2882,7 +2899,7 @@ console.log('projects link only at pages this site serves')
     }
   }
   assert.ok(
-    checkedHubs >= 9,
+    checkedHubs >= 8,
     `expected both flag states to contribute nav hubs, checked ${checkedHubs} — `
     + 'if navLinks stopped returning internal hrefs this guard asserts nothing',
   )
@@ -2899,6 +2916,8 @@ console.log('projects link only at pages this site serves')
     !hidden.has(`${base}/blogs`),
     'sections.blogs=false must drop the /blogs hub from the sitemap',
   )
+  assert.ok(shown.has(`${base}/projects`), 'sections.projects=true must put the /projects hub back in the sitemap')
+  assert.ok(!hidden.has(`${base}/projects`), 'sections.projects=false must drop the /projects hub from the sitemap')
   // The hub carries the newest post date, the same freshness signal /learnings
   // gets — the orphaned `latestPostDate` is what that line was computed for.
   assert.match(
@@ -2908,10 +2927,10 @@ console.log('projects link only at pages this site serves')
   )
   // Gating the hub must not have disturbed anything else in the document.
   assert.ok(shown.has(`${base}/blogs/a-local-post`), 'gating the hub dropped the posts too')
-  for (const hub of ['/', '/projects', '/learnings', '/games', '/tools']) {
+  for (const hub of ['/', '/learnings', '/games', '/tools']) {
     assert.ok(
       hidden.has(hub === '/' ? `${base}/` : `${base}${hub}`),
-      `hiding blogs must not remove ${hub} from the sitemap`,
+      `hiding blogs and projects must not remove ${hub} from the sitemap`,
     )
   }
 }
@@ -2976,6 +2995,7 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
   const toolDirNames = (await readdir(toolsUrl, { withFileTypes: true }))
     .filter(d => d.isDirectory()).map(d => d.name)
   const renderedBy = new Map()   // data-type -> Set(tool dir)
+  const groupedBy = new Map()    // data-group -> Set(tool dir)
   const toolSheets = new Map()   // tool dir -> [[file, css]]
   let toolsWithATitle = 0
   for (const dir of toolDirNames) {
@@ -2986,6 +3006,10 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
       for (const m of src.matchAll(/data-type="([a-z0-9-]+)"/g)) {
         if (!renderedBy.has(m[1])) renderedBy.set(m[1], new Set())
         renderedBy.get(m[1]).add(dir)
+      }
+      for (const m of src.matchAll(/data-group="([a-z0-9-]+)"/g)) {
+        if (!groupedBy.has(m[1])) groupedBy.set(m[1], new Set())
+        groupedBy.get(m[1]).add(dir)
       }
       titles += [...src.matchAll(/<h1[\s>]/g)].length
     }
@@ -3017,9 +3041,20 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
           assert.ok(
             sel.includes(`[data-tool="${dir}"]`),
             `${file} declares \`${sel}\`, but [data-type="${idiom}"] is rendered by `
-            + `${renderedBy.get(idiom).size} tools. Per-tool sheets share one page bundle, so this `
-            + `rule silently styles all of them. Move it to tools-common.css, or scope it with `
+            + `${renderedBy.get(idiom).size} tools, so an unscoped rule for it styles whichever of `
+            + `them shares a page with this sheet. Move it to tools-common.css, or scope it with `
             + `div[data-tool="${dir}"].`,
+          )
+        }
+        // The same for data-group: json-tidy.css once styled List Forge's
+        // pane-actions buttons this way, and only while every tool sheet shared
+        // one bundle — linking each page's own sheet changed List Forge's look.
+        for (const [group, dirs] of groupedBy) {
+          if (dirs.size < 2 || !sel.includes(`[data-group="${group}"]`)) continue
+          assert.ok(
+            sel.includes(`[data-tool="${dir}"]`),
+            `${file} declares \`${sel}\`, but [data-group="${group}"] is rendered by ${dirs.size} tools. `
+            + `Move it to tools-common.css, or scope it with div[data-tool="${dir}"].`,
           )
         }
       }
@@ -3045,7 +3080,8 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
       ...layoutSheets,
       [`pages/${rel} <style>`, astroStyles(src)],
       ...(await Promise.all(
-        [...src.matchAll(/^import\s+['"]([^'"]+\.css)['"]/gm)].map(m => readSheets(new URL(m[1], url))),
+        // A sheet linked through `?url` is reached as surely as an imported one.
+        [...src.matchAll(/^import\s+(?:\w+\s+from\s+)?['"]([^'"]+\.css)(?:\?url)?['"]/gm)].map(m => readSheets(new URL(m[1], url))),
       )).flat(),
     ]])
   }
@@ -5017,6 +5053,12 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
     '2001::1', '2001:0:4136:e378:8000:63bf:3fff:fdd2', '100::1', '100::ffff:ffff:ffff:ffff',
     // The 6to4 relay anycast block, deprecated by RFC 7526.
     '192.88.99.1', '192.88.99.255',
+    // v6 benchmarking (2001:2::/48, RFC 5180), the twin of 198.18/15 above, and
+    // ORCHID/ORCHIDv2 (2001:10::/28, 2001:20::/28): identifiers, never hosts.
+    // First and last address of each, so the prefix lengths are held too.
+    '2001:2::1', '2001:2:0:ffff:ffff:ffff:ffff:ffff',
+    '2001:10::1', '2001:1f:ffff:ffff:ffff:ffff:ffff:ffff',
+    '2001:20::', '2001:2f:ffff:ffff:ffff:ffff:ffff:ffff',
   ]) {
     assert.ok(lpIsForbiddenIp(ip), `classifier must forbid ${ip}`)
   }
@@ -5029,6 +5071,10 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
     // 6to4 address embedding a PUBLIC v4 is that public address.
     '2001:4860:4860::8888', '2002:0808:0808::1',
     '192.88.98.1', '192.88.100.1',
+    // …and the globally reachable IETF assignments packed around the blocked
+    // ones in 2001::/23 stay reachable: PCP anycast, AMT, AS112-v6, and Drone
+    // Remote ID one prefix past ORCHIDv2.
+    '2001:1::1', '2001:3::1', '2001:4:112::1', '2001:30::1',
   ]) {
     assert.equal(lpIsForbiddenIp(ip), false, `classifier must allow public ${ip}`)
   }
@@ -5843,17 +5889,22 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
 {
   const themeSrc = await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8')
 
-  // Pull one palette out of a selector block. Only hex tokens participate —
-  // `--color-bg-blur` is an rgba() over whatever is behind it and has no fixed
-  // ratio to compute against.
+  // Pull one palette out of a selector block. Comments are stripped FIRST and
+  // the block is found by its exact selector at the start of a rule: theme.css
+  // documents its blocks at length, and the old first-`indexOf` parse would
+  // have started at the first comment that mentioned `:root` and stopped at the
+  // first brace a comment quoted. Only hex tokens participate — `--color-bg-blur`
+  // is an rgba() over whatever is behind it and has no fixed ratio.
+  const themeCode = themeSrc.replace(/\/\*[\s\S]*?\*\//g, '')
+  const blockOf = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const found = [...themeCode.matchAll(new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))]
+    assert.equal(found.length, 1, `theme.css defines exactly one ${selector} block`)
+    return found[0][1]
+  }
   const paletteIn = (selector) => {
-    const at = themeSrc.indexOf(selector)
-    assert.notEqual(at, -1, `theme.css still defines ${selector}`)
-    const open = themeSrc.indexOf('{', at)
-    const close = themeSrc.indexOf('}', open)
-    const body = themeSrc.slice(open, close)
     const out = {}
-    for (const [, name, hex] of body.matchAll(/--color-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)) out[name] = hex.toLowerCase()
+    for (const [, name, hex] of blockOf(selector).matchAll(/--color-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)) out[name] = hex.toLowerCase()
     return out
   }
   const light = paletteIn(':root')
@@ -5885,6 +5936,14 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
     ['accent', 'bg'], ['accent', 'surface'],
     ['error', 'bg'], ['error', 'surface'],
     ['success', 'bg'], ['success', 'surface'],
+    // The second raised surface is where the refresh's chrome sits (palette,
+    // sheet, kit shelf), so every ink that sits on a surface must clear AA on
+    // it too. This pairing is what forced the 2026-09-25 nudges: dark muted
+    // held 4.33:1 here and light success 4.502:1.
+    ['text', 'surface-2'], ['muted', 'surface-2'], ['accent', 'surface-2'],
+    ['error', 'surface-2'], ['success', 'surface-2'],
+    // The accent tint takes --color-text and nothing else (theme.css says why).
+    ['text', 'accent-soft'],
     // The label on an accent-filled button — the one place --color-bg is ink.
     ['bg', 'accent'],
   ]
@@ -5899,6 +5958,40 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
         `${name}: --color-${ink} (${palette[ink]}) on --color-${ground} (${palette[ground]}) is ${r.toFixed(2)}:1 — under the ${AA_NORMAL}:1 WCAG AA floor for normal text`,
       )
     }
+  }
+
+  // Each theme pins the scheme the UA and Oat resolve against. Oat declares
+  // `color-scheme: light dark` on the root inside a cascade layer, so without
+  // these every light-dark() token it ships and every native control follows
+  // the OS rather than data-theme — JSON Tidy's checkboxes rendered as white
+  // squares on the dark site under a light-mode OS.
+  // (mutation: delete the dark block's declaration → fails)
+  assert.match(blockOf(':root'), /(?:^|;)\s*color-scheme\s*:\s*light\s*;/,
+    'the light root pins color-scheme: light, outranking Oat\'s layered `light dark`')
+  assert.match(blockOf('[data-theme="dark"]'), /(?:^|;)\s*color-scheme\s*:\s*dark\s*;/,
+    'the dark theme pins color-scheme: dark — without it Oat\'s tokens and native controls follow the OS')
+
+  // The browser chrome colour the bootstrap writes is each theme's own page
+  // background, not a second copy of it that can drift.
+  const { THEME_COLOR } = await import('../src/lib/theme.ts')
+  assert.equal(THEME_COLOR.light, light.bg, 'THEME_COLOR.light is the light --color-bg')
+  assert.equal(THEME_COLOR.dark, dark.bg, 'THEME_COLOR.dark is the dark --color-bg')
+
+  // The Oat bridge: Oat's own tokens point at the site's, so a stock Oat
+  // component lands in the site palette. Every ink-on-fill pair the bridge
+  // creates is a text pairing, so each must be one the sweep above holds to AA
+  // — a bridge edit that puts Oat's muted text on a tint nobody measured fails
+  // here. (mutation: bridge --muted to --color-accent-soft → fails)
+  const bridged = Object.fromEntries([...blockOf(':root').matchAll(/(?:^|;)\s*--([a-z-]+)\s*:\s*var\(--((?:color|font)-[a-z0-9-]+)\)\s*(?=;)/g)]
+    .map(m => [m[1], m[2]]))
+  for (const name of ['background', 'foreground', 'card', 'card-foreground', 'border', 'input', 'ring',
+    'primary', 'primary-foreground', 'muted', 'muted-foreground', 'font-sans']) {
+    assert.ok(bridged[name], `theme.css bridges Oat's --${name} to a site token`)
+  }
+  for (const [ink, fill] of [['foreground', 'background'], ['card-foreground', 'card'], ['primary-foreground', 'primary'], ['muted-foreground', 'muted']]) {
+    const [i, g] = [bridged[ink], bridged[fill]].map(t => t.replace(/^color-/, ''))
+    assert.ok(textPairings.some(([a, b]) => a === i && b === g),
+      `the bridge puts --color-${i} ink on --color-${g} (Oat's --${ink} on --${fill}), a pairing the AA sweep does not hold`)
   }
 
   // …and the last pairing is a claim about the code, so it is read from the
@@ -6118,7 +6211,7 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   const withDead = sg.sgDiffAnswers('A', [mkAnswer('a', 'A', ['1.2.3.4']), dead('x')])
   assert.equal(withDead.agree, true)
   assert.equal(withDead.answered, 1)
-  assert.deepEqual(withDead.failed, ['x'])
+  assert.deepEqual(withDead.failed.map(a => a.resolver), ['x'], 'the failed answer is kept whole, so the page can say what went wrong')
 
   /* …and when NOBODY answered, "they agree" is a sentence nobody earned. This
      one was found by running the endpoint with outbound network blocked: all
@@ -6131,17 +6224,17 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
     assert.equal(d.answered, 0, `${d.type}: nothing was observed`)
     assert.equal(d.groups.length, 0)
   }
-  const blackoutFindings = sg.sgReachabilityFindings(blackout)
+  const blackoutFindings = sg.sgReachabilityFindings(blackout, 'ex.com')
   assert.equal(blackoutFindings.length, 1, 'said once, not once per record type')
   assert.equal(blackoutFindings[0].id, 'resolvers-unreachable')
   assert.equal(blackoutFindings[0].level, 'error')
   assert.ok(/could not ask/.test(blackoutFindings[0].detail), 'it has to say this is not a fact about the zone')
   // One working resolver and the blackout finding must go away, or it fires on
   // every partial outage and stops meaning anything.
-  assert.deepEqual(sg.sgReachabilityFindings([...blackout, withDead]), [])
-  assert.deepEqual(sg.sgReachabilityFindings([]), [])
-  // The component must read `answered`, not `agree`, for that row.
-  const uiSrc = await readFile(new URL('../src/components/tools/dns-sightline/DnsSightline.ts', import.meta.url), 'utf-8')
+  assert.deepEqual(sg.sgReachabilityFindings([...blackout, withDead], 'ex.com'), [])
+  assert.deepEqual(sg.sgReachabilityFindings([], 'ex.com'), [])
+  // The results panel must read `answered`, not `agree`, for that row.
+  const uiSrc = await readFile(new URL('../src/components/tools/dns-sightline/panels.ts', import.meta.url), 'utf-8')
   const answeredAt = uiSrc.indexOf('d.answered === 0')
   const agreeAt = uiSrc.indexOf('if (d.agree)')
   assert.notEqual(answeredAt, -1, 'the diff table handles the nobody-answered case')
@@ -6166,6 +6259,10 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
     'redir.com': ['"v=spf1 redirect=b.net"'],
     'redirall.com': ['"v=spf1 redirect=b.net -all"'],
     'open.com': ['"v=spf1 +all"'],
+    // What an unlisted sender gets through a redirect: +all, or a permerror.
+    'redirpass.com': ['"v=spf1 redirect=pass.net"'],
+    'pass.net': ['"v=spf1 +all"'],
+    'redirgone.com': ['"v=spf1 redirect=gone.net"'],
     'noall.com': ['"v=spf1 ip4:1.2.3.4"'],
     'void.com': ['"v=spf1 include:gone1.net include:gone2.net include:gone3.net -all"'],
   }
@@ -6595,6 +6692,8 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgSpfFindings(nearReport, 'near.com'),
       sg.sgSpfFindings(loopReport, 'loop.com'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('open.com', spfLookup), 'open.com'),
+      sg.sgSpfFindings(await sg.sgAnalyzeSpf('redirpass.com', spfLookup), 'redirpass.com'),
+      sg.sgSpfFindings(await sg.sgAnalyzeSpf('redirgone.com', spfLookup), 'redirgone.com'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('noall.com', spfLookup), 'noall.com'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('a.net', spfLookup), 'a.net'),
       sg.sgSpfFindings(await sg.sgAnalyzeSpf('nothing.com', spfLookup), 'nothing.com'),
@@ -6626,9 +6725,18 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
       sg.sgCaaFindings(sg.sgCaaVerdict({ foundAt: 'ex.com', walked: ['www.ex.com', 'ex.com'], entries: [sg.sgParseCaa('0 issue "letsencrypt.org"')], incomplete: true }), 'www.ex.com', 'digicert.com'),
     ],
     sgMxFindings: [mxFindings, sg.sgMxFindings(nullMx, []), sg.sgMxFindings({ ...mxAnswer, records: [] }, []), unreadMxFindings, stalledMxFindings],
-    sgCnameFindings: [dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com')],
+    sgCnameFindings: [
+      dangling, live, sg.sgCnameFindings({ target: 'x.net', dangling: false, service: null, coexisting: ['MX'], atApex: true }, 'ex.com'),
+      // A target whose lookups got no answer: neither dangling nor hosted is claimed.
+      sg.sgCnameFindings({ target: 'proj.github.io', dangling: false, unchecked: true, service: 'GitHub Pages', coexisting: [], atApex: false }, 'blog.ex.com'),
+    ],
     sgDiffFindings: [sg.sgDiffFindings([realDiff, filtered])],
-    sgReachabilityFindings: [blackoutFindings],
+    sgReachabilityFindings: [
+      blackoutFindings,
+      // Every resolver answered — with SERVFAIL — every question: the zone failing, not the tool.
+      sg.sgReachabilityFindings(['A', 'MX'].map(t => sg.sgDiffAnswers(t, ['cloudflare', 'google', 'quad9']
+        .map(r => ({ resolver: r, type: t, name: 'ex.com', rcode: 'SERVFAIL', records: [], elapsedMs: 1 })))), 'ex.com'),
+    ],
     sgNsFindings: [
       sg.sgNsFindings({ resolver: 'f', type: 'NS', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 2, name: 'ex.com', data: 'a.ns.ex.com', ttl: 60 }] }, { resolver: 'f', type: 'SOA', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [] }, 'ex.com'),
       sg.sgNsFindings({ resolver: 'f', type: 'NS', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [] }, { resolver: 'f', type: 'SOA', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 6, name: 'ex.com', data: 'a b 1', ttl: 1 }, { type: 6, name: 'ex.com', data: 'c d 2', ttl: 1 }] }, 'ex.com'),
@@ -6643,12 +6751,15 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   for (const f of everyFinding) {
     assert.ok(f.id && f.title && f.detail, `a finding needs an id, a title and a detail: ${JSON.stringify(f)}`)
     assert.ok(['error', 'warn', 'info'].includes(f.level), `${f.id} has a real level`)
-    assert.ok(['record', 'absence'].includes(f.basis), `${f.id} declares its basis`)
+    // 'absence' and 'unanswered' are the only bases allowed to cite no record —
+    // 'record' must always cite something, and citing nothing is not a third
+    // option for either of the other two.
+    assert.ok(['record', 'absence', 'unanswered'].includes(f.basis), `${f.id} declares its basis`)
     if (f.basis === 'record') {
       assert.ok(f.evidence.length > 0, `${f.id} claims to rest on a record and cites none`)
       assert.ok(f.evidence.every(e => typeof e === 'string' && e.trim()), `${f.id} cites an empty string as evidence`)
     } else {
-      assert.equal(f.evidence.length, 0, `${f.id} is about an absent record and must cite nothing`)
+      assert.equal(f.evidence.length, 0, `${f.id} rests on '${f.basis}' and must cite nothing`)
     }
     seenIds.add(f.id)
   }
@@ -6853,10 +6964,26 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
     const importPath = slugRoute.slice(at + marker.length, slugRoute.indexOf("'", at + marker.length))
     const dir = importPath.replace(/\/[^/]+$/, '').replace('../../components/tools/', '')
     assert.ok(dir && dir !== importPath, `${tool.slug}'s dispatch must import from src/components/tools/`)
-    assert.ok(
-      slugRoute.includes(`../../components/tools/${dir}/`) && new RegExp(`import '\\.\\./\\.\\./components/tools/${dir}/[a-z0-9-]+\\.css'`).test(slugRoute),
-      `${tool.slug}'s stylesheet is not imported by tools/[slug].astro — the page would render unstyled`,
-    )
+    // Each tool page links its own sheet and no other tool's: the route finds
+    // `<dir>/<slug>.css` through a `?url` glob, so the file must be there.
+    const sheet = await readFile(new URL(`../src/components/tools/${dir}/${tool.slug}.css`, import.meta.url), 'utf-8').catch(() => null)
+    assert.ok(dir === tool.slug && sheet !== null, `${tool.slug}'s stylesheet is not at tools/${tool.slug}/${tool.slug}.css — the page would render unstyled`)
+  }
+  assert.ok(/import\.meta\.glob<string>\('\.\.\/\.\.\/components\/tools\/\*\/\*\.css', \{ query: '\?url'/.test(slugRoute)
+    && /<link slot="head" rel="stylesheet" href=\{toolsCommonCss\} \/>\n\s*\{toolCss && <link slot="head" rel="stylesheet" href=\{toolCss\} \/>\}/.test(slugRoute),
+    'tools/[slug].astro links tools-common.css and then the tool\'s own stylesheet in the head, through ?url')
+  // A static import of a per-tool sheet, in the route OR in a tool module,
+  // lands in every tool page's head: Astro hoists the CSS of every module the
+  // page's script can reach.
+  assert.equal(/import '\.\.\/\.\.\/components\/tools\/[a-z0-9-]+\/[a-z0-9-]+\.css'/.test(slugRoute), false,
+    'tools/[slug].astro imports no per-tool stylesheet statically')
+  for (const e of await readdir(new URL('../src/components/tools/', import.meta.url), { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    for (const f of await readdir(new URL(`../src/components/tools/${e.name}/`, import.meta.url))) {
+      if (!f.endsWith('.ts')) continue
+      const src = await readFile(new URL(`../src/components/tools/${e.name}/${f}`, import.meta.url), 'utf-8')
+      assert.equal(/^import ['"][^'"]+\.css['"]/m.test(src), false, `tools/${e.name}/${f} imports a stylesheet, which Astro would add to every tool page`)
+    }
   }
 
   /* ── 12. The hoisted IP canonicaliser still serves both callers. ───────── */
@@ -6872,6 +6999,12 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   assert.equal(canonicalIp('not-an-ip'), null)
 }
 console.log('dns sightline: the resolver diff ignores TTL and order, the SPF walk matches an independent oracle and terminates on a hostile zone, CAA issuewild replaces issue, every finding cites its record, and the only hosts reachable are the three allowlisted resolvers')
+
+/* The host and runtime names nothing public may carry: they are what helps
+   someone reach the origin around Cloudflare. Bare "node" cannot join the
+   list, because the diagram article says "A node is a thing the order can be",
+   so the runtime's phrase form stands in for it ("node server" once shipped). */
+const HOST_NAMES = /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy|kubernetes|aws|azure|gcp|hetzner|digitalocean|vultr|linode|node\.?js|node\s+(server|runtime|app)s?|astro)\b/i
 
 /* ─────  The Diagram Atlas: seven notations, and what each one cannot say  ─────
 
@@ -7078,10 +7211,114 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
     `the legibility floor is ${floor[1]}rem — below ~34rem the 680-unit viewBox renders labels under 8px`,
   )
   assert.ok(
-    /data-type="at-stage" tabindex="0"/.test(atSrc),
-    'a horizontally scrollable region must be reachable without a pointer',
+    /data-type="at-stage" tabindex="0" role="region" aria-label="[^"]+"/.test(atSrc),
+    'a horizontally scrollable region must be reachable without a pointer, and named',
   )
+  assert.match(atSrc, /private autoplay\(\)[\s\S]*?'aria-live', 'off'[\s\S]*?this\.play\(\)/,
+    'autoplay silences the caption, or a screen reader hears it change every beat')
+
+  /* ── 8. Nothing names the host. ──
+     A deployment view invites drawing the real stack, and this one did, with the
+     provider and runtime on the machine's label. That is what helps someone reach
+     the origin around Cloudflare, so HOST_NAMES runs over every string a view
+     carries (walked, not listed: the svg, the legend, each beat's caption and any
+     field added later) and over every field of the article. */
+  const strings = o => typeof o === 'string' ? [o] : Object.values(o ?? {}).flatMap(strings)
+  for (const v of ATLAS_VIEWS) {
+    for (const s of strings(v)) {
+      assert.doesNotMatch(s, HOST_NAMES, `view "${v.id}" names the host or runtime: "${s.match(HOST_NAMES)?.[0]}"`)
+    }
+  }
+  for (const s of strings(article)) {
+    assert.doesNotMatch(s, HOST_NAMES, `the diagram article names the host or runtime: "${s.match(HOST_NAMES)?.[0]}"`)
+  }
 }
+/* ─────  The Internet Atlas: eight stops, each with what goes wrong  ─────
+
+   The figure for /learnings/how-the-internet-works (2026-09-30), built on the
+   Diagram Atlas's pattern, so it is held to the same silent failures: a beat
+   lighting an id that is not in its SVG, a token off the viewBox, a legend row
+   left empty, a pinned marker naming no view. Two more of its own: its example
+   addresses come only from the ranges reserved for documentation, so no figure
+   shows a real address, and like the hero it names no host or runtime. It shares
+   the Diagram Atlas's stylesheet vocabulary, so that import is held in place. */
+{
+  const { INTERNET_VIEWS, internetView } = await import('../src/components/games/internet-atlas/atlas.ts')
+  const article = learnings.find(l => l.embed === 'internet-atlas')
+  assert.ok(article, 'the internet atlas has no article to be the figure for')
+
+  // Every view gets its own pinned figure in the article, and none twice.
+  const pinned = [...article.content.matchAll(/^[ \t]*\{\{embed:([a-z0-9-]+)\}\}[ \t]*$/gm)].map(m => m[1])
+  for (const id of pinned) assert.ok(INTERNET_VIEWS.some(v => v.id === id), `the article pins "${id}", which is not a view — it would render the full picker`)
+  assert.deepEqual([...pinned].sort(), INTERNET_VIEWS.map(v => v.id).sort(), 'every stop must get its own figure in the article, and none twice')
+
+  // A full legend on every view, in the same shape.
+  const shape = Object.keys(INTERNET_VIEWS[0]).sort().join(',')
+  for (const v of INTERNET_VIEWS) {
+    assert.equal(Object.keys(v).sort().join(','), shape, `view "${v.id}" has a different shape to the others`)
+    for (const field of ['id', 'question', 'title', 'what', 'does', 'breaks', 'svg']) {
+      assert.ok(typeof v[field] === 'string' && v[field].trim().length > 0, `view "${v.id}" ships an empty ${field}`)
+    }
+    assert.ok(v.question.endsWith('?'), `view "${v.id}"'s button label must be a question`)
+    assert.ok(v.breaks.length > 40, `view "${v.id}"'s "if it goes wrong" line is too short to be a real claim`)
+    assert.ok(v.steps.length >= 3, `view "${v.id}" shows movement and needs beats`)
+  }
+  assert.equal(new Set(INTERNET_VIEWS.map(v => v.id)).size, INTERNET_VIEWS.length, 'two views share an id')
+
+  // Every beat lights something that is in its SVG, and every token is on screen.
+  for (const v of INTERNET_VIEWS) {
+    const ids = new Set([...v.svg.matchAll(/id="([^"]+)"/g)].map(m => m[1]))
+    assert.equal(ids.size, (v.svg.match(/id="/g) ?? []).length, `view "${v.id}" reuses an id`)
+    v.steps.forEach((step, i) => {
+      assert.ok(step.on.length > 0, `view "${v.id}" beat ${i} lights nothing`)
+      for (const id of step.on) assert.ok(ids.has(id), `view "${v.id}" beat ${i} lights "#${id}", which is not in its SVG`)
+      assert.ok(step.say.trim().length > 0, `view "${v.id}" beat ${i} has no caption`)
+      if (step.token) {
+        assert.ok(step.token[0] >= 10 && step.token[0] <= 670 && step.token[1] >= 10 && step.token[1] <= 354,
+          `view "${v.id}" beat ${i} puts its token at ${step.token}, outside the viewBox`)
+      }
+    })
+  }
+
+  // Example addresses are from the documentation ranges only, and nothing names the host.
+  const figureText = INTERNET_VIEWS.flatMap(v => [v.svg, v.what, v.does, v.breaks, ...v.steps.map(s => s.say)]).join('\n')
+  for (const ip of figureText.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) ?? []) {
+    assert.match(ip, /^(192\.168\.|203\.0\.113\.)/, `the figure shows ${ip}, which is not a documentation address`)
+  }
+  for (const text of [figureText, article.content, article.summary]) {
+    assert.doesNotMatch(text, HOST_NAMES,
+      'the internet article and its figure never name the host or the runtime')
+  }
+
+  // Selection cannot land on nothing, including a prototype key.
+  assert.equal(internetView('dns').id, 'dns')
+  assert.equal(internetView('not-a-view').id, INTERNET_VIEWS[0].id)
+  assert.equal(internetView('constructor').id, INTERNET_VIEWS[0].id, 'prototype keys are not views')
+
+  // The component: registered under the tag EMBED_TAGS names, no second copy of
+  // the claims, playback that follows visibility and reduced motion, a clock
+  // torn down on unmount, and a stage a keyboard can scroll.
+  const iaSrc = await readFile(new URL('../src/components/games/internet-atlas/InternetAtlas.ts', import.meta.url), 'utf-8')
+  assert.match(iaSrc, /customElements\.define\('internet-atlas-figure'/, 'the element registers under its EMBED_TAGS tag')
+  assert.equal(EMBED_TAGS['internet-atlas'], 'internet-atlas-figure')
+  for (const v of INTERNET_VIEWS) assert.ok(!iaSrc.includes(v.breaks), `view "${v.id}"'s claim is duplicated in the component`)
+  assert.ok(/IntersectionObserver/.test(iaSrc) && /private autoplay\(\)[\s\S]*?this\.visible/.test(iaSrc), 'playback follows visibility')
+  const iaSelect = iaSrc.slice(iaSrc.indexOf('private select('), iaSrc.indexOf('private autoplay('))
+  assert.ok(!/\bthis\.play\(\)/.test(iaSelect), 'select() reaches playback through autoplay(), never play() directly')
+  assert.ok(/prefers-reduced-motion/.test(iaSrc), 'no autoplay for a reader who asked for less motion')
+  assert.ok(/disconnectedCallback/.test(iaSrc) && /clearInterval/.test(iaSrc), 'the beat clock is torn down on unmount')
+  assert.ok(/data-type="at-stage" tabindex="0" role="region" aria-label="[^"]+"/.test(iaSrc), 'the scrollable stage is reachable without a pointer, and named')
+  assert.match(iaSrc, /private autoplay\(\)[\s\S]*?'aria-live', 'off'[\s\S]*?this\.play\(\)/,
+    'autoplay silences the caption, or a screen reader hears it change every beat')
+
+  // Its styles: its own sheet, plus the Diagram Atlas's shared vocabulary.
+  const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
+  assert.match(embedCss, /@import '\.\.\/components\/games\/internet-atlas\/internet-atlas\.css';/, 'the internet atlas stylesheet is loaded')
+  assert.match(embedCss, /@import '\.\.\/components\/games\/diagram-atlas\/diagram-atlas\.css';/,
+    'the internet atlas draws with the at-* vocabulary from diagram-atlas.css, so that import must stay')
+}
+console.log('internet atlas: every stop has a full legend and its own pinned figure, every beat lights a real element, and no figure shows a real address or names the host')
+
 /* ─────  the house article format: many figures, and a cost that follows them  ──
 
    `{{embed:view}}` lets one article carry a figure every few lines
@@ -7156,7 +7393,7 @@ console.log('dns sightline: the resolver diff ignores TTL and order, the SPF wal
 }
 console.log('learnings format: figures are visibility-gated and motion-safe, and the read time is derived from the content')
 
-console.log('diagram atlas: seven views, every beat lights an element that exists, the structural notations refuse to animate, and the prose still says seven')
+console.log('diagram atlas: seven views, every beat lights an element that exists, the structural notations refuse to animate, the prose still says seven, and nothing names the host')
 
 /* ─────  CAA x issuer: the finding neither tool can make alone  ─────────────
 
@@ -7527,7 +7764,7 @@ console.log('diagram atlas: seven views, every beat lights an element that exist
     'the Chainsaw cross-link carries the host across')
   assert.ok(/ca=\$\{encodeURIComponent\(outlook\.ca\.caId\)\}/.test(chainsawSrc),
     "…and hands the identified CA to DNS Sightline's own renewal picker, which is the handoff neither tool could make alone")
-  const sightlineSrc = await readFile(new URL('../src/components/tools/dns-sightline/DnsSightline.ts', import.meta.url), 'utf-8')
+  const sightlineSrc = await readFile(new URL('../src/components/tools/dns-sightline/panels.ts', import.meta.url), 'utf-8')
   assert.ok(/\/tools\/chainsaw\?host=\$\{encodeURIComponent\(r\.name\)\}/.test(sightlineSrc),
     'the DNS Sightline cross-link carries the name to Chainsaw')
 
@@ -7571,6 +7808,8 @@ console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unr
   assert.ok(/spawn\(process\.execPath, \[entry\]/.test(bootSrc), 'the boot check runs the entry under node itself')
   assert.ok(/^delete env\.ASTRO_NODE_LOGGING$/m.test(bootSrc),
     'the boot check must scrub ASTRO_NODE_LOGGING — inherited, it disables the branch that crashed')
+  assert.ok(/\['SIGINT', 130\], \['SIGTERM', 143\]\]\)\s*\{\s*process\.once\(signal, \(\) => stop\(\)\.then/.test(bootSrc),
+    'the boot check stops its server when it is itself interrupted, or the server outlives it on its port')
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf-8'))
   assert.equal(pkg.scripts['boot:check'], 'node scripts/boot-check.mjs', 'npm run boot:check is the documented entry')
 
@@ -7699,6 +7938,24 @@ console.log('boot check: starts the entry the Dockerfile runs, no inherited env 
     }
     for (const id of ['spf-missing', 'dmarc-missing', 'mx-none', 'caa-none']) {
       assert.equal(ids.includes(id), false, `${id} is a claim about the zone, and a deadline is not evidence for it`)
+    }
+    // …and it says the TIME LIMIT stopped it. "Could not be reached" is a claim
+    // about the resolvers, and nothing was wrong with them: this tool stopped
+    // asking. The transport marks each answer it cut off, which is what the
+    // finding reads.
+    assert.ok(Object.values(full.answers).flat().every(a => a.stopped === 'deadline'),
+      'every diff question the deadline cut off is marked as stopped by it')
+    const stoppedFinding = full.findings.find(f => f.id === 'resolvers-unreachable')
+    assert.ok(/time limit/.test(stoppedFinding.detail) && !/could not reach/.test(stoppedFinding.detail),
+      `a deadline is not an unreachable resolver: ${stoppedFinding.detail}`)
+    // A second, real-behaviour check of the same basis rule section 4 proves
+    // over a stub zone: nothing here was answered, so nothing here may cite a
+    // record, and the finding that cites nothing must say 'unanswered'.
+    assert.equal(stoppedFinding.basis, 'unanswered', `resolvers-unreachable: a real deadline is not a confirmed absence`)
+    for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
+      const f = full.findings.find(x => x.id === id)
+      assert.ok(/re-run the inspection/i.test(f.detail) && !/zone itself is failing/.test(f.detail), `${id}: the deadline is this tool's miss, so re-running is the advice`)
+      assert.equal(f.basis, 'unanswered', `${id}: a real deadline is not a confirmed absence`)
     }
     assert.equal(full.spf.truncated, true)
     assert.equal(full.caa.incomplete, true)
@@ -7896,7 +8153,7 @@ console.log('pr 19 review: a refused client never spends the shared bucket (deri
      from here — and each must be a NAMED region, so the extra tab stop
      announces what it is, and ringed by the site's own :focus-visible rule. */
   for (const [component, sheet, dt] of [
-    ['../src/components/tools/dns-sightline/DnsSightline.ts', '../src/components/tools/dns-sightline/dns-sightline.css', 'sg-scroll'],
+    ['../src/components/tools/dns-sightline/panels.ts', '../src/components/tools/dns-sightline/dns-sightline.css', 'sg-scroll'],
     ['../src/components/tools/link-peek/LinkPeek.ts', '../src/components/tools/link-peek/link-peek.css', 'lp-tablewrap'],
   ]) {
     const css = await readFile(new URL(sheet, import.meta.url), 'utf-8')
@@ -7948,20 +8205,41 @@ console.log('pr 19 review: no document/window listener outlives what added it (d
   const uriAt = lpRoute.indexOf('dataUri: `data:${type};base64,')
   assert.ok(typeAt !== -1 && uriAt > typeAt, 'the data URI is built from the allowlisted type and nothing else')
 
-  /* ── 2. A URL off a certificate is a link only when it is plainly http(s). ── */
-  assert.equal(csLinkableUrl('http://r11.i.lencr.org/'), 'http://r11.i.lencr.org/', 'AIA is usually plain http, and that is still a link')
-  assert.equal(csLinkableUrl('https://pki.goog/repo/certs/gts1c3.der'), 'https://pki.goog/repo/certs/gts1c3.der')
-  for (const hostile of [
+  /* ── 2. A URL off a certificate is a link only when it is plainly http(s),
+     and only when it reads exactly as it goes. URL parsing rewrites a string
+     before it navigates — a backslash becomes a slash, an ideographic full stop
+     a dot, fullwidth letters fold, numeric hosts are normalised — so a link
+     whose text was the certificate's and whose href was the parser's could say
+     pki.goog and go to evil.test. ── */
+  const plain = ['http://r11.i.lencr.org/', 'https://pki.goog/repo/certs/gts1c3.der', 'http://crt.sectigo.com/SectigoRSADomainValidationSecureServerCA.crt', 'https://ca.example:8443/a']
+  for (const url of plain) assert.equal(csLinkableUrl(url), url, `${url} is plain http(s), and still a link`)
+  const misleading = [
+    'http://evil.test\\@pki.goog/r1.crt',      // reads as pki.goog; the backslash is a slash, so the host is evil.test
+    'http://pki.goog\u3002evil.test/r1.crt',     // an ideographic full stop becomes a dot
+    'http://pki.goog.\uff45vil.test/',           // a fullwidth letter folds
+    'http://0x7f.1/', 'http://2130706433/',     // numeric hosts are normalised to 127.0.0.1
+    'HTTP://CA.EXAMPLE/', 'http://ca.example',  // case and a missing path — harmless, and still not the same string
+  ]
+  for (const raw of misleading) {
+    assert.notEqual(new URL(raw).href, raw, `${JSON.stringify(raw)} is a fixture the parser rewrites`)
+    assert.equal(csLinkableUrl(raw), null, `${JSON.stringify(raw)} is rewritten by the parser, so it stays text`)
+  }
+  assert.equal(new URL(misleading[0]).hostname, 'evil.test', 'the repro really does go somewhere other than where it reads')
+  const hostileUrls = [
     'javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:x',
     'http://user:pw@ca.example/x', 'http://ca.example/a b', 'http://ca.example/\u0000', 'ldap://ca.example/cn=x',
-    'not a url', '',
-  ]) {
-    assert.equal(csLinkableUrl(hostile), null, `${JSON.stringify(hostile)} stays text`)
+    'not a url', '', ' http://ca.example/', 'http://ca.example/x"onmouseover=alert(1)',
+  ]
+  for (const hostile of hostileUrls) assert.equal(csLinkableUrl(hostile), null, `${JSON.stringify(hostile)} stays text`)
+  // The property itself: whatever becomes a link is byte-for-byte what the certificate said.
+  for (const raw of [...plain, ...misleading, ...hostileUrls]) {
+    const href = csLinkableUrl(raw)
+    assert.ok(href === null || href === raw, `${JSON.stringify(raw)} became a link to something else: ${href}`)
   }
   const csComponent = await readFile(new URL('../src/components/tools/chainsaw/Chainsaw.ts', import.meta.url), 'utf-8')
   assert.ok(/<dd>\$\{csIssuerLink\(cert\.caIssuerUrls\[0\]\)\}<\/dd>/.test(csComponent), 'the Issuer URL row goes through csIssuerLink')
-  assert.ok(/const href = csLinkableUrl\(raw\)\s*return href\s*\? `<a href="\$\{csEsc\(href\)\}" rel="noopener noreferrer" target="_blank">\$\{csEsc\(raw\)\}<\/a>`\s*: csEsc\(raw\)/.test(csComponent),
-    'the link is escaped, opens with no opener and no referrer, and anything csLinkableUrl refuses is escaped text')
+  assert.ok(/const href = csLinkableUrl\(raw\)\s*return href\s*\? `<a href="\$\{csEsc\(href\)\}" rel="noopener noreferrer" target="_blank">\$\{csEsc\(href\)\}<\/a>`\s*: csEsc\(raw\)/.test(csComponent),
+    'the link is escaped, its visible text is its own href, it opens with no opener and no referrer, and anything csLinkableUrl refuses is escaped text')
 
   /* ── 3. An exception's message is not an answer. ────────────────────────
      Every failure these routes expect comes back as a fixed sentence; the text
@@ -7976,7 +8254,7 @@ console.log('pr 19 review: no document/window listener outlives what added it (d
     'csInspect is wrapped, so a throw answers a fixed JSON error rather than Astro\'s error page')
   assert.ok(/'Cache-Control': 'no-store'/.test(csRoute.slice(csRoute.indexOf('function json('))), '…through the same no-store json() every answer uses')
 }
-console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a certificate\'s URL is a link only when plainly http(s), and no exception text reaches a response')
+console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a certificate\'s URL is a link only when plainly http(s) and exactly as it goes, and no exception text reaches a response')
 
 /* ─────  PR 19 review: a retired article keeps its readers  ─────
 
@@ -8036,3 +8314,1195 @@ console.log('pr 19 review: an image type is allowlisted before it reaches CSS, a
     'a permanent redirect to the mapped target, edge-cacheable but not pinned in the browser')
 }
 console.log('pr 19 review: a retired learning answers 301 to the hub, the publish predicate refuses it so no sitemap can list it, and the /games intro counts its dailies')
+
+/* The real DNS Sightline inspection over a stubbed resolver, shared by the two
+   follow-up blocks below. sgInspect takes no endpoint override (asserted in the
+   DNS Sightline block), so the stub replaces `fetch` itself and the real
+   transport, the real pick and the real walks run. `fault(resolver, name,
+   type)` says what one resolver does with one question — a DNS status number
+   (0 is an empty NOERROR, 2 SERVFAIL, 3 NXDOMAIN) or 'unreachable' — and a name
+   missing from the zone is NXDOMAIN. Like a recursive resolver, a question at
+   an alias is answered with the CNAME chain and then the target's records,
+   unless the name holds records of that type itself. */
+const SG_STUB_TYPES = { A: 1, NS: 2, CNAME: 5, SOA: 6, MX: 15, TXT: 16, AAAA: 28, CAA: 257 }
+const sgStubAnswer = (zone, name, type, depth = 0) => {
+  const rrs = zone[name] ?? {}
+  const own = (rrs[type] ?? []).map(data => ({ name: `${name}.`, type: SG_STUB_TYPES[type], TTL: 300, data }))
+  if (own.length || type === 'CNAME' || !rrs.CNAME || depth > 8) return own
+  const target = rrs.CNAME[0].toLowerCase().replace(/\.+$/, '')
+  return [{ name: `${name}.`, type: SG_STUB_TYPES.CNAME, TTL: 300, data: rrs.CNAME[0] }, ...sgStubAnswer(zone, target, type, depth + 1)]
+}
+const sgStubDoh = (zone, fault) => async input => {
+  const u = new URL(String(input))
+  const resolver = u.hostname.includes('cloudflare') ? 'cloudflare' : u.hostname.includes('google') ? 'google' : 'quad9'
+  const name = (u.searchParams.get('name') ?? '').toLowerCase().replace(/\.+$/, '')
+  const type = u.searchParams.get('type') ?? ''
+  const f = fault?.(resolver, name, type)
+  if (f === 'unreachable') throw new TypeError('stubbed resolver unreachable')
+  const body = typeof f === 'number'
+    ? { Status: f, Answer: [] }
+    : name in zone
+      ? { Status: 0, Answer: sgStubAnswer(zone, name, type) }
+      : { Status: 3, Answer: [] }
+  return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/dns-json' } })
+}
+const sgInspectOver = async (zone, fault, name = 'example.test') => {
+  const { sgInspect } = await import('../src/components/tools/dns-sightline/inspect.ts')
+  const realFetch = globalThis.fetch
+  globalThis.fetch = sgStubDoh(zone, fault)
+  try { return await sgInspect(name) } finally { globalThis.fetch = realFetch }
+}
+
+/* cname-coexists counts only records the inspected name owns. The answer to
+   "A for www.github.com" is the CNAME and then github.com's own addresses, and
+   the live tool read those as an A record beside the CNAME, so it reported
+   "CNAME alongside A, MX, TXT, NS" for nearly every alias (PR #27 review). */
+{
+  const apex = { A: ['93.184.216.34'], MX: ['10 mail.example.test.'], NS: ['a.ns.test.'], TXT: ['"v=spf1 -all"'] }
+  const alias = await sgInspectOver({ 'example.test': apex, 'www.example.test': { CNAME: ['example.test.'] } }, null, 'www.example.test')
+  assert.equal(alias.cname.target, 'example.test', 'the fixture is an alias onto the apex')
+  assert.ok(alias.answers.A.some(a => a.records.length > 0), 'and the stub answers the alias like a recursive resolver, with the target\'s addresses')
+  assert.deepEqual(alias.cname.coexisting, [], 'records the alias target owns are not records beside the CNAME')
+  assert.ok(!alias.findings.some(f => f.id === 'cname-coexists'), 'www CNAME apex is a clean alias')
+  const both = await sgInspectOver({ 'example.test': apex, 'www.example.test': { CNAME: ['example.test.'], TXT: ['"verify=1"'] } }, null, 'www.example.test')
+  assert.deepEqual(both.cname.coexisting, ['TXT'], 'a record the aliased name owns itself still counts')
+  assert.ok(both.findings.some(f => f.id === 'cname-coexists'), '…and still raises cname-coexists')
+}
+console.log('dns sightline: a CNAME is reported alongside only the records its own name holds, not the ones its target answers with')
+
+/* ─────  DNS Sightline follow-ups: one test for "did it answer", and whose failure it was  ─────
+
+   The tool had two definitions of "answered". `sgUnanswered` — NOERROR and
+   NXDOMAIN are answers, everything else is not — decided the findings, while
+   the diff and the choice of which resolver the analysis reads asked only "has
+   no `error`", and a SERVFAIL passes that: the transport reached the resolver
+   and the resolver said it could not answer. So Cloudflare's SERVFAIL for MX won
+   the pick over Google and Quad9 both holding the record, the targets were never
+   resolved, `mx-inconclusive` and a FILTERING finding fired, and the Mail panel —
+   which decided absence by a third test, "did any resolver reply" — printed
+   "No MX records." beside a diff table showing one.
+
+   The fix is one definition, and it is asserted three ways: derived from the
+   source (nothing in the tool's folder may read `.error` or compare an rcode
+   with NOERROR outside `sgUnanswered`), exhaustively against the definition
+   (every mix of answers through the pick, the diff and the MX status), and as
+   behaviour (the real inspection over a stubbed resolver, with the rendered
+   panels held to the findings). The second half of the block is the wording:
+   "re-run" is honest for a timeout, the deadline or the budget, and wrong when
+   every resolver returned SERVFAIL — that is the zone failing. */
+{
+  const sg = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const panels = await import('../src/components/tools/dns-sightline/panels.ts')
+
+  /* ── 1. The only test, derived over every module in the tool's folder. ────
+     Resolved by the TypeScript checker rather than by a regex, because the
+     question is which INTERFACE a property belongs to: `counts.error` is a
+     number of error-level findings, `a.error` is an answer's, and only the
+     second is a way to decide whether a question was answered. Two rules, over
+     every .ts in the folder: a read of `SgAnswer.error` outside sgUnanswered
+     may only say WHY a question failed (`a.error ?? a.rcode`), and the literal
+     'NOERROR' — the other half of the definition — appears nowhere else. */
+  const ts = (await import('typescript')).default
+  const sgDir = new URL('../src/components/tools/dns-sightline/', import.meta.url)
+  const sgFiles = (await readdir(sgDir)).filter(f => f.endsWith('.ts')).map(f => new URL(f, sgDir).pathname)
+  for (const f of ['analyze.ts', 'inspect.ts', 'panels.ts', 'DnsSightline.ts']) assert.ok(sgFiles.some(p => p.endsWith(`/${f}`)), `${f} is scanned`)
+  const program = ts.createProgram(sgFiles, {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true, noEmit: true, skipLibCheck: true, allowImportingTsExtensions: true, lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
+  })
+  const checker = program.getTypeChecker()
+  const answerField = sym => (sym?.declarations ?? []).some(d =>
+    ts.isPropertySignature(d) && ts.isInterfaceDeclaration(d.parent) && d.parent.name.text === 'SgAnswer')
+  const enclosingFn = node => {
+    for (let n = node.parent; n; n = n.parent) if (ts.isFunctionDeclaration(n) && n.name) return n.name.text
+    return null
+  }
+  const where = (sf, node) => `${sf.fileName.split('/').pop()}:${sf.getLineAndCharacterOfPosition(node.getStart()).line + 1}`
+  const seen = { definition: 0, why: 0, noerror: 0 }
+  for (const file of sgFiles) {
+    const sf = program.getSourceFile(file)
+    const visit = node => {
+      const read =
+        ts.isPropertyAccessExpression(node) && node.name.text === 'error' ? checker.getSymbolAtLocation(node.name)
+          : ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression) && node.argumentExpression.text === 'error'
+            ? checker.getTypeAtLocation(node.expression).getProperty('error')
+            : ts.isBindingElement(node) && (node.propertyName ?? node.name).getText() === 'error'
+              ? checker.getTypeAtLocation(node.parent).getProperty('error')
+              : null
+      if (read && answerField(read)) {
+        if (enclosingFn(node) === 'sgUnanswered') seen.definition += 1
+        else {
+          const p = node.parent
+          const why = ts.isBinaryExpression(p) && p.left === node && p.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+          assert.ok(why, `${where(sf, node)}: reads an answer's \`error\` outside sgUnanswered to decide something — sgUnanswered is the one test of whether a question got an answer, and \`error\` may only say WHY it did not (\`a.error ?? a.rcode\`)`)
+          seen.why += 1
+        }
+      }
+      if (ts.isStringLiteral(node) && node.text === 'NOERROR') {
+        assert.equal(enclosingFn(node), 'sgUnanswered', `${where(sf, node)}: tests for NOERROR outside sgUnanswered — a second definition of "answered"`)
+        seen.noerror += 1
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sf)
+  }
+  // Not vacuous: the checker resolved the definition's own read, the "why"
+  // reads, and the literal — a scan that resolves nothing passes everything.
+  assert.ok(seen.definition >= 1 && seen.why >= 3 && seen.noerror >= 1, `the scan resolved the answer reads it exists to police (${JSON.stringify(seen)})`)
+  const analyzeCode = await readFile(new URL('analyze.ts', sgDir), 'utf-8')
+  const bodyOf = (src, fn) => src.slice(src.indexOf(`export function ${fn}(`), src.indexOf('\n}\n', src.indexOf(`export function ${fn}(`)))
+  for (const fn of ['sgPickAnswer', 'sgDiffAnswers', 'sgMxStatus']) {
+    assert.ok(bodyOf(analyzeCode, fn).includes('sgUnanswered('), `${fn} decides by sgUnanswered`)
+  }
+  const inspectCode = await readFile(new URL('inspect.ts', sgDir), 'utf-8')
+  assert.ok(/const primaryOf = \(type: SgType\): SgAnswer =>\s*sgPickAnswer\(/.test(inspectCode), 'the analysis reads the pick, not a second rule for it')
+  assert.ok(/mxStatus: sgMxStatus\(mxAnswer\)/.test(inspectCode), 'the report carries the MX status the findings switched on, off the same answer')
+  const panelCode = await readFile(new URL('panels.ts', sgDir), 'utf-8')
+  assert.ok(/r\.mxStatus === 'unanswered'/.test(panelCode) && !/d\.type === 'MX'/.test(panelCode),
+    'the Mail panel reads mxStatus, not the diff, to decide what the MX section says')
+
+  /* ── 2. Exhaustively against the definition. ──────────────────────────────
+     Seven kinds of answer at each of three resolvers is 343 mixes; each goes
+     through the pick, the diff and the MX status, and each must agree with
+     sgUnanswered about what was answered. */
+  const kinds = {
+    records: { rcode: 'NOERROR', records: ['10 mail.ex.test.'] },
+    empty: { rcode: 'NOERROR', records: [] },
+    nxdomain: { rcode: 'NXDOMAIN', records: [] },
+    servfail: { rcode: 'SERVFAIL', records: [] },
+    refused: { rcode: 'REFUSED', records: [] },
+    unreachable: { rcode: 'ERROR', records: [], error: 'resolver unreachable' },
+    deadline: { rcode: 'ERROR', records: [], error: 'inspection deadline reached', stopped: 'deadline' },
+  }
+  const resolvers = ['cloudflare', 'google', 'quad9']
+  const mk = (resolver, kind) => ({
+    resolver, type: 'MX', name: 'ex.test', elapsedMs: 0, ...kinds[kind],
+    records: kinds[kind].records.map(data => ({ type: 15, name: 'ex.test', data, ttl: 60 })),
+  })
+  let mixes = 0
+  for (const k0 of Object.keys(kinds)) for (const k1 of Object.keys(kinds)) for (const k2 of Object.keys(kinds)) {
+    const answers = [mk('cloudflare', k0), mk('google', k1), mk('quad9', k2)]
+    const answered = answers.filter(a => !sg.sgUnanswered(a))
+    const pick = sg.sgPickAnswer(answers, 'cloudflare')
+    const label = `${k0}/${k1}/${k2}`
+    assert.equal(sg.sgUnanswered(pick), answered.length === 0, `${label}: the pick is an answer whenever any resolver answered`)
+    if (!sg.sgUnanswered(answers[0])) assert.equal(pick, answers[0], `${label}: the primary's answer wins when it answered`)
+    if (!answered.length) assert.equal(pick, answers[0], `${label}: with no answer anywhere, the primary's own failure is kept`)
+    const diff = sg.sgDiffAnswers('MX', answers)
+    assert.equal(diff.answered, answered.length, `${label}: the diff counts answers by sgUnanswered`)
+    assert.deepEqual(diff.failed, answers.filter(a => sg.sgUnanswered(a)), `${label}: every non-answer is excluded, and kept whole`)
+    assert.ok(diff.groups.every(g => !sg.sgUnanswered(g.answer)), `${label}: no group is built from a non-answer`)
+    const status = sg.sgMxStatus(pick)
+    assert.equal(status === 'unanswered', answered.length === 0, `${label}: MX is unreadable exactly when nobody answered`)
+    // At least two SERVFAILs, and every other resolver sent no reply at all: a
+    // resolver nobody heard from must not hide the other two's verdict.
+    const ks = [k0, k1, k2]
+    assert.equal(sg.sgServfailEverywhere(diff),
+      ks.filter(k => k === 'servfail').length >= 2 && ks.every(k => k === 'servfail' || k === 'unreachable' || k === 'deadline'),
+      `${label}: "the zone is failing" needs two SERVFAILs and no other reply`)
+    mixes += 1
+  }
+  assert.equal(mixes, 343)
+  // The shape that shipped: a lone SERVFAIL is not a resolver withholding the
+  // record. That is what `filtered-*` says, and it sends people to the wrong fix.
+  const lone = sg.sgDiffAnswers('MX', [mk('cloudflare', 'servfail'), mk('google', 'records'), mk('quad9', 'records')])
+  assert.equal(lone.looksFiltered, false)
+  assert.deepEqual(sg.sgDiffFindings([lone]), [], 'one resolver that could not answer is not a disagreement about the zone')
+
+  /* ── 3. The real inspection, over a stubbed resolver (`sgInspectOver`). ─── */
+  const inspectOver = sgInspectOver
+  const SERVFAIL = 2
+  const zone = {
+    'example.test': {
+      A: ['93.184.216.34'], MX: ['10 mail.example.test.'], NS: ['a.ns.test.', 'b.ns.test.'],
+      TXT: ['"v=spf1 include:_spf.provider.test -all"'], CAA: ['0 issue "letsencrypt.org"'],
+      SOA: ['a.ns.test. hostmaster.example.test. 1 7200 3600 1209600 300'],
+    },
+    '_dmarc.example.test': { TXT: ['"v=DMARC1; p=reject; rua=mailto:d@example.test"'] },
+    '_spf.provider.test': { TXT: ['"v=spf1 ip4:192.0.2.0/24 -all"'] },
+    'mail.example.test': { A: ['93.184.216.35'] },
+  }
+  // Every name that exists, with nothing in it: the world where each absence is real.
+  const bare = Object.fromEntries(Object.keys(zone).filter(n => !n.startsWith('_dmarc.')).map(n => [n, {}]))
+  const text = html => html.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+  const notes = r => [...(panels.sgRenderMail(r) + panels.sgRenderCaa(r)).matchAll(/<p data-type="sg-note">([\s\S]*?)<\/p>/g)].map(m => text(m[1]).replace(/\s+/g, ' ').trim())
+  const ids = r => r.findings.map(f => f.id)
+
+  const healthy = await inspectOver(zone)
+  const absent = await inspectOver(bare)
+  // The absence sentences are read off the panels themselves, in the world
+  // where every record is really missing — not written down here.
+  const absenceNotes = notes(absent).filter(n => !notes(healthy).includes(n))
+  for (const expected of ['No MX records.', 'No v=spf1 record.', 'No record at _dmarc.example.test.']) {
+    assert.ok(absenceNotes.includes(expected), `the absent world renders "${expected}" (got ${JSON.stringify(absenceNotes)})`)
+  }
+  assert.ok(absenceNotes.some(n => /so any CA may issue/.test(n)), 'and the CAA panel says any CA may issue')
+  for (const id of ['mx-none', 'spf-missing', 'dmarc-missing', 'caa-none']) assert.ok(ids(absent).includes(id), `the absent world reports ${id}`)
+
+  // (a) One resolver failing a question the others answered changes nothing a
+  //     finding or a panel says — for EVERY type the diff asks, because the
+  //     walks start from the diff's pick too: a Cloudflare SERVFAIL for TXT
+  //     used to make the SPF walk re-ask Cloudflare and report the record
+  //     unreadable beside a Records table showing it.
+  for (const t of sg.SG_TYPES) {
+    const lone = await inspectOver(zone, (r, n, q) => (r === 'cloudflare' && n === 'example.test' && q === t ? SERVFAIL : undefined))
+    assert.deepEqual(ids(lone), ids(healthy), `a lone SERVFAIL for ${t} changes no finding (got ${ids(lone).join(', ')})`)
+    assert.equal(panels.sgRenderMail(lone) + panels.sgRenderCaa(lone), panels.sgRenderMail(healthy) + panels.sgRenderCaa(healthy),
+      `a lone SERVFAIL for ${t} changes nothing the Mail or CAA panel says`)
+  }
+  // The shipped repro itself: Cloudflare SERVFAILs MX, Google and Quad9 answer.
+  const mixed = await inspectOver(zone, (r, n, t) => (r === 'cloudflare' && n === 'example.test' && t === 'MX' ? SERVFAIL : undefined))
+  assert.equal(mixed.mxStatus, 'hosts', 'the MX the other two resolvers hold is the MX the analysis reads')
+  assert.deepEqual(mixed.mxTargets.map(t => t.host), ['mail.example.test'], 'and its targets are resolved')
+  assert.deepEqual(ids(mixed), ids(healthy), 'one resolver failing a question the others answered changes no finding — neither mx-inconclusive nor filtering')
+  assert.equal(panels.sgRenderMail(mixed), panels.sgRenderMail(healthy), 'nor anything the Mail panel says')
+  assert.ok(text(panels.sgRenderRecords(mixed)).includes('10 mail.example.test'), 'the Records table shows the record the findings were drawn from')
+  assert.ok(/cloudflare: SERVFAIL/.test(text(panels.sgRenderDiff(mixed))), 'and the diff says what Cloudflare said, rather than calling it unreachable')
+
+  // (b) Every resolver SERVFAILs MX, and nothing else: the MX RRset is failing.
+  const mxDown = await inspectOver(zone, (r, n, t) => (n === 'example.test' && t === 'MX' ? SERVFAIL : undefined))
+  assert.equal(mxDown.mxStatus, 'unanswered')
+  assert.ok(ids(mxDown).includes('mx-inconclusive') && !ids(mxDown).includes('mx-none'))
+  const mxDownFinding = mxDown.findings.find(f => f.id === 'mx-inconclusive')
+  assert.ok(/SERVFAIL/.test(mxDownFinding.detail) && /zone itself is failing/.test(mxDownFinding.detail) && !/re-run the inspection/i.test(mxDownFinding.detail),
+    'every resolver failing MX is the zone failing it — "re-run" would not change it')
+  assert.ok(notes(mxDown).includes('The MX lookup got no answer, so the mail servers could not be read.'))
+
+  // (c) Every question about the name SERVFAILs everywhere: broken DNSSEC.
+  const inZone = n => n === 'example.test' || n.endsWith('.example.test')
+  const broken = await inspectOver(zone, (r, n) => (inZone(n) ? SERVFAIL : undefined))
+  assert.ok(ids(broken).includes('zone-servfail'), `a name every resolver fails is reported as the zone failing (got ${ids(broken).join(', ')})`)
+  assert.equal(ids(broken).includes('resolvers-unreachable'), false, 'the resolvers answered, with SERVFAIL — they were not unreachable')
+  for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
+    const f = broken.findings.find(x => x.id === id)
+    assert.ok(f, `${id} is reported for the failing zone`)
+    assert.ok(/zone itself is failing/.test(f.detail) && !/re-run the inspection/i.test(f.detail), `${id} says the zone is failing, not "re-run"`)
+  }
+  // (c2) The same broken zone with one resolver unreachable: two SERVFAILs and
+  //      a silence are still the zone failing, not "try again".
+  const brokenQuiet = await inspectOver(zone, (r, n) => (inZone(n) ? (r === 'cloudflare' ? 'unreachable' : SERVFAIL) : undefined))
+  assert.ok(ids(brokenQuiet).includes('zone-servfail') && !ids(brokenQuiet).includes('resolvers-unreachable'),
+    `one unreachable resolver does not hide a zone every other resolver SERVFAILs (got ${ids(brokenQuiet).join(', ')})`)
+  for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
+    const f = brokenQuiet.findings.find(x => x.id === id)
+    assert.ok(f && /zone itself is failing/.test(f.detail), `${id} says the zone is failing with one resolver silent`)
+  }
+  assert.ok(brokenQuiet.findings.find(f => f.id === 'zone-servfail').evidence.every(e => !/cloudflare/.test(e)),
+    'the zone-servfail evidence names only the resolvers that said SERVFAIL')
+  // A resolver that sent different rcodes for different types is reported with all of them.
+  const mixedCodes = sg.sgReachabilityFindings(sg.SG_TYPES.map((t, i) => sg.sgDiffAnswers(t, resolvers.map(r => ({
+    resolver: r, type: t, name: 'ex.test', elapsedMs: 0, records: [], rcode: r === 'quad9' && i === 0 ? 'REFUSED' : r === 'quad9' ? 'SERVFAIL' : 'REFUSED',
+  })))), 'ex.test')[0]
+  assert.ok(/SERVFAIL/.test(mixedCodes.detail) && /REFUSED or SERVFAIL|SERVFAIL or REFUSED/.test(mixedCodes.detail),
+    `a resolver's every rcode is named, not its first (got ${mixedCodes.detail})`)
+
+  // …and none of the unreadable worlds prints a sentence only a real absence prints.
+  for (const [world, r] of [['mixed', mixed], ['MX down', mxDown], ['broken DNSSEC', broken]]) {
+    const said = notes(r).filter(n => absenceNotes.includes(n))
+    assert.deepEqual(said, [], `${world}: a panel printed an absence nobody observed: ${JSON.stringify(said)}`)
+  }
+
+  // A null MX is a record, and the panel used to call it "No MX records." beside
+  // the finding that says the domain accepts no mail.
+  const nullMx = await inspectOver({ ...zone, 'example.test': { ...zone['example.test'], MX: ['0 .'] } })
+  assert.equal(nullMx.mxStatus, 'null')
+  assert.ok(ids(nullMx).includes('mx-null'))
+  assert.equal(notes(nullMx).some(n => absenceNotes.includes(n)), false, 'a null MX is not an absent one')
+
+  // (d) Nothing reachable: the offline shape, which is the tool's failure.
+  const offline = await inspectOver(zone, () => 'unreachable')
+  const cut = offline.findings.find(f => f.id === 'resolvers-unreachable')
+  assert.ok(cut && /could not reach/.test(cut.detail) && /could not ask/.test(cut.detail) && !/time limit/.test(cut.detail),
+    'unreachable resolvers are the tool\'s failure, said as such')
+  for (const id of ['spf-inconclusive', 'mx-inconclusive']) {
+    assert.ok(/re-run the inspection/i.test(offline.findings.find(f => f.id === id).detail), `${id}: a miss that is this tool's is re-run advice`)
+  }
+  // The zone-servfail finding cites what it rests on, like every record-based one.
+  const zoneFinding = broken.findings.find(f => f.id === 'zone-servfail')
+  assert.equal(zoneFinding.basis, 'record')
+  assert.equal(zoneFinding.evidence.length, sg.SG_TYPES.length, 'one line of evidence per question the diff asked')
+}
+console.log('dns sightline follow-ups: sgUnanswered is the only test of an answer (derived from the source and over all 343 mixes), a lone SERVFAIL changes no finding or panel, and the zone failing is not called "re-run"')
+
+/* ─────  DNS Sightline follow-ups: no finding rests on a lookup that got no answer  ─────
+
+   Three findings still drew a conclusion from a question nobody got answered,
+   and one gated a conclusion on a question it did not depend on:
+
+     - `dmarc-at-apex` ("read by nobody") read `recordCount === 0` without
+       asking whether `_dmarc` answered, so a timed-out `_dmarc` beside a stray
+       apex `v=DMARC1` produced an error-level claim beside dmarc-inconclusive.
+     - An MX target whose A lookup said NXDOMAIN and whose AAAA timed out was
+       "could not be checked" — but NXDOMAIN is about the NAME: nothing lives
+       there, so there is no address of either family.
+     - `cname-hosted` said "resolves, so this is not dangling" off three failed
+       lookups: the presence twin of reading a failure as an absence.
+     - `spf-no-all` was suppressed on ANY truncation. With no `redirect=` in
+       the chain an unlisted sender's result is neutral whatever the includes
+       hold — an include can only match a sender — so the finding holds; and a
+       record that redirects to one with `-all` has an `all` after all.
+
+   The general form is asserted without a list of findings: for every question
+   the real inspection asks (read off the stubbed resolver), a finding that
+   appears when that record is present but not when it is absent — or the
+   other way round — rests on that answer, and must not appear when the answer
+   never came. */
+{
+  const sg = await import('../src/components/tools/dns-sightline/analyze.ts')
+  const panels = await import('../src/components/tools/dns-sightline/panels.ts')
+  const noAnswer = (name, type) => ({ resolver: 'f', type, name, rcode: 'ERROR', records: [], elapsedMs: 0, error: 'no answer within 4000ms' })
+  const answer = (name, type, datas, rcode = datas.length ? 'NOERROR' : 'NXDOMAIN') =>
+    ({ resolver: 'f', type, name, rcode, records: datas.map(d => ({ type: 16, name, data: d, ttl: 60 })), elapsedMs: 0 })
+
+  /* ── 1. The DMARC record "at the wrong name" needs an answer from the right one. ── */
+  const apexDmarc = answer('ex.com', 'TXT', ['"v=spf1 -all"', '"v=DMARC1; p=reject"'])
+  assert.deepEqual(sg.sgDmarcFindings(sg.sgReadDmarc(noAnswer('_dmarc.ex.com', 'TXT'), apexDmarc, 2), 'ex.com').map(f => f.id), ['dmarc-inconclusive'],
+    'an unread _dmarc might hold the real record, so the apex one is not known to be read by nobody')
+  assert.ok(sg.sgDmarcFindings(sg.sgReadDmarc(answer('_dmarc.ex.com', 'TXT', []), apexDmarc, 2), 'ex.com').some(f => f.id === 'dmarc-at-apex'),
+    'an answered, empty _dmarc still makes the apex record the wrong-name one')
+
+  /* ── 2. NXDOMAIN at an MX target settles "no address" for both families. ── */
+  const oneMx = { resolver: 'f', type: 'MX', name: 'ex.com', rcode: 'NOERROR', elapsedMs: 0, records: [{ type: 15, name: 'ex.com', data: '10 mail.ex.com.', ttl: 60 }] }
+  const mxWith = async (a, aaaa) => sg.sgMxFindings(oneMx, await sg.sgResolveMxTargets(oneMx, async (n, t) =>
+    t === 'A' ? a(n, t) : t === 'AAAA' ? aaaa(n, t) : answer(n, t, [], 'NOERROR')))
+  const nx = (n, t) => answer(n, t, [])
+  const emptyNoerror = (n, t) => answer(n, t, [], 'NOERROR')
+  assert.deepEqual((await mxWith(nx, noAnswer)).map(f => f.id), ['mx-unresolvable'], 'A NXDOMAIN + AAAA unanswered: the name holds nothing')
+  assert.deepEqual((await mxWith(noAnswer, nx)).map(f => f.id), ['mx-unresolvable'], '…whichever of the two said NXDOMAIN')
+  assert.deepEqual((await mxWith(emptyNoerror, noAnswer)).map(f => f.id), ['mx-unchecked'],
+    'an EMPTY NOERROR says only "no A here" — the unanswered AAAA could still exist')
+
+  /* ── 3. spf-no-all is suppressed only when the missing record could change it. ── */
+  const spfZone = {
+    'inc.test': ['"v=spf1 include:stalled.test"'],
+    'redir-stalled.test': ['"v=spf1 redirect=stalled.test"'],
+    'redir-strict.test': ['"v=spf1 redirect=strict.test"'],
+    'strict.test': ['"v=spf1 ip4:192.0.2.1 -all"'],
+    'redir-open.test': ['"v=spf1 redirect=plain.test"'],
+    'plain.test': ['"v=spf1 ip4:192.0.2.1"'],
+    'redir-gone.test': ['"v=spf1 redirect=gone.test"'],
+    'loop-a.test': ['"v=spf1 redirect=loop-b.test"'],
+    'loop-b.test': ['"v=spf1 redirect=loop-a.test"'],
+    'first-all.test': ['"v=spf1 -all +all"'],
+    'redir-pass.test': ['"v=spf1 redirect=pass.test"'],
+    'pass.test': ['"v=spf1 ip4:192.0.2.1 +all"'],
+    'redir-two.test': ['"v=spf1 redirect=two.test"'],
+    'two.test': ['"v=spf1 -all"', '"v=spf1 ~all"'],
+  }
+  const spfLookup = async (name, type) => (name === 'stalled.test' ? noAnswer(name, type) : answer(name, type, spfZone[name] ?? []))
+  const spfOf = async domain => {
+    const report = await sg.sgAnalyzeSpf(domain, spfLookup)
+    return { report, ids: sg.sgSpfFindings(report, domain).map(f => f.id) }
+  }
+  const inc = await spfOf('inc.test')
+  assert.ok(inc.report.truncated && inc.ids.includes('spf-no-all'),
+    `an unanswered include cannot give an unlisted sender anything but neutral — spf-no-all still holds (got ${inc.ids.join(', ')})`)
+  assert.equal((await spfOf('redir-stalled.test')).ids.includes('spf-no-all'), false, 'an unread redirect target decides the result, so nobody knows')
+  const strict = await spfOf('redir-strict.test')
+  assert.equal(strict.report.fallthrough, '-')
+  assert.equal(strict.ids.includes('spf-no-all'), false, 'a redirect to a record with -all has an all — it used to be reported as having none')
+  const open = await spfOf('redir-open.test')
+  assert.ok(open.report.fallthrough === 'none' && open.ids.includes('spf-no-all'), 'a redirect chain that ends with no all is neutral')
+  assert.ok(open.report.terms.some(t => t.kind === 'redirect'), 'and the finding cites the redirect it followed')
+  assert.equal((await spfOf('redir-gone.test')).report.fallthrough, 'error', 'a redirect to no SPF record is a permerror, not a missing all')
+  assert.equal((await spfOf('loop-a.test')).report.fallthrough, 'error')
+  // …and each says so. #24 computed these two fallthroughs and no finding read
+  // them, so a redirect to +all or to nothing went unreported (PR #27 review).
+  const findingOf = async (domain, id) => sg.sgSpfFindings((await spfOf(domain)).report, domain).find(f => f.id === id)
+  const passed = await findingOf('redir-pass.test', 'spf-all-pass')
+  assert.ok(passed?.evidence.includes('v=spf1 ip4:192.0.2.1 +all'), 'a redirect to +all is spf-all-pass, citing the record that holds the +all')
+  for (const [domain, line] of [['redir-gone.test', 'redirect=gone.test has no SPF record'], ['redir-two.test', 'two.test publishes 2 SPF records']]) {
+    const broken = await findingOf(domain, 'spf-redirect-permerror')
+    assert.ok(broken?.evidence.some(e => e.startsWith(line)), `${domain}: a redirect that breaks is a permerror finding citing "${line}…"`)
+  }
+  const looped = (await spfOf('loop-a.test')).ids
+  assert.ok(looped.includes('spf-loop') && !looped.includes('spf-redirect-permerror'), 'a redirect loop is reported once, as the loop')
+  const firstAll = await spfOf('first-all.test')
+  assert.equal(firstAll.report.all, '-', 'mechanisms after the first all are never tested (RFC 7208 §5.1)')
+  assert.equal(firstAll.ids.includes('spf-all-pass'), false)
+
+  /* ── 4. The general form, over the real inspection. ─────────────────────────
+
+     For each inspected name, the questions come from the stubbed resolver's own
+     log, and each is answered four more ways besides the baseline: absent (an
+     empty NOERROR, and NXDOMAIN) and unanswered (SERVFAIL from every resolver,
+     and every resolver unreachable). Then per NAME, all its questions at once,
+     which is the only way three lookups can be absent together (a dangling
+     CNAME). A finding in exactly one of present/absent depends on that
+     question, so it must not be drawn when the question went unanswered. No id
+     is listed; the dependence is read off the module's own behaviour.
+
+     The same runs also hold the LABEL, not just the presence, of the
+     empty-evidence findings: 'absence' and 'unanswered' are the only bases
+     allowed to cite nothing, and this is what tells them apart. A finding that
+     cites nothing in a present/absent world (0 or 3 — both real answers) is a
+     confirmed absence; one that cites nothing only once a lookup got no answer
+     at all (2 or 'unreachable') is not — it used to be labelled the same way,
+     which is what put "Based on the absence of a record rather than on one"
+     under a finding whose own sentence said "this is a missing answer, not a
+     missing record". No id is listed here either: a finding with real evidence
+     (`mx-unchecked`, `cname-unchecked`, the found-a-parent-policy branch of
+     `caa-inconclusive`, `zone-servfail`) can appear in either kind of run and
+     stays `'record'`, which is exactly why the check is scoped to
+     `evidence.length === 0` rather than to "any finding new under this
+     perturbation". */
+  const world = {
+    'example.test': {
+      A: ['93.184.216.34'], MX: ['10 mail.example.test.'], NS: ['a.ns.test.', 'b.ns.test.'],
+      // The stray apex DMARC record is what dmarc-at-apex would report.
+      TXT: ['"v=spf1 include:_spf.provider.test -all"', '"v=DMARC1; p=reject"'],
+      CAA: ['0 issue "letsencrypt.org"'], SOA: ['a.ns.test. hostmaster.example.test. 1 7200 3600 1209600 300'],
+    },
+    '_dmarc.example.test': { TXT: ['"v=DMARC1; p=reject; rua=mailto:d@example.test"'] },
+    '_spf.provider.test': { TXT: ['"v=spf1 ip4:192.0.2.0/24 -all"'] },
+    'mail.example.test': { A: ['93.184.216.35'] },
+    // An alias onto a hosted service, for the dangling/hosted pair.
+    'www.example.test': { CNAME: ['proj.github.io.'] },
+    'proj.github.io': { A: ['185.199.108.153'] },
+  }
+  const idsOf = r => new Set(r.findings.map(f => f.id))
+  const dependsOn = new Set()
+  let compared = 0
+  const absentBasis = new Set()
+  const unansweredBasis = new Set()
+  for (const inspected of ['example.test', 'www.example.test']) {
+    const asked = new Set()
+    const baseline = await sgInspectOver(world, (r, n, t) => { asked.add(`${n} ${t}`) }, inspected)
+    const present = idsOf(baseline)
+    // New assertion 2, on the baseline itself: every lookup answered here, so
+    // nothing may cite basis 'unanswered'.
+    for (const f of baseline.findings) {
+      assert.notEqual(f.basis, 'unanswered', `${inspected}: "${f.id}" carries basis 'unanswered' although every lookup answered`)
+    }
+    const questions = [...asked].map(q => q.split(' '))
+    assert.ok(questions.length >= 12, `${inspected}: the inspection asked the questions it walks (${questions.length})`)
+    const names = [...new Set(questions.map(([n]) => n))]
+    const perturbations = [
+      ...questions.map(([n, t]) => ({ label: `${t} ${n}`, hits: (qn, qt) => qn === n && qt === t })),
+      ...names.map(n => ({ label: `every question about ${n}`, hits: qn => qn === n })),
+    ]
+    for (const p of perturbations) {
+      const run = async with_ => sgInspectOver(world, (r, n, t) => (p.hits(n, t) ? with_ : undefined), inspected)
+      const absents = await Promise.all([run(0), run(3)])
+      for (const a of absents) {
+        for (const f of a.findings) {
+          if (f.basis === 'absence') absentBasis.add(f.id)
+          // New assertion 2, over the absent worlds too: an empty NOERROR and
+          // an NXDOMAIN are both real answers, so neither world may produce an
+          // 'unanswered'-basis finding either.
+          assert.notEqual(f.basis, 'unanswered', `${inspected}, ${p.label} absent: "${f.id}" carries basis 'unanswered' although the lookup answered, with an absence`)
+        }
+      }
+      for (const unanswered of [2, 'unreachable']) {
+        const result = await run(unanswered)
+        const u = idsOf(result)
+        // New assertion 1: a finding that cites nothing here, and that was NOT
+        // already true in the fully-answered baseline, was introduced by THIS
+        // perturbation's failure — not a confirmed absence (the present/absent
+        // runs above own that label) — so it must say 'unanswered'. The
+        // `!present.has` guard matters: an unrelated, genuinely-absent record
+        // elsewhere in the zone (e.g. `spf-missing` at a name with no SPF at
+        // all) still shows up in every run regardless of this perturbation, and
+        // is correctly `'absence'` throughout. Scoped to `evidence.length ===
+        // 0`: a record-based finding (evidence rule above) can legitimately
+        // appear only under this perturbation too (`mx-unchecked`,
+        // `zone-servfail`, …) without being about "no answer".
+        for (const f of result.findings) {
+          if (f.evidence.length === 0 && !present.has(f.id)) {
+            assert.equal(f.basis, 'unanswered',
+              `${inspected}, ${p.label} unanswered (${unanswered}): "${f.id}" cites nothing while a lookup got no answer, so its basis must be 'unanswered' (got '${f.basis}')`)
+            unansweredBasis.add(f.id)
+          }
+        }
+        for (const absent of absents.map(idsOf)) {
+          const rests = [...present].filter(id => !absent.has(id)).concat([...absent].filter(id => !present.has(id)))
+          for (const id of rests) {
+            dependsOn.add(id)
+            assert.equal(u.has(id), false,
+              `${inspected}, ${p.label} unanswered (${unanswered}): "${id}" appears only when that record is ${present.has(id) ? 'present' : 'absent'}, so it rests on an answer that never came`)
+          }
+          compared += 1
+        }
+      }
+    }
+  }
+  assert.ok(compared >= 100, `the property was checked across the perturbations (${compared})`)
+  // Not vacuous: every absence-based finding the absent worlds produced was
+  // itself shown to depend on some question — so each was held to the rule.
+  // (Those worlds are fully answered, so no "could not be read" notice is here.)
+  assert.ok(absentBasis.size >= 5, `the absent worlds produced absence findings to check (${[...absentBasis].join(', ')})`)
+  for (const id of absentBasis) {
+    assert.ok(dependsOn.has(id), `the absence finding "${id}" never showed up as depending on a question, so the property never tested it`)
+  }
+  for (const id of ['dmarc-at-apex', 'mx-unresolvable', 'cname-hosted', 'cname-dangling']) {
+    assert.ok(dependsOn.has(id), `the fixture world reaches ${id} (the findings this block was written for)`)
+  }
+  // The mirror-image coverage check for 'unanswered': not vacuous, and it
+  // reaches every finding this fix was written for.
+  assert.ok(unansweredBasis.size >= 5, `the unanswered worlds produced unanswered findings to check (${[...unansweredBasis].join(', ')})`)
+  for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive', 'resolvers-unreachable']) {
+    assert.ok(unansweredBasis.has(id), `the fixture world reaches ${id} under a lookup that got no answer`)
+  }
+
+  /* ── 5. The footer itself, not just the data it switches on. ────────────────
+     A basis assigned correctly is not the same claim as a footer worded
+     correctly — the render function has its own branch, and this is the one
+     check that renders it. */
+  const footerFor = basis => {
+    const html = panels.sgRenderFindings({ findings: [{ id: 'x', level: 'info', title: 't', detail: 'd', evidence: [], basis }] })
+    return /<p data-type="sg-evidence-none">([^<]*)<\/p>/.exec(html)?.[1]
+  }
+  assert.equal(footerFor('absence'), 'Based on the absence of a record rather than on one.')
+  assert.equal(footerFor('unanswered'), 'Based on a lookup that got no answer.')
+  assert.notEqual(footerFor('absence'), footerFor('unanswered'), 'the two footers must read differently, or the basis is decorative')
+}
+console.log('dns sightline follow-ups: no finding rests on a lookup that got no answer (derived over every question the inspection asks, and over the basis those runs draw), NXDOMAIN settles an MX target, and spf-no-all survives an unanswered include')
+
+/* ══════════════  UI refresh · item A: the foundation the other items build on  ══════════════
+
+   Tokens, the head bootstrap, the site index and the error-page nonce. Each
+   block below was checked by breaking the thing it guards and watching it
+   fail; the mutation is named in the block's own comment. */
+
+/* ── A rerouted error page carries the nonce its CSP names ──────────────────
+   A route that answers a BODYLESS 404/500 is re-rendered through its error page
+   (404.astro or 500.astro; a route that throws gets 500.astro too) with the
+   middleware run a second time, and Astro's mergeResponses keeps the FIRST
+   pass's headers — so a CSP set on that pass names nonce A over a body rendered
+   under nonce B, and the head bootstrap is refused on every such page
+   (/zz and /tools/zz both take that path). The middleware leaves CSP to the
+   re-render. The status list is held to Astro's own, so an upgrade that reroutes
+   another status fails here rather than on production 404s.
+   (mutation: set the CSP unconditionally again → fails) */
+{
+  const mwSrc = await readFile(new URL('../src/middleware.ts', import.meta.url), 'utf-8')
+  const code = mwSrc.split('\n').filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n')
+  const cspSets = [...code.matchAll(/response\.headers\.set\('Content-Security-Policy'/g)]
+  assert.equal(cspSets.length, 1, 'the middleware sets the CSP header in exactly one place')
+  const before = code.slice(0, cspSets[0].index)
+  assert.ok(/if \(!isReroutedByAstro\(response, pathname\)\) \{\s*$/.test(before),
+    'the CSP header is set only when Astro will NOT re-render the response — a bodyless 404/500 gets its CSP from the second pass')
+  assert.ok(/function isReroutedByAstro\(response: Response, pathname: string\): boolean \{\s*return response\.body === null && REROUTED_ERROR_STATUSES\.includes\(response\.status\) && !pathname\.startsWith\('\/api\/'\)/.test(code),
+    'the guard is exactly Astro\'s own reroute condition: a null body, a reroutable status, and not an endpoint (Astro never reroutes those, so they keep this pass\'s CSP)')
+  const listed = JSON.parse(code.match(/const REROUTED_ERROR_STATUSES = (\[[\d, ]+\])/)?.[1] ?? 'null')
+  const { REROUTABLE_STATUS_CODES } = await import('../node_modules/astro/dist/core/constants.js')
+  assert.deepEqual(listed, [...REROUTABLE_STATUS_CODES],
+    'the middleware skips CSP for exactly the statuses Astro reroutes — an upgrade that adds one must add it here too')
+
+  // …and the deployed half: origin-check asks production for the same pair on
+  // the three 404 shapes, since the edge caches a 404 for everyone.
+  const originCheck = await readFile(new URL('./origin-check.sh', import.meta.url), 'utf-8')
+  assert.ok(/for path in \/zz \/tools\/zz \/a\/b\/c; do/.test(originCheck) && originCheck.includes('[[ $hdr == "$body" ]]'),
+    'origin-check compares the header nonce with the body nonce on /zz, /tools/zz and /a/b/c')
+
+  // A page that throws is a 500 the edge never keeps. Astro renders /500 for
+  // it; with no 500.astro that path fell through to [slug].astro, whose
+  // bodyless 404 was cached for five minutes as a blank page (PR #27 review).
+  // (mutation: drop the >= 500 branch, or delete 500.astro → fails)
+  const errorPage = await readFile(new URL('../src/pages/500.astro', import.meta.url), 'utf-8').catch(() => '')
+  assert.match(errorPage, /export const prerender = false/, 'src/pages/500.astro renders on demand, or /500 falls through to [slug].astro')
+  assert.match(errorPage, /<Base\b[^>]*\bnoindex\b/, 'the 500 page is noindex')
+  assert.doesNotMatch(errorPage, /Astro\.props/, 'the 500 page never renders the error it is handed: an exception\'s message never reaches a response')
+  assert.match(code, /else if \(response\.status >= 500\) \{\s*response\.headers\.set\('Cache-Control', 'no-store'\)/, 'any 5xx is sent no-store')
+}
+console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard at source, statuses held to astro\'s own list, and the deployed probe in origin-check)')
+
+/* ── The spacing rungs increase in their documented order ──────────────────
+   --space-xs (0.45rem) once sat ABOVE --space-sm (0.4rem), so "a little more
+   room" meant going down a size. Every --space-* token is either a rung of the
+   documented order, declared smallest first, or a named layout measurement.
+   (mutation: swap the xs/sm values back → fails) */
+{
+  const themeCode = (await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+  const rootBlock = themeCode.match(/(?:^|\})\s*:root\s*\{([^}]*)\}/)[1]
+  const declared = [...rootBlock.matchAll(/--space-([a-z0-9-]+)\s*:\s*([\d.]+)rem\s*;/g)].map(m => [m[1], Number(m[2])])
+  const RUNGS = ['2xs', 'xs', 'sm', 'md', 'lg', 'xl', 'card', 'section']
+  const MEASUREMENTS = ['page-x', 'header-offset']
+  assert.deepEqual(declared.map(([n]) => n).filter(n => !MEASUREMENTS.includes(n)), RUNGS,
+    'every --space-* token is a rung of the documented order (declared smallest first, in rem) or a named measurement')
+  const rung = Object.fromEntries(declared)
+  for (let i = 1; i < RUNGS.length; i += 1) {
+    assert.ok(rung[RUNGS[i]] > rung[RUNGS[i - 1]],
+      `--space-${RUNGS[i]} (${rung[RUNGS[i]]}rem) must be larger than --space-${RUNGS[i - 1]} (${rung[RUNGS[i - 1]]}rem)`)
+  }
+}
+
+/* ── The head bootstrap agrees with resolveTheme, whatever storage does ────
+   ROOT_BOOT_JS runs before first paint, so it cannot import resolveTheme; it
+   restates it. Run for real in a sandbox over the whole truth table — stored
+   preference (absent, each value, junk, a storage getter that THROWS as a
+   private window's does) × OS scheme (dark, light, matchMedia throwing) × the
+   site default — and held to the function. No stored preference means the
+   site default, never the OS, and that is pinned separately so the two cannot
+   be changed together into agreeing on the wrong rule.
+   (mutation: make the bootstrap default to the OS scheme → fails) */
+{
+  const vm = await import('node:vm')
+  const { ROOT_BOOT_JS, THEME_COLOR, resolveTheme, patchIncomingDocument } = await import('../src/lib/theme.ts')
+  const { sanitizeKit, KIT_MAX } = await import('../src/lib/kit.ts')
+  assert.equal(resolveTheme(null, 'dark', false), 'dark', 'no stored preference is the site default, not a light OS')
+  assert.equal(resolveTheme(null, 'light', true), 'light', '…and not a dark OS either')
+  assert.equal(resolveTheme('system', 'dark', false), 'light', 'system follows the OS')
+
+  const THROWS = Symbol('throws')
+  const show = v => (v === THROWS ? 'throws' : String(v))
+  const fakeEl = (attrs = {}) => {
+    const a = new Map(Object.entries(attrs))
+    return { getAttribute: n => (a.has(n) ? a.get(n) : null), setAttribute: (n, v) => { a.set(n, String(v)) }, removeAttribute: n => { a.delete(n) } }
+  }
+  const fakeDoc = (ssr, attrs = {}) => {
+    const metas = { 'meta[name="theme-color"]': fakeEl({ content: THEME_COLOR[ssr] }), 'meta[name="color-scheme"]': fakeEl({ content: ssr }) }
+    return { documentElement: fakeEl({ 'data-theme': ssr, 'data-theme-default': ssr, ...attrs }), querySelector: sel => metas[sel] ?? null, metas }
+  }
+  const boot = ({ ssr = 'dark', store = {}, os = false }) => {
+    const document = fakeDoc(ssr)
+    const context = { document }
+    if (store === THROWS) Object.defineProperty(context, 'localStorage', { get() { throw new Error('SecurityError: storage disabled') } })
+    else context.localStorage = { getItem: k => (Object.hasOwn(store, k) ? store[k] : null) }
+    context.matchMedia = os === THROWS ? () => { throw new Error('no matchMedia') } : () => ({ matches: os })
+    vm.runInNewContext(ROOT_BOOT_JS, context)
+    return document
+  }
+
+  let rows = 0
+  for (const ssr of ['dark', 'light']) {
+    for (const stored of [undefined, 'light', 'dark', 'system', 'Dark', 'garbage', THROWS]) {
+      for (const os of [true, false, THROWS]) {
+        const doc = boot({ ssr, os, store: stored === THROWS ? THROWS : stored === undefined ? {} : { 'theme:v1': stored } })
+        const pref = ['light', 'dark', 'system'].includes(stored) ? stored : null
+        const want = resolveTheme(pref, ssr, os === true)
+        const at = `(site ${ssr}, stored ${show(stored)}, OS dark ${show(os)})`
+        const el = doc.documentElement
+        assert.equal(el.getAttribute('data-theme'), want, `the bootstrap and resolveTheme disagree ${at}`)
+        assert.equal(el.getAttribute('data-theme-pref'), pref, `data-theme-pref mirrors only a valid stored preference ${at}`)
+        assert.equal(el.getAttribute('data-js'), '', `the bootstrap marks data-js ${at}`)
+        assert.equal(doc.metas['meta[name="theme-color"]'].getAttribute('content'), THEME_COLOR[want], `theme-color follows the theme ${at}`)
+        assert.equal(doc.metas['meta[name="color-scheme"]'].getAttribute('content'), want, `the color-scheme meta follows the theme ${at}`)
+        rows += 1
+      }
+    }
+  }
+  assert.equal(rows, 42, 'the whole truth table ran')
+
+  // data-kit is the count sanitizeKit would keep, so the shelf can reserve its
+  // height before the kit script runs — and nothing when storage says nothing.
+  const thirty = Array.from({ length: 30 }, (_, i) => `tool-${i}`)
+  for (const [raw, slugs] of [
+    [undefined, null],
+    [JSON.stringify({ v: 1, slugs: ['json-tidy', 'regex-lab', 'json-tidy', 'BAD', 'constructor', 7, 'a'.repeat(49)] }), 'from-raw'],
+    [JSON.stringify({ v: 1, slugs: thirty }), 'from-raw'],
+    [JSON.stringify({ v: 2, slugs: ['json-tidy'] }), null],
+    [JSON.stringify({ v: 1, slugs: 'json-tidy' }), null],
+    ['not json', null],
+    [THROWS, null],
+  ]) {
+    const doc = boot({ store: raw === THROWS ? THROWS : raw === undefined ? {} : { 'kit:v1': raw } })
+    const count = slugs === 'from-raw' ? sanitizeKit(JSON.parse(raw).slugs).length : 0
+    assert.equal(doc.documentElement.getAttribute('data-kit'), count ? String(count) : null,
+      `data-kit agrees with sanitizeKit for ${show(raw).slice(0, 60)}`)
+  }
+  assert.equal(sanitizeKit(thirty).length, KIT_MAX, 'the 30-slug fixture really exercised the cap')
+
+  // It is inert markup-wise and rendered exactly one way: through set:html, with
+  // the page nonce, ahead of every stylesheet in Head.astro.
+  assert.equal(/<\/script|<!--/i.test(ROOT_BOOT_JS), false, 'the bootstrap cannot close its own <script> element')
+  const headSrc = await readFile(new URL('../src/components/Head.astro', import.meta.url), 'utf-8')
+  const bootTag = headSrc.indexOf('<script is:inline nonce={cspNonce} set:html={ROOT_BOOT_JS} />')
+  assert.ok(bootTag !== -1, 'Head.astro renders ROOT_BOOT_JS inline, with the nonce, through set:html')
+  assert.ok(bootTag < headSrc.indexOf('rel="stylesheet"') && bootTag > headSrc.indexOf('<meta name="theme-color"'),
+    'the bootstrap sits after the metas it updates and before every stylesheet, which an inline script would otherwise wait for')
+
+  // ── The only inline executable script. ClientRouter re-inserts a changed
+  //    inline script under the new page's nonce, which the live CSP refuses,
+  //    so every <script> in the templates is bundled, external, JSON-LD data,
+  //    or THE bootstrap. (mutation: add an is:inline script to a page → fails)
+  const templates = []
+  const walkAstro = async dir => {
+    for (const e of await readdir(new URL(`${dir}/`, import.meta.url), { withFileTypes: true })) {
+      if (e.isDirectory()) await walkAstro(`${dir}/${e.name}`)
+      else if (e.name.endsWith('.astro')) templates.push(`${dir}/${e.name}`)
+    }
+  }
+  await walkAstro('../src')
+  const inline = []
+  for (const file of templates) {
+    for (const [tag] of (await readFile(new URL(file, import.meta.url), 'utf-8')).matchAll(/<script\b[^>]*>/g)) {
+      if (tag === '<script>' || /\bsrc=["{]/.test(tag) || /type="application\/ld\+json"/.test(tag)) continue
+      inline.push(`${file.replace('../', '')}: ${tag}`)
+    }
+  }
+  assert.deepEqual(inline, ['src/components/Head.astro: <script is:inline nonce={cspNonce} set:html={ROOT_BOOT_JS} />'],
+    'the head bootstrap is the one inline executable script on the site')
+  // A bare <script> counts as bundled above only because the build never
+  // inlines one: Vite inlines a small script chunk by default, with no nonce,
+  // and the CSP refuses it (the coming-soon game page's button never wired up).
+  // (mutation: drop assetsInlineLimit from astro.config.mjs → fails)
+  {
+    const { default: astroConfig } = await import('../astro.config.mjs')
+    const limit = astroConfig.vite?.build?.assetsInlineLimit
+    assert.equal(typeof limit, 'function', 'astro.config.mjs decides asset inlining per file')
+    assert.equal(limit('/_astro/page.astro_astro_type_script_index_0_lang.js'), false, 'no bundled script is ever inlined into a page')
+    assert.equal(limit('/repo/src/components/tools/flowmap/flowmap.css'), false, 'a tool sheet linked by ?url is never a data: URL the CSP would refuse')
+    assert.equal(limit('/x/icon.svg'), undefined, 'other assets keep Vite\'s default rule')
+  }
+
+  // ── A ClientRouter swap keeps the client state: patchIncomingDocument copies
+  //    it onto the incoming document, presence AND absence.
+  //    (mutation: drop data-kit from ROOT_STATE_ATTRS → fails)
+  const saved = globalThis.document
+  try {
+    const live = fakeDoc('light', { 'data-theme-pref': 'light', 'data-js': '', 'data-kit': '3' })
+    globalThis.document = live
+    const incoming = fakeDoc('dark')
+    patchIncomingDocument(incoming)
+    for (const name of ['data-theme', 'data-theme-pref', 'data-js', 'data-kit']) {
+      assert.equal(incoming.documentElement.getAttribute(name), live.documentElement.getAttribute(name), `a swap carries ${name}`)
+    }
+    for (const meta of ['meta[name="theme-color"]', 'meta[name="color-scheme"]']) {
+      assert.equal(incoming.metas[meta].getAttribute('content'), live.metas[meta].getAttribute('content'), `a swap carries ${meta}`)
+    }
+    globalThis.document = fakeDoc('dark', { 'data-js': '' })
+    const stale = fakeDoc('dark', { 'data-theme-pref': 'system', 'data-kit': '2' })
+    patchIncomingDocument(stale)
+    assert.equal(stale.documentElement.getAttribute('data-theme-pref'), null, 'an absent preference stays absent across a swap')
+    assert.equal(stale.documentElement.getAttribute('data-kit'), null, 'an emptied kit stays empty across a swap')
+  } finally {
+    if (saved === undefined) delete globalThis.document
+    else globalThis.document = saved
+  }
+}
+
+/* ── Both shells wire the swap patch, and the chrome never pulls in the router ── */
+{
+  const siteUi = await readFile(new URL('../src/lib/site-ui.ts', import.meta.url), 'utf-8')
+  assert.ok(/document\.addEventListener\('astro:before-swap', onBeforeSwap\)/.test(siteUi)
+    && /function onBeforeSwap\([^)]*\)[^{]*\{[\s\S]*?patchIncomingDocument\(incoming\)/.test(siteUi),
+    'initSiteUI patches the incoming document on astro:before-swap — without it every Base navigation resets the theme')
+  for (const layout of ['Base.astro', 'ToolBase.astro']) {
+    const src = await readFile(new URL(`../src/layouts/${layout}`, import.meta.url), 'utf-8')
+    const script = src.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? ''
+    assert.ok(script.includes("import { initSiteUI } from '../lib/site-ui.ts'") && /\binitSiteUI\(\)/.test(script),
+      `${layout} calls initSiteUI() from its module script`)
+    assert.ok(/<html[^>]*data-theme=\{site\.theme\}[^>]*data-theme-default=\{site\.theme\}/.test(src),
+      `${layout} renders the site default twice: data-theme for first paint, data-theme-default for the bootstrap to fall back to`)
+  }
+  // The four feature modules load on ToolBase pages too, and importing the
+  // router client from any of them would put ClientRouter on those pages.
+  for (const mod of ['site-ui', 'theme-ui', 'find-ui', 'kit-ui', 'motion', 'theme', 'kit']) {
+    const src = await readFile(new URL(`../src/lib/${mod}.ts`, import.meta.url), 'utf-8')
+    assert.equal(/from ['"]astro:transitions\/client['"]/.test(src), false, `src/lib/${mod}.ts must not import astro:transitions/client`)
+  }
+  // The nav's JS-only buttons stay hidden until the bootstrap marks data-js.
+  const sharedSrc = (await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+  assert.ok(/html:not\(\[data-js\]\) button:is\(\[data-action="palette"\], \[data-action="theme"\], \[data-action="shortcuts"\]\)\s*\{\s*visibility:\s*hidden;/.test(sharedSrc),
+    'shared.css keeps the palette, theme and shortcut buttons invisible until data-js is set')
+}
+
+/* ── The sitemap is the site index, and matches the route it replaced ──────
+   The route used to compute its own page list; it now serialises
+   indexablePaths. `legacySitemap` below is the old route's logic, kept as the
+   oracle: it reads each kind's predicate directly and shares no code with
+   src/lib/site-index.ts, so the new route must equal it BYTE FOR BYTE across
+   blogs on and off, Driftfield live and wip, and fixtures carrying a wip tool
+   and a draft article. The palette's index and /llms.txt are held to the same
+   pages.
+   (mutations: let site-index list wip tools → fails; drop the modes from
+   buildSiteIndex → fails; drop a kind from llms.txt → fails; stop escaping its
+   link text → fails) */
+{
+  const { GET } = await import('../src/pages/sitemap.xml.ts')
+  const { GET: llmsGET } = await import('../src/pages/llms.txt.ts')
+  const { buildSiteIndex, indexablePaths, loadSiteConfigs, projectAnchors } = await import('../src/lib/site-index.ts')
+  const { DRIFTFIELD_SLUG, isDriftfieldPublic } = await import('../src/lib/driftfield.ts')
+  const { escapeHtml } = await import('../src/lib/escape.ts')
+  const { posts } = await import('../src/config/blogs.ts')
+  const legacySitemap = ({ site: s, posts: ps, games: gs, tools: ts, learnings: ls }) => {
+    const blogsPublic = isBlogsPublic(s)
+    const published = ls.filter(isPublishedLearning)
+    const base = s.url.replace(/\/$/, '')
+    const normalize = href => (href.startsWith('http') ? href : href.startsWith('/') ? `${base}${href}` : `${base}/${href}`)
+    const latestPost = ps.reduce((max, p) => (p.date > max ? p.date : max), '')
+    const latestLearning = published.reduce((max, l) => (l.date > max ? l.date : max), '')
+    const pages = [
+      { loc: '/' }, ...(isProjectsPublic(s) ? [{ loc: '/projects' }] : []),
+      ...(blogsPublic ? [{ loc: '/blogs', lastmod: latestPost || undefined }] : []),
+      { loc: '/learnings', lastmod: latestLearning || undefined }, { loc: '/games' }, { loc: '/tools' },
+      ...(blogsPublic ? ps : []).filter(p => !/^https?:\/\//i.test(p.href))
+        .map(p => ({ loc: `/blogs/${p.href.replace(/^\/?(blogs\/)?/, '')}`, lastmod: p.date })),
+      ...published.map(l => ({ loc: `/learnings/${l.slug}`, lastmod: l.date })),
+      ...gs.filter(isPlayableGame).map(g => ({ loc: `/games/${g.slug}` })),
+      ...ts.filter(t => t.status === 'live').map(t => ({ loc: `/tools/${t.slug}` })),
+      ...(isDriftfieldPublic(ts) ? DRIFTFIELD_MODES.map(m => ({ loc: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` })) : []),
+    ]
+    const rows = pages.map(u => `  <url><loc>${escapeHtml(normalize(u.loc))}</loc>${u.lastmod ? `<lastmod>${escapeHtml(u.lastmod)}</lastmod>` : ''}</url>`)
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.join('\n')}\n</urlset>`
+  }
+  const tool = (slug, status) => ({ slug, title: slug, description: 'd', status })
+  const learning = (slug, published, content = 'a body') => ({ slug, title: slug, summary: 's', date: '2027-01-01', content, published })
+  let fixtures = 0
+  for (const blogs of [true, false]) {
+    for (const df of ['live', 'wip']) {
+      const fx = {
+        site: { ...site, sections: { ...site.sections, blogs, projects: blogs } },
+        tools: [...tools.map(t => (t.slug === DRIFTFIELD_SLUG ? { ...t, status: df } : t)), tool('zz-wip', 'wip'), tool('zz-canary', 'live')],
+        learnings: [...learnings, learning('zz-draft', false), learning('zz-empty', true, '  '), learning('zz-canary-article', true)],
+        blogs: [...posts, { title: 'x', href: '/blogs/tabs-&-spaces', date: '2026-01-02', summary: 's' }, { title: 'y', href: 'https://example.com/p', date: '2027-02-02', summary: 's' }],
+      }
+      const locals = { runtime: { env: { SITE_CONFIG: { get: async key => fx[key] ?? null } } } }
+      const at = `(blogs and projects ${blogs}, driftfield ${df})`
+      const configs = await loadSiteConfigs(locals)
+      const xml = await (await GET({ locals })).text()
+      assert.ok(xml.includes('/tools/zz-canary<') && xml.includes('/learnings/zz-canary-article<'), `the fixture config was read ${at}`)
+      assert.equal(xml, legacySitemap(configs), `the sitemap is byte-identical to the route it replaced ${at}`)
+      assert.ok(!xml.includes('zz-wip') && !xml.includes('zz-draft') && !xml.includes('zz-empty'), `no wip tool or unpublished article is sitemapped ${at}`)
+      const base = configs.site.url.replace(/\/$/, '')
+      const locs = [...xml.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1])
+      assert.deepEqual(locs, indexablePaths(configs).map(p => escapeHtml(`${base}${p.path}`)), `the sitemap lists exactly indexablePaths ${at}`)
+      const entryPaths = [...new Set(buildSiteIndex(configs).map(e => e.u.split('#')[0]))].sort()
+      assert.deepEqual(entryPaths, [...new Set(indexablePaths(configs).map(p => p.path))].sort(),
+        `every index entry points at an indexable page and every indexable page has an entry ${at}`)
+      const md = await (await llmsGET({ locals })).text()
+      const mdLinks = [...md.matchAll(/^- \[(?:\\.|[^\\\]])*\]\(([^)\s]+)\)/gm)].map(m => m[1]).filter(u => u.startsWith(`${base}/`))
+      assert.deepEqual(mdLinks.sort(), buildSiteIndex(configs).map(e => `${base}${e.u}`).sort(), `llms.txt lists exactly the site index ${at}`)
+      fixtures += 1
+    }
+  }
+  assert.equal(fixtures, 4)
+  {
+    const nasty = { slug: 'zz-nasty', title: 'Evil](https://evil.example)\n# Injected [x]', description: 'one\n\n## two', status: 'live' }
+    const fx = { tools: [...tools, nasty] }
+    const md = await (await llmsGET({ locals: { runtime: { env: { SITE_CONFIG: { get: async key => fx[key] ?? null } } } } })).text()
+    assert.ok(md.includes('\n- [Evil\\](https://evil.example) # Injected \\[x\\]](https://apanjwani0.com/tools/zz-nasty): one\n'),
+      'a hostile title stays inside its own link text in llms.txt')
+    assert.equal(/^#+ (Injected|two)/m.test(md), false, 'no config value starts a heading in llms.txt')
+  }
+  // A project entry is `/projects#<id>`, so /projects must render that id on
+  // the card, from the same function — or every project link lands at the top.
+  {
+    const page = await readFile(new URL('../src/pages/projects.astro', import.meta.url), 'utf-8')
+    const card = await readFile(new URL('../src/components/ProjectCard.astro', import.meta.url), 'utf-8')
+    assert.ok(/const anchors = projectAnchors\(projects\)/.test(page) && /id=\{anchors\[i\]\}/.test(page),
+      '/projects passes each card its projectAnchors() id')
+    assert.ok(/<article data-type="project" id=\{id\}>/.test(card), 'ProjectCard renders the id it is given on the card')
+  }
+  // Project cards are listed only while /projects is public (sections.projects).
+  const defaults = await loadSiteConfigs({})
+  const withProjects = on => buildSiteIndex({ ...defaults, site: { ...defaults.site, sections: { ...defaults.site.sections, projects: on } } })
+  const projectEntries = withProjects(true).filter(e => e.k === 'project')
+  assert.ok(projectEntries.length > 0 && projectEntries.every(e => /^\/projects#[a-z0-9-]+$/.test(e.u) && e.u === `/projects#${e.s}`),
+    'a project entry points at its own card on /projects')
+  assert.equal(withProjects(false).filter(e => e.k === 'project').length, 0, 'a hidden /projects puts no project card in the palette')
+  assert.deepEqual(projectAnchors([{ title: 'Sort' }, { title: 'sort' }, { title: '!!!' }]), ['sort', 'sort-2', 'project'],
+    'project anchors are unique and never empty')
+}
+console.log('ui refresh: spacing rungs increase in order, the head bootstrap matches resolveTheme across the truth table and is the one inline script, a swap keeps the client state, and the sitemap equals both the route it replaced and the palette index, and llms.txt lists the same pages')
+
+/* ── The kit parse is bounded, and its export writes nothing hostile ───────
+   A ?t= value is whatever a link says, and a stored kit is whatever a page
+   once wrote, so both go through the one bounded parser: live slugs only,
+   unique, in order, at most KIT_MAX, and nothing read past KIT_RAW_MAX.
+   A bookmarks file is imported straight into a browser, so every value is
+   escaped and only https URLs are written.
+   (mutations: remove the KIT_MAX cap → fails; drop quote escaping from the
+   bookmark titles → fails) */
+{
+  const { KIT_MAX, KIT_PARAM, KIT_RAW_MAX, bookmarksFile, kitHref, parseKitParam, sanitizeKit } = await import('../src/lib/kit.ts')
+  const live = tools.filter(t => t.status === 'live').map(t => t.slug)
+  assert.equal(KIT_PARAM, 't')
+  const forty = Array.from({ length: 40 }, (_, i) => `tool-${i}`)
+  assert.equal(parseKitParam(forty.join(','), forty).length, KIT_MAX, 'a link can carry at most KIT_MAX tools')
+  assert.deepEqual(parseKitParam(forty.join(','), forty), forty.slice(0, KIT_MAX), '…the first ones, in the order given')
+  assert.deepEqual(parseKitParam('regex-lab,JSON-TIDY, nope ,json-tidy,,audio-transcriber', live), ['regex-lab', 'json-tidy'],
+    'live slugs only, lowercased, unique, in order — a disabled tool and junk are dropped')
+  assert.deepEqual(parseKitParam(`${'x'.repeat(KIT_RAW_MAX)},json-tidy`, live), [], 'nothing past KIT_RAW_MAX is read at all')
+  assert.deepEqual(parseKitParam(null, live), [])
+  assert.deepEqual(sanitizeKit('json-tidy'), [], 'a stored kit that is not an array is empty')
+  assert.deepEqual(sanitizeKit(['a b', 'A', '', 'x'.repeat(49), 7, 'ok', 'ok']), ['ok'], 'the slug grammar holds in storage too')
+  assert.equal(kitHref(['json-tidy', 'regex-lab', 'json-tidy']), '/tools/kit?t=json-tidy,regex-lab', 'the canonical permalink')
+  assert.equal(kitHref([]), '/tools/kit')
+  assert.deepEqual(parseKitParam(kitHref(['regex-lab', 'json-tidy']).split('=')[1], live), ['regex-lab', 'json-tidy'], 'the permalink round-trips')
+
+  const now = Date.UTC(2026, 8, 25)
+  const nasty = `& <b>"q"</b> 'x'`
+  const items = ['json-tidy', 'regex-lab'].map(slug => ({ title: `${slug} ${nasty}`, url: new URL(`/tools/${slug}`, site.url).href }))
+  const hostile = [
+    { title: 'js', url: 'javascript:alert(1)' },
+    { title: 'data', url: 'data:text/html,<script>alert(1)</script>' },
+    { title: 'plain http', url: 'http://apanjwani0.com/tools/json-tidy' },
+    { title: 'credentials', url: 'https://user:pw@apanjwani0.com/tools/json-tidy' },
+    { title: 'whitespace', url: 'https://apanjwani0.com/tools/json tidy' },
+  ]
+  const file = bookmarksFile([...items, ...hostile], { folder: `apanjwani0 tools ${nasty}`, now })
+  assert.ok(file.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>'), 'the Netscape format every browser imports')
+  const hrefs = [...file.matchAll(/HREF="([^"]*)"/g)].map(m => m[1])
+  assert.deepEqual(hrefs, items.map(i => i.url), 'only the https /tools/<live slug> URLs are written')
+  for (const href of hrefs) assert.match(href, /^https:\/\/apanjwani0\.com\/tools\/[a-z0-9-]+$/)
+  const escaped = '&amp; &lt;b&gt;&quot;q&quot;&lt;/b&gt; &#39;x&#39;'
+  assert.equal(file.split(escaped).length - 1, 3, 'the folder name and every title are escaped — & < > " \' all five')
+  assert.equal(/<b>|"q"|'x'/.test(file), false, 'no raw markup or quote from an item reaches the file')
+  assert.ok(file.includes(`ADD_DATE="${Math.floor(now / 1000)}"`), 'dates are in seconds, as importers expect')
+}
+
+/* ── Fuzzy matching: the 404 suggests the page a typo meant, and nothing to scanners ──
+   (mutation: drop the scanner guard → fails — /tools/json-tidy.php is one
+   letter-run from a real page, so without the guard it would be answered with
+   one; /wp-login.php alone could not tell, because nothing resembles it) */
+{
+  const { buildSiteIndex, loadSiteConfigs } = await import('../src/lib/site-index.ts')
+  const { fuzzyScore, isScannerPath, suggestPaths } = await import('../src/lib/fuzzy.ts')
+  const entries = buildSiteIndex(await loadSiteConfigs({}))
+  assert.equal(suggestPaths('/tools/jsontidy', entries)[0]?.u, '/tools/json-tidy', 'a missing hyphen still finds JSON Tidy')
+  assert.equal(suggestPaths('/tool/regex-lab', entries)[0]?.u, '/tools/regex-lab', 'a singular section still finds Regex Lab')
+  assert.equal(suggestPaths('/json-tidy', entries)[0]?.u, '/tools/json-tidy', 'a missing section prefix still finds it')
+  assert.ok(suggestPaths('/tools/jsontidy', entries).length <= 3, 'three suggestions at most')
+  assert.deepEqual(suggestPaths('/zzzzzz', entries), [], 'nothing in common gets nothing, not a guess')
+  for (const path of ['/wp-login.php', '/tools/json-tidy.php', '/tools/json-tidy/.env', '/.git/config', `/tools/${'json-tidy/'.repeat(25)}`]) {
+    assert.ok(isScannerPath(path), `${path.slice(0, 40)} is scanner-shaped`)
+    assert.deepEqual(suggestPaths(path, entries), [], `${path.slice(0, 40)} gets no suggestions — a scanner is not owed a crawl list`)
+  }
+  assert.deepEqual(fuzzyScore('jt', 'JSON Tidy')?.hits, [0, 5], 'the match is recoverable for highlighting')
+  assert.ok(fuzzyScore('jt', 'JSON Tidy').score > fuzzyScore('jt', 'Adjust').score, 'word starts outrank a buried subsequence')
+  assert.equal(fuzzyScore('zz', 'JSON Tidy'), null)
+  assert.equal(fuzzyScore('x'.repeat(65), 'x'.repeat(100)), null, 'an over-long query is refused before any quadratic work')
+}
+console.log('ui refresh: the kit parse is bounded and its bookmarks export writes only escaped https tool links; the 404 suggests what a typo meant and nothing to a scanner')
+
+/* ─────  Home hero: the replay of this page load  ─────
+
+   The home page has one hero, network.ts, which replays this page load (the
+   owner picked it on 2026-09-30 and retired the switch, the classic hero and
+   the internet explainer). Five things about it must not drift:
+
+   1. One hero and no switch: the page reads no query string, its one bundled
+      script is the hero's mount, and everything in the text block is lifted
+      above the scrim that darkens the canvas behind the name.
+   2. No tools or games in the hero (owner, 2026-09-27: not in the copy, not a
+      link, not a "discover" affordance). This is checked over the tagline, the
+      page's markup, and every string literal and stylesheet the live hero
+      ships. The meta description and keywords are deliberately outside the
+      rule.
+   3. Dev hooks stay dev-only: every read of `location.search`, and every
+      call to the dev server's live-site probe (`/__hero-probe`), sits behind
+      the same constant, and the probe itself exists only in the dev server's
+      middleware, for loopback callers.
+   4. The hero never names the host provider or the runtime (owner,
+      2026-09-27): that is what helps someone reach the origin around
+      Cloudflare.
+   5. Nothing blinks or pulses on the clock, in script or stylesheet, except
+      the stars' slow twinkle: blinking has read as the page flickering
+      twice. Nor does the stage ever flash empty on a resize. */
+{
+  const styleUrl = n => new URL(`../src/styles/${n}`, import.meta.url)
+  const homeSrc = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf-8')
+  const [frontmatter, template] = homeSrc.split(/^---$/m).slice(1)
+
+  // ── 1. One hero, no switch, and its text above the scrim ──
+  assert.doesNotMatch(frontmatter, /searchParams/, 'the home page reads no query string: there is one hero and no switch')
+  assert.doesNotMatch(template, /hero-switch/, 'no hero switch is left in the markup')
+  assert.match(template, /<section data-type="hero"[^>]*\bdata-hero="network"/, 'the hero section names the network hero')
+  const pageScripts = [...template.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  assert.equal(pageScripts.length, 1, 'the page has one bundled script…')
+  assert.match(pageScripts[0][1], /initHero\(\)/, '…and it mounts the hero')
+  // The scrim behind the name paints over any child of the text block that is
+  // not lifted above it; the social links once sat under it, nearly invisible.
+  // The children are read from the markup, so a new one needs its own rule.
+  const textBlock = template.match(/<div data-type="hero-content">\n([\s\S]*?)\n\s*<\/div>/)
+  assert.ok(textBlock, 'the hero text block is found')
+  const blockLines = textBlock[1].split('\n').filter(l => l.trim())
+  const childIndent = Math.min(...blockLines.map(l => l.match(/^\s*/)[0].length))
+  const textChildren = blockLines
+    .filter(l => l.match(/^\s*/)[0].length === childIndent && /^\s*<\w/.test(l))
+    .map(l => l.match(/^\s*<(\w+)(?:[^>]*?\bdata-type="([^"]+)")?/))
+    .map(([, tag, type]) => (type ? `${tag}[data-type="${type}"]` : tag))
+  assert.ok(textChildren.length >= 3, `the text block holds the name, the tagline and the links (found ${textChildren.join(', ')})`)
+  const heroCssRules = [...(await readFile(styleUrl('hero-network.css'), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)]
+  const liftedSelectors = heroCssRules
+    .filter(([, , body]) => /position:\s*relative/.test(body) && /z-index:\s*1\b/.test(body))
+    .flatMap(([, sel]) => sel.split(',').map(s => s.trim()))
+  for (const child of textChildren) {
+    assert.ok(liftedSelectors.some(sel => sel.endsWith(` ${child}`)), `${child} in the hero text block is lifted above the scrim (position: relative; z-index: 1)`)
+  }
+
+  // ── 2. No tools or games anywhere in the hero ──
+  const banned = /\b(tools?|games?)\b|\/(tools|games)\b/i
+  const tagline = frontmatter.match(/const heroTagline =\s*'([^']*)'/)
+  assert.ok(tagline, 'the hero line is one literal')
+  assert.doesNotMatch(tagline[1], banned, 'the hero line names no tools or games')
+  const section = template.match(/<section data-type="hero"[\s\S]*?<\/section>/)
+  assert.ok(section, 'the hero section is found')
+  // The whole template, not just the section, so markup added after it is
+  // covered too. Only the <Base> tag is exempt, for its meta keywords.
+  const markup = template.replace(/<Base\b[^>]*>/, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  assert.doesNotMatch(markup, banned, 'the home page markup links and names no tools or games')
+  // Every string literal the live hero ships, comments dropped first, so a
+  // docblock may still say why the rule exists.
+  const literalsOf = (code) => {
+    const out = []
+    for (let i = 0; i < code.length; i += 1) {
+      const c = code[i]
+      if (c === '/' && code[i + 1] === '/') { i = code.indexOf('\n', i); if (i < 0) break; continue }
+      if (c === '/' && code[i + 1] === '*') { i = code.indexOf('*/', i + 2) + 1; if (i <= 0) break; continue }
+      if (c === "'" || c === '"' || c === '`') {
+        let j = i + 1
+        while (j < code.length && code[j] !== c) j += code[j] === '\\' ? 2 : 1
+        out.push(code.slice(i + 1, j))
+        i = j
+      }
+    }
+    return out
+  }
+  const heroDir = new URL('../src/components/home/hero/', import.meta.url)
+  const heroFiles = (await readdir(heroDir, { recursive: true })).filter(f => f.endsWith('.ts'))
+  for (const need of ['types.ts', 'mount.ts', 'network.ts']) {
+    assert.ok(heroFiles.includes(need), `src/components/home/hero/${need} exists — has the hero moved?`)
+  }
+  for (const file of heroFiles) {
+    const code = await readFile(new URL(file, heroDir), 'utf-8')
+    for (const literal of literalsOf(code)) {
+      assert.doesNotMatch(literal, banned, `src/components/home/hero/${file} ships a string naming tools or games: "${literal.slice(0, 80)}"`)
+    }
+    // ── 3. Test hooks are dev-only ── (whole comment lines dropped, so a
+    // docblock naming the constant cannot stand in for the gate itself)
+    const live = code.split('\n').filter(line => !/^\s*(\/\/|\/\*|\*)/.test(line)).join('\n')
+    for (const m of live.matchAll(/\blocation\.search\b|\/__hero-probe\b/g)) {
+      assert.ok(live.slice(Math.max(0, m.index - 240), m.index).includes('import.meta.env.DEV'),
+        `src/components/home/hero/${file} uses ${m[0]} outside an import.meta.env.DEV gate — a dev hook would ship`)
+    }
+    // ── 4. Nothing about the host ── (network.ts is where every string on
+    // screen comes from; mount.ts's astro:* event names never reach it)
+    for (const literal of file === 'network.ts' ? literalsOf(code) : []) {
+      assert.doesNotMatch(literal, HOST_NAMES,
+        `src/components/home/hero/${file} ships a string naming the host or runtime: "${literal.slice(0, 80)}"`)
+    }
+  }
+  const astroConfig = await readFile(new URL('../astro.config.mjs', import.meta.url), 'utf-8')
+  const probeMount = astroConfig.match(/configureServer\(server\) \{\s*server\.middlewares\.use\('\/__hero-probe', async \(req, res\) => \{([\s\S]*?)\n    \}\);/)
+  assert.ok(probeMount, 'the live-site probe is mounted only as dev-server middleware (configureServer), never as a route')
+  assert.match(probeMount[1], /if \(req\.method !== 'GET' \|\| !isLoopback\)/, 'the probe answers loopback GETs only')
+  assert.equal((astroConfig.match(/__hero-probe/g) ?? []).length, 1, 'the probe is mounted once')
+  for (const sheet of ['hero-network.css', 'home.css']) {
+    const css = (await readFile(styleUrl(sheet), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.doesNotMatch(css.replace(/\[data-type="[^"]*"\]/g, ''), banned, `${sheet} puts no tools or games into the hero`)
+  }
+  // The hero loads only through mount.ts's dynamic import, as its own chunk.
+  const mountSrc = await readFile(new URL('mount.ts', heroDir), 'utf-8')
+  assert.match(mountSrc, /network: \(\) => import\('\.\/network'\)/, 'the hero loads the network chunk lazily')
+  for (const file of heroFiles.filter(f => f !== 'mount.ts')) {
+    const code = await readFile(new URL(file, heroDir), 'utf-8')
+    assert.doesNotMatch(code, /from '\.\.?\/network(\/index)?'|import\('\.\.?\/network(\/index)?'\)/, `${file} does not pull the hero into another chunk`)
+  }
+  // ── 5. Nothing blinks or pulses ── Blinking read as the page flickering,
+  // twice: status lights blinking at rest (2026-09-28), then the same lights
+  // blinking while traffic crossed and a glow that breathed (2026-09-30). The
+  // one clock-driven brightness the owner keeps is the stars' slow twinkle.
+  // The twinkle lives in src/lib/sky.ts, shared with the hubs' sky; the hero
+  // and the hubs' mount may not add a clock-driven oscillation of their own.
+  const networkSrc = await readFile(new URL('network.ts', heroDir), 'utf-8')
+  const skySrc = await readFile(new URL('../src/lib/sky.ts', import.meta.url), 'utf-8')
+  const skyUiSrc = await readFile(new URL('../src/lib/sky-ui.ts', import.meta.url), 'utf-8')
+  const starsFn = skySrc.match(/export function drawStars\([\s\S]*?\n\}\n/)
+  assert.ok(starsFn, 'drawStars is found in src/lib/sky.ts')
+  const clockedIn = src => [...src.matchAll(/Math\.(sin|cos)\(([^()]|\([^()]*\))*\btime\b/g)].map(m => m[0])
+  const clocked = [...clockedIn(networkSrc), ...clockedIn(skySrc.replace(starsFn[0], '')), ...clockedIn(skyUiSrc)]
+  assert.deepEqual(clocked, [], `the sky or the hero oscillates on the clock outside the stars' twinkle, which reads as flicker: ${clocked.join(' | ')}`)
+  // The stylesheets too: the log's typing dots pulsed forever in CSS while
+  // this check read only the script (found in the PR #27 review).
+  for (const sheet of ['hero-network.css', 'home.css']) {
+    const css = (await readFile(styleUrl(sheet), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.doesNotMatch(css, /\binfinite\b/, `${sheet} runs an animation forever, which reads as the page flickering`)
+  }
+  // …and the stage never shows empty. A resize resets the canvas, which
+  // clears it, and the loop draws idle frames only every other frame, so
+  // resize() must draw at once: an early return in renderNow() while the loop
+  // ran flashed a blank stage on every rotation and window drag.
+  const fnBody = name => networkSrc.match(new RegExp(`\\n  function ${name}\\([^)]*\\) \\{\\n([\\s\\S]*?)\\n  \\}\\n`))?.[1] ?? ''
+  assert.match(fnBody('resize'), /canvas\.width[\s\S]*\brenderNow\(\)/, 'resize() redraws after it resets the canvas')
+  assert.ok(/^\s*draw\(\)$/m.test(fnBody('renderNow')) && !/\breturn\b/.test(fnBody('renderNow')),
+    'renderNow() draws every time it is called, whether or not the loop is running')
+  // …and no constellation line pops. A star that drifts off one edge
+  // reappears at the other; a line still drawn to it vanished or appeared in
+  // one frame, about once a second at 14 px/s (the third flicker report,
+  // 2026-09-30). Drift the real stars for a minute and count those jumps.
+  const { makeStars, driftStars, lineAlpha, starCount, SKY_NEAR } = await import('../src/lib/sky.ts')
+  const realRandom = Math.random
+  let seed = 7
+  Math.random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
+  try {
+    for (const [w, h, reach] of [[1440, 900, 120], [375, 812, 80]]) {
+      const stars = makeStars(starCount(w, h, false), w, h)
+      const near = stars.filter(st => st.z >= SKY_NEAR)
+      const lines = () => near.flatMap((a, i) => near.slice(i + 1).map(b => lineAlpha(a, b, reach, w, h)))
+      let before = lines(), pops = 0
+      for (let frame = 0; frame < 30 * 60; frame++) {
+        driftStars(stars, w, h, 1 / 30)
+        const after = lines()
+        pops += after.filter((v, k) => Math.abs(v - before[k]) > 0.02).length
+        before = after
+      }
+      assert.equal(pops, 0, `${w}×${h}: ${pops} constellation lines changed by more than 0.02 alpha in one frame over a minute of drift`)
+    }
+    assert.equal(lineAlpha({ x: -8, y: 100, z: 1, ph: 0 }, { x: 20, y: 100, z: 1, ph: 0 }, 120, 1440, 900), 0, 'a line to a star past the edge is invisible')
+  } finally {
+    Math.random = realRandom
+  }
+}
+/* ─────  The hubs' sky  ─────
+   The home hero's drifting stars behind the tools, games and learnings hubs
+   (owner, 2026-10-01). It must stay a light backdrop: only those hubs render
+   it, it pauses while the tab is hidden, gives reduced motion one still frame,
+   caps the canvas at 1.5 device pixels, and the cards it sits behind are
+   opaque, so no star lands in a card's copy. */
+{
+  const pagesDir = new URL('../src/pages/', import.meta.url)
+  const withSky = []
+  for (const rel of (await readdir(pagesDir, { recursive: true })).filter(f => f.endsWith('.astro'))) {
+    if (/^\s*sky\s*$/m.test(await readFile(new URL(rel, pagesDir), 'utf-8'))) withSky.push(rel)
+  }
+  assert.deepEqual(withSky.sort(), ['games.astro', 'learnings.astro', 'tools/index.astro'], 'the sky is drawn behind the three hubs and nowhere else')
+  const skyUi = await readFile(new URL('../src/lib/sky-ui.ts', import.meta.url), 'utf-8')
+  assert.match(skyUi, /const run = !reduced && !document\.hidden/, 'the sky loop runs only with motion allowed and the tab visible')
+  assert.match(skyUi, /Math\.min\(window\.devicePixelRatio \|\| 1, 1\.5\)/, 'the sky canvas is capped at 1.5 device pixels')
+  assert.match(skyUi, /if \(last && now - last < FRAME_MS\) return/, 'the sky draws at a capped frame rate')
+  const nav = await readFile(new URL('../src/lib/nav-ui.ts', import.meta.url), 'utf-8')
+  assert.match(nav, /import\('\.\/sky-ui'\)/, 'the sky loads as its own chunk, only where a page renders it')
+  const shared = (await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+  const card = shared.match(/\[data-type="card-grid"\] > \* \{([^}]*)\}/)?.[1] ?? ''
+  assert.match(card, /background:\s*var\(--color-surface\)/, 'listing cards are opaque, so the sky never shows through their copy')
+}
+
+console.log('home hero: one hero and no switch, its text sits above the scrim, nothing blinks, it names no tools or games or the host, and its dev hooks compile out of production')
+
+/* ══════════════  UI refresh · anchor regions for items B–G  ══════════════
+
+   One region per item, each with its own banner and end marker. An item adds
+   its assertions ONLY between its own two lines, and the three spacer lines
+   between regions stay untouched, so items built in parallel worktrees merge
+   without touching each other's hunks. */
+
+/* ── item B · theme: every engine repaints on a theme change ── (region start) */
+/* ── item B · end of region ── */
+// ·
+// ·
+// ·
+/* ── item C · find: palette, shortcut sheet, smart 404 ── (region start) */
+/* ── item C · end of region ── */
+// ·
+// ·
+// ·
+/* ── item D · toolkit: stars, shelf, /tools/kit ── (region start) */
+/* ── item D · end of region ── */
+// ·
+// ·
+// ·
+/* ── item E · shells, nav, motion, home seam ── (region start) */
+/* ── item E · end of region ── */
+// ·
+// ·
+// ·
+/* ── item F · hubs, thumbnails, share cards ── (region start) */
+/* ── item F · end of region ── */
+// ·
+// ·
+// ·
+/* ── item G · one control kit ── (region start) */
+/* ── item G · end of region ── */

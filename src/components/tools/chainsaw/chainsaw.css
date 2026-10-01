@@ -374,7 +374,7 @@ div[data-tool="chainsaw"] [data-type="cs-outlook"][data-state="unavailable"] {
 }
 
 div[data-tool="chainsaw"] [data-type="cs-outlook-head"] {
-  margin: 0 0 var(--space-sm);
+  margin: 0 0 var(--space-xs);
   color: var(--color-success);
   font-size: var(--text-base);
 }

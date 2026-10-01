@@ -1,43 +1,48 @@
 # Ideas / backlog
 
-Not committed to, not scheduled. Delete an entry when it ships or when it stops
-being a good idea.
+Not committed to, not scheduled. Delete an entry when it ships or stops being a
+good idea.
 
-## Leaderboards on scoring games
+## 2048 high scores
 
-A leaderboard **section inside** a game page (2048 first), not a separate page.
-Only 5 of the 12 wired games produce a rankable number — 2048, quintle,
-type-trial, hue-hunt, maze-weaver. The rest (game-of-life, flow-field,
-starfield-toy, murmuration, turing-bloom, sand-loom, lsystem-tree) are
-screensavers with no win condition, so there is nothing to rank.
+Build it the way the Type Trial and Hue Hunt daily boards already work (bounds,
+separate read and write limiters, a debounced flush to `data/`, rows
+re-validated on load). Game pages are edge-cached for ten minutes, so the board
+must be fetched client-side from `/api/…` inside `astro:page-load`. 2048 is
+deterministic given its spawn seed, so a shared daily seed plus replay
+verification (submit `{seed, inputs[]}` and re-run it on the server) would make
+a score checkable instead of trusted.
 
-**Storage: `node:sqlite`**, stdlib since Node 22 and the Docker image is
-`node:22-alpine`, so no new dependency. One file at `data/leaderboard.db` on the
-same bind mount as `visits.json`. Table `(game, period, name, score, created_at)`,
-index on `(game, period, score DESC)`, delete below rank 100 on insert to bound it.
+## Flowmap permalinks
 
-Do **not** reuse the `visits.json` pattern. That design is right for analytics and
-wrong here: whole-file read-modify-write has a lost-update race, and the 4 MB
-`serializeBounded` backstop drops the oldest data — correct for counters, silent
-data loss for scores.
+Flowmap shipped browser-only. The original brief also wanted a server store: a
+permalink to keep editing and a live image URL to embed a diagram in a README,
+Slack or Notion. That half would clear the tool bar in AGENTS.md; the brief is
+`docs/plans/flowmap.md` in git history.
 
-**The page shape is forced by the edge cache.** `/games/2048` is served with
-`s-maxage=600`, so a server-rendered board would be frozen for ten minutes and
-shared across every visitor in the colo. The section must fetch
-`/api/leaderboard/<game>` client-side, from inside an `astro:page-load` listener
-(ClientRouter is on — see AGENTS.md). `/api/*` already gets `no-store` from
-middleware, so the headers are correct without new code.
+## Tool renames
 
-Deferred, and none of these change the table shape:
-- **Replay verification** — submit `{seed, inputs[]}` instead of a score and
-  re-run the engine server-side, so a fake run has to be a real run. 2048 is
-  deterministic given the spawn seed, so this stays available. Without it,
-  `curl -d '{"score":999999}'` is the whole attack; label it "high scores", clamp
-  to a plausible max, and rate-limit with `createRateLimiter()`.
-- **Daily seed** — everyone gets the same board that day, which makes scores
-  comparable and gives the server a known seed to verify against.
-- **Names** — 3-letter arcade initials `[A-Z]{3}`. Bounded, no moderation queue,
-  no accounts, nothing personal retained.
-- **Cloudflare D1** — the equivalent if the site ever moves to Workers. Not a
-  reason to move; Durable Objects only earn their keep once replay verification
-  exists.
+- Regex Lab → Thicket, JSON Tidy → Plumb, List Forge → Winnow. Names picked,
+  awaiting a decision. Avoid "Backtrack": BackTrack was the distro that became
+  Kali. Slugs change, so do all three in one commit with 301s, new cards and a
+  sitemap shift. A rename alone doesn't fix a thin page; ReDoS detection is the
+  capability that would make Thicket more than a regex tester.
+- Cosmetic, batch with the above if at all: Codec Forge → Sift, Hash Smith →
+  Fingerprint, Epoch Wizard → Meridian, Chroma Lab → Pigment.
+
+## Editable maps
+
+Flowmap and Draftboard's map only navigate; dragging a node never rewrites the
+markdown. Doing it correctly is a larger build than the maps themselves.
+
+## Unexplained CSP error on tool pages
+
+A blob worker is blocked by the CSP (`script-src` has no `worker-src` fallback),
+visible in the console on `/tools/json-tidy`. Find what spawns it before adding
+`worker-src`.
+
+## Search demand, before building more
+
+Export Google Search Console → Performance → Queries (90 days) and pair it with
+production `data/visits.json`. Near-zero impressions means no demand;
+impressions at position 30 means the gap is content and links.

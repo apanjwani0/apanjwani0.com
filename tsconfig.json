@@ -6,7 +6,6 @@
     "./worker-configuration.d.ts"
   ],
   "exclude": [
-    "dist",
-    "pocketbase/pb_migrations/**/*.js"
+    "dist"
   ]
 }
