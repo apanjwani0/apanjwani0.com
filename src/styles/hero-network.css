@@ -325,15 +325,6 @@ section[data-type="hero"][data-hero] [data-part="typing"] i {
   height: 0.3rem;
   border-radius: 50%;
   background: var(--color-muted);
-  animation: hero-typing 0.9s var(--ease-in-out) infinite;
-}
-
-section[data-type="hero"][data-hero] [data-part="typing"] i:nth-child(2) { animation-delay: 0.15s; }
-section[data-type="hero"][data-hero] [data-part="typing"] i:nth-child(3) { animation-delay: 0.3s; }
-
-@keyframes hero-typing {
-  0%, 60%, 100% { opacity: 0.3; }
-  30% { opacity: 1; }
 }
 
 section[data-type="hero"][data-hero] [data-part="hint"] {

@@ -502,6 +502,12 @@ export interface SgSpfReport {
    * `recordCount` is 0.
    */
   fallthrough: '+' | '-' | '~' | '?' | 'none' | 'error' | 'unknown'
+  /**
+   * The line `fallthrough` rests on, for a finding to cite: the record whose
+   * `all` an unlisted sender meets, or the problem that broke the redirect
+   * chain (a target with no SPF record, or with several). Null otherwise.
+   */
+  decidedBy: string | null
   queries: number
 }
 
@@ -563,6 +569,7 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
     all: null,
     // Two records at the root is a permerror before any mechanism is read.
     fallthrough: found.length > 1 ? 'error' : 'unknown',
+    decidedBy: null,
     queries,
   }
   if (!found.length) {
@@ -653,6 +660,7 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
           : next === 'loop' || next === 'missing' ? 'error'
             : typeof next === 'string' ? 'unknown'
               : report.fallthrough)
+      if (first && !node.several) report.decidedBy = node.record
     }
   }
 
@@ -688,12 +696,16 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
       return 'unanswered'
     }
     if (answer.rcode === 'NXDOMAIN' || !answer.records.length) voidLookups += 1
+    // A redirect from a deciding record that breaks is what an unlisted sender gets.
+    const decisive = node.decides && via === 'redirect'
     if (!records.length) {
       problems.push(`${via === 'include' ? `include:${target}` : `redirect=${target}`} has no SPF record — a receiver treats that as a permerror`)
+      if (decisive) report.decidedBy = problems[problems.length - 1]
       return 'missing'
     }
     if (records.length > 1) {
       problems.push(`${target} publishes ${records.length} SPF records, which is a permerror on its own`)
+      if (decisive) report.decidedBy = problems[problems.length - 1]
     }
     return {
       record: records[0], domain: target, depth: node.depth + 1, ancestry: [...node.ancestry, key],
@@ -792,13 +804,25 @@ export function sgSpfFindings(spf: SgSpfReport, domain: string, outage: SgOutage
       basis: 'record',
     })
   }
-  if (spf.all === '+') {
+  if (spf.all === '+' || spf.fallthrough === '+') {
+    // The record's own `+all`, or the one an unlisted sender reaches through
+    // `redirect=`, cited from the record that holds it.
     out.push({
       id: 'spf-all-pass',
       level: 'error',
       title: '`+all` authorises the entire internet',
-      detail: 'Any host anywhere passes SPF for this domain. This is almost always a typo for `-all` or `~all`.',
-      evidence: [spf.record ?? ''],
+      detail: `${spf.all === '+' ? '' : 'This record has no `all` of its own, so an unlisted sender gets what its `redirect=` target says, which is `+all`. '}Any host anywhere passes SPF for this domain. This is almost always a typo for \`-all\` or \`~all\`.`,
+      evidence: [...new Set([spf.record ?? '', spf.decidedBy ?? ''])].filter(e => e.trim()),
+      basis: 'record',
+    })
+  } else if (spf.fallthrough === 'error' && spf.decidedBy) {
+    // A loop and two records at the root have findings of their own.
+    out.push({
+      id: 'spf-redirect-permerror',
+      level: 'error',
+      title: '`redirect=` ends in a permerror',
+      detail: 'This record has no `all` of its own, so a receiver follows its `redirect=` (RFC 7208 §6.1), and the chain breaks there: the result is a permerror, which most receivers treat as a hard SPF failure. Point the redirect at a name that publishes exactly one SPF record.',
+      evidence: [spf.record ?? '', spf.decidedBy].filter(e => e.trim()),
       basis: 'record',
     })
   } else if (spf.recordCount > 0 && spf.fallthrough === 'none') {

@@ -420,16 +420,18 @@ const NO_CACHE: CacheFacts = { cache: '', cacheStatus: '', cacheAge: 0 }
 function readPaint(): number {
   try { return performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? 0 } catch { return 0 }
 }
-function readTiming(): Timing | null {
+// The navigation entry describes the session's first hard load, so only the
+// first mount can be this page's own; ClientRouter keeps this module across
+// in-site swaps.
+let mounts = 0
+function readTiming(returned: boolean): Timing | null {
   let nav: PerformanceNavigationTiming | undefined
   try { nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined } catch { /* exotic embeds */ }
   if (!nav || nav.responseEnd <= 0) return null
   const connect = Math.max(0, nav.connectEnd - nav.connectStart)
   const tls = nav.secureConnectionStart > 0 ? Math.max(0, nav.connectEnd - nav.secureConnectionStart) : 0
-  let otherPage = false
-  // After an in-site swap back to '/', the entry still describes the
-  // session's first hard load, which can be another page.
-  try { otherPage = new URL(nav.name).pathname !== location.pathname } catch { /* a malformed name: assume this page */ }
+  let otherPage = returned
+  try { otherPage ||= new URL(nav.name).pathname !== location.pathname } catch { /* a malformed name: assume this page */ }
   return {
     dns: Math.max(0, nav.domainLookupEnd - nav.domainLookupStart), connect, tls, tcp: Math.max(0, connect - tls),
     ttfb: Math.max(0, nav.responseStart - nav.requestStart), download: Math.max(0, nav.responseEnd - nav.responseStart),
@@ -848,15 +850,16 @@ function part<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, name
 const INTRO = 1500, TYPE = 520, LEG_MIN = 240, READ = 34
 // How long a pointer rests on a stop before its card opens.
 const HOVER = 140
-// The height a phone keeps between the frame and the text block for the line
-// and its labels, sub-lines included.
-const PHONE_BAND = 230
+// The height kept between the frame and the text block for the line and its
+// labels, sub-lines included, on a phone and wider.
+const PHONE_BAND = 230, BAND = 260
 const POOL = 80, PULSES = 20
 
 export const create: HeroCreate = (host, env) => {
   const doc = host.ownerDocument
   const section = env.text.section
   const { reduced, isTouch } = env
+  const returned = mounts++ > 0
   const dpr = clamp(env.dpr || 1, 1, 2)
   const mono = getComputedStyle(section).getPropertyValue('--font-mono').trim() || 'ui-monospace, monospace'
 
@@ -1043,12 +1046,16 @@ export const create: HeroCreate = (host, env) => {
     }
     return cur
   }
-  function glow(route: string[]) {
+  // Lights a route's wires and stops: in the replay it flashes and leaves a
+  // trail; in the still frame (reduced motion) it only takes the colour.
+  function glow(route: string[], pal: number, still = false) {
     for (let i = 0; i + 1 < route.length; i++) {
       const hop = hops.get(`${route[i]}>${route[i + 1]}`)
       if (!hop) continue
       const l = links[hop.li]
-      for (const x of [linkHeat[hop.li], nodeHeat[l.a], nodeHeat[l.b]]) { bump(x, SHAKE); x.floor = TRAIL }
+      for (const x of [linkHeat[hop.li], nodeHeat[l.a], nodeHeat[l.b]]) {
+        if (still) { x.c = PALETTE[pal]; x.floor = 0.5 } else { bump(x, pal); x.floor = TRAIL }
+      }
     }
   }
   function setChip(id: string, text: string) {
@@ -1069,7 +1076,7 @@ export const create: HeroCreate = (host, env) => {
         run: () => {
           msg.ms = logAdd(step, false)
           if (step.pulse) ring(indexOf(step.pulse), step.pal, n === 0)
-          if (step.glow) glow(step.glow)
+          if (step.glow) glow(step.glow, SHAKE)
         },
       })
       const start = cur
@@ -1132,22 +1139,14 @@ export const create: HeroCreate = (host, env) => {
   // route it would light is lit, every chip set and every message shown.
   function renderFinal() {
     for (const step of story.steps) {
-      for (const f of step.flights) glowRoute(f.route, f.pal)
-      if (step.glow) glowRoute(step.glow, SHAKE)
+      for (const f of step.flights) glow(f.route, f.pal, true)
+      if (step.glow) glow(step.glow, SHAKE, true)
       if (step.chip) setChip(step.chip[0], step.chip[1])
       logAdd(step, true)
     }
     fill = 1
     finish()
     draw()
-  }
-  function glowRoute(route: string[], pal: number) {
-    for (let i = 0; i + 1 < route.length; i++) {
-      const hop = hops.get(`${route[i]}>${route[i + 1]}`)
-      if (!hop) continue
-      const l = links[hop.li]
-      for (const x of [linkHeat[hop.li], nodeHeat[l.a], nodeHeat[l.b]]) { x.c = PALETTE[pal]; x.floor = 0.5 }
-    }
   }
   function advance(dt: number) {
     cursor += dt * 1000
@@ -1179,17 +1178,25 @@ export const create: HeroCreate = (host, env) => {
     }
     const route = story.ping, half = (route.length - 1) / 2
     const leg = clamp((ms * 6) / (route.length - 1), LEG_MIN, 520)
+    const ev: Sched[] = []
     let at = cursor + 30
-    sched.push({ at, run: () => logTyping(OUT) })
+    ev.push({ at, run: () => logTyping(OUT) })
     for (let i = 0; i + 1 < route.length; i++) {
       const a = route[i], b = route[i + 1], pal = i < half ? OUT : BACK
-      sched.push({ at, run: () => spawn(a, b, pal, leg, 3, false) })
+      ev.push({ at, run: () => spawn(a, b, pal, leg, 3, false) })
       at += leg
     }
-    sched.push({ at, run: () => { pinging = false; logAdd(line, true); logHint() } })
+    ev.push({ at, run: () => { pinging = false; logAdd(line, true); logHint() } })
+    enqueue(ev)
+  }
+  // Merges events into what is still to come, in time order, and drops what
+  // has run, so a ping never waits behind a stop's demo.
+  function enqueue(ev: Sched[]) {
+    sched = sched.slice(si).concat(ev).sort((a, b) => a.at - b.at)
+    si = 0
   }
   pingTarget.addEventListener('click', () => { closeCard(); ping() }, { signal: env.signal })
-  replay.addEventListener('click', () => { play(); if (!running) start() }, { signal: env.signal })
+  replay.addEventListener('click', play, { signal: env.signal })
 
   // ---- Stops explain themselves. Each glyph has an invisible, focusable
   // button over it, so a keyboard reaches what a hover or a tap shows: a card
@@ -1265,8 +1272,7 @@ export const create: HeroCreate = (host, env) => {
     if (!demo) return
     const ev: Sched[] = []
     flights(ev, demo, cursor + 80, 1300, false)
-    sched = sched.slice(si).concat(ev).sort((a, b) => a.at - b.at)
-    si = 0
+    enqueue(ev)
   }
   function refreshText() {
     kicker.textContent = story.kicker
@@ -1278,15 +1284,21 @@ export const create: HeroCreate = (host, env) => {
   }
 
   // ---- Layout: the name makes room for the log, then the line fills the band
-  // between the frame and whichever text block reaches highest.
+  // between the frame and whichever text block reaches highest. When the
+  // frame, the line and the text block cannot share one screen (a short
+  // window, a phone either way up), the hero grows taller and the line keeps
+  // its room.
   function layout() {
+    section.style.minHeight = ''
     env.text.name.style.fontSize = ''
     env.text.tagline.style.maxWidth = ''
     let stacked = false
-    const hostRect = host.getBoundingClientRect()
     if (!phone) {
-      placeLog(false)
-      const nameRect = env.text.name.getBoundingClientRect(), logRect = log.getBoundingClientRect()
+      // The log's place at the stage's bottom right, measured on an empty
+      // stand-in: moving the log there and back restarts its messages' fade.
+      const slot = host.appendChild(log.cloneNode(false) as HTMLElement)
+      const nameRect = env.text.name.getBoundingClientRect(), logRect = slot.getBoundingClientRect()
+      slot.remove()
       const room = logRect.left - 40 - nameRect.left
       if (nameRect.width > room) {
         const fit = (parseFloat(getComputedStyle(env.text.name).fontSize) * room) / nameRect.width * 0.99
@@ -1297,18 +1309,19 @@ export const create: HeroCreate = (host, env) => {
         const tagRect = env.text.tagline.getBoundingClientRect()
         env.text.tagline.style.maxWidth = `min(46ch, ${Math.max(160, logRect.left - 40 - tagRect.left)}px)`
       }
-      placeLog(stacked)
-    } else {
-      placeLog(true)
-      // A short phone cannot fit the frame, the line and the text block in one
-      // screen, so the hero grows taller and the line keeps its room.
-      section.style.minHeight = ''
-      const need = Math.ceil(frame.getBoundingClientRect().bottom - hostRect.top + PHONE_BAND + env.text.content.getBoundingClientRect().height)
-      if (need > section.getBoundingClientRect().height) section.style.minHeight = `${need}px`
     }
-    textTop = env.text.content.getBoundingClientRect().top - hostRect.top
-    if (!phone && !stacked) textTop = Math.min(textTop, log.getBoundingClientRect().top - hostRect.top)
-    const top = frame.getBoundingClientRect().bottom - hostRect.top + (phone ? 10 : 20)
+    placeLog(phone || stacked)
+    const hostRect = host.getBoundingClientRect()
+    const textAt = () => {
+      const t = env.text.content.getBoundingClientRect().top
+      return (logInContent ? t : Math.min(t, log.getBoundingClientRect().top)) - hostRect.top
+    }
+    const frameBottom = frame.getBoundingClientRect().bottom - hostRect.top
+    // The text block keeps its height as the hero grows; only its top moves.
+    const need = Math.ceil(frameBottom + (phone ? PHONE_BAND : BAND) + hostRect.height - textAt())
+    if (need > hostRect.height) section.style.minHeight = `${need}px`
+    textTop = textAt()
+    const top = frameBottom + (phone ? 10 : 20)
     fonts.label = `${phone ? 11 : 13}px ${mono}`
     fonts.sub = `${phone ? 10 : 12}px ${mono}`
     fonts.chip = `600 ${phone ? 10 : 12}px ${mono}`
@@ -1473,11 +1486,11 @@ export const create: HeroCreate = (host, env) => {
     if (veil > 0.01 && lit >= 0) drawSpotlight(ctx, lit, veil)
     drawPulses(ctx)
   }
-  // Without the loop (reduced motion, or a hidden tab) the veil has no frames
-  // to ease over, so it is simply on or off.
+  // Draws at once: a resize has just cleared the canvas, and the loop's next
+  // idle frame may be two frames away. Without the loop (reduced motion, or a
+  // hidden tab) the veil has no frames to ease over, so it is on or off.
   function renderNow() {
-    if (running) return
-    veil = cardIndex >= 0 ? 1 : 0
+    if (!running) veil = cardIndex >= 0 ? 1 : 0
     draw()
   }
 
@@ -1529,7 +1542,7 @@ export const create: HeroCreate = (host, env) => {
     if (import.meta.env.DEV) {
       loaded = { ...(await loadProbe(env.signal)), device, dev: true }
     } else {
-      const timing = readTiming()
+      const timing = readTiming(returned)
       const own = timing && !timing.otherPage && !timing.fromCache
       const [edge, cache] = await Promise.all([loadEdge(env.signal), own ? loadCache(env.signal) : Promise.resolve(NO_CACHE)])
       loaded = { timing, edge, ...cache, device, dev: false }

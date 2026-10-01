@@ -201,9 +201,12 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
     unchecked,
     service: cnameTarget ? sgTakeoverService(cnameTarget) : null,
     // A CNAME may not coexist with anything. Reported only for types actually
-    // observed at this exact name in the same inspection.
+    // observed at this exact name in the same inspection: a recursive answer
+    // also carries the target's records, which the alias does not own. Owner
+    // names are normalised as sgQuery normalises them.
     coexisting: cnameTarget
-      ? (['A', 'AAAA', 'MX', 'TXT', 'NS'] as SgType[]).filter(t => (primaryOf(t).records ?? []).length > 0)
+      ? (['A', 'AAAA', 'MX', 'TXT', 'NS'] as SgType[]).filter(t =>
+          (primaryOf(t).records ?? []).some(r => r.name === name.toLowerCase().replace(/\.+$/, '')))
       : [],
     atApex: name.split('.').length === 2,
   }

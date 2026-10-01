@@ -11,16 +11,17 @@
  *     list serialised and nothing else.
  *   - `buildSiteIndex` — the same pages as searchable entries (title, a short
  *     description, extra search words), plus one entry per project pointing at
- *     its card on /projects. The command palette's /search.json and the 404's
- *     suggestions read this.
+ *     its card on /projects. /llms.txt reads this; the planned command
+ *     palette (through /search.json) and the 404's suggestions will.
  *
  * `security:smoke` holds the two to each other — every entry points at an
  * indexable page, and every indexable page has an entry — so a page kind added
  * to one and forgotten in the other fails the gate instead of a search result
  * pointing at a noindex page or a real page being unfindable.
  *
- * SERVER-ONLY: it imports the config accessors (node:fs). The browser gets the
- * index as JSON from /search.json and may import the `IndexEntry` TYPE only.
+ * SERVER-ONLY: it imports the config accessors (node:fs). The browser is to
+ * get the index as JSON from /search.json (planned) and may import the
+ * `IndexEntry` TYPE only.
  */
 
 import { getGames, getLearnings, getPosts, getProjects, getSite, getTools, isBlogsPublic, isProjectsPublic, type Site } from './config'
@@ -35,7 +36,7 @@ import type { Tool } from '../config/tools'
 
 export type IndexKind = 'section' | 'tool' | 'mode' | 'game' | 'learning' | 'project' | 'post'
 
-/** One searchable page. Short keys: this is serialised into /search.json. */
+/** One searchable page. Short keys: it is to be serialised into /search.json. */
 export interface IndexEntry {
   /** kind */
   k: IndexKind
