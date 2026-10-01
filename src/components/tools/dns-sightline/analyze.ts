@@ -78,6 +78,11 @@ export interface SgFinding {
   basis: 'record' | 'absence' | 'unanswered'
 }
 
+/** A DNS name as this tool compares names: trimmed, lower-case, no trailing dot. */
+export function sgNormName(name: string): string {
+  return name.trim().toLowerCase().replace(/\.+$/, '')
+}
+
 /**
  * Did this question get an answer at all?
  *
@@ -250,11 +255,11 @@ export function sgCanonicalRecord(rec: SgRecord, type: SgType): string {
     }
     case 'CNAME':
     case 'NS':
-      return data.toLowerCase().replace(/\.+$/, '')
+      return sgNormName(data)
     case 'MX': {
       const m = data.match(/^\s*(\d+)\s+(\S+)\s*$/)
-      if (!m) return data.toLowerCase().replace(/\.+$/, '')
-      return `${Number(m[1])} ${m[2].toLowerCase().replace(/\.+$/, '')}`
+      if (!m) return sgNormName(data)
+      return `${Number(m[1])} ${sgNormName(m[2])}`
     }
     case 'SOA': {
       // The serial is the whole point of comparing SOAs, so it stays; the
@@ -345,16 +350,20 @@ export function sgDiffAnswers(type: SgType, answers: SgAnswer[]): SgDiff {
 }
 
 /**
- * Did every resolver fail this question with SERVFAIL?
+ * Did every resolver that replied fail this question with SERVFAIL?
  *
  * One SERVFAIL is one resolver's bad moment. Every independent resolver
  * returning it for the same question is the zone failing that question — a
  * DNSSEC chain that no longer validates, or nameservers that do not answer —
  * and it is the one missing answer that running the inspection again will not
- * fix. At least two are required: one resolver cannot agree with itself.
+ * fix. At least two are required: one resolver cannot agree with itself. A
+ * resolver that sent no reply at all (`ERROR`: unreachable, timed out, cut off
+ * by the deadline) holds no opinion, so it must not hide the other two's.
  */
 export function sgServfailEverywhere(d: SgDiff): boolean {
-  return d.answered === 0 && d.failed.length >= 2 && d.failed.every(a => a.rcode === 'SERVFAIL')
+  return d.answered === 0
+    && d.failed.filter(a => a.rcode === 'SERVFAIL').length >= 2
+    && d.failed.every(a => a.rcode === 'SERVFAIL' || a.rcode === 'ERROR')
 }
 
 /**
@@ -596,7 +605,7 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
    */
   interface SgSpfNode { record: string; domain: string; depth: number; ancestry: string[]; decides: boolean; several?: boolean }
   type SgSpfStop = 'loop' | 'ceiling' | 'unanswered' | 'missing'
-  const rootKey = domain.toLowerCase().replace(/\.+$/, '')
+  const rootKey = sgNormName(domain)
   const queue: SgSpfNode[] = [{ record: found[0], domain, depth: 0, ancestry: [rootKey], decides: found.length === 1 }]
 
   while (queue.length) {
@@ -666,7 +675,7 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
 
   /** Follow one include/redirect, or explain in `problems` why it was not followed. */
   async function sgSpfDescend(target: string, node: SgSpfNode, via: 'include' | 'redirect'): Promise<SgSpfNode | SgSpfStop> {
-    const key = target.toLowerCase().replace(/\.+$/, '')
+    const key = sgNormName(target)
     // A cycle is a name inside its OWN ancestry. A name reached twice by two
     // different routes is a diamond, and a receiver pays for it twice.
     if (node.ancestry.includes(key)) {
@@ -730,7 +739,7 @@ export function sgSpfFindings(spf: SgSpfReport, domain: string, outage: SgOutage
       level: 'warn',
       title: 'SPF record could not be read',
       detail: outage.types.includes('TXT')
-        ? `Every resolver asked returned SERVFAIL for the TXT lookup at ${domain}, so whether it publishes SPF is unknown. ${SG_ZONE_FAILING}`
+        ? `Every resolver that replied returned SERVFAIL for the TXT lookup at ${domain}, so whether it publishes SPF is unknown. ${SG_ZONE_FAILING}`
         : `The TXT lookup for ${domain} got no answer, so whether it publishes SPF is unknown — this is a missing answer, not a missing record. Re-run the inspection before concluding that no sender is authorised.`,
       evidence: [],
       basis: 'unanswered',
@@ -921,7 +930,7 @@ export function sgDmarcFindings(d: SgDmarcReport, domain: string, outage: SgOuta
       // that name fails everywhere, the zone that also serves `_dmarc` is the
       // thing failing.
       detail: outage.whole
-        ? `The lookup got no answer, and every resolver asked returned SERVFAIL for every question about ${domain}, so whether a policy is published is unknown. ${SG_ZONE_FAILING}`
+        ? `The lookup got no answer, and every resolver that replied returned SERVFAIL for every question about ${domain}, so whether a policy is published is unknown. ${SG_ZONE_FAILING}`
         : 'The lookup got no answer, so whether a policy is published is unknown — a missing answer, not a missing record. Re-run the inspection before concluding there is no DMARC.',
       evidence: [],
       basis: 'unanswered',
@@ -1124,7 +1133,7 @@ export function sgCaaFindings(v: SgCaaVerdict, name: string, wantedCa: string | 
       level: 'warn',
       title: 'CAA policy could not be determined',
       detail: zoneFailing
-        ? `A CAA policy is published at ${v.policyAt}, but every resolver asked returned SERVFAIL for the CAA lookup at ${name}. A CAA record there would take precedence, so this is not known to be the policy that governs ${name}. ${SG_ZONE_FAILING}`
+        ? `A CAA policy is published at ${v.policyAt}, but every resolver that replied returned SERVFAIL for the CAA lookup at ${name}. A CAA record there would take precedence, so this is not known to be the policy that governs ${name}. ${SG_ZONE_FAILING}`
         : `A CAA policy is published at ${v.policyAt}, but the lookup for a more specific name on the way there failed or was refused. A CAA record at that name would take precedence, so this is not known to be the policy that governs ${name} — re-run the inspection before relying on it either way.`,
       evidence: v.raws.map(r => `${v.policyAt}  ${r}`),
       basis: 'record',
@@ -1140,7 +1149,7 @@ export function sgCaaFindings(v: SgCaaVerdict, name: string, wantedCa: string | 
       level: 'warn',
       title: 'CAA policy could not be determined',
       detail: zoneFailing
-        ? `Every resolver asked returned SERVFAIL for the CAA lookup at ${name}, so whether any policy governs it is unknown — which is not the same as knowing that none does. ${SG_ZONE_FAILING}`
+        ? `Every resolver that replied returned SERVFAIL for the CAA lookup at ${name}, so whether any policy governs it is unknown — which is not the same as knowing that none does. ${SG_ZONE_FAILING}`
         : `At least one CAA lookup for ${name} failed or was refused, so the absence of a policy here is not a finding — it is a missing answer. Re-run the inspection before concluding that any CA may issue.`,
       evidence: [],
       basis: 'unanswered',
@@ -1276,7 +1285,7 @@ export async function sgResolveMxTargets(mx: SgAnswer, lookup: SgLookup, max = 8
       preference: entry.preference,
       host: entry.host,
       isCname: cname.records.length > 0,
-      cnameTo: cname.records[0]?.data.toLowerCase().replace(/\.+$/, '') ?? null,
+      cnameTo: cname.records[0] ? sgNormName(cname.records[0].data) : null,
       addresses,
       resolves: addresses.length > 0,
       unanswered: addresses.length === 0 && !gone && (sgUnanswered(a) || sgUnanswered(aaaa)),
@@ -1305,7 +1314,7 @@ export function sgMxFindings(mx: SgAnswer, targets: SgMxTarget[], outage: SgOuta
       level: 'warn',
       title: 'MX records could not be read',
       detail: outage.types.includes('MX')
-        ? `Every resolver asked returned SERVFAIL for the MX lookup, so whether this domain receives mail — and where — is unknown. ${SG_ZONE_FAILING}`
+        ? `Every resolver that replied returned SERVFAIL for the MX lookup, so whether this domain receives mail — and where — is unknown. ${SG_ZONE_FAILING}`
         : 'The MX lookup got no answer, so whether this domain receives mail — and where — is unknown. A missing answer is not a missing record; re-run the inspection.',
       evidence: [],
       basis: 'unanswered',
@@ -1395,7 +1404,7 @@ const SG_TAKEOVER_SUFFIXES: ReadonlyArray<{ suffix: string; service: string }> =
 ]
 
 export function sgTakeoverService(target: string): string | null {
-  const t = target.toLowerCase().replace(/\.+$/, '')
+  const t = sgNormName(target)
   for (const entry of SG_TAKEOVER_SUFFIXES) {
     if (t.endsWith(entry.suffix)) return entry.service
   }
@@ -1525,7 +1534,7 @@ export function sgCnameFindings(c: SgCnameReport, name: string): SgFinding[] {
 
 export function sgNsFindings(ns: SgAnswer, soa: SgAnswer, name: string): SgFinding[] {
   const out: SgFinding[] = []
-  const hosts = ns.records.map(r => r.data.toLowerCase().replace(/\.+$/, '')).filter(Boolean)
+  const hosts = ns.records.map(r => sgNormName(r.data)).filter(Boolean)
 
   // Answered and not NXDOMAIN: the name exists and is not a zone cut.
   if (!hosts.length && !sgUnanswered(ns) && ns.rcode !== 'NXDOMAIN') {
@@ -1620,9 +1629,9 @@ export function sgReachabilityFindings(diffs: SgDiff[], name: string): SgFinding
     return [{
       id: 'zone-servfail',
       level: 'error',
-      title: `Every resolver returns SERVFAIL for ${name}`,
-      detail: `Every resolver asked returned SERVFAIL for every question about ${name}, so nothing on this page could be read. ${SG_ZONE_FAILING} A broken chain is usually an expired signature, or a DS record at the parent that no longer matches the zone's key.`,
-      evidence: diffs.map(d => `${d.type} → SERVFAIL from ${d.failed.map(a => a.resolver).join(', ')}`),
+      title: `The resolvers return SERVFAIL for ${name}`,
+      detail: `Every resolver that replied returned SERVFAIL for every question about ${name}, so nothing on this page could be read. ${SG_ZONE_FAILING} A broken chain is usually an expired signature, or a DS record at the parent that no longer matches the zone's key.`,
+      evidence: diffs.map(d => `${d.type} → SERVFAIL from ${d.failed.filter(a => a.rcode === 'SERVFAIL').map(a => a.resolver).join(', ')}`),
       basis: 'record',
     }]
   }
@@ -1644,7 +1653,10 @@ export function sgReachabilityFindings(diffs: SgDiff[], name: string): SgFinding
     } else if (list.some(a => a.rcode === 'ERROR')) {
       unreachable.push(resolver)
     } else {
-      replied.set(list[0].rcode, [...(replied.get(list[0].rcode) ?? []), resolver])
+      // Every rcode it sent, not the first: SERVFAIL for most types and REFUSED
+      // for one is not "REFUSED came back".
+      const said = [...new Set(list.map(a => a.rcode))].join(' or ')
+      replied.set(said, [...(replied.get(said) ?? []), resolver])
     }
   }
   const said: string[] = []

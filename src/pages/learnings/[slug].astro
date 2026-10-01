@@ -90,6 +90,7 @@ const ldJson = blogPostingJsonLd({
   authorName: site.name,
   authorUrl: site.url,
   keywords: learning.keywords,
+  image: ogCard ? new URL(ogCard, site.url).href : undefined,
 })
 
 // Visible trail + matching BreadcrumbList (see src/components/Breadcrumbs.astro).

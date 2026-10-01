@@ -2995,6 +2995,7 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
   const toolDirNames = (await readdir(toolsUrl, { withFileTypes: true }))
     .filter(d => d.isDirectory()).map(d => d.name)
   const renderedBy = new Map()   // data-type -> Set(tool dir)
+  const groupedBy = new Map()    // data-group -> Set(tool dir)
   const toolSheets = new Map()   // tool dir -> [[file, css]]
   let toolsWithATitle = 0
   for (const dir of toolDirNames) {
@@ -3005,6 +3006,10 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
       for (const m of src.matchAll(/data-type="([a-z0-9-]+)"/g)) {
         if (!renderedBy.has(m[1])) renderedBy.set(m[1], new Set())
         renderedBy.get(m[1]).add(dir)
+      }
+      for (const m of src.matchAll(/data-group="([a-z0-9-]+)"/g)) {
+        if (!groupedBy.has(m[1])) groupedBy.set(m[1], new Set())
+        groupedBy.get(m[1]).add(dir)
       }
       titles += [...src.matchAll(/<h1[\s>]/g)].length
     }
@@ -3036,9 +3041,20 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
           assert.ok(
             sel.includes(`[data-tool="${dir}"]`),
             `${file} declares \`${sel}\`, but [data-type="${idiom}"] is rendered by `
-            + `${renderedBy.get(idiom).size} tools. Per-tool sheets share one page bundle, so this `
-            + `rule silently styles all of them. Move it to tools-common.css, or scope it with `
+            + `${renderedBy.get(idiom).size} tools, so an unscoped rule for it styles whichever of `
+            + `them shares a page with this sheet. Move it to tools-common.css, or scope it with `
             + `div[data-tool="${dir}"].`,
+          )
+        }
+        // The same for data-group: json-tidy.css once styled List Forge's
+        // pane-actions buttons this way, and only while every tool sheet shared
+        // one bundle — linking each page's own sheet changed List Forge's look.
+        for (const [group, dirs] of groupedBy) {
+          if (dirs.size < 2 || !sel.includes(`[data-group="${group}"]`)) continue
+          assert.ok(
+            sel.includes(`[data-tool="${dir}"]`),
+            `${file} declares \`${sel}\`, but [data-group="${group}"] is rendered by ${dirs.size} tools. `
+            + `Move it to tools-common.css, or scope it with div[data-tool="${dir}"].`,
           )
         }
       }
@@ -3064,7 +3080,8 @@ console.log('hiding a section is a two-way door: every nav hub is sitemapped in 
       ...layoutSheets,
       [`pages/${rel} <style>`, astroStyles(src)],
       ...(await Promise.all(
-        [...src.matchAll(/^import\s+['"]([^'"]+\.css)['"]/gm)].map(m => readSheets(new URL(m[1], url))),
+        // A sheet linked through `?url` is reached as surely as an imported one.
+        [...src.matchAll(/^import\s+(?:\w+\s+from\s+)?['"]([^'"]+\.css)(?:\?url)?['"]/gm)].map(m => readSheets(new URL(m[1], url))),
       )).flat(),
     ]])
   }
@@ -6947,10 +6964,26 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
     const importPath = slugRoute.slice(at + marker.length, slugRoute.indexOf("'", at + marker.length))
     const dir = importPath.replace(/\/[^/]+$/, '').replace('../../components/tools/', '')
     assert.ok(dir && dir !== importPath, `${tool.slug}'s dispatch must import from src/components/tools/`)
-    assert.ok(
-      slugRoute.includes(`../../components/tools/${dir}/`) && new RegExp(`import '\\.\\./\\.\\./components/tools/${dir}/[a-z0-9-]+\\.css'`).test(slugRoute),
-      `${tool.slug}'s stylesheet is not imported by tools/[slug].astro — the page would render unstyled`,
-    )
+    // Each tool page links its own sheet and no other tool's: the route finds
+    // `<dir>/<slug>.css` through a `?url` glob, so the file must be there.
+    const sheet = await readFile(new URL(`../src/components/tools/${dir}/${tool.slug}.css`, import.meta.url), 'utf-8').catch(() => null)
+    assert.ok(dir === tool.slug && sheet !== null, `${tool.slug}'s stylesheet is not at tools/${tool.slug}/${tool.slug}.css — the page would render unstyled`)
+  }
+  assert.ok(/import\.meta\.glob<string>\('\.\.\/\.\.\/components\/tools\/\*\/\*\.css', \{ query: '\?url'/.test(slugRoute)
+    && /<link slot="head" rel="stylesheet" href=\{toolsCommonCss\} \/>\n\s*\{toolCss && <link slot="head" rel="stylesheet" href=\{toolCss\} \/>\}/.test(slugRoute),
+    'tools/[slug].astro links tools-common.css and then the tool\'s own stylesheet in the head, through ?url')
+  // A static import of a per-tool sheet, in the route OR in a tool module,
+  // lands in every tool page's head: Astro hoists the CSS of every module the
+  // page's script can reach.
+  assert.equal(/import '\.\.\/\.\.\/components\/tools\/[a-z0-9-]+\/[a-z0-9-]+\.css'/.test(slugRoute), false,
+    'tools/[slug].astro imports no per-tool stylesheet statically')
+  for (const e of await readdir(new URL('../src/components/tools/', import.meta.url), { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    for (const f of await readdir(new URL(`../src/components/tools/${e.name}/`, import.meta.url))) {
+      if (!f.endsWith('.ts')) continue
+      const src = await readFile(new URL(`../src/components/tools/${e.name}/${f}`, import.meta.url), 'utf-8')
+      assert.equal(/^import ['"][^'"]+\.css['"]/m.test(src), false, `tools/${e.name}/${f} imports a stylesheet, which Astro would add to every tool page`)
+    }
   }
 
   /* ── 12. The hoisted IP canonicaliser still serves both callers. ───────── */
@@ -8461,7 +8494,12 @@ console.log('dns sightline: a CNAME is reported alongside only the records its o
     assert.ok(diff.groups.every(g => !sg.sgUnanswered(g.answer)), `${label}: no group is built from a non-answer`)
     const status = sg.sgMxStatus(pick)
     assert.equal(status === 'unanswered', answered.length === 0, `${label}: MX is unreadable exactly when nobody answered`)
-    assert.equal(sg.sgServfailEverywhere(diff), [k0, k1, k2].every(k => k === 'servfail'), `${label}: "the zone is failing" needs every resolver's SERVFAIL`)
+    // At least two SERVFAILs, and every other resolver sent no reply at all: a
+    // resolver nobody heard from must not hide the other two's verdict.
+    const ks = [k0, k1, k2]
+    assert.equal(sg.sgServfailEverywhere(diff),
+      ks.filter(k => k === 'servfail').length >= 2 && ks.every(k => k === 'servfail' || k === 'unreachable' || k === 'deadline'),
+      `${label}: "the zone is failing" needs two SERVFAILs and no other reply`)
     mixes += 1
   }
   assert.equal(mixes, 343)
@@ -8540,6 +8578,24 @@ console.log('dns sightline: a CNAME is reported alongside only the records its o
     assert.ok(f, `${id} is reported for the failing zone`)
     assert.ok(/zone itself is failing/.test(f.detail) && !/re-run the inspection/i.test(f.detail), `${id} says the zone is failing, not "re-run"`)
   }
+  // (c2) The same broken zone with one resolver unreachable: two SERVFAILs and
+  //      a silence are still the zone failing, not "try again".
+  const brokenQuiet = await inspectOver(zone, (r, n) => (inZone(n) ? (r === 'cloudflare' ? 'unreachable' : SERVFAIL) : undefined))
+  assert.ok(ids(brokenQuiet).includes('zone-servfail') && !ids(brokenQuiet).includes('resolvers-unreachable'),
+    `one unreachable resolver does not hide a zone every other resolver SERVFAILs (got ${ids(brokenQuiet).join(', ')})`)
+  for (const id of ['spf-inconclusive', 'dmarc-inconclusive', 'mx-inconclusive', 'caa-inconclusive']) {
+    const f = brokenQuiet.findings.find(x => x.id === id)
+    assert.ok(f && /zone itself is failing/.test(f.detail), `${id} says the zone is failing with one resolver silent`)
+  }
+  assert.ok(brokenQuiet.findings.find(f => f.id === 'zone-servfail').evidence.every(e => !/cloudflare/.test(e)),
+    'the zone-servfail evidence names only the resolvers that said SERVFAIL')
+  // A resolver that sent different rcodes for different types is reported with all of them.
+  const mixedCodes = sg.sgReachabilityFindings(sg.SG_TYPES.map((t, i) => sg.sgDiffAnswers(t, resolvers.map(r => ({
+    resolver: r, type: t, name: 'ex.test', elapsedMs: 0, records: [], rcode: r === 'quad9' && i === 0 ? 'REFUSED' : r === 'quad9' ? 'SERVFAIL' : 'REFUSED',
+  })))), 'ex.test')[0]
+  assert.ok(/SERVFAIL/.test(mixedCodes.detail) && /REFUSED or SERVFAIL|SERVFAIL or REFUSED/.test(mixedCodes.detail),
+    `a resolver's every rcode is named, not its first (got ${mixedCodes.detail})`)
+
   // …and none of the unreadable worlds prints a sentence only a real absence prints.
   for (const [world, r] of [['mixed', mixed], ['MX down', mxDown], ['broken DNSSEC', broken]]) {
     const said = notes(r).filter(n => absenceNotes.includes(n))
@@ -8824,10 +8880,10 @@ console.log('dns sightline follow-ups: no finding rests on a lookup that got no 
   const cspSets = [...code.matchAll(/response\.headers\.set\('Content-Security-Policy'/g)]
   assert.equal(cspSets.length, 1, 'the middleware sets the CSP header in exactly one place')
   const before = code.slice(0, cspSets[0].index)
-  assert.ok(/if \(!isReroutedByAstro\(response\)\) \{\s*$/.test(before),
+  assert.ok(/if \(!isReroutedByAstro\(response, pathname\)\) \{\s*$/.test(before),
     'the CSP header is set only when Astro will NOT re-render the response — a bodyless 404/500 gets its CSP from the second pass')
-  assert.ok(/function isReroutedByAstro\(response: Response\): boolean \{\s*return response\.body === null && REROUTED_ERROR_STATUSES\.includes\(response\.status\)/.test(code),
-    'the guard is exactly Astro\'s own reroute condition: a null body and a reroutable status')
+  assert.ok(/function isReroutedByAstro\(response: Response, pathname: string\): boolean \{\s*return response\.body === null && REROUTED_ERROR_STATUSES\.includes\(response\.status\) && !pathname\.startsWith\('\/api\/'\)/.test(code),
+    'the guard is exactly Astro\'s own reroute condition: a null body, a reroutable status, and not an endpoint (Astro never reroutes those, so they keep this pass\'s CSP)')
   const listed = JSON.parse(code.match(/const REROUTED_ERROR_STATUSES = (\[[\d, ]+\])/)?.[1] ?? 'null')
   const { REROUTABLE_STATUS_CODES } = await import('../node_modules/astro/dist/core/constants.js')
   assert.deepEqual(listed, [...REROUTABLE_STATUS_CODES],
@@ -8971,12 +9027,24 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
   const inline = []
   for (const file of templates) {
     for (const [tag] of (await readFile(new URL(file, import.meta.url), 'utf-8')).matchAll(/<script\b[^>]*>/g)) {
-      if (tag === '<script>' || /\bsrc="/.test(tag) || /type="application\/ld\+json"/.test(tag)) continue
+      if (tag === '<script>' || /\bsrc=["{]/.test(tag) || /type="application\/ld\+json"/.test(tag)) continue
       inline.push(`${file.replace('../', '')}: ${tag}`)
     }
   }
   assert.deepEqual(inline, ['src/components/Head.astro: <script is:inline nonce={cspNonce} set:html={ROOT_BOOT_JS} />'],
     'the head bootstrap is the one inline executable script on the site')
+  // A bare <script> counts as bundled above only because the build never
+  // inlines one: Vite inlines a small script chunk by default, with no nonce,
+  // and the CSP refuses it (the coming-soon game page's button never wired up).
+  // (mutation: drop assetsInlineLimit from astro.config.mjs → fails)
+  {
+    const { default: astroConfig } = await import('../astro.config.mjs')
+    const limit = astroConfig.vite?.build?.assetsInlineLimit
+    assert.equal(typeof limit, 'function', 'astro.config.mjs decides asset inlining per file')
+    assert.equal(limit('/_astro/page.astro_astro_type_script_index_0_lang.js'), false, 'no bundled script is ever inlined into a page')
+    assert.equal(limit('/repo/src/components/tools/flowmap/flowmap.css'), false, 'a tool sheet linked by ?url is never a data: URL the CSP would refuse')
+    assert.equal(limit('/x/icon.svg'), undefined, 'other assets keep Vite\'s default rule')
+  }
 
   // ── A ClientRouter swap keeps the client state: patchIncomingDocument copies
   //    it onto the incoming document, presence AND absence.
@@ -9107,6 +9175,15 @@ console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard a
     assert.ok(md.includes('\n- [Evil\\](https://evil.example) # Injected \\[x\\]](https://apanjwani0.com/tools/zz-nasty): one\n'),
       'a hostile title stays inside its own link text in llms.txt')
     assert.equal(/^#+ (Injected|two)/m.test(md), false, 'no config value starts a heading in llms.txt')
+  }
+  // A project entry is `/projects#<id>`, so /projects must render that id on
+  // the card, from the same function — or every project link lands at the top.
+  {
+    const page = await readFile(new URL('../src/pages/projects.astro', import.meta.url), 'utf-8')
+    const card = await readFile(new URL('../src/components/ProjectCard.astro', import.meta.url), 'utf-8')
+    assert.ok(/const anchors = projectAnchors\(projects\)/.test(page) && /id=\{anchors\[i\]\}/.test(page),
+      '/projects passes each card its projectAnchors() id')
+    assert.ok(/<article data-type="project" id=\{id\}>/.test(card), 'ProjectCard renders the id it is given on the card')
   }
   // Project cards are listed only while /projects is public (sections.projects).
   const defaults = await loadSiteConfigs({})
@@ -9318,11 +9395,16 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   // twice: status lights blinking at rest (2026-09-28), then the same lights
   // blinking while traffic crossed and a glow that breathed (2026-09-30). The
   // one clock-driven brightness the owner keeps is the stars' slow twinkle.
+  // The twinkle lives in src/lib/sky.ts, shared with the hubs' sky; the hero
+  // and the hubs' mount may not add a clock-driven oscillation of their own.
   const networkSrc = await readFile(new URL('network.ts', heroDir), 'utf-8')
-  const starsFn = networkSrc.match(/function drawStars\([\s\S]*?\n\}\n/)
-  assert.ok(starsFn, 'drawStars is found in network.ts')
-  const clocked = [...networkSrc.replace(starsFn[0], '').matchAll(/Math\.(sin|cos)\(([^()]|\([^()]*\))*\btime\b/g)].map(m => m[0])
-  assert.deepEqual(clocked, [], `the hero oscillates on the clock outside the stars' twinkle, which reads as flicker: ${clocked.join(' | ')}`)
+  const skySrc = await readFile(new URL('../src/lib/sky.ts', import.meta.url), 'utf-8')
+  const skyUiSrc = await readFile(new URL('../src/lib/sky-ui.ts', import.meta.url), 'utf-8')
+  const starsFn = skySrc.match(/export function drawStars\([\s\S]*?\n\}\n/)
+  assert.ok(starsFn, 'drawStars is found in src/lib/sky.ts')
+  const clockedIn = src => [...src.matchAll(/Math\.(sin|cos)\(([^()]|\([^()]*\))*\btime\b/g)].map(m => m[0])
+  const clocked = [...clockedIn(networkSrc), ...clockedIn(skySrc.replace(starsFn[0], '')), ...clockedIn(skyUiSrc)]
+  assert.deepEqual(clocked, [], `the sky or the hero oscillates on the clock outside the stars' twinkle, which reads as flicker: ${clocked.join(' | ')}`)
   // The stylesheets too: the log's typing dots pulsed forever in CSS while
   // this check read only the script (found in the PR #27 review).
   for (const sheet of ['hero-network.css', 'home.css']) {
@@ -9341,14 +9423,14 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   // reappears at the other; a line still drawn to it vanished or appeared in
   // one frame, about once a second at 14 px/s (the third flicker report,
   // 2026-09-30). Drift the real stars for a minute and count those jumps.
-  const { makeStars, driftStars, lineAlpha } = await import('../src/components/home/hero/network.ts')
+  const { makeStars, driftStars, lineAlpha, starCount, SKY_NEAR } = await import('../src/lib/sky.ts')
   const realRandom = Math.random
   let seed = 7
   Math.random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
   try {
     for (const [w, h, reach] of [[1440, 900, 120], [375, 812, 80]]) {
-      const stars = makeStars(Math.round(Math.min(Math.max((w * h) / 9000, 50), 170)), w, h)
-      const near = stars.filter(st => st.z >= 0.62)
+      const stars = makeStars(starCount(w, h, false), w, h)
+      const near = stars.filter(st => st.z >= SKY_NEAR)
       const lines = () => near.flatMap((a, i) => near.slice(i + 1).map(b => lineAlpha(a, b, reach, w, h)))
       let before = lines(), pops = 0
       for (let frame = 0; frame < 30 * 60; frame++) {
@@ -9364,6 +9446,30 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
     Math.random = realRandom
   }
 }
+/* ─────  The hubs' sky  ─────
+   The home hero's drifting stars behind the tools, games and learnings hubs
+   (owner, 2026-10-01). It must stay a light backdrop: only those hubs render
+   it, it pauses while the tab is hidden, gives reduced motion one still frame,
+   caps the canvas at 1.5 device pixels, and the cards it sits behind are
+   opaque, so no star lands in a card's copy. */
+{
+  const pagesDir = new URL('../src/pages/', import.meta.url)
+  const withSky = []
+  for (const rel of (await readdir(pagesDir, { recursive: true })).filter(f => f.endsWith('.astro'))) {
+    if (/^\s*sky\s*$/m.test(await readFile(new URL(rel, pagesDir), 'utf-8'))) withSky.push(rel)
+  }
+  assert.deepEqual(withSky.sort(), ['games.astro', 'learnings.astro', 'tools/index.astro'], 'the sky is drawn behind the three hubs and nowhere else')
+  const skyUi = await readFile(new URL('../src/lib/sky-ui.ts', import.meta.url), 'utf-8')
+  assert.match(skyUi, /const run = !reduced && !document\.hidden/, 'the sky loop runs only with motion allowed and the tab visible')
+  assert.match(skyUi, /Math\.min\(window\.devicePixelRatio \|\| 1, 1\.5\)/, 'the sky canvas is capped at 1.5 device pixels')
+  assert.match(skyUi, /if \(last && now - last < FRAME_MS\) return/, 'the sky draws at a capped frame rate')
+  const nav = await readFile(new URL('../src/lib/nav-ui.ts', import.meta.url), 'utf-8')
+  assert.match(nav, /import\('\.\/sky-ui'\)/, 'the sky loads as its own chunk, only where a page renders it')
+  const shared = (await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
+  const card = shared.match(/\[data-type="card-grid"\] > \* \{([^}]*)\}/)?.[1] ?? ''
+  assert.match(card, /background:\s*var\(--color-surface\)/, 'listing cards are opaque, so the sky never shows through their copy')
+}
+
 console.log('home hero: one hero and no switch, its text sits above the scrim, nothing blinks, it names no tools or games or the host, and its dev hooks compile out of production')
 
 /* ══════════════  UI refresh · anchor regions for items B–G  ══════════════

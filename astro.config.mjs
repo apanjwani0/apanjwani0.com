@@ -244,7 +244,7 @@ const adminSavePlugin = {
 // the page comes from localhost. So the dev server measures one real request
 // to the live site from this machine instead (DNS, TCP, TLS, first byte and
 // body, plus the edge's own trace), and the review shows real numbers, never
-// a sample. `?ping` times one HEAD over a kept-open HTTP/2 connection, like
+// a sample. `?ping` times one GET of /cdn-cgi/trace over a kept-open HTTP/2 connection, like
 // the hero's click-to-ping. Loopback callers only, so a dev server started with
 // --host is not an open measuring proxy. configureServer never runs in a
 // production build.
@@ -286,15 +286,15 @@ async function probeVisit() {
 }
 
 // The browser pings over the HTTP/2 connection its page load already opened,
-// so this keeps one open and times a HEAD on it; a new connection's first HEAD
-// is untimed. Not HTTP/1.1: Node closes that connection after the edge's HEAD
-// reply (it carries no length), so every timing would include a handshake.
+// so this keeps one open and times a GET of /cdn-cgi/trace on it (answered by
+// the data centre, like the hero's own ping); a new connection's first request
+// is untimed. Not HTTP/1.1, so no timing includes a fresh handshake.
 /** @type {import('node:http2').ClientHttp2Session | undefined} */
 let probeSession;
 /** @param {import('node:http2').ClientHttp2Session} session */
-function probeHead(session) {
+function probeRequest(session) {
   return new Promise((resolve, reject) => {
-    const req = session.request({ ':method': 'HEAD', ':path': '/' });
+    const req = session.request({ ':method': 'GET', ':path': '/cdn-cgi/trace' });
     req.setTimeout(6000, () => req.close());
     req.on('response', () => { resolve(undefined); req.close(); });
     req.on('error', reject);
@@ -310,10 +310,10 @@ async function probePing() {
     fresh.on('goaway', () => { if (probeSession === fresh) probeSession = undefined; });
     fresh.unref();
     probeSession = session = fresh;
-    await probeHead(fresh);
+    await probeRequest(fresh);
   }
   const t0 = performance.now();
-  await probeHead(session);
+  await probeRequest(session);
   return { ms: performance.now() - t0 };
 }
 
@@ -359,5 +359,14 @@ export default defineConfig({
   devToolbar: { enabled: false },
   vite: {
     plugins: [adminSavePlugin, heroProbePlugin],
+    // A small bundled <script> is inlined into the page by default, and an
+    // inline script without the response's nonce is refused by the CSP (the
+    // coming-soon game page's "want this sooner" button never wired up). So
+    // scripts always ship as files. So do the tool stylesheets pages link by
+    // `?url`: inlined, they would be data: URLs, which the CSP's style-src also
+    // refuses. Other assets keep Vite's 4 KB rule.
+    build: {
+      assetsInlineLimit: (file) => (file.endsWith('.js') || /\/src\/components\/tools\/.*\.css$/.test(file) ? false : undefined),
+    },
   },
 });

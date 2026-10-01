@@ -16,8 +16,9 @@ experience / blogs / learnings / games / tools sections.
   deployment-specific file.
 - **Oat UI**: a forked WebComponents design system, vendored as
   `public/oat.min.{css,js}`. To update it, run `make` in the fork
-  (github.com/apanjwani0/oat) and copy `dist/oat.min.*` into `public/`. No
-  React/Vue/Svelte.
+  (github.com/apanjwani0/oat) and copy `dist/oat.min.*` into `public/`. Keep
+  it out of Vite: its CSS minifier merges Oat's `@layer` blocks and restyles
+  buttons. No React/Vue/Svelte.
 - **TypeScript** throughout; `@astrojs/check` for type checking.
 - **marked** + **dompurify** for markdown; **html2canvas** for tools;
   **gifenc** for GIF export; **cytoscape** for the Flowmap and Draftboard graphs.
@@ -37,6 +38,8 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - `src/middleware.ts` — security headers, the CSP nonce, `Cache-Control`, the
   visit counter and the origin lock.
 - `src/lib/caa.ts` — the CAA vocabulary shared by DNS Sightline and Chainsaw.
+- `src/lib/sky.ts` — the drifting stars the home hero and the hubs share;
+  `src/lib/sky-ui.ts` mounts them behind the hubs.
 - `src/lib/site-index.ts` — the site's real pages, derived once for the
   sitemap, `/llms.txt`, the command palette and the 404.
 - `src/lib/theme.ts`, `src/lib/site-ui.ts`, `src/lib/kit.ts`,
@@ -61,12 +64,14 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - **PR #27 (`develop` → `main`) is open, and held** for the fixes from its
   2026-10-01 review, among them a live DNS Sightline bug and the hero's layout
   on short screens.
-- **In flight:** `fix/release-review`, cut from `origin/develop`, holds every
-  fix the review asked for. Its PR goes into `develop`; then #27 ships
-  everything. What the review left open (post-deploy checks, the owner's
-  calls, deferred bugs) is in `docs/plans/release-followups.md`.
+- **The review's fixes** (`fix/release-review`, PR #28) are merged into
+  `develop`. A second review pass, plus a page-by-page SEO and performance
+  audit, is on `fix/pr27-review-2`, cut from `origin/develop`; its PR goes into
+  `develop`, then #27 ships everything. What the reviews left open (post-deploy
+  checks, the owner's calls, deferred bugs) is in
+  `docs/plans/release-followups.md`.
 - **Owner's pending moves:**
-  1. Merge `fix/release-review` into `develop`, then #27.
+  1. Merge `fix/pr27-review-2` into `develop`, then #27.
   2. Run the post-deploy checks in `docs/plans/release-followups.md`.
   3. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
@@ -460,6 +465,15 @@ fixture is the worked example.
   `data-tool="<dir-name>"`. That root supplies the workbench width
   (`--tool-width`), the gutter, the focus ring and `<kbd>` styling. A tool styles
   its internals, never its own container width. Asserted.
+- **A tool page links only its own stylesheet**, `tools/<slug>/<slug>.css`,
+  through a `?url` glob in `tools/[slug].astro`, after `tools-common.css`. A
+  static import of a per-tool sheet, in the route or in a tool module, puts it
+  in every tool page's head: Astro hoists the CSS of every module a page's
+  script can reach. Asserted.
+- **No bundled script is inlined.** Vite inlines a small `<script>` chunk by
+  default, with no nonce, and the CSP refuses it; `assetsInlineLimit` in
+  `astro.config.mjs` keeps every script a file, and every `?url`-linked
+  stylesheet too (a data: stylesheet is refused the same way). Asserted.
 - **A tool's claims live in a module, not in the component**
   (`webhook-inspector/signature.ts`, `cron-whisperer/schedule.ts` and
   `crontab.ts`, `token-bench/diagnose.ts`, `chainsaw/analyze.ts`,
@@ -526,8 +540,15 @@ fixture is the worked example.
   an article.
 - **StarField** runs behind the plain pages that keep `Base.astro`'s default
   (the 404, blogs, a learning with no figure). Keep it off tool and game detail
-  pages (CPU), the four card hubs (dots land in card copy) and the home page,
-  whose hero draws its own stars. A new listing page passes `starfield={false}`.
+  pages (CPU), the card hubs and the home page, whose hero draws its own stars.
+  A new listing page passes `starfield={false}`.
+- **The sky** (`src/lib/sky.ts`) is the home hero's drifting stars and
+  constellations. The tools, games and learnings hubs draw it as their
+  background (`Base`'s `sky` prop, mounted by `src/lib/sky-ui.ts`, owner
+  2026-10-01): about half the hero's density, at most ~30 fps, stopped while
+  the tab is hidden, one still frame under reduced motion, the canvas capped at
+  1.5 device pixels. Listing cards are opaque so no star lands in their copy.
+  Only those three hubs render it. Asserted.
 - **Tool and game detail pages** pass `loadFonts={false}` (no CLS, no
   render-blocking font request) and `clientRouter={false}` (no router bundle) to
   `Head`.
@@ -568,9 +589,15 @@ editing tokens only.
   `main { flex: 1 0 auto }`. The `tool-header` block lives once, in
   `tools-common.css`. Only a tool-private subtree may size an `h1` (Draftboard's
   `md-preview`). All derived from the components and asserted.
-- **Card titles**: `[data-type="card-title"]` gets its weight from `shared.css`,
-  and no other sheet may set its `font-size` or `font-weight`. A hub that wants
-  a different shape uses a variant (`/learnings` passes `data-variant="list"`).
+- **Card titles**: `[data-type="card-title"]` gets its size (`--text-card`) and
+  weight from `shared.css`, and no other sheet may set its `font-size` or
+  `font-weight`.
+- **One card anatomy on every hub** (`shared.css`): `card-head` (the title,
+  then a `card-badges` group on the right), `card-desc` (clamped to three
+  lines), then an optional `card-meta` pinned to the bottom (the learnings
+  card's date and read time). The tools, games and learnings hubs all render
+  `ul[data-type="card-grid"] > li` this way; the streak strip finds its game's
+  `card-badges`.
 - **The whole card is its link**, through a stretched `::after` on the title
   link. The card must stay `position: relative` (or the overlay covers the
   page), and a card's secondary links need `position: relative` to stay
@@ -676,7 +703,9 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 
 - **Real data only, never a sample** (owner, 2026-09-28). The replay reads
   Navigation Timing, `/cdn-cgi/trace` (country, data centre, TLS) and one HEAD
-  of `/` (whether Cloudflare's copy predates the visit, from its `age`). A fact
+  of `/` (whether Cloudflare's copy predates the visit, from its `age`). The
+  click-to-ping times a GET of `/cdn-cgi/trace`, which the data centre answers
+  itself, so a ping is the edge round trip and never an origin render. A fact
   it cannot measure is left out: the ISP station carries no number, because
   nothing times that hop apart from the rest. On the dev server the page comes
   from localhost, so `/__hero-probe` (dev-server middleware in
@@ -697,7 +726,9 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 - **Nothing blinks or pulses.** Blinking read as the page flickering twice, so
   the status lights stay lit, the spotlight's glow is steady and its veil eases
   in and out. The stars' slow twinkle is the only brightness driven by the
-  clock (asserted in the script and the stylesheets); they drift at 14 px/s.
+  clock (asserted in the script and the stylesheets); they drift at 14 px/s,
+  and there are 115% as many, 15% brighter, as the first sky (`SKY_INTENSITY`,
+  owner 2026-10-01).
 - **A short screen scrolls**, at any width: a phone either way up, or a short
   laptop window. When the frame, the line and the text block cannot share one
   screen, the hero grows taller rather than squeezing the line into the name;
@@ -715,9 +746,9 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 - **No tools or games in the hero** (the owner's rule): not in the copy, not as
   a link or a hover affordance, not even by name. The site nav keeps "tools"
   and "games" for search reach, and the meta description still lists them.
-- **Looping motion is allowed here and nowhere else.** It still stops when the
-  hero is hidden or off screen, and renders the finished replay as one still
-  frame under `prefers-reduced-motion`.
+- **Looping motion is allowed here and in the hubs' sky, nowhere else.** It
+  still stops when the hero is hidden or off screen, and renders the finished
+  replay as one still frame under `prefers-reduced-motion`.
 
 `security:smoke` holds the page to one hero with no switch and no query string,
 every child of the hero's text block above the scrim (read from the markup),

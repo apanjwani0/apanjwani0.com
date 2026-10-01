@@ -28,6 +28,7 @@ const ldJson = itemListJsonLd(
 <Base
   wide
   starfield={false}
+  sky
   title="learnings"
   description="Short, visual explainers of how things work, with interactive diagrams you can play with while you read."
   keywords="interactive explainers, how things work, visual explanations, how the internet works, system diagrams"
@@ -39,16 +40,18 @@ const ldJson = itemListJsonLd(
     play with while you read.
   </p>
   {ordered.length === 0 && <p>Nothing published yet — the first pieces are being written.</p>}
-  <ul data-type="card-grid" data-variant="list">
+  <ul data-type="card-grid">
     {ordered.map(l => (
       <li>
-        <div data-type="writing-row">
-          <span data-type="writing-date"><time datetime={l.date}>{formatDisplayDate(l.date)}</time> · {readingTime(l.content)} min read</span>
+        <div data-type="card-head">
           <h2 data-type="card-title">
             <a href={`/learnings/${l.slug}`}>{l.title}</a>
           </h2>
         </div>
-        <div data-type="writing-summary" set:html={render(l.summary)} />
+        <div data-type="card-desc" set:html={render(l.summary)} />
+        <p data-type="card-meta">
+          <span data-type="writing-date"><time datetime={l.date}>{formatDisplayDate(l.date)}</time> · {readingTime(l.content)} min read</span>
+        </p>
       </li>
     ))}
   </ul>

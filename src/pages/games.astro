@@ -36,6 +36,7 @@ const metaDescription =
 <Base
   wide
   starfield={false}
+  sky
   title="games"
   seoTitle="Free Browser Games — Daily Word Puzzle, Typing Race & More"
   description={metaDescription}
@@ -52,12 +53,12 @@ const metaDescription =
   {games.length === 0 ? (
     <p>Coming soon.</p>
   ) : (
-    <div data-type="card-grid">
+    <ul data-type="card-grid">
       {games.map(g => (
-        <article data-type="project">
-          <div data-type="project-header">
+        <li>
+          <div data-type="card-head">
             <h2 data-type="card-title"><a href={`/games/${g.slug}`}>{g.title}</a></h2>
-            <span data-type="project-stats">
+            <span data-type="card-badges">
               {isPlayableGame(g) ? (
                 <span data-type="game-badge" data-live>play <span aria-hidden="true">&rsaquo;</span></span>
               ) : (
@@ -67,15 +68,13 @@ const metaDescription =
           </div>
           {/* First paragraph only. The full description is the product copy
               for /games/<slug> and runs to three paragraphs (Deep Shore is
-              1,074 characters), which on a card made one column three times
-              the height of its neighbours and buried the eight titles this
-              page exists to let you scan. `intro` is not the answer — only 2
-              of 8 games have one — but every description's first paragraph is
-              already written as its summary. */}
-          <div data-type="project-description" set:html={render(g.description.split(/\n\s*\n/)[0])} />
-        </article>
+              1,074 characters); every description's first paragraph is
+              already written as its summary, and the card clamps it to three
+              lines so the titles stay easy to scan. */}
+          <div data-type="card-desc" set:html={render(g.description.split(/\n\s*\n/)[0])} />
+        </li>
       ))}
-    </div>
+    </ul>
   )}
 </Base>
 

@@ -11,7 +11,7 @@
  *    the anchor `scroll-padding-top` read, so content never hides under the
  *    fixed hero nav (re-measured on resize in case the nav wraps).
  *  - hide-on-scroll-down / show-on-scroll-up for the fixed hero nav.
- *  - lazy-mounts the StarField hero canvas.
+ *  - lazy-mounts the StarField hero canvas, and the hubs' sky (sky-ui.ts).
  *
  * The window-level scroll/resize listeners are registered ONCE (guarded by
  * `wired`), not on every navigation. The previous inline version re-added them
@@ -71,6 +71,24 @@ function mountStarField() {
   setTimeout(run, 800)
 }
 
+// The hubs' sky: imported on idle the first time a page renders its host,
+// then (re)mounted on every page, which also unmounts it from pages without one.
+let skyUi: Promise<typeof import('./sky-ui')> | null = null
+function mountSky() {
+  if (!skyUi && !document.querySelector('div[data-type="sky"]')) return
+  if (!skyUi) {
+    skyUi = new Promise(resolve => {
+      const run = () => resolve(import('./sky-ui'))
+      const requestIdle = (window as Window & {
+        requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      }).requestIdleCallback
+      if (requestIdle) requestIdle(run, { timeout: 1200 })
+      else setTimeout(run, 800)
+    })
+  }
+  void skyUi.then(m => m.mountSky())
+}
+
 function pageSetup() {
   syncNavHeight()
   // A page can load already scrolled — an anchor link, a restored position, or a
@@ -78,6 +96,7 @@ function pageSetup() {
   // resolved on load, not only on the next scroll event.
   syncNavScrolled()
   mountStarField()
+  mountSky()
 }
 
 export function initNav() {

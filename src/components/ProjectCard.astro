@@ -7,15 +7,17 @@ import { appendPathToExternalUrl, safeExternalUrl } from '../lib/security'
 interface Props {
   project: Project
   stats?: GitHubStats
+  /** The card's anchor, from projectAnchors() — what the site index links to. */
+  id: string
 }
 
-const { project, stats } = Astro.props
+const { project, stats, id } = Astro.props
 const projectUrl = safeExternalUrl(project.url)
 const stargazersUrl = appendPathToExternalUrl(project.url, 'stargazers')
 const forksUrl = appendPathToExternalUrl(project.url, 'forks')
 ---
 
-<article data-type="project">
+<article data-type="project" id={id}>
   <div data-type="project-header">
     <h2 data-type="card-title">
       {projectUrl

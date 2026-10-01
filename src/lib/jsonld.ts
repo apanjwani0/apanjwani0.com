@@ -46,6 +46,8 @@ export interface BlogPostingSchema {
   authorName: string
   authorUrl: string
   keywords?: string
+  /** Absolute URL of the share card. Google wants an image for Article results. */
+  image?: string
 }
 
 export function blogPostingJsonLd(b: BlogPostingSchema): string {
@@ -62,6 +64,7 @@ export function blogPostingJsonLd(b: BlogPostingSchema): string {
       url: b.authorUrl,
     },
     ...(b.keywords && { keywords: b.keywords }),
+    ...(b.image && { image: b.image }),
   })
 }
 

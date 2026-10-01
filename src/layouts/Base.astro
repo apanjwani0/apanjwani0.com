@@ -20,6 +20,8 @@ interface Props {
   wide?: boolean
   fluid?: boolean
   starfield?: boolean
+  /** The home hero's drifting sky behind the page (the tools, games and learnings hubs). */
+  sky?: boolean
   loadFonts?: boolean
   clientRouter?: boolean
   ogType?: 'website' | 'article'
@@ -42,6 +44,7 @@ const {
   wide = false,
   fluid = false,
   starfield = true,
+  sky = false,
   loadFonts = true,
   clientRouter = true,
   ogType = 'website',
@@ -88,6 +91,7 @@ const ogImage = ogImageMeta(site, ogCard, title)
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
     {starfield && <star-field data-type="starfield" aria-hidden="true"></star-field>}
+    {sky && <div data-type="sky" aria-hidden="true"></div>}
     <Nav site={site} bare={bare} />
     <main
       id="main-content"

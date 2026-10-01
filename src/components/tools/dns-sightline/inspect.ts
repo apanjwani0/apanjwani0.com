@@ -64,6 +64,7 @@ import {
   sgIsDangling,
   sgMxFindings,
   sgMxStatus,
+  sgNormName,
   sgNsFindings,
   sgOutageOf,
   sgPickAnswer,
@@ -163,7 +164,7 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
   // that could disagree with the first — the walk reading a SERVFAIL while the
   // Records table showed Google's record — so they are served from the pick.
   const walkLookup: SgLookup = (n, t) =>
-    n.trim().toLowerCase().replace(/\.+$/, '') === name && (SG_TYPES as readonly string[]).includes(t)
+    sgNormName(n) === name && (SG_TYPES as readonly string[]).includes(t)
       ? Promise.resolve(primaryOf(t))
       : lookup(n, t)
 
@@ -181,7 +182,7 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
   const caa = sgCaaVerdict(caaReport)
 
   // ── 3. the CNAME picture ─────────────────────────────────────────────────
-  const cnameTarget = cnameAnswer.records[0]?.data.toLowerCase().replace(/\.+$/, '') ?? null
+  const cnameTarget = cnameAnswer.records[0] ? sgNormName(cnameAnswer.records[0].data) : null
   let dangling = false
   let unchecked = false
   if (cnameTarget) {
@@ -206,7 +207,7 @@ export async function sgInspect(name: string, opts: SgInspectOptions = {}): Prom
     // names are normalised as sgQuery normalises them.
     coexisting: cnameTarget
       ? (['A', 'AAAA', 'MX', 'TXT', 'NS'] as SgType[]).filter(t =>
-          (primaryOf(t).records ?? []).some(r => r.name === name.toLowerCase().replace(/\.+$/, '')))
+          (primaryOf(t).records ?? []).some(r => r.name === sgNormName(name)))
       : [],
     atApex: name.split('.').length === 2,
   }
