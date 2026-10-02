@@ -340,7 +340,9 @@ SPF's ten-lookup budget counts lookups across the whole recursive evaluation. A
 domain reached by two routes is a diamond and is charged twice; only a name in
 its own ancestry is a cycle (`sgSpfDescend`). The walker is checked against an
 independent oracle in `security-smoke.mjs` (valid only on acyclic zones), and
-depth and breadth each have their own bound and fixture.
+depth and breadth each have their own bound and fixture. So does what it keeps:
+past the overshoot a term is counted, never kept or followed, because one TXT
+answer can hold thousands.
 
 ### A finding cites the record it rests on
 

@@ -77,10 +77,10 @@ Found while verifying. Ordered by how much each one matters.
      - It sends at a fixed 1.5 s after load (`:95`), before late LCP, most layout shift and any interaction.
      - Its CLS is a running sum of every shift (`:124-131`). That is the pre-2021 definition; current CLS is the largest session window.
    - Review A's "actual UX performance: unknown" is literally true.
-2. **The SPF walk is still unbounded** (`release-followups.md`, "Do this soon").
-   - A crafted zone costs about 110 MB of heap per request against a 768 MB container.
-   - It breaks *Public endpoints must be bounded in every dimension*.
-   - Neither review could see it. It goes first, because promotion brings attention.
+2. **The SPF walk was unbounded. Fixed on 2026-10-02:** past the overshoot it now counts terms without keeping them.
+   - A crafted zone cost about 110 MB of heap per request against a 768 MB container.
+   - It broke *Public endpoints must be bounded in every dimension*.
+   - Neither review could see it.
 3. **DNS Sightline decides "apex" by counting labels.**
    - The test is `atApex: name.split('.').length === 2` (`dns-sightline/inspect.ts:212`).
    - `example.co.uk` and `example.com.au` are never treated as apexes, so CNAME-at-apex is never flagged there.
@@ -149,15 +149,6 @@ for the owner's go-ahead first (§9 step 3).
   `main` are level. This rides PR-1.
 
 ### Phase 1: trust (correctness and measurement)
-
-**PR-4a. Bound the SPF walk.** (Small, security. First, because today it breaks a written invariant.)
-- Where: the SPF walk in `src/components/tools/dns-sightline/analyze.ts`, which is the term loop just after `SG_SPF_OVERSHOOT` is defined, plus `sgSpfDescend`.
-- Change: stop collecting terms once `lookups` passes `SG_SPF_OVERSHOOT`.
-- Fixture in `scripts/security-smoke.mjs`: a crafted zone with thousands of lookup terms.
-  - Assert that the collected-term count and the serialised report size both stay under a fixed ceiling.
-  - Assert that the verdict is unchanged.
-  - Then remove the bound and watch the assertion fail.
-- Delete the item from `release-followups.md`.
 
 **PR-1. The beacon fires, and measures what Google measures.** (Opus, medium. D6. Ask the owner to ship it to `main` soon after it merges, because Phase 3's two weeks start at deploy, not at the merge into `develop`.)
 - **Record each hard page load once, independent of the router.**
@@ -381,7 +372,7 @@ Only with Phase 3's numbers. See §6.
 ## 7. Interaction with existing plans
 
 - **`release-followups.md`.**
-  - Its SPF item rides PR-4a; its other DNS and Chainsaw items ride PR-4b.
+  - Its DNS and Chainsaw items ride PR-4b.
   - The meta description item rides PR-2; the article titles ride PR-3 (optional).
   - The performance items wait for Phase 3.
   - Delete each there as it ships.
@@ -395,19 +386,18 @@ Only with Phase 3's numbers. See §6.
 
 | Order | PR | Phase | Size | Model | Needs |
 | --- | --- | --- | --- | --- | --- |
-| 1 | PR-4a SPF bound | 1 | S | any, with the mutation check | — |
-| 2 | PR-1 beacon | 1 | M | Opus (or a design note approved first) | — |
-| 3 | PR-2 tool and game copy | 1 | M | Sonnet, then `/code-review` | — |
-| 4 | PR-3 article hedges | 1 | S | Sonnet, owner voice read | — |
-| 5 | PR-8 head cleanup | 2 | S | Sonnet | — |
-| 6 | PR-7 tools hub | 2 | S | Sonnet | — |
-| 7 | PR-4b DNS and Chainsaw correctness | 1 | M | Opus (or a design note approved first) | PR-4a |
-| 8 | PR-5 server-rendered header | 2 | L | Opus recipe, Sonnet conversions | PR-2 |
-| 9 | PR-6 topic graph | 2 | M | Opus design, Sonnet data | PR-5 |
-| 10 | PR-5b game headers | 2 | M | Opus | PR-5 |
+| 1 | PR-1 beacon | 1 | M | Opus (or a design note approved first) | — |
+| 2 | PR-2 tool and game copy | 1 | M | Sonnet, then `/code-review` | — |
+| 3 | PR-3 article hedges | 1 | S | Sonnet, owner voice read | — |
+| 4 | PR-8 head cleanup | 2 | S | Sonnet | — |
+| 5 | PR-7 tools hub | 2 | S | Sonnet | — |
+| 6 | PR-4b DNS and Chainsaw correctness | 1 | M | Opus (or a design note approved first) | — |
+| 7 | PR-5 server-rendered header | 2 | L | Opus recipe, Sonnet conversions | PR-2 |
+| 8 | PR-6 topic graph | 2 | M | Opus design, Sonnet data | PR-5 |
+| 9 | PR-5b game headers | 2 | M | Opus | PR-5 |
 
-The order is for one item at a time. PR-1 is second because its data needs a
-two-week head start. With parallel worktrees, PR-4a, PR-1, PR-2 and PR-3 touch
+The order is for one item at a time. PR-1 is first because its data needs a
+two-week head start. With parallel worktrees, PR-1, PR-2 and PR-3 touch
 disjoint files and can run together, and PR-7 and PR-8 can run beside PR-5.
 
 ## 9. How to work an item

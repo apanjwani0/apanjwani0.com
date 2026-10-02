@@ -475,6 +475,7 @@ export interface SgSpfReport {
   record: string | null
   /** More than one `v=spf1` TXT at the same name is a permerror, not a merge. */
   recordCount: number
+  /** The terms that cost a lookup, in walk order, up to the overshoot; `lookups` counts every one. */
   terms: SgSpfTerm[]
   lookups: number
   limit: number
@@ -541,7 +542,8 @@ function sgSpfRecordsIn(answer: SgAnswer): string[] {
  * a depth ceiling, and a cycle guard. `truncated` says which of those stopped
  * it, so the report can distinguish "your record is over the limit" from "this
  * tool stopped looking" — collapsing those two is how a checker ends up
- * confidently wrong.
+ * confidently wrong. What it returns is bounded too: past the overshoot it
+ * counts terms without keeping or following them.
  *
  * **The cycle guard is per-PATH, not global, and that distinction is the whole
  * correctness of the count.** A domain reached twice by two different routes —
@@ -599,6 +601,22 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
   const SG_SPF_OVERSHOOT = SG_SPF_LOOKUP_LIMIT * 3
 
   /**
+   * Count a term that costs a lookup, and keep it only within the overshoot.
+   * Past that it is counted and nothing more (`sgSpfDescend` follows nothing
+   * there). A zone can answer six questions with thousands of terms, and
+   * keeping every one cost about 110 MB of heap and a 74 MB response per
+   * request, against a 768 MB container.
+   */
+  function sgSpfCount(term: SgSpfTerm): boolean {
+    report.lookups += 1
+    if (report.lookups > SG_SPF_OVERSHOOT) return false
+    report.terms.push(term)
+    return true
+  }
+  /** Loops already reported, so a record naming its ancestor thousands of times past the overshoot writes one line, not thousands. */
+  const loopsSeen = new Set<string>()
+
+  /**
    * `decides`: this record's `all` — or, lacking one, its redirect — is what an
    * unlisted sender gets. The root decides, and so does the target of a
    * redirect from a record that decides; an included record never does.
@@ -642,11 +660,10 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
       const after = token.replace(/^[+\-~?]/, '').slice(kind.length)
       let target = node.domain
       if (after.startsWith(':') || after.startsWith('=')) target = after.slice(1).split('/')[0]
-      report.terms.push({ kind, domain: target || node.domain, depth: node.depth, parent: node.domain, raw: token })
-      report.lookups += 1
+      const kept = sgSpfCount({ kind, domain: target || node.domain, depth: node.depth, parent: node.domain, raw: token })
 
       if (kind === 'include') {
-        const child = await sgSpfDescend(target, node, 'include')
+        const child = await sgSpfDescend(target, node, 'include', kept)
         if (typeof child !== 'string') queue.push(child)
       }
     }
@@ -654,9 +671,8 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
     // §6.1: a `redirect=` is ignored entirely when the record also has `all`.
     let next: SgSpfNode | SgSpfStop | null = null
     if (redirect && !hasAll) {
-      report.terms.push({ kind: 'redirect', domain: redirect, depth: node.depth, parent: node.domain, raw: `redirect=${redirect}` })
-      report.lookups += 1
-      next = await sgSpfDescend(redirect, node, 'redirect')
+      const kept = sgSpfCount({ kind: 'redirect', domain: redirect, depth: node.depth, parent: node.domain, raw: `redirect=${redirect}` })
+      next = await sgSpfDescend(redirect, node, 'redirect', kept)
       if (typeof next !== 'string') queue.push(next)
     }
     if (node.decides) {
@@ -673,21 +689,31 @@ export async function sgAnalyzeSpf(domain: string, lookup: SgLookup): Promise<Sg
     }
   }
 
-  /** Follow one include/redirect, or explain in `problems` why it was not followed. */
-  async function sgSpfDescend(target: string, node: SgSpfNode, via: 'include' | 'redirect'): Promise<SgSpfNode | SgSpfStop> {
+  /**
+   * Follow one include/redirect, or explain in `problems` why it was not
+   * followed. `kept` is false past the overshoot: a loop there is still a
+   * loop, reported once, and anything else is not followed.
+   */
+  async function sgSpfDescend(target: string, node: SgSpfNode, via: 'include' | 'redirect', kept: boolean): Promise<SgSpfNode | SgSpfStop> {
     const key = sgNormName(target)
     // A cycle is a name inside its OWN ancestry. A name reached twice by two
     // different routes is a diamond, and a receiver pays for it twice.
     if (node.ancestry.includes(key)) {
-      problems.push(`${via} loop: ${node.domain} ${via === 'include' ? 'includes' : 'redirects to'} ${target}, which is already on the path from ${domain}`)
+      const loop = `${via} loop: ${node.domain} ${via === 'include' ? 'includes' : 'redirects to'} ${target}, which is already on the path from ${domain}`
+      if (kept || !loopsSeen.has(loop)) problems.push(loop)
+      loopsSeen.add(loop)
       return 'loop'
+    }
+    if (!kept) {
+      truncated = true
+      return 'ceiling'
     }
     if (node.depth + 1 > SG_SPF_MAX_DEPTH) {
       truncated = true
       problems.push(`stopped at ${SG_SPF_MAX_DEPTH} levels — the tree below ${target} was not walked`)
       return 'ceiling'
     }
-    if (queries >= SG_SPF_MAX_QUERIES || report.lookups > SG_SPF_OVERSHOOT) {
+    if (queries >= SG_SPF_MAX_QUERIES) {
       truncated = true
       return 'ceiling'
     }
