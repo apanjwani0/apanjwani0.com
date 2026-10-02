@@ -48,28 +48,18 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - `astro.config.mjs` — the adapter and the Vite middleware that persists
   `/admin` saves.
 
-## Current state (2026-10-01)
+## Current state (2026-10-03)
 
-- **Live** = `origin/main` (last merge 2026-09-26, PR #22). Branch flow:
+- **Live** = `origin/main` (last merge 2026-10-01, PR #27: the UI refresh
+  foundation, the home hero, `/llms.txt` and the review passes). Branch flow:
   feature → `develop` → `main`, by PR. Local `main` is stale (2026-07-07);
   compare against `origin/main`.
-- **Merged into `develop`, not live:** PRs #23–#26 and #28–#29, 35 commits
-  ahead of `origin/main`:
-  - boot-check signals;
-  - the DNS Sightline follow-ups;
-  - the UI refresh foundation;
-  - the home hero (the network replay only), with `/llms.txt`, the AI-crawler
-    `robots.txt`, Projects hidden and the new article
-    `/learnings/how-the-internet-works`;
-  - two review passes over all of it, a page-by-page SEO and performance
-    audit, and the hubs' shared card layout and sky.
-- **PR #27 (`develop` → `main`) ships everything.** It was reviewed and the
-  full gate passed on `develop` on 2026-10-01. What the reviews left open
-  (post-deploy checks, the owner's calls, deferred bugs) is in
-  `docs/plans/release-followups.md`.
+- **Merged into `develop`, not live:** PR #30 (the bounded SPF walk and two
+  home layout fixes) and `docs/plans/review-response.md`, the plan answering
+  two outside reviews. PR #31 (`develop` → `main`) ships them.
 - **Owner's pending moves:**
-  1. Merge #27, then purge the Cloudflare cache and run the post-deploy checks
-     in `docs/plans/release-followups.md`.
+  1. Purge the Cloudflare cache and run the post-deploy checks in
+     `docs/plans/release-followups.md`, after #27 and again after #31.
   2. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).

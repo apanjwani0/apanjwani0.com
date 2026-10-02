@@ -145,8 +145,6 @@ for the owner's go-ahead first (§9 step 3).
 - Verify the domain in Google Search Console and Bing Webmaster Tools and
   submit `/sitemap.xml`, if that isn't done. Without them, Phase 3 has no
   search data to read.
-- Update AGENTS.md *Current state*: #27 merged on 2026-10-01, so `develop` and
-  `main` are level. This rides PR-1.
 
 ### Phase 1: trust (correctness and measurement)
 
@@ -175,7 +173,7 @@ for the owner's go-ahead first (§9 step 3).
   - Every metric's edge list contains its good threshold (drop 2500).
   - The bucket count is fixed (add a bucket per request).
   - No user-agent or IP field appears in the stored shape (add `ua`).
-- **AGENTS.md:** *Analytics* covers the metrics, p75, the viewport bucket, and why the bucket is not identity. Also update *Current state* (Phase 0).
+- **AGENTS.md:** *Analytics* covers the metrics, p75, the viewport bucket, and why the bucket is not identity.
 
 **PR-2. The tool and game copy pass.** (Sonnet with the table below; then `/code-review`. D4.)
 - **Owns:**
