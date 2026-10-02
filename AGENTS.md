@@ -545,6 +545,19 @@ fixture is the worked example.
 - **Tool and game detail pages** pass `loadFonts={false}` (no CLS, no
   render-blocking font request) and `clientRouter={false}` (no router bundle) to
   `Head`.
+- **A tool or game holds a skeleton until its element upgrades.** The server
+  renders a bare `<h1>` and intro inside the custom element, which the
+  component then replaces, so raw it flashed unstyled text and the page jumped
+  (layout shift 0.169 on a slow load, 0.01 now). `shared.css` keeps the title,
+  hides the rest of a host that is a direct child of `main`, and draws a static
+  `--skeleton-height` panel on `html[data-js] :is([data-tool],
+  [data-game]):not(:defined)`; without JS the text stays. The panel also holds
+  the space of a Driftfield stage and a learning's figure, which render empty
+  and used to push the page down when they mounted. No animation. A new tool,
+  game or embed gets it free through its `data-tool` / `data-game` attribute.
+- **Measure layout in an observer, never at module evaluation.** `nav-ui.ts`
+  reads the nav's height in a `ResizeObserver` callback, which runs after
+  layout; a synchronous read made the script pay for the first layout. Asserted.
 - **No JS framework.**
 - **Heavy dependencies load per route.** `cytoscape` is only ever a dynamic
   `import()`: in `Flowmap.ts`'s `connectedCallback`, and in `Draftboard.ts`

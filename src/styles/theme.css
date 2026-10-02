@@ -185,6 +185,7 @@
   --max-width: 768px;       /* readable content column (prose)  */
   --content-width: 1200px;  /* wide column for listing/index pages (card grids) */
   --tool-width: clamp(1120px, 70vw, 1800px); /* ~70% of viewport on wide screens; floored so it never gets narrower than a laptop, capped so ultrawides stay readable */
+  --skeleton-height: 70vh; /* the panel held where a tool or game mounts, so the page below doesn't jump when it arrives */
   --thumb-ratio: 1200 / 630; /* card thumbnails share the share card's shape */
 
   /* ── Oat bridge ──────────────────────────────────────────────

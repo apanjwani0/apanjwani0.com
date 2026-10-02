@@ -9,7 +9,7 @@
  *
  *  - `--nav-h`: the live nav height → CSS variable that `main`'s top padding and
  *    the anchor `scroll-padding-top` read, so content never hides under the
- *    fixed hero nav (re-measured on resize in case the nav wraps).
+ *    fixed hero nav (a ResizeObserver keeps it current if the nav wraps).
  *  - hide-on-scroll-down / show-on-scroll-up for the fixed hero nav.
  *  - lazy-mounts the StarField hero canvas, and the hubs' sky (sky-ui.ts).
  *
@@ -23,12 +23,10 @@
 let wired = false
 let starFieldImportQueued = false
 
-function syncNavHeight() {
-  const nav = document.querySelector('[data-type="hero-nav"]') as HTMLElement | null
-  if (nav) {
-    document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px')
-  }
-}
+// The nav's height, kept by the observer below so the scroll handler never
+// reads layout itself.
+let navH = 0
+let navObserver: ResizeObserver | null = null
 
 /**
  * Flags whether anything has scrolled, which is the only situation where page
@@ -37,18 +35,37 @@ function syncNavHeight() {
  * over content). Kept separate from onScroll so page load can set the initial
  * state without disturbing the hide-on-scroll bookkeeping below.
  */
-function syncNavScrolled() {
+function syncNavScrolled(nav: HTMLElement) {
+  nav.toggleAttribute('data-nav-scrolled', window.scrollY > 0)
+}
+
+// A ResizeObserver callback runs after layout, so reading the nav here forces no
+// reflow. Measuring synchronously when the module evaluates did: it made the
+// script pay for the page's first layout (Lighthouse "forced reflow"). The
+// first callback also covers a page that loads already scrolled, and a later
+// one covers the nav wrapping on resize.
+function onNavResize(entries: ResizeObserverEntry[]) {
+  const nav = entries[entries.length - 1].target as HTMLElement
+  navH = nav.offsetHeight
+  document.documentElement.style.setProperty('--nav-h', navH + 'px')
+  syncNavScrolled(nav)
+}
+
+function watchNav() {
   const nav = document.querySelector('[data-type="hero-nav"]') as HTMLElement | null
-  nav?.toggleAttribute('data-nav-scrolled', window.scrollY > 0)
+  navObserver ??= new ResizeObserver(onNavResize)
+  // A ClientRouter swap replaces the nav; observing the new one reports at once.
+  navObserver.disconnect()
+  if (nav) navObserver.observe(nav)
 }
 
 let lastScroll = 0
 function onScroll() {
   const nav = document.querySelector('[data-type="hero-nav"]') as HTMLElement | null
   if (!nav) return
-  syncNavScrolled()
+  syncNavScrolled(nav)
   const current = window.scrollY
-  if (current > lastScroll && current > nav.offsetHeight + 20) {
+  if (current > lastScroll && current > navH + 20) {
     nav.setAttribute('data-nav-hidden', '')
   } else if (current < lastScroll) {
     nav.removeAttribute('data-nav-hidden')
@@ -90,11 +107,7 @@ function mountSky() {
 }
 
 function pageSetup() {
-  syncNavHeight()
-  // A page can load already scrolled — an anchor link, a restored position, or a
-  // View Transition into a page mid-scroll — so the frosted state has to be
-  // resolved on load, not only on the next scroll event.
-  syncNavScrolled()
+  watchNav()
   mountStarField()
   mountSky()
 }
@@ -104,8 +117,7 @@ export function initNav() {
   wired = true
   // Persistent window listeners — registered once (window outlives in-site nav).
   window.addEventListener('scroll', onScroll, { passive: true })
-  window.addEventListener('resize', syncNavHeight)
-  // Per-page work: re-measure the nav and (re)mount the hero canvas after every
+  // Per-page work: re-observe the nav and (re)mount the hero canvas after every
   // View Transition. Also run once immediately for shells that intentionally
   // skip ClientRouter on direct tool/game loads.
   pageSetup()

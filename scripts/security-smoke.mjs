@@ -9551,9 +9551,15 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   assert.match(skyUi, /if \(last && now - last < FRAME_MS\) return/, 'the sky draws at a capped frame rate')
   const nav = await readFile(new URL('../src/lib/nav-ui.ts', import.meta.url), 'utf-8')
   assert.match(nav, /import\('\.\/sky-ui'\)/, 'the sky loads as its own chunk, only where a page renders it')
+  const navCode = nav.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  assert.match(navCode, /new ResizeObserver\(onNavResize\)/, 'the nav is measured by an observer, after layout')
+  assert.equal(navCode.match(/offsetHeight/g)?.length, 1, 'the nav height is read in one place, the observer callback: a read at module evaluation or in the scroll handler forces a reflow')
   const shared = (await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
   const card = shared.match(/\[data-type="card-grid"\] > \* \{([^}]*)\}/)?.[1] ?? ''
   assert.match(card, /background:\s*var\(--color-surface\)/, 'listing cards are opaque, so the sky never shows through their copy')
+  assert.match(shared, /html\[data-js\] main > :is\(\[data-tool\], \[data-game\]\):not\(:defined\) > :not\(h1\)\s*\{\s*display:\s*none/, 'before a tool or game upgrades, the intro is hidden only while JS runs, so a visitor without it keeps the text')
+  assert.match(shared, /html\[data-js\] :is\(\[data-tool\], \[data-game\]\):not\(:defined\)::after\s*\{[^}]*min-height:\s*var\(--skeleton-height\)/, 'a not-yet-upgraded tool, game, Driftfield stage or learning figure holds a panel where it lands, so the page does not jump')
+  assert.doesNotMatch(shared.match(/:not\(:defined\)::after\s*\{[^}]*\}/)?.[0] ?? '', /animation|transition/, 'the skeleton is static: nothing here pulses')
 }
 
 console.log('home hero: one hero and no switch, its text sits above the scrim, nothing blinks, it names no tools or games or the host, and its dev hooks compile out of production')

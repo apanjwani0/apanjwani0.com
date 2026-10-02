@@ -261,11 +261,40 @@ main {
    Individual tools style only their own internals — never their own container
    width. On narrow screens the max-width is a no-op and the gutter keeps content
    off the edges. */
-[data-type="tool-page"] {
+[data-type="tool-page"],
+[data-tool]:not(:defined) {
   max-width: var(--tool-width);
   margin-inline: auto;
   padding: 2rem var(--space-page-x);
   box-sizing: border-box;
+}
+
+/* Before a tool or game's script upgrades its element, the server markup is a
+   bare <h1> and intro, which the component then replaces wholesale. Seen raw
+   that reads as a flash of unstyled text and a page that jumps when the
+   workbench lands. So, with JS running (`data-js`: a visitor without it keeps
+   the full text), keep the title, hide the intro and hold a static panel the
+   size of a typical workbench. Static on purpose: nothing here pulses. The
+   tools' placeholder shares the real root's geometry through the selector lists
+   above and in tools-common.css, so the title does not move when it upgrades. */
+html[data-js] main > :is([data-tool], [data-game]):not(:defined) > :not(h1) {
+  display: none;
+}
+
+html[data-js] :is([data-tool], [data-game]):not(:defined)::after {
+  content: "";
+  display: block;
+  min-height: var(--skeleton-height);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* The panel is the same wherever a component mounts: under a tool or game's
+   title, in a Driftfield stage, or as a figure inside a learning. Only the
+   first has a title above it to leave room for. */
+html[data-js] main > :is([data-tool], [data-game]):not(:defined)::after {
+  margin-top: var(--space-section);
 }
 
 /* ── The page title ────────────────────────────────────────────────────────

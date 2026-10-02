@@ -257,7 +257,8 @@ div[data-type="tool-header"] {
   margin-bottom: 1.5rem;
 }
 
-div[data-type="tool-header"] h1 {
+div[data-type="tool-header"] h1,
+[data-tool]:not(:defined) > h1 {
   margin: 0 0 0.35rem;
 }
 
