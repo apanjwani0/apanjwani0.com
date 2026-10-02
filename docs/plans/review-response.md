@@ -6,7 +6,9 @@ The first, "Review A", is a long page-by-page review. The second, "Review B",
 is a short architecture and monetization note. Every concrete claim was checked
 against the code, and checking turned up more than either review found. This
 file is the plan that came out of that. Delete each item as it ships, and the
-file with the last one. Line numbers are as of `ae86364`.
+file with the last one. Line numbers are as of `ae86364` and drift as work
+lands: find code by the quoted string or the symbol name, never by the line
+number alone. §9 is how to work any item.
 
 ## 1. How the reviews hold up
 
@@ -82,7 +84,7 @@ Found while verifying. Ordered by how much each one matters.
 3. **DNS Sightline decides "apex" by counting labels.**
    - The test is `atApex: name.split('.').length === 2` (`dns-sightline/inspect.ts:212`).
    - `example.co.uk` and `example.com.au` are never treated as apexes, so CNAME-at-apex is never flagged there.
-   - The zone apex is where the SOA lives, and SOA is already one of the eight questions asked.
+   - Testing the SOA answer cannot fix it. A CNAME at a name hides every other type there from a resolver: an SOA query follows the alias. So the CNAME-at-apex case, the one being detected, is exactly where an SOA test goes blind. The fix is in PR-4b.
 4. **A tool page's crawlable text and its rendered text disagree.**
    - The server renders `<h1>{title}</h1><p>{intro}</p>`. `intro` runs up to 3,994 characters (Cron Whisperer); DNS Sightline's is 2,556.
    - Each component's `connectedCallback` then replaces it with its own hard-coded h1 and tagline.
@@ -127,10 +129,11 @@ All ten are settled. Nine took the recommendation; D9 did not.
 
 ## 4. The work
 
-Phases run in order. PRs inside a phase are independent unless marked, and
-each one goes feature → `develop` behind the full gate. "Model" follows the
-owner's split: Opus for design, security and review; Sonnet for the
-mechanical and copy work, given an exact brief and reviewed by Opus.
+§8 gives the order, and §9 says how to work any item. Each item is one PR,
+feature → `develop`, behind the full gate. "Model" follows the owner's split:
+Opus for design and security, Sonnet for mechanical and copy work. When a
+Sonnet session takes an item marked Opus, it writes a design note and waits
+for the owner's go-ahead first (§9 step 3).
 
 ### Phase 0: housekeeping (owner, about 15 minutes)
 
@@ -143,134 +146,189 @@ mechanical and copy work, given an exact brief and reviewed by Opus.
   submit `/sitemap.xml`, if that isn't done. Without them, Phase 3 has no
   search data to read.
 - Update AGENTS.md *Current state*: #27 merged on 2026-10-01, so `develop` and
-  `main` are level. This rides the first PR below.
+  `main` are level. This rides PR-1.
 
 ### Phase 1: trust (correctness and measurement)
 
-**PR-1. The beacon fires, and measures what Google measures.** (Opus, medium. Decision D6.)
-- Record the initial page view on every page, independent of the router. Use `astro:page-load` only for later client navigations, with a per-document guard against counting twice.
-- Send on the first `visibilitychange → hidden` (or `pagehide`) through `sendBeacon`, not after a fixed 1.5 s.
-- Take LCP, CLS (session window) and INP from `web-vitals` (about 2 KB compressed). Add `inpMs` to `analyticsMetricKeys` and to the server's bounds.
-- Store fixed buckets per metric so p75 is computable. Bound the bucket count; keep 90-day retention.
-- Optional: extend the beacon to `/learnings/<slug>` (a third `AnalyticsKind`).
-- Assertions in `analytics:smoke` and `security:smoke`, each with its mutation:
-  - A router-less page records a view (remove the fallback).
-  - `inpMs` is accepted and out-of-range values are refused (widen the bound).
-  - The bucket count is fixed (add one per request).
-  - No user-agent or IP field appears in the stored shape (add `ua`).
-- AGENTS.md: update *Analytics* (the metrics, p75, the viewport bucket and why it is not identity).
+**PR-4a. Bound the SPF walk.** (Small, security. First, because today it breaks a written invariant.)
+- Where: the SPF walk in `src/components/tools/dns-sightline/analyze.ts`, which is the term loop just after `SG_SPF_OVERSHOOT` is defined, plus `sgSpfDescend`.
+- Change: stop collecting terms once `lookups` passes `SG_SPF_OVERSHOOT`.
+- Fixture in `scripts/security-smoke.mjs`: a crafted zone with thousands of lookup terms.
+  - Assert that the collected-term count and the serialised report size both stay under a fixed ceiling.
+  - Assert that the verdict is unchanged.
+  - Then remove the bound and watch the assertion fail.
+- Delete the item from `release-followups.md`.
 
-**PR-2. The tool and game copy pass.** (Sonnet with the table below; Opus reviews. Decision D4.)
-- Owns: `src/config/tools.ts` and `src/config/games.ts` copy, plus user-facing strings in every tool and game component **except** DNS Sightline and Chainsaw, whose copy rides PR-4 so the two PRs don't collide.
+**PR-1. The beacon fires, and measures what Google measures.** (Opus, medium. D6. Ask the owner to ship it to `main` soon after it merges, because Phase 3's two weeks start at deploy, not at the merge into `develop`.)
+- **Record each hard page load once, independent of the router.**
+  - The pages the beacon accepts (`parseToolGamePath`: `/tools/<slug>` and `/games/<slug>`) never load the router, with one exception: the Driftfield hub at `/tools/driftfield` uses `Base`. There, a soft navigation records a view with no vitals. Soft navigations are otherwise out of scope.
+  - Keep a per-document guard, so `astro:page-load` can never count a load twice.
+  - Learnings pages stay out of this PR.
+- **Send once**, on the first `visibilitychange → hidden` (falling back to `pagehide`), through `sendBeacon`. Today it sends after a fixed 1.5 s.
+- **Take LCP, CLS (session window), INP and TTFB from `web-vitals`.**
+  - Install it as an npm dependency and let Vite bundle it.
+  - **Never load it from a CDN:** the CSP allows `'self'` only.
+  - The bundled chunk must stay a file, not inlined (`assetsInlineLimit`, asserted).
+- **Server:** add `inpMs` to `analyticsMetricKeys`, with a bound. TTFB, DOMContentLoaded, load and transferSize stay as they are.
+- **Buckets per metric:** a fixed list of edges in which Google's "good" threshold is itself an edge. Each stored row keeps one count per bucket, so storage is fixed-size.
+  - LCP and TTFB (ms): 200, 500, 800, 1200, 1800, 2500, 4000, 6000, overflow.
+  - INP (ms): 50, 100, 200, 300, 500, 1000, overflow.
+  - CLS: 0.01, 0.05, 0.1, 0.15, 0.25, 0.5, overflow.
+- **A viewport bucket**, `narrow` (≤ 640 CSS px at load) or `wide`, as one more key on the stored row. It is read from `innerWidth`, never from the user agent.
+- **Reading it:** `summarizeAnalytics()` (behind the dev-only `/api/admin/analytics`) reports p75 per metric as the upper edge of the bucket where the running count passes 75%.
+  - Rows stored before this change are re-validated on load and keep their sums. They have no buckets.
+  - Phase 3 reads production data by copying `/opt/portfolio/data/analytics.json` into the local `data/` and running the dev server.
+- **Assertions** in `analytics:smoke` and `security:smoke`, each with the mutation that must break it:
+  - A router-less page records exactly one view (remove the fallback; or fire `astro:page-load` too and expect one, not two).
+  - `inpMs` is accepted, and out-of-range values are refused (widen the bound).
+  - Every metric's edge list contains its good threshold (drop 2500).
+  - The bucket count is fixed (add a bucket per request).
+  - No user-agent or IP field appears in the stored shape (add `ua`).
+- **AGENTS.md:** *Analytics* covers the metrics, p75, the viewport bucket, and why the bucket is not identity. Also update *Current state* (Phase 0).
+
+**PR-2. The tool and game copy pass.** (Sonnet with the table below; then `/code-review`. D4.)
+- **Owns:**
+  - `src/config/tools.ts` and `src/config/games.ts` copy, **except the `dns-sightline` and `chainsaw` entries**;
+  - user-facing strings in every tool and game component **except** DNS Sightline and Chainsaw.
+
+  Those two belong to PR-4b, so the two PRs never touch the same lines.
 
 | Where | Change |
 | --- | --- |
-| Token Bench `tools.ts:77` | "is a forgery anyone who can read your JWKS could have written" → "is forgeable by anyone who can read your JWKS" |
-| Token Bench `diagnose.ts:443-453` (structural) | "Nothing legitimate signs this way, so treat the token as hostile" → "This is the shape of an algorithm-confusion attack. It also happens when the key belongs to a different issuer. Treat the token as untrusted until you know which." Keep the `proof: 'structural'` label. |
-| JSON Tidy banner, fix labels | "Repaired —" → "Best-effort repair:", ending "Check it before you apply it." Name the lossy fix: "replaced NaN, Infinity and undefined with null". `tools.ts:87` loses "actually". |
-| Epoch Wizard | "detects" → "guesses"; the row becomes "Unit: milliseconds (guessed from 13 digits)"; add "Pick a unit if the guess is wrong." Make the copy's digit counts agree with `EpochWizard.ts:64-70`. |
-| Chroma Lab | A note beside the CMYK row: "A simple conversion with no colour profile. Print will differ." Change "edit any field" to name the editable fields. |
-| Hash Smith | The SHA-1 row is labelled "SHA-1 (legacy)", and the intro says it is fine for checksums and not for security. Drop the "md5 alternative" keyword: MD5 isn't offered. |
-| Cron Whisperer | The first mention names "Vixie cron and the crons built on it (cronie, Debian's cron)". Add one line: "systemd timers, Kubernetes CronJobs, GitHub Actions and cloud schedulers have their own rules, and many run on UTC only." Cut "the one almost nobody knows" and "every other cron explainer". |
-| Link Peek | "exactly the way each platform reads them" / "true precedence rules" → "the precedence rules each platform follows today. They change without notice, and the platform's own debugger has the final word." "X renders no card at all" → "X usually shows a bare link". |
-| Maze Weaver `games.ts:61` | "exactly one corridor" → "exactly one path" (and the comment at `MazeWeaver.ts:5`). |
-| Poker Trainer | `games.ts:30` "Set any Hold'em spot" → "Set a Hold'em spot", and say that oversized spots are refused rather than sampled. `PokerTrainer.ts:443`: an out is "a card that puts you ahead on the next card; they can still outdraw you after it". `:444`: "systematically too optimistic" → "usually optimistic, most of all with many outs". |
-| Hue Hunt `games.ts:81` | "true perceptual closeness" → "how close your colour is to the answer". Name redmean in the in-game explainer. |
-| Rhetoric | Remove user-facing "actually", "every other … tool", "almost nobody knows", "the things people get wrong", "worth asking", "Not by guessing". Code comments are out of scope. |
-| Meta descriptions | Bring the nine over 160 characters under it (Token Bench 216, Cron Whisperer 207 and DNS Sightline 195 are the longest). This one is from `release-followups.md`; delete it there. |
+| Token Bench `tools.ts` (search "is a forgery") | "is a forgery anyone who can read your JWKS could have written" → "is forgeable by anyone who can read your JWKS" |
+| Token Bench `diagnose.ts` structural finding (search "treat the token as hostile") | → "This is the shape of an algorithm-confusion attack. It also happens when the key belongs to a different issuer. Treat the token as untrusted until you know which." Keep `proof: 'structural'`. The proved finding stays as it is. |
+| JSON Tidy banner and fix labels | "Repaired —" → "Best-effort repair:", ending "Check it before you apply it." Name the lossy fix: "replaced NaN, Infinity and undefined with null". The `tools.ts` intro loses "actually". |
+| Epoch Wizard | "detects" → "guesses". The row becomes "Unit: milliseconds (guessed from 13 digits)". Add "Pick a unit if the guess is wrong." Make the copy's digit counts agree with the thresholds in `EpochWizard.ts` (≥12 ms, ≥15 µs, ≥18 ns). |
+| Chroma Lab | A note beside the CMYK row: "A simple conversion with no colour profile. Printed colour will differ." Change "edit any field" to name the editable fields; CMYK is output-only. |
+| Hash Smith | Label the row "SHA-1 (legacy)". The intro says SHA-1 is fine for checksums and not for security. Drop the "md5 alternative" keyword, because MD5 isn't offered. |
+| Cron Whisperer | The first mention names "Vixie cron and the crons built on it (cronie, Debian's cron)". Add one line: "systemd timers, Kubernetes CronJobs, GitHub Actions and cloud schedulers have their own rules, and some run on UTC only." Cut "the one almost nobody knows" and "every other cron explainer". |
+| Link Peek | "exactly the way each platform reads them" / "true precedence rules" → "the precedence rules each platform follows today. They change without notice, and the platform's own debugger has the final word." "X renders no card at all" → "X may show a bare link". |
+| Maze Weaver `games.ts` | "exactly one corridor" → "exactly one path", and the same in the comment at the top of `MazeWeaver.ts`. |
+| Poker Trainer | `games.ts`: "Set any Hold'em spot" → "Set a Hold'em spot", and say that oversized spots are refused rather than sampled. The Learn tab (search "An 'out' is"): define an out as `outsAgainst()` counts it, a card that puts you ahead once it lands, after which they can still outdraw you. Say the rule of 4 overshoots with many outs, and drop the full-house example, which contradicts that definition. Check any number against `exactEquity` before writing it. |
+| Hue Hunt `games.ts` | "true perceptual closeness" → "how close your colour is to the answer". Name redmean in the in-game explainer. |
+| Rhetoric | Remove or rephrase user-facing "actually" wherever it adds nothing, plus "every other … tool", "almost nobody knows", "the things people get wrong", "worth asking" and "Not by guessing". Code comments are out of scope. |
+| Meta descriptions | Bring every one over 160 characters under it (measure with a one-off script). DNS Sightline's is PR-4b's. Delete the item from `release-followups.md`. |
 
-- Guardrails:
-  - `security:smoke` checks some copy, for example the number word in the `/tools` intro and the pot-odds labels in `PokerTrainer.ts`.
-  - Run the whole gate after every file.
+- **Guardrails:**
+  - `security:smoke` checks some copy, for example the number word in the `/tools` intro and the pot-odds labels in `PokerTrainer.ts`. Run `npm run security:smoke` after each tool and the full gate before each commit.
   - Never change a claim a module proves without changing the module.
-- AGENTS.md: none. `learnings-voice.md` gets a short "Tool copy" section listing the banned phrases and the rule "say what it does, then where it stops" (D4).
+- **Share cards:** a card prints the item's `title` and `description` (`scripts/generate-og.mjs`).
+  - Any item whose `description` changes needs its card regenerated (AGENTS.md *Share cards*).
+  - The script hard-codes macOS Chrome. Add a `CHROME_PATH` environment override; on the cloud container that is `/opt/pw-browsers/chromium`.
+  - First regenerate one **unchanged** card and compare it with the committed PNG. If it differs visibly (fonts, layout), commit no cards and list the stale ones in the PR, for the owner to run `npm run og` on their Mac.
+- **Docs:** AGENTS.md is unchanged. `learnings-voice.md` gets a short "Tool copy" section (D4) that lists the banned phrases and the rule "say what it does, then where it stops".
 
-**PR-3. The article hedges.** (Sonnet; you read it for voice before merge.)
-- Internet article:
-  - md line 11: "The server cuts it into small pieces" → "The page travels as small pieces called packets."
-  - `atlas.ts:252` gets the same change and keeps "about 1,500 bytes".
-  - `atlas.ts:267` and `:270` gain "usually".
-  - One new line: "With IPv6, a device can have a public address of its own."
-  - md line 59 adds: "HTTP/3 runs on QUIC, over UDP instead of TCP."
-  - `atlas.ts:365`: "TCP numbers every packet" → "TCP, or QUIC under HTTP/3, numbers every packet".
-- Diagram article:
-  - After md line 9: "Seven is a working set. BPMN, data-flow and C4 diagrams give the arrow other meanings."
-  - md line 45: "The one people mean when they say UML" → "The UML diagram most people picture first. Sequence, activity, state and deployment diagrams are UML too."
-- Constraints `security:smoke` holds:
+**PR-3. The article hedges.** (Sonnet. The owner reads it for voice before merge.)
+- The article text is markdown inside one `content` string per article in `src/config/learnings.ts`. Find each sentence by the quoted text.
+- **Internet article:**
+  - "The server cuts it into small pieces" → "The page travels as small pieces called packets."
+  - The same change in `internet-atlas/atlas.ts` (search "cuts it into"), keeping "about 1,500 bytes".
+  - The step captions "Every device at home gets its own private address" and "It leaves with the router's public address" gain "usually".
+  - After the paragraph that starts "At home, your router usually gives each device a private address", add one line: "With IPv6, a device can have a public address of its own."
+  - After "Over HTTP/3, the newest version, the two happen together, in one handshake.", add "HTTP/3 runs on QUIC, over UDP instead of TCP."
+  - The caption "TCP numbers every packet" → "TCP, or QUIC under HTTP/3, numbers every packet".
+- **Diagram article:**
+  - After the sentence that contains "drawn seven ways", add "Seven is a working set. BPMN, data-flow and C4 diagrams give the arrow other meanings."
+  - "The one people mean when they say UML" → "The UML diagram most people picture first. Sequence, activity, state and deployment diagrams are UML too."
+- **Constraints `security:smoke` holds:**
   - "drawn seven ways" stays in `content`, `summary` and `metaDescription`.
   - Every `{{embed:view}}` marker stays.
   - The seven `arrow` strings stay distinct.
   - Every `blind` and `breaks` string stays over 40 characters.
   - No host or runtime names anywhere.
-  - The voice file's bans apply, so no "not X, it is Y".
-- Optional, your call from `release-followups.md`: shorten both titles under 65 characters and give the hub a real title.
+  - Read `docs/plans/learnings-voice.md` first; its bans apply.
+- **Optional, the owner's call** from `release-followups.md`: titles under 65 characters, and a real title for the learnings hub. Ask before doing it.
 
-**PR-4. DNS Sightline and Chainsaw: bounds, then correctness.** (Opus. Security first.)
-- In order:
-  1. **Bound the SPF walk** (`analyze.ts:602-636`): stop collecting terms once `lookups` passes the overshoot limit. Add a fixture with a crafted wide zone that asserts both heap-bounded output size and the existing verdict; the mutation removes the bound.
-  2. **Apex from SOA.** A name is an apex when the SOA answer is owned by that name. Keep the label count only as the fallback when SOA went unanswered, and then follow *A failed lookup is not an absent record*: no confident `cname-at-apex` from the heuristic beyond two labels.
-     - Fixtures: `example.co.uk` with an apex CNAME is flagged; `www.example.com` is not; SOA unanswered behaves as above.
-  3. The remaining deferred items in `release-followups.md` (delete each there as it lands):
-     - The loop flag moves to its own field instead of matching the substring "loop".
-     - CAA in RFC 3597 `\#` form.
-     - The Records-table message when lookups got no answer.
-     - Chainsaw's raw AIA URL goes through `csLinkableUrl`.
-     - The dead code.
-  4. The copy in these two tools:
-     - The Chainsaw CN message branches. When the certificate has SANs: "Clients that follow RFC 6125 ignore the Common Name when SANs are present, so this certificate does not cover this host." When it has none: "Browsers stopped reading the Common Name in 2017; only legacy clients still fall back to it."
-     - `tools.ts:57` loses "no client has read since 2017".
-     - DNS Sightline: "the supported way" → "Many DNS providers offer ALIAS, ANAME or CNAME flattening for this; check whether yours does." Trim "correct about the things people get wrong" (`tools.ts:47`, `DnsSightline.ts:60`).
-- AGENTS.md: *A failed lookup is not an absent record* gains the apex rule.
+**PR-4b. DNS Sightline and Chainsaw correctness.** (Opus.)
+1. **Apex detection.**
+   - A name is an apex when either:
+     - it is a registrable domain (eTLD+1) by the Public Suffix List, through a server-only dependency such as `tldts`; or
+     - the SOA answer is owned by that name (a delegated sub-zone).
+   - When neither can be decided, emit no `cname-at-apex`, and follow *A failed lookup is not an absent record*.
+   - Do not rely on SOA alone: a CNAME at the name hides its SOA (§2, item 3).
+   - Only the API route may use the dependency. Check the client chunks to confirm it never reaches one.
+   - Fixtures:
+     - `example.co.uk` with a CNAME is flagged;
+     - `www.example.com` with a CNAME is not;
+     - a delegated `sub.example.com` that owns an SOA is an apex.
+2. **The remaining deferred items in `release-followups.md`**, deleting each there as it lands:
+   - The loop flag moves to its own field instead of `p.includes('loop')`.
+   - CAA in RFC 3597 `\#` form.
+   - The Records-table message when lookups got no answer.
+   - Chainsaw's raw AIA URL goes through `csLinkableUrl`.
+   - The dead code.
+3. **Copy, including both tools' entries in `tools.ts`:**
+   - The Chainsaw CN message branches on whether the certificate lists DNS names:
+     - When it does: "This certificate lists DNS names, and this host is not one of them. Clients check those names and ignore the Common Name (RFC 6125), so it does not cover this host."
+     - When it lists none: "Major browsers no longer read the Common Name (Chrome stopped in 2017). Only older clients still fall back to it."
+   - Drop "every modern TLS library" and "no client has read since 2017".
+   - DNS Sightline: "the supported way" → "Many DNS providers offer ALIAS, ANAME or CNAME flattening for this; check whether yours does." Trim "correct about the things people get wrong" (`tools.ts`, `DnsSightline.ts`), and bring its meta description under 160 characters.
+- **AGENTS.md:** *A failed lookup is not an absent record* gains the apex rule.
 
 ### Phase 2: findability (structure)
 
-**PR-5. One server-rendered header per tool page.** (Opus designs the recipe and converts two tools; Sonnet converts the other 14; Opus reviews. Decisions D1 and D2. After PR-2.)
-- The route renders `div[data-type="tool-page"]`:
-  - the eyebrow (D1), the h1 and the lede from config;
-  - an empty workbench host the component renders into;
-  - the "How it works" block (D2) after it.
-- Components stop writing a header or an h1.
-- Header extras that live in templates today (Token Bench's "decode and verify" badge, Flowmap's "a canvas for thinking on", Driftfield's "image + GIF studio") are inventoried, and each either becomes lede copy or is dropped.
-- This removes four problems at once:
+**PR-5. One server-rendered header per tool page.** (Opus designs the recipe and converts two tools; Sonnet converts the rest; `/code-review`. D1, D2. After PR-2.)
+- **The route renders the shell:** `div[data-type="tool-page"][data-tool]` containing:
+  - an eyebrow, which is the head of `seoTitle` before " — " (D1);
+  - the h1, which is `title`;
+  - the lede, which is `description`, the card copy, so the card and the lede can't disagree;
+  - the component's custom element, empty, which renders only the workbench into itself;
+  - "How it works" (D2), which renders `intro` through `src/lib/markdown.ts`.
+- **Each `intro` becomes ≤150 plain words**, drafted from the current text after PR-2's fixes. The owner reviews them in the PR.
+- **`seoContent` is deleted** from tools and games across all five *Admin Config Management* steps and both routes, because every entry is empty. Rewrite AGENTS.md's "SEO support copy is off" bullet: "How it works" is the one long-copy block, at most 150 words, and the owner approves it.
+- **Components stop writing a header or an h1.**
+  - Before converting, inventory every selector that assumes the header or `tool-page` sits inside the custom element: child combinators, `querySelector` on `tool-page`, and per-tool CSS.
+  - Inventory the header extras too (Token Bench's "decode and verify", Flowmap's "a canvas for thinking on", Driftfield's "image + GIF studio"). Each one becomes lede copy or is dropped.
+- **This removes four problems at once:**
   - the h1 typed in 16 places;
   - the gap between raw and rendered text;
   - the layout jump at mount;
-  - the `MutationObserver` the paused UI item E planned for placing the actions dock.
-- The convention "every tool renders `div[data-type="tool-page"]`" moves from the component to the route, so update its assertion and AGENTS.md *Key Conventions*.
-- Assertions:
+  - the `MutationObserver` that paused UI item E planned for placing the actions dock.
+- **The convention moves.** "Every tool renders `div[data-type="tool-page"]`" moves from the component to the route. Update its assertion and AGENTS.md *Key Conventions*.
+- **Assertions:**
   - No file under `src/components/tools/` writes `<h1` (add one back).
   - Each tool page has exactly one h1, and its text comes from config (hard-code one).
   - The eyebrow equals the `seoTitle` head (edit one by hand).
-- Run `/browser-debug` on every tool, clicking in through the hub.
+- **Check in a browser.** Run `/browser-debug` on every tool, clicking in from the hub, and load one page with JS off: the header and "How it works" must be there.
 - **PR-5b (later, optional): the same for game pages.** Game components double as learnings embeds, whose chrome `mountEmbed` strips with a `MutationObserver`. Once components stop writing chrome, that observer and `EMBED_NO_CHROME` can go. It is a separate PR because it rewrites asserted embed machinery.
 
-**PR-6. A derived topic graph for cross-links.** (Opus designs; Sonnet does the data entry. Decision D5. After PR-5, because both touch `tools/[slug].astro`.)
-- `TOPICS` is a fixed vocabulary in `src/lib/topics.ts`, for example `dns`, `tls`, `http`, `auth`, `webhooks`, `time`, `data`, `text`, `colour`, `diagrams`, `algorithms`, `generative`, `probability`. It lives in `src/lib/`, not config, because `/admin` regenerates config wholesale.
-- A `topics` field goes on tools, games and learnings: all five steps of *Admin Config Management*, including the `astro.config.mjs` generators that must mirror the interface.
-- `relatedTo(item)` in `src/lib/related.ts`:
+**PR-6. A derived topic graph for cross-links.** (Opus designs; Sonnet does the data entry. D5. After PR-5, because both touch `tools/[slug].astro`.)
+- **`TOPICS`** is a fixed vocabulary in `src/lib/topics.ts`, for example `dns`, `tls`, `http`, `auth`, `webhooks`, `time`, `data`, `text`, `colour`, `diagrams`, `algorithms`, `generative`, `probability`. It lives in `src/lib/`, not config, because `/admin` regenerates config wholesale.
+- **A `topics` field** goes on tools, games and learnings, through all five steps of *Admin Config Management*, including the `astro.config.mjs` generators that must mirror the interface.
+- **`relatedTo(item)`** in `src/lib/related.ts` returns:
   - only items that pass their kind's indexing predicate;
-  - at least one shared topic;
-  - ordered by overlap, at most four, across kinds.
-- `RelatedLinks` shows a title and a one-line description for each (descriptive anchors), server-rendered. "More tools" becomes those four plus a link to the hub.
-- Prose links in the two articles: the DNS stop → DNS Sightline, the TLS stop → Chainsaw, and the diagram article's flowchart section → Flowmap ("edit a Mermaid flowchart visually"). `markdown.ts` already accepts internal URLs.
-- Assertions:
+  - that share at least one topic;
+  - ordered by overlap, then kind, then config order;
+  - at most four, across kinds.
+- **`RelatedLinks`** shows a title and a one-line description for each, as descriptive anchors, server-rendered. "More tools" becomes those four plus a link to the hub.
+- **Prose links in the two articles:** the DNS stop → DNS Sightline, the TLS stop → Chainsaw, and the diagram article's flowchart section → Flowmap ("edit a Mermaid flowchart visually"). `markdown.ts` already accepts internal URLs.
+- **Assertions:**
   - Every related target is indexable (give a `wip` tool a topic).
   - Every topic is in `TOPICS` (misspell one).
   - Every live tool and playable game has at least one related item (empty one's topics).
-  - The relation is symmetric when overlap is equal.
-- AGENTS.md *Indexing*: "Cross-links come from `relatedTo()`". The admin checklist gains `topics`.
+  - The order is deterministic: run it twice over a shuffled config and get the same list (drop the tie-break).
+- **AGENTS.md:** *Indexing* gets "Cross-links come from `relatedTo()`", and the admin checklist gains `topics`.
 
-**PR-7. The `/tools` hub has a shape.** (Sonnet. Decision D3.)
-- If grouped: a slug→group map in `src/lib/tools.ts`, beside `SERVER_TOOLS` and for the same reason. One h2 per group, flagships first.
+**PR-7. The `/tools` hub has a shape.** (Sonnet. D3.)
+- **A slug → group map in `src/lib/tools.ts`**, beside `SERVER_TOOLS` and for the same reason. One h2 per group, in this order, with flagships first. The owner may rename the groups in review.
+  - **Debug a live system:** webhook-inspector, dns-sightline, chainsaw, token-bench, link-peek.
+  - **Everyday data:** json-tidy, cron-whisperer, regex-lab, list-forge, epoch-wizard, codec-forge, hash-smith.
+  - **Make something:** flowmap, chroma-lab, draftboard, driftfield.
+  - A `wip` tool goes in its natural group and stays muted.
 - The JSON-LD `ItemList` follows the rendered order.
-- Assertions:
-  - Every live tool is in exactly one group (drop one).
+- **Assertions:**
+  - Every non-disabled tool is in exactly one group (drop one).
   - The intro's number word still matches `SERVER_TOOLS`.
 
-**PR-8. Head cleanup.** (Sonnet. Decision D7.)
-- Drop `<meta name="keywords">` (`Head.astro:74`) and the JSON-LD `keywords` (`jsonld.ts:66,199`). Keep the config field as palette synonyms and say so in AGENTS.md.
-- Add JSON-LD `alternateName` (the `seoTitle` head) and `image` (the card from `og.ts`) to tool and game entries.
-- Assertion: the head renders no `name="keywords"` (re-add it).
+**PR-8. Head cleanup.** (Sonnet. D7.)
+- Drop `<meta name="keywords">` (`Head.astro`) and both JSON-LD `keywords` spreads (`jsonld.ts`, the BlogPosting and WebApplication builders).
+- Remove the now-dead plumbing (Standing rule 3):
+  - the `keywords` prop on `Head`, `Base` and `ToolBase`;
+  - every page that passes it;
+  - the hub-level keyword strings on `/tools` and `/games`.
+- The config `keywords` field stays: `site-index.ts` turns it into palette search words. Say so in AGENTS.md.
+- Add JSON-LD `alternateName` (the `seoTitle` head) and `image` (the card from `og.ts`, only where a card exists) to tool and game entries.
+- Assertion: no page renders `name="keywords"` (re-add it).
 
 ### Phase 3: measure, then optimise (about two weeks after PR-1 deploys)
 
@@ -323,7 +381,7 @@ Only with Phase 3's numbers. See §6.
 ## 7. Interaction with existing plans
 
 - **`release-followups.md`.**
-  - Its deferred DNS and Chainsaw items ride PR-4.
+  - Its SPF item rides PR-4a; its other DNS and Chainsaw items ride PR-4b.
   - The meta description item rides PR-2; the article titles ride PR-3 (optional).
   - The performance items wait for Phase 3.
   - Delete each there as it ships.
@@ -333,20 +391,45 @@ Only with Phase 3's numbers. See §6.
   - Item C's palette gains the keyword synonyms PR-8 keeps.
   - Item F's site share card is the same as Phase 3's home card; build it once.
 
-## 8. Summary
+## 8. Summary and order
 
-| PR | Phase | Size | Model | After |
-| --- | --- | --- | --- | --- |
-| PR-1 beacon | 1 | M | Opus | D6 |
-| PR-2 tool and game copy | 1 | M | Sonnet, Opus review | D4 |
-| PR-3 article hedges | 1 | S | Sonnet, owner voice read | — |
-| PR-4 DNS and Chainsaw bounds and correctness | 1 | M | Opus | — |
-| PR-5 server-rendered header | 2 | L | Opus recipe, Sonnet ×14 | PR-2, D1, D2 |
-| PR-5b game headers | 2 | M | Opus | PR-5 |
-| PR-6 topic graph | 2 | M | Opus design, Sonnet data | PR-5, D5 |
-| PR-7 tools hub | 2 | S | Sonnet | D3 |
-| PR-8 head cleanup | 2 | S | Sonnet | D7 |
+| Order | PR | Phase | Size | Model | Needs |
+| --- | --- | --- | --- | --- | --- |
+| 1 | PR-4a SPF bound | 1 | S | any, with the mutation check | — |
+| 2 | PR-1 beacon | 1 | M | Opus (or a design note approved first) | — |
+| 3 | PR-2 tool and game copy | 1 | M | Sonnet, then `/code-review` | — |
+| 4 | PR-3 article hedges | 1 | S | Sonnet, owner voice read | — |
+| 5 | PR-8 head cleanup | 2 | S | Sonnet | — |
+| 6 | PR-7 tools hub | 2 | S | Sonnet | — |
+| 7 | PR-4b DNS and Chainsaw correctness | 1 | M | Opus (or a design note approved first) | PR-4a |
+| 8 | PR-5 server-rendered header | 2 | L | Opus recipe, Sonnet conversions | PR-2 |
+| 9 | PR-6 topic graph | 2 | M | Opus design, Sonnet data | PR-5 |
+| 10 | PR-5b game headers | 2 | M | Opus | PR-5 |
 
-PR-1 to PR-4 can run in parallel worktrees: they touch disjoint files, since
-PR-2 leaves DNS Sightline and Chainsaw to PR-4. PR-7 and PR-8 can run beside
-PR-5.
+The order is for one item at a time. PR-1 is second because its data needs a
+two-week head start. With parallel worktrees, PR-4a, PR-1, PR-2 and PR-3 touch
+disjoint files and can run together, and PR-7 and PR-8 can run beside PR-5.
+
+## 9. How to work an item
+
+1. Read AGENTS.md in full, then this item, then every file the item names.
+2. Start from the latest `origin/develop`, on a branch for this item only. One
+   item per PR, and the PR goes into `develop`.
+3. **For items marked Opus,** or any item that adds a dependency, a field or a
+   route: before writing code, put a short design note in the PR description
+   (files, data shapes, the assertions and their mutations) and stop for the
+   owner's go-ahead.
+4. Write the assertions first. Break what each one guards and watch it fail
+   before you fix the code (AGENTS.md *Before merging anything that touches a
+   trust boundary*).
+5. Copy follows `docs/plans/learnings-voice.md` and the "Tool copy" rules once
+   PR-2 adds them: plain sentences, no new superlatives, no claim the code
+   doesn't back.
+6. Run the gate before every commit: `npm run build`, `npm run check` (0
+   errors), `npm run security:smoke`, `npm run poker:check`,
+   `npm run boot:check`. Run `npm ci` first in a fresh container. For UI
+   changes, also run `/browser-debug`, clicking in from a hub.
+7. In the same PR, update AGENTS.md wherever a convention changed, and delete
+   the shipped item from this file and from `release-followups.md`.
+8. Run `/code-review` on the diff, fix what it finds, then open the PR into
+   `develop` and stop. Never push to `develop` or `main` directly.
