@@ -6430,6 +6430,92 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   // is a fact about the zone and the other is a fact about this tool.
   assert.notEqual(hostile.truncated, false)
 
+  /* …and a FAT zone, which neither ceiling sees: six questions, but thousands
+     of lookup terms in the answers. A receiver counts every one, and so does
+     the walk; past the overshoot it keeps none of them. Kept, they cost about
+     110 MB of heap and a 74 MB response per request against a 768 MB
+     container. The ceilings here are fixed numbers, not the walk's own
+     constants, so raising the overshoot to a million fails here rather than
+     moving the limit with it. TXT strings are split at 255 characters, as a
+     real zone's are. */
+  const SG_FAT_TERMS = 4000
+  const SG_SPF_KEPT_TERMS = 64
+  const SG_SPF_REPORT_BYTES = 32 * 1024
+  const spfTxt = (name, record) => ({
+    resolver: 'fixture', type: 'TXT', name, rcode: 'NOERROR', elapsedMs: 0,
+    records: [{ type: 16, name, ttl: 1, data: record.match(/.{1,255}/g).map(s => `"${s}"`).join(' ') }],
+  })
+  const spfSize = (report, findings) => JSON.stringify({ report, findings }).length
+  const fatIncludes = Array.from({ length: 5 }, (_, i) => `include:f${i}.fat.test`)
+  const fat = await sg.sgAnalyzeSpf('fat.test', async name => spfTxt(name, name === 'fat.test'
+    ? `v=spf1 ${fatIncludes.join(' ')} -all`
+    : `v=spf1 ${Array.from({ length: SG_FAT_TERMS }, (_, i) => `a:h${i}.${name}`).join(' ')} ~all`))
+  const fatFindings = sg.sgSpfFindings(fat, 'fat.test')
+  assert.ok(fat.terms.length <= SG_SPF_KEPT_TERMS, `the SPF walk kept ${fat.terms.length} terms from a zone with ${fat.lookups}: past the overshoot it must count a term and keep nothing`)
+  assert.ok(spfSize(fat, fatFindings) <= SG_SPF_REPORT_BYTES, `a fat SPF zone serialises to ${spfSize(fat, fatFindings)} bytes: what the walk keeps must not grow with the zone`)
+  // The bound is on what is kept, so the verdict is the unbounded walk's: every
+  // term counted, the whole tree read (an exact number, not a floor), and the
+  // head of the list, which the finding cites, intact.
+  const fatTotal = fatIncludes.length + fatIncludes.length * SG_FAT_TERMS
+  assert.equal(fat.lookups, fatTotal)
+  assert.equal(fat.truncated, false)
+  assert.deepEqual(
+    fatFindings.map(f => [f.id, f.level, f.title]),
+    [['spf-lookup-limit', 'error', `${fatTotal} DNS lookups — the limit is ${sg.SG_SPF_LOOKUP_LIMIT}`]],
+  )
+  assert.deepEqual(
+    fatFindings[0].evidence.slice(0, fatIncludes.length + 1),
+    [...fatIncludes.map(t => `${t}  (in fat.test)`), 'a:h0.f0.fat.test  (in f0.fat.test)'],
+  )
+
+  /* What following a term writes is bounded the same way. Every include the
+     walk followed back into its own ancestry wrote a problem, and each problem
+     a finding, so a record naming its parent thousands of times did the same
+     damage through `problems`. Past the overshoot a loop is still a loop, but
+     it is reported once. The record sits one level down so the root record,
+     which the report rightly keeps, stays short. */
+  const SG_LOOP_TERMS = 3000
+  const loopy = await sg.sgAnalyzeSpf('loopy.test', async name => spfTxt(name, name === 'loopy.test'
+    ? 'v=spf1 include:mid.loopy.test -all'
+    : `v=spf1 ${Array(SG_LOOP_TERMS).fill('include:loopy.test').join(' ')} -all`))
+  const loopyFindings = sg.sgSpfFindings(loopy, 'loopy.test')
+  assert.ok(loopy.problems.length <= SG_SPF_KEPT_TERMS, `the SPF walk wrote ${loopy.problems.length} problems for one looping record`)
+  assert.ok(spfSize(loopy, loopyFindings) <= SG_SPF_REPORT_BYTES, `a looping SPF zone serialises to ${spfSize(loopy, loopyFindings)} bytes: what the walk keeps must not grow with the zone`)
+  const spfVerdict = findings => [...new Set(findings.map(f => `${f.id} | ${f.level} | ${f.title}`))]
+  assert.deepEqual(spfVerdict(loopyFindings), [
+    `spf-lookup-limit | error | ${1 + SG_LOOP_TERMS} DNS lookups — the limit is ${sg.SG_SPF_LOOKUP_LIMIT}`,
+    'spf-loop | error | Include loop',
+  ], 'both records were read to the end, so the count is exact and the loop is reported')
+
+  /* The edge of the overshoot, one term past it, each way a term can be
+     followed. A loop there is found without being followed, so the count
+     stays exact; an include or a redirect that is not followed leaves the
+     count a floor, and an unread redirect leaves an unlisted sender's result
+     unknown. Each verdict is the one the unbounded walk gave. */
+  const thirty = Array.from({ length: 30 }, (_, i) => `a:h${i}.edge.test`).join(' ')
+  const edge = async tail => {
+    const report = await sg.sgAnalyzeSpf('edge.test', async name => spfTxt(name, name === 'edge.test'
+      ? `v=spf1 ${thirty} ${tail}`
+      : 'v=spf1 +all'))
+    return { report, verdict: spfVerdict(sg.sgSpfFindings(report, 'edge.test')) }
+  }
+  const edgeLoop = await edge('include:edge.test -all')
+  assert.deepEqual(edgeLoop.verdict, ['spf-lookup-limit | error | 31 DNS lookups — the limit is 10', 'spf-loop | error | Include loop'])
+  const edgeInclude = await edge('include:other.test -all')
+  assert.deepEqual(edgeInclude.verdict, ['spf-lookup-limit | error | At least 31 DNS lookups — the limit is 10'])
+  const edgeRedirect = await edge('redirect=other.test')
+  assert.deepEqual(edgeRedirect.verdict, ['spf-lookup-limit | error | At least 31 DNS lookups — the limit is 10'], 'a redirect past the overshoot is not read, so its +all is not claimed either way')
+  assert.equal(edgeRedirect.report.fallthrough, 'unknown')
+  assert.equal(edgeRedirect.report.queries, 1, 'and nothing past the overshoot is asked')
+
+  // The panel lists what was kept, and says when that is not everything.
+  const spfPanels = await import('../src/components/tools/dns-sightline/panels.ts')
+  const mailPanel = report => spfPanels.sgRenderMail({ name: 'fat.test', spf: report, dmarc: { record: null, tags: {}, unanswered: false }, mxStatus: 'none' })
+  const partialNote = /<p data-type="sg-note">Only the first \d+ lookups are listed\.<\/p>/
+  assert.equal(mailPanel(fat).match(/<li data-depth=/g).length, fat.terms.length)
+  assert.match(mailPanel(fat), partialNote)
+  assert.doesNotMatch(mailPanel(wide), partialNote, 'a complete list carries no note')
+
   /* ── 5. DMARC: alignment is a different question from the SPF pass. ────── */
 
   const txtAnswer = (name, values) => ({
@@ -6998,7 +7084,7 @@ console.log('a11y: palette contrast derived from theme.css clears AA, the skip l
   assert.equal(canonicalIp('2001:0DB8:0000:0000:0000:0000:0000:0001'), canonicalIp('2001:db8::1'))
   assert.equal(canonicalIp('not-an-ip'), null)
 }
-console.log('dns sightline: the resolver diff ignores TTL and order, the SPF walk matches an independent oracle and terminates on a hostile zone, CAA issuewild replaces issue, every finding cites its record, and the only hosts reachable are the three allowlisted resolvers')
+console.log('dns sightline: the resolver diff ignores TTL and order, the SPF walk matches an independent oracle and terminates on a hostile zone and keeps a bounded report from a fat one, CAA issuewild replaces issue, every finding cites its record, and the only hosts reachable are the three allowlisted resolvers')
 
 /* The host and runtime names nothing public may carry: they are what helps
    someone reach the origin around Cloudflare. Bare "node" cannot join the

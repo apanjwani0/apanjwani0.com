@@ -859,7 +859,8 @@ export const create: HeroCreate = (host, env) => {
   host.append(canvas, poster, pingTarget, nodesLayer, card, frame, log)
 
   // The log sits at the stage's bottom right on desktop and moves into the
-  // text block, under the links, on a phone or when the name needs the width.
+  // text block on a phone or when the name needs the width: after the links in
+  // the markup, shown above the name (hero-network.css).
   let logInContent = false
   function placeLog(inContent: boolean) {
     if (inContent === logInContent) return

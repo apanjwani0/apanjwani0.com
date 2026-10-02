@@ -169,8 +169,11 @@ a[data-type="hero-wordmark"] {
   color: inherit;
 }
 
-/* centred link cluster — second grid column, wrapped for narrow screens */
+/* centred link cluster — second grid column, wrapped for narrow screens.
+   Placed explicitly: the home page renders no wordmark, and auto-placement
+   would move the links into the first column. */
 span[data-type="hero-links"] {
+  grid-column: 2;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -221,6 +224,7 @@ nav[data-type="hero-nav"] a[data-active] {
   }
 
   span[data-type="hero-links"] {
+    grid-column: 1;
     gap: 0.75rem 1.2rem;
   }
 }

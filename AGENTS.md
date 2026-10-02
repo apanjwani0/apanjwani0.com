@@ -48,28 +48,18 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - `astro.config.mjs` — the adapter and the Vite middleware that persists
   `/admin` saves.
 
-## Current state (2026-10-01)
+## Current state (2026-10-03)
 
-- **Live** = `origin/main` (last merge 2026-09-26, PR #22). Branch flow:
+- **Live** = `origin/main` (last merge 2026-10-01, PR #27: the UI refresh
+  foundation, the home hero, `/llms.txt` and the review passes). Branch flow:
   feature → `develop` → `main`, by PR. Local `main` is stale (2026-07-07);
   compare against `origin/main`.
-- **Merged into `develop`, not live:** PRs #23–#26 and #28–#29, 35 commits
-  ahead of `origin/main`:
-  - boot-check signals;
-  - the DNS Sightline follow-ups;
-  - the UI refresh foundation;
-  - the home hero (the network replay only), with `/llms.txt`, the AI-crawler
-    `robots.txt`, Projects hidden and the new article
-    `/learnings/how-the-internet-works`;
-  - two review passes over all of it, a page-by-page SEO and performance
-    audit, and the hubs' shared card layout and sky.
-- **PR #27 (`develop` → `main`) ships everything.** It was reviewed and the
-  full gate passed on `develop` on 2026-10-01. What the reviews left open
-  (post-deploy checks, the owner's calls, deferred bugs) is in
-  `docs/plans/release-followups.md`.
+- **Merged into `develop`, not live:** PR #30 (the bounded SPF walk and two
+  home layout fixes) and `docs/plans/review-response.md`, the plan answering
+  two outside reviews. PR #31 (`develop` → `main`) ships them.
 - **Owner's pending moves:**
-  1. Merge #27, then purge the Cloudflare cache and run the post-deploy checks
-     in `docs/plans/release-followups.md`.
+  1. Purge the Cloudflare cache and run the post-deploy checks in
+     `docs/plans/release-followups.md`, after #27 and again after #31.
   2. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
@@ -340,7 +330,9 @@ SPF's ten-lookup budget counts lookups across the whole recursive evaluation. A
 domain reached by two routes is a diamond and is charged twice; only a name in
 its own ancestry is a cycle (`sgSpfDescend`). The walker is checked against an
 independent oracle in `security-smoke.mjs` (valid only on acyclic zones), and
-depth and breadth each have their own bound and fixture.
+depth and breadth each have their own bound and fixture. So does what it keeps:
+past the overshoot a term is counted, never kept or followed, because one TXT
+answer can hold thousands.
 
 ### A finding cites the record it rests on
 
@@ -730,6 +722,10 @@ Liquid light, monsoon and the Hero Lab prototypes live in
   laptop window. When the frame, the line and the text block cannot share one
   screen, the hero grows taller rather than squeezing the line into the name;
   a line still too short drops its sub-lines before any label.
+- **It reads line, log, name** (owner, 2026-10-02). On a laptop the log sits at
+  the bottom right. On a phone, or when the name needs the width, it joins the
+  text block and shows above the name through CSS `order`, so the markup keeps
+  the h1 first.
 - **Text is server-rendered.** The page renders the h1, tagline and social
   links; the hero reads them through `env.text` and never draws its own copy.
   The section carries `data-theme="dark"` because the canvas is dark, and the
@@ -743,6 +739,7 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 - **No tools or games in the hero** (the owner's rule): not in the copy, not as
   a link or a hover affordance, not even by name. The site nav keeps "tools"
   and "games" for search reach, and the meta description still lists them.
+  The nav drops its wordmark on `/` (owner, 2026-10-02): it links home.
 - **Looping motion is allowed here and in the hubs' sky, nowhere else.** It
   still stops when the hero is hidden or off screen, and renders the finished
   replay as one still frame under `prefers-reduced-motion`.
