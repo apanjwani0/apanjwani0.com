@@ -236,8 +236,10 @@ The Transform Rule, the Cache Rule and Browser Cache TTL live in the Cloudflare
 dashboard, where a stray click reverts them silently. `npm run origin:check`
 (`scripts/origin-check.sh`) asserts what a stranger sees: a 200 through
 Cloudflare, the origin IP not serving the app, `max-age=0`, `s-maxage` present,
-the response proxied, and matching header and body nonces on three 404 shapes.
-Run it after any Cloudflare change.
+the response proxied, matching header and body nonces on three 404 shapes, and
+no Web Analytics beacon in a browser's copy of `/`. Cloudflare injects that
+beacon only for a browser user agent and copies the page's nonce onto it, so a
+plain `curl` never sees it. Run it after any Cloudflare change.
 
 ### Rate limits must be bounded
 

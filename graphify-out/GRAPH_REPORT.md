@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-10-03)
 
 ## Corpus Check
-- 188 files · ~388,598 words
+- 188 files · ~388,775 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3142 nodes · 7002 edges · 124 communities (110 shown, 14 thin omitted)
+- 3142 nodes · 7002 edges · 126 communities (111 shown, 15 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 36 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f70f1bc2`
+- Built from commit: `bef6eb9b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -126,9 +126,11 @@
 - [[_COMMUNITY_Community 109|Community 109]]
 - [[_COMMUNITY_Community 110|Community 110]]
 - [[_COMMUNITY_Community 111|Community 111]]
+- [[_COMMUNITY_Community 112|Community 112]]
 - [[_COMMUNITY_Community 113|Community 113]]
 - [[_COMMUNITY_Community 114|Community 114]]
 - [[_COMMUNITY_Community 115|Community 115]]
+- [[_COMMUNITY_Community 116|Community 116]]
 - [[_COMMUNITY_Community 117|Community 117]]
 - [[_COMMUNITY_Community 122|Community 122]]
 - [[_COMMUNITY_Community 133|Community 133]]
@@ -173,7 +175,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (124 total, 14 thin omitted)
+## Communities (126 total, 15 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.08
@@ -304,8 +306,8 @@ Cohesion: 0.12
 Nodes (21): ../../components/tools/chroma-lab/ChromaLab.ts, ChromaLabTool, clClamp(), clContrast(), clEsc(), clFmt(), clHex2(), ClHSL (+13 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.08
-Nodes (28): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), childPath(), cleanMessage(), countKeys(), ErrorLoc, Indent, isPrimitive() (+20 more)
+Cohesion: 0.09
+Nodes (27): ../../components/tools/json-tidy/JsonTidy.ts, analyze(), childPath(), cleanMessage(), ErrorLoc, Indent, isPrimitive(), jtDeepEqual() (+19 more)
 
 ### Community 40 - "Community 40"
 Cohesion: 0.14
@@ -488,8 +490,8 @@ Cohesion: 0.40
 Nodes (5): Admin Config Management, Hiding a section: `sections.blogs`, `sections.projects`, Indexing: one predicate decides whether a page is real, Learnings: articles that mount a live component, Learnings: writing, not just rendering
 
 ### Community 91 - "Community 91"
-Cohesion: 0.13
-Nodes (6): DeepShoreGame, dsReadStored(), dsAutoIter(), dsEffectiveIter(), dsTokenFromHash(), DsStop
+Cohesion: 0.15
+Nodes (3): DeepShoreGame, dsAutoIter(), dsEffectiveIter()
 
 ### Community 92 - "Community 92"
 Cohesion: 0.19
@@ -524,8 +526,8 @@ Cohesion: 0.18
 Nodes (26): sgAnalyzeCaa(), sgAnalyzeSpf(), sgCaaFindings(), sgCnameFindings(), sgCnameTargetUnchecked(), sgDiffFindings(), sgDmarcFindings(), sgIsDangling() (+18 more)
 
 ### Community 101 - "Community 101"
-Cohesion: 0.13
-Nodes (14): DS_PALETTES, DS_PASS_WORK, DS_PASSES, DS_PLACES, DS_SEEDS, DsPalette, DsPlace, DsSeed (+6 more)
+Cohesion: 0.14
+Nodes (13): DS_PALETTES, DS_PASS_WORK, DS_PASSES, DS_PLACES, DS_SEEDS, DsPalette, DsPlace, DsSeed (+5 more)
 
 ### Community 102 - "Community 102"
 Cohesion: 0.17
@@ -548,8 +550,8 @@ Cohesion: 0.46
 Nodes (7): initNav(), mountSky(), mountStarField(), onScroll(), pageSetup(), syncNavHeight(), syncNavScrolled()
 
 ### Community 107 - "Community 107"
-Cohesion: 0.20
-Nodes (14): DS_DEFAULT_VIEW, DS_LOG_BAILOUT, DS_PALETTE_IDS, DS_ZOOM_CODE_MAX, DS_ZOOM_CODE_MIN, dsDecodeView(), dsDecodeZoomCode(), dsEscape (+6 more)
+Cohesion: 0.24
+Nodes (10): DS_DEFAULT_VIEW, DS_LOG_BAILOUT, DS_PALETTE_IDS, DS_ZOOM_CODE_MAX, DS_ZOOM_CODE_MIN, dsEscape, dsEscapeReference(), dsInInterior() (+2 more)
 
 ### Community 108 - "Community 108"
 Cohesion: 0.25
@@ -566,6 +568,10 @@ Nodes (12): sgCaaVerdict, SgCnameReport, SgDiff, SgDiffGroup, SgDmarcReport, SgM
 ### Community 111 - "Community 111"
 Cohesion: 0.40
 Nodes (4): Figures, Learnings: how the internet works, Shape, Wiring checklist (from AGENTS.md)
+
+### Community 112 - "Community 112"
+Cohesion: 0.27
+Nodes (8): dsReadStored(), dsDecodeView(), dsDecodeZoomCode(), dsParseCoord(), dsTokenFromHash(), dsDecodeTour(), DsStop, dsTourTokenFromHash()
 
 ### Community 113 - "Community 113"
 Cohesion: 0.39
@@ -614,7 +620,7 @@ Nodes (3): indentString(), repairJson(), sortDeep()
 ## Knowledge Gaps
 - **780 isolated node(s):** `heroProbePlugin`, `name`, `type`, `version`, `node` (+775 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
