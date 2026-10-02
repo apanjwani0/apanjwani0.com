@@ -43,11 +43,6 @@ last one. Line numbers are as of `9433d9a`.
 
 ## Deferred: separate PRs
 
-- **The SPF walk collects terms without a bound** (`analyze.ts:602-636`). A
-  crafted zone costs about 110 MB of heap and a 74 MB response per request (a
-  stub run), against a 768 MB container. Stop collecting once `lookups`
-  passes the overshoot limit. Do this soon: it breaks the "bounded in every
-  dimension" rule.
 - **Loop detection matches the substring "loop"** in problem text
   (`analyze.ts:772`, `:818`), so an unanswered `include:_spf.loopia.se` reads
   as a loop error. Keep loops in their own field.

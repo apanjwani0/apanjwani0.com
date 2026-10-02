@@ -185,7 +185,10 @@ export function sgRenderMail(r: SgInspection): string {
           t =>
             `<li data-depth="${Math.min(t.depth, 4)}"><code>${sgEsc(t.raw)}</code> <span>in ${sgEsc(t.parent)}</span></li>`,
         )
-        .join('')}</ol>`
+        .join('')}</ol>${
+        // The walk stops keeping terms past its overshoot (`sgSpfCount`), so a partial list says so.
+        spf.terms.length < spf.lookups ? `<p data-type="sg-note">Only the first ${spf.terms.length} lookups are listed.</p>` : ''
+      }`
     : ''
 
   const dmarcTags = Object.entries(r.dmarc.tags)

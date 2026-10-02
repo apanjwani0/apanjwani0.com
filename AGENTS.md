@@ -340,7 +340,9 @@ SPF's ten-lookup budget counts lookups across the whole recursive evaluation. A
 domain reached by two routes is a diamond and is charged twice; only a name in
 its own ancestry is a cycle (`sgSpfDescend`). The walker is checked against an
 independent oracle in `security-smoke.mjs` (valid only on acyclic zones), and
-depth and breadth each have their own bound and fixture.
+depth and breadth each have their own bound and fixture. So does what it keeps:
+past the overshoot a term is counted, never kept or followed, because one TXT
+answer can hold thousands.
 
 ### A finding cites the record it rests on
 
@@ -730,6 +732,10 @@ Liquid light, monsoon and the Hero Lab prototypes live in
   laptop window. When the frame, the line and the text block cannot share one
   screen, the hero grows taller rather than squeezing the line into the name;
   a line still too short drops its sub-lines before any label.
+- **It reads line, log, name** (owner, 2026-10-02). On a laptop the log sits at
+  the bottom right. On a phone, or when the name needs the width, it joins the
+  text block and shows above the name through CSS `order`, so the markup keeps
+  the h1 first.
 - **Text is server-rendered.** The page renders the h1, tagline and social
   links; the hero reads them through `env.text` and never draws its own copy.
   The section carries `data-theme="dark"` because the canvas is dark, and the
@@ -743,6 +749,7 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 - **No tools or games in the hero** (the owner's rule): not in the copy, not as
   a link or a hover affordance, not even by name. The site nav keeps "tools"
   and "games" for search reach, and the meta description still lists them.
+  The nav drops its wordmark on `/` (owner, 2026-10-02): it links home.
 - **Looping motion is allowed here and in the hubs' sky, nowhere else.** It
   still stops when the hero is hidden or off screen, and renders the finished
   replay as one still frame under `prefers-reduced-motion`.
