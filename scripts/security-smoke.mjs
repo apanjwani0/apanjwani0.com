@@ -9624,6 +9624,10 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   const hold = shared.match(/(html\[data-js\] main > :is\(\[data-tool\], \[data-game\]\):not\(:defined\) ~ \*,[^{]*)\{([^}]*)\}/)
   assert.ok(hold && /visibility:\s*hidden/.test(hold[2]), 'while a workbench is pending, what follows it is held invisible: a short tool pulled the footer into view and a tall one pushed a link out of it, both scored as layout shift')
   assert.ok(/~ footer(?![\w-])/.test(hold[1]) && hold[1].includes('driftfield-stage'), 'the hold reaches the footer and a Driftfield mode, whose host sits two levels down')
+  // A component whose script never loads never upgrades, so the hold must let go by itself.
+  const release = hold[2].match(/animation:\s*([\w-]+)\s+0s\s+(\d+(?:\.\d+)?)s\s+forwards/)
+  assert.ok(release && Number(release[2]) > 0 && Number(release[2]) <= 8, 'the hold releases itself after a few seconds: a chunk that never loads must not leave the page without its footer forever')
+  assert.match(shared, new RegExp(`@keyframes ${release[1]}\\s*\\{\\s*to\\s*\\{\\s*visibility:\\s*visible`), 'the release keyframe makes the held content visible')
   // A tooltip box is laid out while hidden; held at both the root and body, or a phone zooms out to fit it.
   assert.match(shared, /html\s*\{[^}]*overflow-x:\s*clip/, 'html clips sideways overflow (body alone would propagate to the viewport instead)')
   assert.match(shared, /(?<![\w-])body\s*\{[^}]*overflow-x:\s*clip/, "body clips sideways overflow: Oat's nowrap tooltip is laid out while hidden, and a long one near the right edge widened the page")

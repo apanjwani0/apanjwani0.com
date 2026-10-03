@@ -335,11 +335,23 @@ html[data-js] main > :is([data-tool], [data-game]):not(:defined)::after {
    the first screen out of it (0.03 on Hue Hunt). The panel's height can then be
    generic: no tool has one height anyway, it is 490px to 1,900px at a laptop's
    width and different again at every other. Covers a tool or game page, and a
-   Driftfield mode (its host sits in the stage, the stage in the tool root). */
+   Driftfield mode (its host sits in the stage, the stage in the tool root).
+
+   The hold lets go on its own after a few seconds. A component whose script
+   never arrives (a chunk that 404s under HTML the edge still serves from before
+   a deploy, a blocked request) never upgrades, and an unconditional hold left
+   that page with no footer and no links out, forever. Revealing in place moves
+   nothing, so the release costs no layout shift. A delay, not a duration: the
+   reduced-motion rule above shortens durations only. */
 html[data-js] main > :is([data-tool], [data-game]):not(:defined) ~ *,
 html[data-js] :is(main > [data-type="tool-page"], [data-type="driftfield-stage"]):has([data-game]:not(:defined)) ~ *,
 html[data-js] main:has(> :is([data-tool], [data-game]):not(:defined), > [data-type="tool-page"] [data-game]:not(:defined)) ~ footer {
   visibility: hidden;
+  animation: release-hold 0s 4s forwards;
+}
+
+@keyframes release-hold {
+  to { visibility: visible; }
 }
 
 /* ── The page title ────────────────────────────────────────────────────────
