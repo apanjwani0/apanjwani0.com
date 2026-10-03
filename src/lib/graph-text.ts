@@ -31,6 +31,29 @@ export function isGraphShape(value: unknown): value is GraphShape {
   return typeof value === 'string' && (GRAPH_SHAPES as readonly string[]).includes(value)
 }
 
+/**
+ * Node colours, by name. Colour carries meaning on a diagram (done, blocked,
+ * risky, owned by another team) the way shape does, and it arrives the same way:
+ * from a share link a stranger wrote. So it is a fixed list of names matched on
+ * decode, and the renderer maps each name to a theme token (`--tone-*`), never
+ * to a value from the link.
+ */
+export const GRAPH_TONES = ['blue', 'green', 'amber', 'red', 'violet'] as const
+export type GraphTone = (typeof GRAPH_TONES)[number]
+
+export function isGraphTone(value: unknown): value is GraphTone {
+  return typeof value === 'string' && (GRAPH_TONES as readonly string[]).includes(value)
+}
+
+/** Mermaid has no theme to borrow, so the export names fixed colours. */
+const MERMAID_TONE: Record<GraphTone, string> = {
+  blue: 'fill:#dbe7fb,stroke:#2f6fd6',
+  green: 'fill:#d8f1e3,stroke:#1e8a55',
+  amber: 'fill:#fbecd3,stroke:#c27a0e',
+  red: 'fill:#f8dcda,stroke:#c7413a',
+  violet: 'fill:#e6defa,stroke:#7a5bd8',
+}
+
 export interface GraphNode {
   id: string
   label: string
@@ -39,6 +62,8 @@ export interface GraphNode {
   line?: number
   /** Defaults to 'rounded' when absent, so every existing graph stays valid. */
   shape?: GraphShape
+  /** No colour when absent. */
+  tone?: GraphTone
 }
 
 export interface GraphEdge {
@@ -276,6 +301,11 @@ export function toMermaid(graph: Graph): string {
     const mid = edge.label ? `-->|${edge.label.replace(/\|/g, '/')}|` : '-->'
     lines.push(`  ${source} ${mid} ${target}`)
   }
+  const used = GRAPH_TONES.filter(tone => graph.nodes.some(n => n.tone === tone))
+  for (const tone of used) {
+    lines.push(`  classDef ${tone} ${MERMAID_TONE[tone]}`)
+    lines.push(`  class ${graph.nodes.filter(n => n.tone === tone).map(n => n.id).join(',')} ${tone}`)
+  }
   return lines.join('\n')
 }
 
@@ -312,6 +342,7 @@ export function decodeGraph(encoded: string): Graph | null {
         // Unknown or absent shape silently becomes the default rather than
         // rejecting the whole graph — a share link should degrade, not 404.
         ...(isGraphShape(n.shape) ? { shape: n.shape } : {}),
+        ...(isGraphTone(n.tone) ? { tone: n.tone } : {}),
       }))
     const ids = new Set(nodes.map(n => n.id))
     const edges: GraphEdge[] = parsed.e

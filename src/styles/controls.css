@@ -1,0 +1,364 @@
+/* The control kit: one look for buttons, toggles, fields, labels, tabs, menus
+   and badges inside a tool or game. A root opts in with `data-kit`; nothing
+   outside such a root is touched, so tools that have not moved yet keep their
+   own controls until they do.
+
+   Every value reads a token from theme.css (--control-*, --tab-*, --badge-*,
+   which read --font-* and --color-*), so a typeface, a colour or the control
+   height changes in one line. Styled through elements, ARIA state and data-*
+   attributes, never classes.
+
+   Hover rules carry :not(:disabled), so a dead control never lights up and the
+   disabled rule needs to restate nothing. Asserted. */
+
+/* A touch screen gets 44px targets. Scoped to the kit rather than :root, so the
+   theme keeps one :root block. */
+@media (pointer: coarse) {
+  [data-kit] {
+    --control-h: 2.75rem;
+  }
+}
+
+/* A grid or flex child sizes to its content's min-content unless told
+   otherwise: one scrolling row or long label widens its cell past the tool on
+   a phone. */
+[data-kit] :where(div, section, aside, form, fieldset, label) {
+  min-width: 0;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────
+   Default is the secondary: an outline with text ink. `primary` is the one
+   thing to do next (at most one per view), `ghost` is for quiet inline
+   actions, `danger` reddens on hover only. */
+[data-kit] button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: var(--control-h);
+  padding: 0 var(--control-pad-x);
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--control-ink);
+  font: 500 var(--control-fs) / 1 var(--control-font);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+[data-kit] button:hover:not(:disabled) {
+  border-color: var(--control-border-hover);
+}
+
+[data-kit] button[data-variant='primary'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+[data-kit] button[data-variant='primary']:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 85%, var(--color-text));
+}
+
+[data-kit] button[data-variant='ghost'] {
+  border-color: transparent;
+  color: var(--color-muted);
+}
+
+[data-kit] button[data-variant='ghost']:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+[data-kit] button[data-variant='danger']:hover:not(:disabled) {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+/* An icon-only button is square. It must carry an aria-label and a title. */
+[data-kit] button[data-icon] {
+  min-width: var(--control-h);
+  padding: 0;
+}
+
+[data-kit] button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+/* Selected ("on"): a soft accent fill and an accent border, never the primary's
+   solid fill, which means "do this". */
+[data-kit] button[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+/* A shortcut hint inside its button. Hidden on touch, where there is no key. */
+[data-kit] button kbd {
+  padding: 0 0.3em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font: 400 var(--text-label) / 1.4 var(--font-mono);
+}
+
+[data-kit] button[data-variant='primary'] kbd {
+  border-color: color-mix(in srgb, var(--color-bg) 45%, transparent);
+  color: inherit;
+}
+
+@media (pointer: coarse) {
+  [data-kit] button kbd {
+    display: none;
+  }
+}
+
+/* ── Groups ──────────────────────────────────────────────────────────────
+   A toolbar is a wrapping row. A segmented control is joined buttons in one
+   border, for a choice of one from a few. */
+[data-kit] [data-type='toolbar'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+[data-kit] [data-type='segmented'] {
+  display: inline-flex;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  overflow: hidden;
+}
+
+[data-kit] [data-type='segmented'] > button {
+  border: 0;
+  border-radius: 0;
+}
+
+[data-kit] [data-type='segmented'] > button + button {
+  border-left: 1px solid var(--control-border);
+}
+
+[data-kit] [data-type='segmented'] > button[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+/* ── Fields ──────────────────────────────────────────────────────────────── */
+[data-kit] :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']), select, textarea) {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: 0 var(--space-md);
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: 400 var(--field-fs) / 1.4 var(--control-font);
+  /* A field shows what was typed: no `-->` drawn as one arrow glyph. */
+  font-variant-ligatures: none;
+}
+
+[data-kit] textarea {
+  padding: var(--space-md);
+  resize: vertical;
+}
+
+[data-kit] input:is([type='checkbox'], [type='radio'], [type='range']) {
+  accent-color: var(--color-accent);
+}
+
+/* Section heading (UPPERCASE) and field label (sentence case). */
+[data-kit] [data-type='section-label'] {
+  margin: 0;
+  color: var(--color-muted);
+  font: 600 var(--text-label) / 1.3 var(--control-font);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+[data-kit] [data-type='field'] {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-kit] [data-type='field'] > span,
+[data-kit] [data-type='field-label'] {
+  color: var(--color-muted);
+  font: 500 var(--text-xs) / 1.3 var(--control-font);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────
+   Underline for page-level views; `data-tabs="pill"` for tabs inside a pane. */
+[data-kit] [role='tablist'] {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+[data-kit] [role='tab'] {
+  min-height: var(--control-h);
+  padding: 0 var(--control-pad-x);
+  border: 0;
+  border-bottom: var(--tab-rule) solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--tab-ink);
+}
+
+[data-kit] [role='tablist']:not([data-tabs='pill']) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-kit] [role='tablist']:not([data-tabs='pill']) [role='tab'] {
+  margin-bottom: -1px;
+}
+
+[data-kit] [role='tab']:hover:not(:disabled),
+[data-kit] [role='tab'][aria-selected='true'] {
+  color: var(--tab-ink-active);
+}
+
+[data-kit] [role='tab'][aria-selected='true'] {
+  border-bottom-color: var(--tab-rule-active);
+}
+
+[data-kit] [data-tabs='pill'] {
+  gap: var(--space-xs);
+}
+
+[data-kit] [data-tabs='pill'] [role='tab'] {
+  padding: 0 var(--space-md);
+  border-bottom: 0;
+  border-radius: var(--control-radius);
+}
+
+[data-kit] [data-tabs='pill'] [role='tab'][aria-selected='true'] {
+  background: var(--color-surface-2);
+  color: var(--color-accent);
+}
+
+/* ── Menu ────────────────────────────────────────────────────────────────
+   A <details> whose <summary> looks like a button and whose list floats. */
+[data-kit] details[data-type='menu'] {
+  position: relative;
+  /* The base layer clips a <details>; a menu's list floats outside it. */
+  overflow: visible;
+}
+
+/* Open, it stacks above whatever follows it (a canvas draws its own layers). */
+[data-kit] details[data-type='menu'][open] {
+  z-index: 10;
+}
+
+[data-kit] details[data-type='menu'] > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--control-h);
+  padding: 0 var(--control-pad-x);
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  color: var(--control-ink);
+  font: 500 var(--control-fs) / 1 var(--control-font);
+  letter-spacing: 0.02em;
+  list-style: none;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+[data-kit] details[data-type='menu'] > summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-kit] details[data-type='menu'] > summary::after {
+  content: none;
+}
+
+[data-kit] details[data-type='menu'] > summary > svg {
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+[data-kit] details[data-type='menu'][open] > summary > svg {
+  transform: rotate(180deg);
+}
+
+[data-kit] details[data-type='menu'] > summary:hover,
+[data-kit] details[data-type='menu'][open] > summary {
+  border-color: var(--control-border-hover);
+}
+
+[data-kit] details[data-type='menu'] > [role='menu'] {
+  position: absolute;
+  z-index: 5;
+  inset-inline-end: 0;
+  top: calc(100% + var(--space-xs));
+  display: grid;
+  min-width: 13rem;
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-2);
+}
+
+[data-kit] details[data-type='menu'] [role='menuitem'] {
+  justify-content: space-between;
+  border-color: transparent;
+}
+
+[data-kit] details[data-type='menu'] [role='menuitem']:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--color-surface-2);
+}
+
+[data-kit] details[data-type='menu'] [role='separator'] {
+  height: 1px;
+  margin: var(--space-xs) 0;
+  background: var(--color-border);
+}
+
+/* ── Badge and status ──────────────────────────────────────────────────── */
+[data-kit] [data-type='badge'] {
+  padding: var(--badge-pad-y) var(--badge-pad-x);
+  border: 1px solid var(--color-border);
+  border-radius: var(--badge-radius);
+  color: var(--color-muted);
+  font: 400 var(--badge-fs) / 1.4 var(--control-font);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+[data-kit] [data-type='badge'][data-tone='accent'] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+[data-kit] [data-type='badge'][data-tone='success'] {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+[data-kit] [data-type='badge'][data-tone='error'] {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+/* One quiet line of state under a workspace: counts on the left, the latest
+   message on the right. */
+[data-kit] [data-type='status-line'] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-lg);
+  margin: 0;
+  color: var(--color-muted);
+  font: 400 var(--text-xs) / 1.5 var(--control-font);
+}

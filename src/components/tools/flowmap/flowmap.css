@@ -1,196 +1,302 @@
-/* Flowmap — tokens only, no hardcoded colours or sizes (see AGENTS.md). */
+/* Flowmap — canvas-first. Controls come from the kit (src/styles/controls.css,
+   `data-kit` on the root); this sheet only lays the page out. Tokens only.
 
-/* Rhythm only — width and gutter come from the shared `[data-type="tool-page"]`
-   rule in shared.css. See the same note in token-bench.css: rendering a bespoke
-   root here silently opted the tool out of every shared workbench style. */
+   Width and gutter come from the shared `[data-type="tool-page"]` rule. */
 [data-tool='flowmap'] {
   display: flex;
   flex-direction: column;
-  gap: var(--space-section);
+  gap: var(--space-lg);
 }
 
-[data-type='fm-titlebar'] {
+[data-tool='flowmap'] [data-type='tool-header'] {
+  margin-bottom: 0;
+}
+
+/* ── Command bar ── one row on a laptop, wrapping groups on a phone. */
+[data-tool='flowmap'] [data-type='fm-bar'] {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-sm);
   flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-xl);
 }
 
-[data-type='fm-badge'] {
-  padding: var(--space-2xs) var(--space-sm);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
+[data-tool='flowmap'] [data-type='fm-bar'] > [data-slot='end'] {
+  margin-inline-start: auto;
 }
 
-/* Rail · canvas · detail. Stacks on narrow screens — the canvas is useless in a
-   200px column, so it gets the full width there and the panels sit around it. */
-[data-type='fm-body'] {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-sm);
+[data-tool='flowmap'] [data-type='fm-bar'] input[type='search'] {
+  width: 11rem;
 }
 
-@media (min-width: 64rem) {
-  [data-type='fm-body'] {
-    grid-template-columns: 15rem minmax(0, 1fr) 15rem;
-    align-items: start;
+@media (max-width: 40rem) {
+  [data-tool='flowmap'] [data-type='fm-bar'] > [data-slot='end'] {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+  }
+
+  [data-tool='flowmap'] [data-type='fm-bar'] input[type='search'] {
+    flex: 1 1 0;
+    width: auto;
   }
 }
 
-[data-type='fm-rail'],
-[data-type='fm-detail'] {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-section);
-  min-width: 0;
+/* ── Workspace ── the source drawer beside the board while it is open; the
+   board takes the full width once it closes. */
+[data-tool='flowmap'] [data-type='fm-workspace'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-lg);
 }
 
-[data-type='fm-rail'] h2,
-[data-type='fm-detail'] h2 {
-  font-size: var(--text-sm);
+@media (min-width: 56rem) {
+  [data-type='fm-workspace'][data-source='open'] {
+    grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+  }
+}
+
+[data-tool='flowmap'] [data-type='fm-source'] {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+[data-tool='flowmap'] [data-type='fm-source'][hidden] {
+  display: none;
+}
+
+[data-tool='flowmap'] [data-type='fm-source-field'] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-sm);
+}
+
+[data-tool='flowmap'] [data-type='fm-source'] textarea[data-field] {
+  min-height: 12rem;
+  height: 100%;
+  line-height: 1.55;
+}
+
+[data-tool='flowmap'] [data-type='fm-help'] code {
+  font-variant-ligatures: none;
+}
+
+[data-tool='flowmap'] [data-type='fm-help'] {
+  margin: 0;
   color: var(--color-muted);
-  text-transform: lowercase;
-  margin-bottom: var(--space-2xs);
+  font-size: var(--text-xs);
+  line-height: 1.55;
 }
 
-[data-type='fm-rail'] textarea,
-[data-type='fm-rail'] input {
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-}
-
-[data-type='fm-rail-actions'],
-[data-type='fm-layouts'] {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs);
-  margin-top: var(--space-2xs);
-}
-
-[data-type='fm-layouts'] button[data-active] {
-  border-color: var(--color-accent);
-  color: var(--color-text);
-}
-
-[data-type='fm-import-note'],
-[data-type='fm-share-note'],
-[data-type='fm-hint'] {
-  margin-top: var(--space-2xs);
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-}
-
-[data-type='fm-keys'] {
-  margin-top: var(--space-2xs);
-  color: var(--color-muted);
-  font-size: var(--text-xs, var(--text-sm));
-  line-height: 1.5;
-}
-
-/* Shape is a small fixed set, so it is a row of toggles rather than a select —
-   one press instead of open-scan-pick, and the current shape is readable
-   without opening anything. */
-[data-type='fm-shapes'] {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs);
-  align-items: center;
-  margin-top: var(--space-sm);
-}
-
-[data-type='fm-shapes'] > span {
-  width: 100%;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-}
-
-[data-type='fm-shapes'] button[data-active] {
-  border-color: var(--color-accent);
-  color: var(--color-text);
-}
-
-/* The canvas needs an explicit height: Cytoscape measures its container, and a
+/* ── The board ── an explicit height: Cytoscape measures its container, and a
    container sized by its content collapses to zero because the canvas IS the
-   content. Viewport-relative so it stays usable on a laptop and a phone. */
-[data-type='fm-canvas-wrap'] {
+   content. Tall enough to work in, short enough that the status line shows. */
+[data-tool='flowmap'] [data-type='fm-stage'] {
   position: relative;
-  min-width: 0;
+  /* Cytoscape stacks its canvases with z-index; keep them inside the board. */
+  isolation: isolate;
+  height: clamp(24rem, calc(100svh - 22rem), 46rem);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+@media (max-width: 40rem) {
+  [data-type='fm-stage'] {
+    height: min(70svh, 34rem);
+  }
+}
+
+[data-tool='flowmap'] [data-type='fm-board'],
+[data-tool='flowmap'] [data-type='fm-canvas'] {
+  position: absolute;
+  inset: 0;
 }
 
 /* The board is a single focusable widget, so it must SHOW focus — without this
-   a keyboard user pressing Tab into it has no idea the arrows now do something. */
-[data-type='fm-canvas-wrap']:focus-visible {
+   a keyboard user pressing Tab into it has no idea the keys now do something.
+   Inset, because the stage clips anything outside it. */
+[data-tool='flowmap'] [data-type='fm-board']:focus-visible {
   outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm, 4px);
+  outline-offset: -2px;
+  border-radius: var(--radius-lg);
 }
 
-[data-type='fm-canvas'] {
-  height: min(70vh, 40rem);
-  min-height: 20rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
-  background: var(--color-surface, transparent);
-}
-
-[data-type='fm-zoom'] {
+/* Floating panels share one chrome: a raised surface over the board. */
+[data-tool='flowmap'] [data-type='fm-selection'],
+[data-tool='flowmap'] [data-type='fm-banner'],
+[data-tool='flowmap'] [data-type='fm-zoom'] {
   position: absolute;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  box-shadow: var(--shadow-2);
+}
+
+[data-tool='flowmap'] [data-type='fm-selection'][hidden],
+[data-tool='flowmap'] [data-type='fm-banner'][hidden],
+[data-tool='flowmap'] [data-type='fm-empty'][hidden] {
+  display: none;
+}
+
+[data-tool='flowmap'] [data-type='fm-selection'] {
+  top: var(--space-md);
+  left: var(--space-md);
+  z-index: 2;
+  flex-wrap: nowrap;
+  max-width: calc(100% - 2 * var(--space-md));
+}
+
+/* Docked on a narrow board: full width along the bottom, the label on its own
+   row, and the zoom steps aside while it is up. */
+[data-tool='flowmap'] [data-type='fm-selection'][data-dock] {
+  top: auto;
   right: var(--space-sm);
   bottom: var(--space-sm);
-  display: flex;
-  gap: var(--space-2xs);
+  left: var(--space-sm);
+  flex-wrap: wrap;
+  max-width: none;
 }
 
-[data-type='fm-zoom'] button {
-  width: 2rem;
-  height: 2rem;
+[data-tool='flowmap'] [data-type='fm-selection'][data-dock] input[type='text'] {
+  flex: 1 1 100%;
+}
+
+/* Docked rows: the label; the shapes with Delete at the far end; the colours. */
+[data-tool='flowmap'] [data-type='fm-selection'][data-dock] > button[data-variant='danger'] {
+  order: 1;
+  margin-inline-start: auto;
+}
+
+[data-tool='flowmap'] [data-type='fm-selection'][data-dock] > [data-type='fm-tones'] {
+  order: 2;
+}
+
+[data-tool='flowmap'] [data-type='fm-selection'][data-dock]:not([hidden]) ~ [data-type='fm-zoom'] {
+  display: none;
+}
+
+[data-tool='flowmap'] [data-type='fm-selection'] input[type='text'] {
+  width: 14rem;
+  flex: 1 1 10rem;
+}
+
+[data-tool='flowmap'] [data-type='fm-selection-count'] {
+  padding: 0 var(--space-sm);
+  color: var(--color-muted);
+  font: 500 var(--text-xs) / 1 var(--font-mono);
+}
+
+/* Colour swatches: a dot in the tone, ringed when chosen. */
+[data-tool='flowmap'] [data-type='fm-tones'] {
+  display: inline-flex;
+}
+
+[data-tool='flowmap'] [data-type='fm-tones'] > button {
+  --swatch: var(--color-muted);
+  border-color: transparent;
+}
+
+[data-tool='flowmap'] [data-type='fm-swatch'] {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 1.5px solid var(--swatch);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--swatch) 30%, transparent);
+}
+
+[data-tool='flowmap'] [data-tone='none'] [data-type='fm-swatch'] {
+  background: linear-gradient(135deg, transparent 44%, var(--swatch) 44% 56%, transparent 56%);
+}
+
+[data-tool='flowmap'] [data-type='fm-tones'] > button[data-tone='blue'] { --swatch: var(--tone-blue); }
+[data-tool='flowmap'] [data-type='fm-tones'] > button[data-tone='green'] { --swatch: var(--tone-green); }
+[data-tool='flowmap'] [data-type='fm-tones'] > button[data-tone='amber'] { --swatch: var(--tone-amber); }
+[data-tool='flowmap'] [data-type='fm-tones'] > button[data-tone='red'] { --swatch: var(--tone-red); }
+[data-tool='flowmap'] [data-type='fm-tones'] > button[data-tone='violet'] { --swatch: var(--tone-violet); }
+
+[data-tool='flowmap'] [data-type='fm-tones'] > button[aria-pressed='true'] {
+  border-color: transparent;
+  background: transparent;
+}
+
+[data-tool='flowmap'] [data-type='fm-tones'] > button[aria-pressed='true'] [data-type='fm-swatch'] {
+  box-shadow: 0 0 0 2px var(--color-surface-2), 0 0 0 3.5px var(--swatch);
+}
+
+[data-tool='flowmap'] [data-type='fm-banner'] {
+  bottom: var(--space-md);
+  left: var(--space-md);
+  max-width: calc(100% - 2 * var(--space-md));
+  margin: 0;
+  padding-inline-start: var(--space-md);
+  border-color: var(--color-accent);
+  font: 400 var(--text-xs) / 1.4 var(--font-mono);
+}
+
+[data-tool='flowmap'] [data-type='fm-zoom'] {
+  right: var(--space-md);
+  bottom: var(--space-md);
   padding: 0;
-  line-height: 1;
+  background: var(--color-surface-2);
 }
 
-[data-type='fm-field'] {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
+[data-tool='flowmap'] [data-type='fm-zoom'] [data-type='segmented'] {
+  border: 0;
 }
 
-[data-type='fm-field'] > span {
+/* While connecting, the banner holds the bottom-left; on a phone it would sit
+   on the zoom, so the zoom steps aside. */
+@media (max-width: 40rem) {
+  [data-type='fm-banner']:not([hidden]) ~ [data-type='fm-zoom'] {
+    display: none;
+  }
+}
+
+/* ── Empty board ── says what the board is for and offers the shortest way to
+   a diagram. The wrapper lets clicks through to the board around the card. */
+[data-tool='flowmap'] [data-type='fm-empty'] {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-xl);
+  pointer-events: none;
+}
+
+[data-tool='flowmap'] [data-type='fm-empty'] > div {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-md);
+  max-width: 26rem;
+  text-align: center;
+  pointer-events: auto;
+}
+
+[data-tool='flowmap'] [data-type='fm-empty'] p {
+  margin: 0;
   color: var(--color-muted);
   font-size: var(--text-sm);
 }
 
-[data-type='fm-connections'] {
-  list-style: none;
-  padding: 0;
-  margin: var(--space-2xs) 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-  font-size: var(--text-sm);
+[data-tool='flowmap'] [data-type='fm-empty'] [data-type='fm-empty-title'] {
+  color: var(--color-text);
+  font: 600 var(--text-lg) / 1.2 var(--font-serif);
 }
 
-[data-type='fm-connections'] li {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2xs);
+[data-tool='flowmap'] [data-type='fm-empty'] [data-type='toolbar'] {
+  justify-content: center;
 }
 
-[data-type='fm-connections'] button {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--color-accent);
-  text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  font: inherit;
-}
-
-[data-type='fm-empty'] {
-  color: var(--color-muted);
-  font-size: var(--text-sm);
+[data-tool='flowmap'] [data-type='fm-empty'] [data-type='fm-empty-hint'] {
+  font-size: var(--text-xs);
 }

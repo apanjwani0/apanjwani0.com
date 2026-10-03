@@ -1,6 +1,7 @@
 /* Shared between portfolio (Base.astro) and tools (ToolBase.astro).
    Design tokens live in theme.css — the single source of truth. */
 @import './theme.css';
+@import './controls.css';
 
 html {
   scrollbar-gutter: stable;

@@ -79,7 +79,9 @@ dev-only and writes `src/config/*.ts`, which ships through git.
   after 4 s (a tool whose chunk never loads keeps its footer); the related-links
   block is one scrolling row of chips with the hub link pinned at the end; the
   footer tagline is gone; the docs no longer describe the site as Oat-dependent;
-  the fonts are self-hosted and load on tool and game pages too.
+  the fonts are self-hosted and load on tool and game pages too; the control kit
+  exists and Flowmap is rebuilt on it (canvas-first, node colours, a tidy-tree
+  Flow layout), waiting on the owner's review before other tools move.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
 
 ## Build / Test / Run
@@ -626,6 +628,11 @@ fixture is the worked example.
   nothing to a phone's page width; `body` needs it too. The fix proper is in the
   Oat fork, which owns that rule. Asserted.
 - **No JS framework.**
+- **Flowmap's colours and layout.** A node's colour is a name from
+  `GRAPH_TONES` (`src/lib/graph-text.ts`), matched on decode like its shape and
+  drawn from the `--tone-*` tokens (set in both palettes, a border plus a faint
+  tint under `--color-text`). "Flow" is `tidyTree` (`src/lib/graph-layout.ts`):
+  each parent centred over its own children, in either direction. Asserted.
 - **Heavy dependencies load per route.** `cytoscape` is only ever a dynamic
   `import()`: in `Flowmap.ts`'s `connectedCallback`, and in `Draftboard.ts`
   when the Map view first opens. Never import it statically. Every Cytoscape layout
@@ -679,12 +686,25 @@ shared idioms in `shared.css`); Oat is the base layer under it.
 - **Spacing rungs increase in name order**: `2xs < xs < sm < md < lg < xl < card
   < section`, declared smallest first. The only other `--space-*` tokens are
   layout measurements (`page-x`, `header-offset`). Asserted.
+- **One control kit**: `src/styles/controls.css`, imported by `shared.css`,
+  styles the controls inside any root carrying `data-kit` (buttons with
+  `data-variant="primary|ghost|danger"`, `aria-pressed` for "on",
+  `[data-type="segmented"]`, `toolbar`, fields, `section-label`, `field`, tabs
+  with `data-tabs="pill"` inside a pane, `details[data-type="menu"]`, badges with
+  `data-tone`, `status-line`). It reads only the `--control-*`, `--tab-*`,
+  `--badge-*`, `--field-fs` and `--label-tracking` tokens, and those read
+  `--font-*` and `--color-*`, so one token changes every control. Controls are
+  36px, 44px on a coarse pointer; at most one primary per view. Its hover rules
+  carry `:not(:disabled)`. Every kit token is read by the kit, no literal
+  colour or family, and a kit tool is in none of the `tools-common.css` lists.
+  Asserted. The kit loads after a tool's own sheet, so a tool rule that must
+  beat it is prefixed with the tool root (`[data-tool='flowmap'] …`). New
+  tools join the kit; Flowmap is the reference.
 - **One disabled treatment**: `--opacity-disabled`. The lane floors
   (`tools-common.css`, `games-common.css`) neutralise `:hover` by re-stating the
   hovered properties at equal specificity, declared after. Not
   `:hover:not(:disabled)`: that raises specificity and repaints per-tool tab
-  opt-outs. A tool joining the shared button chrome adds its selector to three
-  lists in `tools-common.css`: toolbar, button and `button:disabled`.
+  opt-outs. Those lists are being retired tool by tool as each moves to the kit.
 - **Contrast is asserted.** `security:smoke` parses both palettes and holds
   every text pairing to WCAG AA (4.5:1). Headroom is thin on
   `--color-surface-2` (accent 4.59 and success 4.68 in light, muted 4.76 in
@@ -752,9 +772,8 @@ read it before building any of them, and keep that branch. Until they are built,
 and `fuzzy.ts` have no UI caller; `security:smoke` covers them so they don't rot, and each
 item's assertions go in its labelled region at the end of that script. Planned
 names nothing renders yet: `button[data-type="kit-star"]`,
-`section[data-type="kit-shelf"]`, `div[data-type="detail-actions"]`, and badges
-(`[data-type="badge"][data-tone]`, planned for a `src/styles/controls.css` that
-does not exist yet). The
+`section[data-type="kit-shelf"]`, `div[data-type="detail-actions"]`. Item G's
+control kit now exists (`src/styles/controls.css`, see *Design System*). The
 view-transition plan: `vt-title` is the page h1 and, during a navigation, the
 clicked card's title, with `html[data-vt-source]` clearing the source page's h1
 (two elements with one name abort the transition); `vt-nav` is the fixed nav;
