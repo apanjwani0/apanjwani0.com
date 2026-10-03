@@ -14,11 +14,19 @@ experience / blogs / learnings / games / tools sections.
 - **Adapter**: `@astrojs/node` in Docker on an OCI VM behind Cloudflare;
   `@astrojs/cloudflare` is the swap-in. `astro.config.mjs` is the only
   deployment-specific file.
-- **Oat UI**: a forked WebComponents design system, vendored as
-  `public/oat.min.{css,js}`. To update it, run `make` in the fork
+- **Oat, the base layer**: a forked WebComponents library, vendored as
+  `public/oat.min.{css,js}`. It supplies element defaults (buttons, inputs,
+  tables, details), `title` tooltips and a few behaviours (tabs, dropdown,
+  toast, dialog). The look on top is the site's own design system (see
+  *Design System*). To update Oat, run `make` in the fork
   (github.com/apanjwani0/oat) and copy `dist/oat.min.*` into `public/`. Keep
   it out of Vite: its CSS minifier merges Oat's `@layer` blocks and restyles
   buttons. No React/Vue/Svelte.
+- **Lightweight**: no JS framework, no CSS framework or runtime component
+  library. A component Oat lacks is built here, small and dependency-free, on
+  the tokens. Every dependency earns its place, and the heavy ones (cytoscape,
+  html2canvas, gifenc, marked) load per route, so a page pays only for what it
+  uses.
 - **TypeScript** throughout; `@astrojs/check` for type checking.
 - **marked** + **dompurify** for markdown; **html2canvas** for tools;
   **gifenc** for GIF export; **cytoscape** for the Flowmap and Draftboard graphs.
@@ -67,6 +75,10 @@ dev-only and writes `src/config/*.ts`, which ships through git.
      push.
   2. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
+- **On `develop`, not live:** the pending-workbench hold now releases itself
+  after 4 s (a tool whose chunk never loads keeps its footer); the related-links
+  block is one scrolling row of chips with the hub link pinned at the end; the
+  footer tagline is gone; the docs no longer describe the site as Oat-dependent.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
 
 ## Build / Test / Run
@@ -542,8 +554,11 @@ fixture is the worked example.
   wholesale. Asserted: each slug is `live` and calls an `/api/` route, and the
   number word in the intro copy matches the set's size. The `/games` intro's
   daily count is checked against `DAILY_SLUGS` the same way.
-- **Oat UI semantics**: style standard elements and `data-*` attributes rather
-  than custom classes. Fixes to Oat go in the fork.
+- **Semantic elements and `data-type` idioms**: style standard elements and
+  `data-*` attributes rather than custom classes, with tokens only. Oat is a
+  base layer the site builds on, not the design system. A component Oat lacks
+  is built here, small and dependency-free. Fixes to Oat's own rules go in the
+  fork; anything site-specific stays in this repo.
 - **SSR everywhere**, `/tools` included: KV reads and the middleware headers
   need it.
 - **SEO support copy is off.** `seoContent` still renders when set, but every
@@ -622,7 +637,8 @@ fixture is the worked example.
 ## Design System
 
 All visual design comes from the tokens in `src/styles/theme.css`. Re-theme by
-editing tokens only.
+editing tokens only. The design system is the site's own (the tokens plus the
+shared idioms in `shared.css`); Oat is the base layer under it.
 
 - **Never hardcode** a colour, font, size or spacing in a stylesheet; use
   `var(--color-*)`, `var(--font-*)`, `var(--text-*)`, `var(--space-*)`.
@@ -814,15 +830,15 @@ gate, the probe to loopback-only dev middleware, and the hero to its own chunk.
 ## Skills & Commands
 
 - **`/browser-debug [url] [what to check]`** — a subagent that fetches the dev
-  server, validates nav routes, HTML structure and Oat asset linking. Use after
-  any layout, component or page change.
+  server, validates nav routes, HTML structure and asset linking (Oat's base
+  files, per-tool stylesheets). Use after any layout, component or page change.
 - **`/antigravity <task>`** — hands small, well-scoped edits to a faster
   subagent. Keep architecture, multi-file changes, debugging and
   `astro.config.mjs` here.
 - **`/frontent-design`** — UI generation under the portfolio override: no custom
-  classes, fonts or Tailwind; semantic HTML plus Oat `data-*` attributes. Motion
-  only in the tasteful sense: short transitions from the `--motion-*` and
-  `--ease-*` tokens, never looping decoration. `shared.css` neutralises every
+  classes, fonts or Tailwind; semantic HTML plus the site's `data-type` idioms
+  and tokens. Motion only in the tasteful sense: short transitions from the
+  `--motion-*` and `--ease-*` tokens, never looping decoration. `shared.css` neutralises every
   transition and animation under `prefers-reduced-motion: reduce`; motion driven
   from script checks the query itself.
 - **`/update-project-memory`** — saves non-obvious learnings to memory.
