@@ -1975,6 +1975,15 @@ for (const p of smokeProjects) {
     /data-action="undo"[^>]*\sdisabled/.test(flowmap) && /\.disabled = this\.(history|future)\.length === 0/.test(flowmap),
     'flowmap Undo/Redo still ship disabled and toggle at runtime — the case tools-common.css now covers',
   )
+  // The board is brought to the model by a diff, never by removing and re-adding
+  // every element: that left Cytoscape's cached list of pointer targets stale,
+  // and after an edit some nodes ignored hover, clicks and drags.
+  assert.ok(/private reconcile\(\)/.test(flowmap) && !/\.elements\(\)\.remove\(\)/.test(flowmap),
+    'flowmap reconciles the canvas with a diff; elements().remove() breaks hit-testing after edits')
+  // Scroll pans and Ctrl/pinch zooms: the board takes the wheel before
+  // Cytoscape (capture), may cancel it (not passive), and lets go on unmount.
+  assert.ok(/addEventListener\('wheel'[\s\S]{0,1500}?\{ capture: true, passive: false, signal \}/.test(flowmap),
+    'flowmap handles the wheel in the capture phase, non-passive, bound to its signal')
   // Flowmap now draws its controls with the kit, whose floor is below.
   assert.ok(
     /data-tool="flowmap" data-kit/.test(flowmap),

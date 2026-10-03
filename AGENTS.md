@@ -632,7 +632,12 @@ fixture is the worked example.
   `GRAPH_TONES` (`src/lib/graph-text.ts`), matched on decode like its shape and
   drawn from the `--tone-*` tokens (set in both palettes, a border plus a faint
   tint under `--color-text`). "Flow" is `tidyTree` (`src/lib/graph-layout.ts`):
-  each parent centred over its own children, in either direction. Asserted.
+  each parent centred over its own children, in either direction. The board
+  identifies what is under the pointer (cursor, a lifted node, a "+" handle that
+  adds a child on click and connects on drag; on touch it follows the selected
+  node). Scroll pans and Ctrl/pinch zooms, taken from Cytoscape in the capture
+  phase. The canvas is updated by a diff (`reconcile`), never by removing every
+  element: that leaves Cytoscape's pointer-target cache stale. Asserted.
 - **Heavy dependencies load per route.** `cytoscape` is only ever a dynamic
   `import()`: in `Flowmap.ts`'s `connectedCallback`, and in `Draftboard.ts`
   when the Map view first opens. Never import it statically. Every Cytoscape layout

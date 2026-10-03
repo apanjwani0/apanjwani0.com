@@ -51,6 +51,9 @@ const FM_VIEW_STORE = 'flowmap:view:v1'
  *  looks right" always works, shallow enough that the snapshots stay small. */
 const FM_HISTORY_MAX = 50
 
+/** Set once the visitor has panned or zoomed, so the hint stops showing. */
+const FM_HINT_STORE = 'flowmap:navigated:v1'
+
 /** Model shape -> the Cytoscape shape that draws it. Kept here rather than in
  *  the shared module: the vocabulary is the site's, the rendering is this
  *  renderer's, and swapping renderer should not rewrite the saved graphs. */
@@ -158,6 +161,11 @@ class FlowmapTool extends HTMLElement {
   private autoFit = true
   private lastPointer = ''
   private hashTimer = 0
+  /** The node the pointer is over, which the "+" handle belongs to. */
+  private hovered: string | null = null
+  private handleTimer = 0
+  /** Space held: drags pan even over a node. */
+  private spacePan = false
   private messageTimer = 0
 
   async connectedCallback() {
@@ -243,11 +251,23 @@ class FlowmapTool extends HTMLElement {
               <button data-action="cancel-connect" data-variant="ghost" type="button">Cancel <kbd>Esc</kbd></button>
             </p>
 
+            <button data-type="fm-handle" type="button" hidden
+                    aria-label="Add a connected node. Drag to connect to another node"
+                    title="Click: add a connected node · Drag: connect to a node, or drop on space for a new one">${this.arrow('plus')}</button>
+            <svg data-type="fm-ghost" aria-hidden="true" hidden><line /></svg>
+
+            <p data-type="fm-nav-hint" hidden>
+              ${this.arrow('hand')}
+              <span data-pointer="fine">Drag the board to pan · scroll to move · <kbd>${mod}</kbd> + scroll to zoom · hold <kbd>Space</kbd> to pan over nodes</span>
+              <span data-pointer="coarse">Drag to pan · pinch to zoom · tap a node for its actions</span>
+            </p>
+
             <div data-type="fm-zoom">
               <div data-type="segmented" role="group" aria-label="Zoom">
                 <button data-action="zoom-out" data-icon type="button" aria-label="Zoom out" title="Zoom out">${this.arrow('minus')}</button>
-                <button data-action="zoom-fit" data-icon type="button" aria-label="Fit to view" title="Fit to view (F)">${this.arrow('fit')}</button>
+                <button data-action="zoom-reset" type="button" data-type="fm-zoom-level" title="Reset to 100%">100%</button>
                 <button data-action="zoom-in" data-icon type="button" aria-label="Zoom in" title="Zoom in">${this.arrow('plus')}</button>
+                <button data-action="zoom-fit" data-icon type="button" aria-label="Fit to view" title="Fit to view (F)">${this.arrow('fit')}</button>
               </div>
             </div>
           </div>
@@ -269,6 +289,10 @@ class FlowmapTool extends HTMLElement {
     this.wire()
     this.setSource(this.graph.nodes.length === 0)
     this.sync({ animate: false })
+    try {
+      if (!localStorage.getItem(FM_HINT_STORE)) (this.querySelector('[data-type="fm-nav-hint"]') as HTMLElement).hidden = false
+    } catch { /* storage off: no hint, nothing lost */ }
+    this.renderZoom()
     // The labels are drawn to a canvas in the site's serif, which may still be
     // loading; redraw once it is here.
     void document.fonts?.ready.then(() => this.cy?.style().update())
@@ -288,7 +312,7 @@ class FlowmapTool extends HTMLElement {
   }
 
   /** Small stroke icons, drawn in the text colour. */
-  private arrow(kind: 'down' | 'right' | 'undo' | 'redo' | 'minus' | 'plus' | 'fit' | 'chevron'): string {
+  private arrow(kind: 'down' | 'right' | 'undo' | 'redo' | 'minus' | 'plus' | 'fit' | 'chevron' | 'hand'): string {
     const paths: Record<typeof kind, string> = {
       down: 'M9 3v12M4 10l5 5 5-5',
       right: 'M3 9h12M10 4l5 5-5 5',
@@ -298,6 +322,7 @@ class FlowmapTool extends HTMLElement {
       plus: 'M4 9h10M9 4v10',
       fit: 'M3 7V3h4M11 3h4v4M15 11v4h-4M7 15H3v-4',
       chevron: 'M5 7l4 4 4-4',
+      hand: 'M6 9V4.5a1.2 1.2 0 0 1 2.4 0V8M8.4 8V3.5a1.2 1.2 0 0 1 2.4 0V8M10.8 8V4.5a1.2 1.2 0 0 1 2.4 0V10c0 3-1.8 5.5-4.6 5.5-2 0-3.1-1-4-2.6L3 10.3a1.2 1.2 0 0 1 2-1.3L6 10.5',
     }
     return `<svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[kind]}"/></svg>`
   }
@@ -457,6 +482,10 @@ class FlowmapTool extends HTMLElement {
         { selector: 'node:selected', style: { 'border-color': accent, 'border-width': 2.5 } },
         { selector: 'node:selected[!tone]', style: { 'background-color': accentSoft } },
         { selector: 'node.fm-source', style: { 'border-color': accent, 'border-width': 2, 'border-style': 'dashed' } },
+        // Hover says "this is a thing you can act on" before any click: the
+        // node lifts with a soft ring, its edges brighten.
+        { selector: 'node.fm-hover', style: { 'border-color': text, 'underlay-color': accent, 'underlay-opacity': 0.14, 'underlay-padding': 5, 'underlay-shape': 'round-rectangle' } },
+        { selector: 'node.fm-target', style: { 'border-color': accent, 'border-width': 2.5, 'underlay-color': accent, 'underlay-opacity': 0.25, 'underlay-padding': 6 } },
         { selector: 'node.dimmed', style: { opacity: 0.25 } },
         {
           selector: 'edge',
@@ -466,6 +495,9 @@ class FlowmapTool extends HTMLElement {
             'target-arrow-color': muted,
             'target-arrow-shape': 'triangle',
             'arrow-scale': 0.9,
+            // A 1.5px line is a hard target; this widens what a pointer hits.
+            'overlay-padding': 6,
+            'overlay-opacity': 0,
             'curve-style': 'bezier',
             label: 'data(label)',
             'font-family': mono,
@@ -476,6 +508,7 @@ class FlowmapTool extends HTMLElement {
             'text-background-padding': '3px',
           },
         },
+        { selector: 'edge.fm-hover', style: { width: 2.5, 'line-color': text, 'target-arrow-color': text, color: text } },
         { selector: 'edge:selected', style: { width: 2.5, 'line-color': accent, 'target-arrow-color': accent, color: text } },
         { selector: 'edge.dimmed', style: { opacity: 0.15 } },
       ],
@@ -511,13 +544,14 @@ class FlowmapTool extends HTMLElement {
         this.focusLabel()
       }
     })
-    this.cy.on('scrollzoom pinchzoom dragpan', () => { this.autoFit = false })
+    this.cy.on('scrollzoom pinchzoom dragpan', () => { this.autoFit = false; this.navigated() })
+    this.wireHover(host)
     // Keep the floating toolbar beside its selection as the view or the node
     // moves; one placement per frame.
     let placing = 0
     this.cy.on('viewport position', () => {
       if (placing) return
-      placing = requestAnimationFrame(() => { placing = 0; this.placeSelection() })
+      placing = requestAnimationFrame(() => { placing = 0; this.placeSelection(); this.placeHandle(); this.renderZoom() })
     })
 
     // Cytoscape caches its container's size at init and never re-reads it, so
@@ -617,14 +651,14 @@ class FlowmapTool extends HTMLElement {
   /** Add a node. With one node selected (and no position given) the new one is
    *  its child: connected from it and placed after it in the flow's direction,
    *  so an outline can be grown on the board one key at a time. */
-  private addNode(position?: { x: number; y: number }) {
+  private addNode(position?: { x: number; y: number }, parentId?: string) {
     this.commit()
     const id = `n${this.seq++}_${Date.now().toString(36)}`
-    const parent = position ? null : this.cy.nodes(':selected')
+    const parent = parentId ? this.cy.getElementById(parentId) : position ? null : this.cy.nodes(':selected')
     const from = parent && parent.length === 1 ? parent : null
     this.graph.nodes.push({ id, label: 'New node' })
-    if (from) {
-      this.graph.edges.push({ id: `e${this.graph.edges.length}_${Date.now().toString(36)}`, source: from.id(), target: id })
+    if (from) this.graph.edges.push({ id: `e${this.graph.edges.length}_${Date.now().toString(36)}`, source: from.id(), target: id })
+    if (from && !position) {
       const at = from.position()
       const siblings = from.outgoers('node').length
       position = this.direction === 'LR'
@@ -697,7 +731,7 @@ class FlowmapTool extends HTMLElement {
   private focusLabel() {
     const input = this.querySelector('[data-type="fm-selection"] input') as HTMLInputElement | null
     if (!input) return
-    input.focus()
+    input.focus({ preventScroll: true })
     input.select()
   }
 
@@ -792,9 +826,10 @@ class FlowmapTool extends HTMLElement {
     on('cancel-connect', () => { this.endConnect('Connection cancelled.'); board.focus() })
     on('undo', () => this.travel(this.history, this.future))
     on('redo', () => this.travel(this.future, this.history))
-    on('zoom-in', () => { this.autoFit = false; this.cy.zoom({ level: this.cy.zoom() * 1.2, renderedPosition: this.centre() }) })
-    on('zoom-out', () => { this.autoFit = false; this.cy.zoom({ level: this.cy.zoom() / 1.2, renderedPosition: this.centre() }) })
+    on('zoom-in', () => { this.autoFit = false; this.navigated(); this.cy.zoom({ level: this.cy.zoom() * 1.2, renderedPosition: this.centre() }) })
+    on('zoom-out', () => { this.autoFit = false; this.navigated(); this.cy.zoom({ level: this.cy.zoom() / 1.2, renderedPosition: this.centre() }) })
     on('zoom-fit', () => this.fit())
+    on('zoom-reset', () => { this.autoFit = false; this.cy.zoom({ level: 1, renderedPosition: this.centre() }) })
 
     on('copy-link', () => {
       menu.open = false
@@ -964,6 +999,195 @@ class FlowmapTool extends HTMLElement {
     bar.style.top = `${Math.round(Math.max(gap, y))}px`
   }
 
+  /* ── The pointer on the board ────────────────────────────────────────────
+   * What is under the pointer is always identified: the cursor says what a
+   * drag will do (move a node, pan the board, pick an edge), the element lifts,
+   * and a hovered node grows a "+" handle on its flow side. Click it for a
+   * connected child; drag it to another node to connect, or onto empty board
+   * for a new connected node there. On touch there is no hover, so the handle
+   * follows the selected node instead: tap a node, then its "+".
+   */
+  private wireHover(host: HTMLElement) {
+    const board = this.querySelector('[data-type="fm-board"]') as HTMLElement
+    const handle = this.querySelector('[data-type="fm-handle"]') as HTMLButtonElement
+    const ghost = this.querySelector('[data-type="fm-ghost"]') as unknown as SVGSVGElement
+    const line = ghost.querySelector('line') as SVGLineElement
+    const signal = this.abort!.signal
+    const cursor = (value: string) => { board.dataset.cursor = value }
+    cursor('grab')
+
+    this.cy.on('mouseover', 'node', (event: any) => {
+      if (this.spacePan) return
+      event.target.addClass('fm-hover')
+      event.target.connectedEdges().addClass('fm-hover')
+      cursor('move')
+      clearTimeout(this.handleTimer)
+      this.hovered = event.target.id()
+      this.placeHandle()
+    })
+    this.cy.on('mouseout', 'node', (event: any) => {
+      event.target.removeClass('fm-hover')
+      event.target.connectedEdges().removeClass('fm-hover')
+      cursor('grab')
+      // A short grace period, so the pointer can travel from the node to its
+      // handle without the handle vanishing on the way.
+      // Cytoscape tracks the pointer on the window, so this can fire after the
+      // pointer has already reached the handle; never hide it from under you.
+      this.handleTimer = window.setTimeout(() => {
+        if (handle.matches(':hover')) return
+        this.hovered = null
+        this.placeHandle()
+      }, 220)
+    })
+    this.cy.on('mouseover', 'edge', (event: any) => { event.target.addClass('fm-hover'); cursor('pointer') })
+    this.cy.on('mouseout', 'edge', (event: any) => { event.target.removeClass('fm-hover'); cursor('grab') })
+    this.cy.on('grab', 'node', () => { cursor('grabbing'); handle.hidden = true })
+    this.cy.on('free', 'node', () => { cursor('move'); this.placeHandle() })
+    this.cy.on('tapstart', (event: any) => { if (event.target === this.cy) cursor('grabbing') })
+    this.cy.on('tapend', (event: any) => { if (event.target === this.cy) cursor('grab') })
+    this.cy.on('select unselect remove', () => this.placeHandle())
+    handle.addEventListener('pointerenter', () => clearTimeout(this.handleTimer))
+    handle.addEventListener('pointerleave', () => {
+      this.handleTimer = window.setTimeout(() => { this.hovered = null; this.placeHandle() }, 220)
+    })
+
+    // Scrolling moves the board and a pinch or Ctrl/⌘ + scroll zooms at the
+    // pointer — the convention of every canvas tool, and the only one where a
+    // trackpad's two-finger swipe does what the hand expects. Captured before
+    // Cytoscape's own wheel handler, which zooms on any scroll.
+    board.addEventListener('wheel', (event: WheelEvent) => {
+      if (!this.cy) return
+      event.preventDefault()
+      event.stopPropagation()
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1
+      const dx = event.deltaX * unit
+      const dy = event.deltaY * unit
+      this.autoFit = false
+      if (event.ctrlKey || event.metaKey) {
+        const box = host.getBoundingClientRect()
+        // A pinch arrives as small Ctrl-wheel deltas, a mouse notch as ~100;
+        // clamping makes one notch a comfortable step and a pinch smooth.
+        const level = this.cy.zoom() * Math.exp(-Math.max(-50, Math.min(50, dy)) * 0.008)
+        this.cy.zoom({ level, renderedPosition: { x: event.clientX - box.left, y: event.clientY - box.top } })
+      } else if (event.shiftKey && !dx) {
+        this.cy.panBy({ x: -dy, y: 0 })
+      } else {
+        this.cy.panBy({ x: -dx, y: -dy })
+      }
+      this.navigated()
+    }, { capture: true, passive: false, signal })
+
+    // Space-drag pans over nodes too: with nodes ungrabbable, Cytoscape pans.
+    board.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key !== ' ' || event.repeat) return
+      event.preventDefault()
+      this.spacePan = true
+      this.cy.autoungrabify(true)
+      cursor('grab')
+      handle.hidden = true
+    })
+    const endSpace = () => {
+      if (!this.spacePan) return
+      this.spacePan = false
+      this.cy?.autoungrabify(false)
+      cursor('grab')
+    }
+    board.addEventListener('keyup', (event: KeyboardEvent) => { if (event.key === ' ') endSpace() })
+    board.addEventListener('blur', endSpace)
+
+    // The handle: a click adds a child, a drag draws an edge.
+    let drag: { from: string; x: number; y: number; moved: boolean; target: any } | null = null
+    const local = (event: PointerEvent) => {
+      const box = host.getBoundingClientRect()
+      return { x: event.clientX - box.left, y: event.clientY - box.top }
+    }
+    const nodeAt = (at: { x: number; y: number }) => {
+      const pan = this.cy.pan()
+      const zoom = this.cy.zoom()
+      const model = { x: (at.x - pan.x) / zoom, y: (at.y - pan.y) / zoom }
+      const hit = this.cy.nodes().filter((n: any) => {
+        const b = n.boundingBox()
+        return model.x >= b.x1 && model.x <= b.x2 && model.y >= b.y1 && model.y <= b.y2
+      })
+      return { node: hit.length ? hit.last() : null, model }
+    }
+    handle.addEventListener('pointerdown', (event: PointerEvent) => {
+      const from = handle.dataset.node
+      if (!from || event.button !== 0) return
+      event.preventDefault()
+      handle.setPointerCapture(event.pointerId)
+      const at = local(event)
+      drag = { from, x: at.x, y: at.y, moved: false, target: null }
+    })
+    handle.addEventListener('pointermove', (event: PointerEvent) => {
+      if (!drag) return
+      const at = local(event)
+      if (!drag.moved && Math.hypot(at.x - drag.x, at.y - drag.y) < 6) return
+      drag.moved = true
+      const source = this.cy.getElementById(drag.from).renderedPosition()
+      line.setAttribute('x1', String(source.x))
+      line.setAttribute('y1', String(source.y))
+      line.setAttribute('x2', String(at.x))
+      line.setAttribute('y2', String(at.y))
+      ghost.removeAttribute('hidden')
+      const { node } = nodeAt(at)
+      const target = node && node.id() !== drag.from ? node : null
+      if (drag.target && (!target || target.id() !== drag.target.id())) drag.target.removeClass('fm-target')
+      target?.addClass('fm-target')
+      drag.target = target
+      board.dataset.cursor = target ? 'copy' : 'crosshair'
+    })
+    const finish = (event: PointerEvent, cancelled = false) => {
+      if (!drag) return
+      const { from, moved, target } = drag
+      drag = null
+      ghost.setAttribute('hidden', '')
+      target?.removeClass('fm-target')
+      cursor('grab')
+      if (cancelled) return
+      if (!moved) { this.addNode(undefined, from); return }
+      if (target) { this.connect(from, target.id()); return }
+      const { model } = nodeAt(local(event))
+      this.addNode(model, from)
+    }
+    handle.addEventListener('pointerup', event => finish(event))
+    handle.addEventListener('pointercancel', event => finish(event, true))
+  }
+
+  /** The "+" handle sits just outside a node on its flow side: below in a
+   *  top-down flow, right in a left-to-right one. */
+  private placeHandle() {
+    const handle = this.querySelector('[data-type="fm-handle"]') as HTMLButtonElement | null
+    if (!handle || !this.cy) return
+    const selected = this.cy.nodes(':selected')
+    const id = this.hovered ?? (selected.length === 1 && this.lastPointer !== 'mouse' ? selected.id() : null)
+    const node = id ? this.cy.getElementById(id) : null
+    if (!node || !node.length || this.connectFrom || this.spacePan) { handle.hidden = true; return }
+    const box = node.renderedBoundingBox({ includeLabels: false })
+    const size = handle.offsetWidth || 28
+    const lr = this.direction === 'LR' && this.layout === 'flow'
+    const x = lr ? box.x2 + 10 : (box.x1 + box.x2) / 2 - size / 2
+    const y = lr ? (box.y1 + box.y2) / 2 - size / 2 : box.y2 + 10
+    handle.style.left = `${Math.round(x)}px`
+    handle.style.top = `${Math.round(y)}px`
+    handle.dataset.node = node.id()
+    handle.hidden = false
+  }
+
+  private renderZoom() {
+    const el = this.querySelector('[data-type="fm-zoom-level"]') as HTMLElement | null
+    if (el && this.cy) el.textContent = `${Math.round(this.cy.zoom() * 100)}%`
+  }
+
+  /** The pan-and-zoom hint shows until the visitor has panned or zoomed once. */
+  private navigated() {
+    const hint = this.querySelector('[data-type="fm-nav-hint"]') as HTMLElement | null
+    if (hint && !hint.hidden) {
+      hint.hidden = true
+      try { localStorage.setItem(FM_HINT_STORE, '1') } catch { /* fine */ }
+    }
+  }
+
   private centre() {
     return { x: this.cy.width() / 2, y: this.cy.height() / 2 }
   }
@@ -999,12 +1223,7 @@ class FlowmapTool extends HTMLElement {
       this.cy.nodes().forEach((n: any) => positions.set(n.id(), { ...n.position() }))
     }
     if (place) positions.set(place.id, place.at)
-    // Selection survives a re-render, so an edit does not drop what you were
-    // working on.
-    const selected = new Set(this.cy.elements(':selected').map((e: any) => e.id()))
-    this.cy.elements().remove()
-    this.cy.add(this.toElements())
-    this.cy.elements().filter((e: any) => selected.has(e.id())).select()
+    this.reconcile()
     if (relayout) {
       this.applyLayout(options.animate ?? true)
     } else {
@@ -1024,6 +1243,33 @@ class FlowmapTool extends HTMLElement {
     this.markView()
     this.renderSelection()
     this.persist()
+  }
+
+  /**
+   * Bring the canvas to the model by changing only what differs. Removing and
+   * re-adding everything left Cytoscape's cached "which elements take the
+   * pointer" list stale: after an edit, some nodes stopped answering hover,
+   * clicks and drags until the page reloaded. A diff also keeps selection, and
+   * every untouched element keeps its place.
+   */
+  private reconcile() {
+    const wanted = new Map<string, any>(this.toElements().map(e => [e.data.id, e]))
+    // An edge whose ends changed (Reverse) is a different edge to Cytoscape.
+    this.cy.elements().forEach((ele: any) => {
+      const want = wanted.get(ele.id())
+      if (!want || (ele.isEdge() && (ele.data('source') !== want.data.source || ele.data('target') !== want.data.target))) ele.remove()
+    })
+    const fresh: any[] = []
+    for (const [id, want] of wanted) {
+      const ele = this.cy.getElementById(id)
+      if (!ele.length) { fresh.push(want); continue }
+      for (const [key, value] of Object.entries(want.data)) {
+        if (ele.data(key) !== value) ele.data(key, value)
+      }
+      if (ele.isNode() && !want.data.tone && ele.data('tone') !== undefined) ele.removeData('tone')
+    }
+    // Nodes before edges, so an edge never names a node that is not there yet.
+    if (fresh.length) this.cy.add([...fresh.filter(e => !e.data.source), ...fresh.filter(e => e.data.source)])
   }
 
   /** The floating toolbar: what you can do to what is selected. */
@@ -1101,6 +1347,7 @@ class FlowmapTool extends HTMLElement {
         this.commit()
         ;[edge.source, edge.target] = [edge.target, edge.source]
         this.sync({ relayout: false })
+        this.cy.getElementById(id).select()
       })
       reverse.title = 'Point the arrow the other way'
       bar.replaceChildren(input, reverse, remove)

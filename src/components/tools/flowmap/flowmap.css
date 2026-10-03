@@ -117,6 +117,22 @@
   inset: 0;
 }
 
+/* The cursor says what a drag will do: pan the board, move a node, pick an
+   edge, or (from the handle) connect. Set on the board and its canvases,
+   which Cytoscape stacks on top. */
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='grab'],
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='grab'] canvas { cursor: grab; }
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='grabbing'],
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='grabbing'] canvas { cursor: grabbing; }
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='move'],
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='move'] canvas { cursor: move; }
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='pointer'],
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='pointer'] canvas { cursor: pointer; }
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='copy'],
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='copy'] canvas { cursor: copy; }
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='crosshair'],
+[data-tool='flowmap'] [data-type='fm-board'][data-cursor='crosshair'] canvas { cursor: crosshair; }
+
 /* The board is a single focusable widget, so it must SHOW focus — without this
    a keyboard user pressing Tab into it has no idea the keys now do something.
    Inset, because the stage clips anything outside it. */
@@ -299,4 +315,105 @@
 
 [data-tool='flowmap'] [data-type='fm-empty'] [data-type='fm-empty-hint'] {
   font-size: var(--text-xs);
+}
+
+/* ── The "+" handle ── on a node's flow side; a round accent target that
+   reads as "grow from here". Click adds a child, drag connects. */
+[data-tool='flowmap'] button[data-type='fm-handle'] {
+  position: absolute;
+  z-index: 1;
+  width: calc(var(--control-h) * 0.75);
+  min-width: 0;
+  height: calc(var(--control-h) * 0.75);
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-accent);
+  box-shadow: var(--shadow-2);
+  cursor: grab;
+  touch-action: none;
+}
+
+[data-tool='flowmap'] button[data-type='fm-handle']:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+[data-tool='flowmap'] button[data-type='fm-handle'][hidden] {
+  display: none;
+}
+
+[data-tool='flowmap'] svg[data-type='fm-ghost'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+[data-tool='flowmap'] svg[data-type='fm-ghost'][hidden] {
+  display: none;
+}
+
+[data-tool='flowmap'] svg[data-type='fm-ghost'] line {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+/* ── Pan and zoom hint ── until the first pan or zoom. */
+[data-tool='flowmap'] [data-type='fm-nav-hint'] {
+  position: absolute;
+  bottom: var(--space-md);
+  left: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  max-width: calc(100% - 12rem);
+  margin: 0;
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-muted);
+  font: 400 var(--text-xs) / 1.4 var(--font-mono);
+  pointer-events: none;
+}
+
+[data-tool='flowmap'] [data-type='fm-nav-hint'] > svg {
+  flex: none;
+}
+
+[data-tool='flowmap'] [data-type='fm-nav-hint'][hidden],
+[data-tool='flowmap'] [data-type='fm-empty']:not([hidden]) ~ [data-type='fm-nav-hint'],
+[data-tool='flowmap'] [data-type='fm-banner']:not([hidden]) ~ [data-type='fm-nav-hint'],
+[data-tool='flowmap'] [data-type='fm-selection'][data-dock]:not([hidden]) ~ [data-type='fm-nav-hint'] {
+  display: none;
+}
+
+[data-tool='flowmap'] [data-type='fm-nav-hint'] [data-pointer='coarse'] {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  [data-tool='flowmap'] [data-type='fm-nav-hint'] [data-pointer='fine'] {
+    display: none;
+  }
+
+  [data-tool='flowmap'] [data-type='fm-nav-hint'] [data-pointer='coarse'] {
+    display: inline;
+  }
+
+  [data-tool='flowmap'] [data-type='fm-nav-hint'] {
+    max-width: calc(100% - 2 * var(--space-md));
+    bottom: calc(var(--control-h) + 2 * var(--space-md));
+  }
+}
+
+[data-tool='flowmap'] [data-type='fm-zoom-level'] {
+  min-width: 4.5em;
+  font-variant-numeric: tabular-nums;
 }
