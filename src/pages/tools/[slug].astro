@@ -216,7 +216,7 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
   )}
   {toolSeoContentHtml && <section data-type="seo-support" data-inset set:html={toolSeoContentHtml} />}
   <RelatedLinks heading="Read about it" items={stories} inset />
-  <RelatedLinks heading="More tools" items={relatedTools} inset />
+  <RelatedLinks heading="More tools" items={relatedTools} all={{ label: 'All tools', href: '/tools' }} inset />
 </ToolBase>
 
 <script>

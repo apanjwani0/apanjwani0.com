@@ -10,7 +10,8 @@
  * a search query. Eleven sibling links give each page eleven ways in, and give a
  * visitor who landed on one from a search a reason to see the rest.
  *
- * Plain text links, no cards: this sits under the SEO support copy at the very
+ * One row that never wraps: compact chips that scroll sideways, the hub link
+ * pinned at the end. A wrapping list ran to five lines on a phone, at the very
  * bottom of the page, where the job is to be crawlable and unobtrusive. The
  * hub's card grid is where the products get sold.
  */
@@ -21,9 +22,11 @@ interface Props {
   /** For a page rendered outside <main>'s gutter (every tool page, in ToolBase):
    *  the block leaves a gutter of its own, as `Breadcrumbs` does. */
   inset?: boolean
+  /** The hub these items come from, pinned after the row ('All tools'). */
+  all?: { label: string; href: string }
 }
 
-const { heading, items, inset = false } = Astro.props
+const { heading, items, inset = false, all } = Astro.props
 
 // Derived from the heading, not a constant: a product page renders this twice
 // (siblings, plus the article about it) and two navs sharing one id is invalid
@@ -34,7 +37,10 @@ const headingId = `related-${heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').r
 
 {items.length > 0 && (
   <nav data-type="related-links" data-inset={inset ? '' : undefined} aria-labelledby={headingId}>
-    <h2 id={headingId}>{heading}</h2>
+    <div data-type="related-head">
+      <h2 id={headingId}>{heading}</h2>
+      {all && <a href={all.href} data-type="related-all">{all.label} →</a>}
+    </div>
     <ul>
       {items.map(item => (
         <li><a href={item.href}>{item.title}</a></li>
@@ -44,47 +50,106 @@ const headingId = `related-${heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').r
 )}
 
 <style>
-  /* Matches section[data-type="seo-support"] so the two stack as one column. */
+  /* The page's own column: main's on a Base page, the tools' on a tool page. */
   nav {
-    width: min(var(--max-width), 100%);
-    margin: var(--space-section) auto 0;
-    padding-top: var(--space-section);
-    border-top: 1px solid var(--color-border);
-  }
-
-  /* No gutter around <main> on a tool page, so on a phone the block ran to the
-     screen edge. Same column as everywhere else once the viewport is wider. */
-  nav[data-inset] {
-    width: min(var(--max-width), 100% - 2 * var(--space-page-x));
-  }
-
-  h2 {
-    margin: 0 0 0.75rem;
+    margin-top: var(--space-section);
     font-family: var(--font-mono);
     font-size: var(--text-label);
     letter-spacing: 0.04em;
+  }
+
+  /* Outside <main>'s gutter (a tool page): the tools' column, with a gutter of
+     its own, so the row starts where the tool above it does. */
+  nav[data-inset] {
+    width: calc(min(var(--tool-width), 100%) - 2 * var(--space-page-x));
+    margin-inline: auto;
+  }
+
+  /* Room above the footer's rule, which this block no longer duplicates. */
+  nav:last-of-type {
+    margin-bottom: var(--space-section);
+  }
+
+  /* Two of these in a row (the article about it, then the siblings) read as one block. */
+  nav + nav {
+    margin-top: var(--space-lg);
+  }
+
+  div[data-type="related-head"] {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-bottom: var(--space-sm);
+  }
+
+  h2 {
+    margin: 0;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: 600;
+    text-transform: uppercase;
     color: var(--color-muted);
   }
 
+  /* One line at any width. The end padding is the fade's width, so the last
+     chip can scroll clear of it. */
   ul {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1.15rem;
+    gap: var(--space-xs);
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: var(--space-xs) var(--space-xl) var(--space-xs) 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    /* A mask reads only alpha, so any opaque token does. */
+    mask-image: linear-gradient(to right, var(--color-text) calc(100% - var(--space-xl)), transparent);
+  }
+
+  ul::-webkit-scrollbar {
+    display: none;
+  }
+
+  li {
+    flex: none;
+    scroll-snap-align: start;
   }
 
   a {
-    font-size: var(--text-sm);
     color: var(--color-muted);
     text-decoration: none;
+    transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out);
+  }
+
+  li a {
+    display: block;
+    padding: var(--space-2xs) var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
   }
 
   a:hover {
     color: var(--color-text);
-    text-decoration: underline;
-    text-decoration-color: var(--color-accent);
-    text-underline-offset: 0.3em;
+  }
+
+  li a:hover {
+    border-color: var(--color-muted);
+  }
+
+  a:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* Inside the scroll row a ring outside the chip is clipped at its edges. */
+  li a:focus-visible {
+    outline-offset: -2px;
+  }
+
+  a[data-type="related-all"] {
+    flex: none;
+    white-space: nowrap;
   }
 </style>
