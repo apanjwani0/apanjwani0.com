@@ -5935,11 +5935,12 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
   // documents its blocks at length, and the old first-`indexOf` parse would
   // have started at the first comment that mentioned `:root` and stopped at the
   // first brace a comment quoted. Only hex tokens participate — `--color-bg-blur`
-  // is an rgba() over whatever is behind it and has no fixed ratio.
+  // is an rgba() over whatever is behind it and has no fixed ratio. A block may
+  // follow a rule's `}` or a statement's `;` (the @import of fonts.css).
   const themeCode = themeSrc.replace(/\/\*[\s\S]*?\*\//g, '')
   const blockOf = (selector) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const found = [...themeCode.matchAll(new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))]
+    const found = [...themeCode.matchAll(new RegExp(`(?:^|[};])\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))]
     assert.equal(found.length, 1, `theme.css defines exactly one ${selector} block`)
     return found[0][1]
   }
@@ -9057,7 +9058,7 @@ console.log('origin-check: the beacon check reads the page before it matches, an
    (mutation: swap the xs/sm values back → fails) */
 {
   const themeCode = (await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
-  const rootBlock = themeCode.match(/(?:^|\})\s*:root\s*\{([^}]*)\}/)[1]
+  const rootBlock = themeCode.match(/(?:^|[};])\s*:root\s*\{([^}]*)\}/)[1]
   const declared = [...rootBlock.matchAll(/--space-([a-z0-9-]+)\s*:\s*([\d.]+)rem\s*;/g)].map(m => [m[1], Number(m[2])])
   const RUNGS = ['2xs', 'xs', 'sm', 'md', 'lg', 'xl', 'card', 'section']
   const MEASUREMENTS = ['page-x', 'header-offset']
@@ -9637,6 +9638,63 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
 }
 
 console.log('home hero: one hero and no switch, its text sits above the scrim, nothing blinks, it names no tools or games or the host, and its dev hooks compile out of production')
+
+/* ── Fonts: self-hosted, loaded on every page, named only through the tokens ──
+   Tool and game pages once skipped the Google Fonts link (loadFonts={false}) and
+   rendered Georgia and the system mono, so a component looked different on its
+   own page and in an article. The faces now ship from src/assets/fonts on both
+   shells, and a typeface is changed in one token. */
+{
+  const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf-8')
+  const theme = await read('src/styles/theme.css')
+  const fontsCss = await read('src/styles/fonts.css')
+  const head = await read('src/components/Head.astro')
+  assert.match(theme, /@import\s+['"]\.\/fonts\.css['"]/, 'theme.css imports fonts.css, so both shells declare the faces')
+  const faces = [...fontsCss.matchAll(/@font-face\s*\{([^}]*)\}/g)].map((m) => m[1])
+  const family = (body) => body.match(/font-family:\s*'([^']+)'/)?.[1]
+  for (const token of ['--font-serif', '--font-mono']) {
+    const value = theme.match(new RegExp(`${token}:\\s*([^;]+);`))?.[1] ?? ''
+    const [primary, fallback] = [...value.matchAll(/'([^']+)'/g)].map((m) => m[1])
+    const own = faces.filter((f) => family(f) === primary)
+    assert.ok(own.length > 0, `${token} names '${primary}', which fonts.css declares`)
+    for (const f of own) {
+      const src = f.match(/url\('\.\.\/assets\/fonts\/([\w.-]+\.woff2)'\)/)?.[1]
+      assert.ok(src, `every '${primary}' face is a woff2 from src/assets/fonts (hashed, cached), never a third-party host`)
+      await readFile(new URL(`../src/assets/fonts/${src}`, import.meta.url))
+      assert.match(f, /font-display:\s*swap/, `'${primary}' swaps in, so text is never invisible while it loads`)
+    }
+    assert.equal(fallback, `${primary} Fallback`, `${token}'s second family is the metric-matched fallback face, so the swap moves no text`)
+    const fb = faces.find((f) => family(f) === fallback)
+    assert.ok(fb && /src:\s*local\(/.test(fb) && /size-adjust:\s*[\d.]+%/.test(fb) && /ascent-override/.test(fb), `'${fallback}' is a local font scaled to the real one`)
+    const upright = own.find((f) => /font-style:\s*normal/.test(f)).match(/url\('\.\.\/(assets\/fonts\/[\w.-]+\.woff2)'\)/)[1]
+    const imp = head.match(new RegExp(`import (\\w+) from '\\.\\./${upright.replace(/[.]/g, '\\.')}\\?url'`))
+    assert.ok(imp && new RegExp(`<link rel="preload" href=\\{${imp[1]}\\} as="font" type="font/woff2" crossorigin />`).test(head), `Head preloads '${primary}' through the same file the face names`)
+  }
+  assert.ok(!/\{\s*\w+\s*&&[^}]*rel="preload"[^>]*as="font"/.test(head), 'the font preloads are unconditional: every page, both shells')
+  const files = []
+  const walk = async (dir) => {
+    for (const e of await readdir(new URL(`../${dir}`, import.meta.url), { withFileTypes: true })) {
+      const path = `${dir}/${e.name}`
+      if (e.isDirectory()) await walk(path)
+      else if (/\.(css|astro|ts)$/.test(e.name)) files.push(path)
+    }
+  }
+  await walk('src')
+  for (const path of files) {
+    const src = await read(path)
+    assert.ok(!/fonts\.(googleapis|gstatic)\.com/.test(src), `${path} reaches no Google Fonts host; the faces are self-hosted`)
+    assert.ok(!/\bloadFonts\b/.test(src), `${path}: no page opts out of the fonts`)
+    if (!/\.(css|astro)$/.test(path) || path === 'src/styles/fonts.css') continue
+    for (const m of src.matchAll(/(?<![\w-])font(?:-family)?:\s*([^;}]+)/g)) {
+      const v = m[1].trim()
+      const literal = /^font-family/.test(m[0]) ? !/^(var\(--font-[\w-]+\)|inherit)$/.test(v) : !/(var\(--font-[\w-]+\)|^inherit)\s*(!important)?$/.test(v)
+      assert.ok(!literal, `${path}: "${m[0].trim()}" names a family; use var(--font-serif) or var(--font-mono), so one token changes the typeface everywhere`)
+    }
+  }
+  assert.match(middlewareSrc, /"font-src 'self'"/, "the CSP allows fonts from this origin only")
+}
+
+console.log('fonts: both families self-hosted with metric-matched fallbacks, preloaded on every page, and named only through the --font-* tokens')
 
 /* ══════════════  UI refresh · anchor regions for items B–G  ══════════════
 

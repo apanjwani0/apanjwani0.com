@@ -78,7 +78,8 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 - **On `develop`, not live:** the pending-workbench hold now releases itself
   after 4 s (a tool whose chunk never loads keeps its footer); the related-links
   block is one scrolling row of chips with the hub link pinned at the end; the
-  footer tagline is gone; the docs no longer describe the site as Oat-dependent.
+  footer tagline is gone; the docs no longer describe the site as Oat-dependent;
+  the fonts are self-hosted and load on tool and game pages too.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
 
 ## Build / Test / Run
@@ -576,9 +577,19 @@ fixture is the worked example.
   the tab is hidden, one still frame under reduced motion, the canvas capped at
   1.5 device pixels. Listing cards are opaque so no star lands in their copy.
   Only those three hubs render it. Asserted.
-- **Tool and game detail pages** pass `loadFonts={false}` (no CLS, no
-  render-blocking font request) and `clientRouter={false}` (no router bundle) to
-  `Head`.
+- **Tool and game detail pages** pass `clientRouter={false}` (no router bundle)
+  to `Head`.
+- **Fonts are self-hosted and load on every page.** Source Serif 4 and
+  JetBrains Mono (variable, Latin subset, OFL) live in `src/assets/fonts`;
+  `src/styles/fonts.css` declares them, Vite hashes them into `/_astro/`, and
+  `Head` preloads the two upright faces through the same `?url` import. Each
+  family has a metric-matched local fallback face (`size-adjust` and the
+  overrides, measured over the site's own text), so the swap moves no text
+  (at most 0.022 with fonts delayed 1.2 s, phone width). Serif is for reading
+  (titles, prose, card titles), mono for operating (controls, labels, nav,
+  code). No stylesheet names a family: everything reads `--font-serif` or
+  `--font-mono`, so a typeface changes in one token. No Google Fonts host, and
+  CSP `font-src` is `'self'`. Asserted.
 - **A tool or game holds a skeleton until its element upgrades.** The server
   renders a bare `<h1>` and intro inside the custom element, which the
   component then replaces, so raw it flashed unstyled text and the page jumped

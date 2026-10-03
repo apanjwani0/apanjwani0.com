@@ -21,6 +21,8 @@
    its output by theme, so every cached page is the same for every visitor.
    ============================================================================= */
 
+@import './fonts.css';
+
 :root {
   /* The scheme the UA and Oat resolve against. Oat declares
      `color-scheme: light dark` on the root inside @layer theme, which let every
@@ -77,8 +79,10 @@
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* ── Fonts ───────────────────────────────────────────────── */
-  --font-serif: 'Source Serif 4', Georgia, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* The faces are declared in fonts.css. Change a typeface here: every text
+     style and control reads one of these two tokens, nothing names a family. */
+  --font-serif: 'Source Serif 4', 'Source Serif 4 Fallback', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* ── Type scale ──────────────────────────────────────────────
      Raised across the board in Aug 2026: the site read as small on desktop,

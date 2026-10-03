@@ -40,6 +40,12 @@ body {
   color: var(--color-text);
 }
 
+/* Code-ish elements take the mono token, not the browser's bare `monospace`,
+   which skips both the font and its fallback face. */
+code, kbd, pre, samp {
+  font-family: var(--font-mono);
+}
+
 /* Make the `hidden` attribute reliable. Some elements set an explicit display
    (e.g. flex) whose specificity beats the UA `[hidden] { display: none }`, so
    toggling `.hidden` in JS leaves them visible. This guarantees hidden wins. */
