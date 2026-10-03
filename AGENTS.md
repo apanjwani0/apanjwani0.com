@@ -458,6 +458,18 @@ fixture is the worked example.
   `data-tool="<dir-name>"`. That root supplies the workbench width
   (`--tool-width`), the gutter, the focus ring and `<kbd>` styling. A tool styles
   its internals, never its own container width. Asserted.
+- **Tools, games and Driftfield modes share one frame**: `--tool-width` (70vw,
+  floored at 1120px and capped at 1800px), one left edge for the breadcrumb, the
+  title and the content, at every viewport width. A tool draws it on its root. A
+  playable game page asks `Base` for `workbench`, which makes `main` the same box
+  (it is border-box and carries the gutter, so that page's breadcrumb takes no
+  `inset`), and a Driftfield mode wraps its page in the tool root. No game or
+  engine caps its own root (the cap does nothing in an article's 728px column and
+  is a second, narrower column on a game page), and no game renders the tool root
+  (Type Trial did, and doubled the gutter). A page outside `main`'s gutter, which
+  is every tool page, gives `RelatedLinks` and the SEO block `inset`. Asserted. A
+  headless-Chrome sweep of every page at 20 widths (320 to 3,440) found them
+  identical; it needs a browser, so it is not in the gate.
 - **A tool page links only its own stylesheet**, `tools/<slug>/<slug>.css`,
   through a `?url` glob in `tools/[slug].astro`, after `tools-common.css`. A
   static import of a per-tool sheet, in the route or in a tool module, puts it
@@ -548,16 +560,38 @@ fixture is the worked example.
 - **A tool or game holds a skeleton until its element upgrades.** The server
   renders a bare `<h1>` and intro inside the custom element, which the
   component then replaces, so raw it flashed unstyled text and the page jumped
-  (layout shift 0.169 on a slow load, 0.01 now). `shared.css` keeps the title,
-  hides the rest of a host that is a direct child of `main`, and draws a static
+  (layout shift 0.169 on a slow load). `shared.css` keeps the title, hides the
+  rest of a host that is a direct child of `main`, and draws a static
   `--skeleton-height` panel on `html[data-js] :is([data-tool],
   [data-game]):not(:defined)`; without JS the text stays. The panel also holds
   the space of a Driftfield stage and a learning's figure, which render empty
   and used to push the page down when they mounted. No animation. A new tool,
   game or embed gets it free through its `data-tool` / `data-game` attribute.
+  - **What follows a pending workbench is `visibility: hidden`, not removed**
+    (the footer, the related links, a Driftfield story line). A short tool pulled
+    the footer up into view (0.15 on Chainsaw) and a tall one pushed a link out
+    of it (0.03 on Hue Hunt); a hidden box is not scored, so the panel's height
+    can stay generic (a tool is 490 to 1,900px at a laptop's width, and different
+    at every other).
+  - **The tool host keeps the column before and after it upgrades**; only the
+    pending host carries the gutter. A host that took the column only while
+    pending changed its own box at mount, which the browser scored (0.088).
+  - Measured cold and throttled on the production build (a phone on slow 4G at 4x
+    CPU, a laptop, a tablet): 0 on the phone, at most 0.009 elsewhere, from Hue
+    Hunt's daily board changing height just after it mounts. The rules above are
+    asserted; the numbers need a browser, so they are not in the gate.
 - **Measure layout in an observer, never at module evaluation.** `nav-ui.ts`
   reads the nav's height in a `ResizeObserver` callback, which runs after
-  layout; a synchronous read made the script pay for the first layout. Asserted.
+  layout; a synchronous read made the script pay for the first layout. Until that
+  lands, `main` pads by `--space-header-offset`, which must be the nav's real
+  height (64px, 66px stacked on a phone, measured in a browser): at 76px the whole
+  page jumped 10 to 12px when the measured one arrived. Asserted.
+- **Sideways overflow is held on `html` and `body` together.** Oat's tooltip is a
+  `white-space: nowrap` pseudo-element, laid out even while hidden, so a long one
+  on a button near the right edge widened the page (JSON Tidy's "Repair" made it
+  655px on a 390px phone, which zoomed out to fit). A clip on the root alone does
+  nothing to a phone's page width; `body` needs it too. The fix proper is in the
+  Oat fork, which owns that rule. Asserted.
 - **No JS framework.**
 - **Heavy dependencies load per route.** `cytoscape` is only ever a dynamic
   `import()`: in `Flowmap.ts`'s `connectedCallback`, and in `Draftboard.ts`

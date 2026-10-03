@@ -7,6 +7,9 @@ html {
   /* The nav is fixed, so anchor targets need clearance. Uses the same live
      nav-height variable as main's padding-top (JS-updated, with a fallback). */
   scroll-padding-top: var(--nav-h, var(--space-header-offset));
+  /* Held with `body`, below: a clip on the root alone leaves the document's
+     scrollable width untouched, and that width is what sizes a phone's page. */
+  overflow-x: clip;
 }
 
 /* The page shell. BOTH layouts render <body>, so it is owned here and not in
@@ -18,6 +21,16 @@ html {
    it. The column (flex + min-height here, `flex: 1 0 auto` on main below) is
    what pins the footer to the bottom, and both lanes need all four. */
 body {
+  /* Oat's tooltip is a `white-space: nowrap` pseudo-element, centred on its
+     button and only hidden with opacity and visibility, so it stays laid out.
+     A long one (JSON Tidy's "Repair" is ~630px) on a button near the right edge
+     widened the whole page: a sideways scroll, and a phone zoomed out to fit it.
+     The viewport is the edge a tooltip can never usefully cross, and body spans
+     it on both shells. `clip`, not `hidden`: no scroll container, so the sticky
+     nav is untouched. It takes `html`'s clip above to apply at all (a body
+     overflow propagates to the viewport otherwise). The fix proper is in the
+     Oat fork, which owns that rule. */
+  overflow-x: clip;
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -212,6 +225,14 @@ nav[data-type="hero-nav"] a[data-active] {
 }
 
 @media (max-width: 640px) {
+  /* The stacked nav is two lines tall: ~66px measured at 320 to 600. Until
+     nav-ui.ts measures it, `main` pads by this token, and a token that is wrong
+     moves the whole page when the real height lands (it was 76px, a 10px jump
+     on every tool and game page). */
+  :root {
+    --space-header-offset: 4.125rem;
+  }
+
   nav[data-type="hero-nav"] {
     grid-template-columns: 1fr;
     justify-items: center;
@@ -260,13 +281,23 @@ main {
 /* Every tool workbench shares one width + side gutter so all tools line up.
    Individual tools style only their own internals — never their own container
    width. On narrow screens the max-width is a no-op and the gutter keeps content
-   off the edges. */
+   off the edges.
+
+   The host element (`<json-tidy-tool data-tool>`) keeps the column before and
+   after its component upgrades; only the pending host also carries the gutter,
+   which the real root supplies afterwards. A host that took the column just while
+   pending changed its own box when the component landed, and the browser scored
+   that as a layout shift (0.088 on a cold desktop load) though no text moved. */
 [data-type="tool-page"],
-[data-tool]:not(:defined) {
+[data-tool] {
   max-width: var(--tool-width);
   margin-inline: auto;
-  padding: 2rem var(--space-page-x);
   box-sizing: border-box;
+}
+
+[data-type="tool-page"],
+[data-tool]:not(:defined) {
+  padding: 2rem var(--space-page-x);
 }
 
 /* Before a tool or game's script upgrades its element, the server markup is a
@@ -295,6 +326,20 @@ html[data-js] :is([data-tool], [data-game]):not(:defined)::after {
    first has a title above it to leave room for. */
 html[data-js] main > :is([data-tool], [data-game]):not(:defined)::after {
   margin-top: var(--space-section);
+}
+
+/* What a pending workbench will push down is held invisible, not removed: the
+   page below keeps its place, and nothing visible moves when the real thing
+   lands. Without this a tool shorter than the panel pulled the footer up into
+   view (0.15 on Chainsaw), and a tall one pushed a link that sat at the bottom of
+   the first screen out of it (0.03 on Hue Hunt). The panel's height can then be
+   generic: no tool has one height anyway, it is 490px to 1,900px at a laptop's
+   width and different again at every other. Covers a tool or game page, and a
+   Driftfield mode (its host sits in the stage, the stage in the tool root). */
+html[data-js] main > :is([data-tool], [data-game]):not(:defined) ~ *,
+html[data-js] :is(main > [data-type="tool-page"], [data-type="driftfield-stage"]):has([data-game]:not(:defined)) ~ *,
+html[data-js] main:has(> :is([data-tool], [data-game]):not(:defined), > [data-type="tool-page"] [data-game]:not(:defined)) ~ footer {
+  visibility: hidden;
 }
 
 /* ── The page title ────────────────────────────────────────────────────────

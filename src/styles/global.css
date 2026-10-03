@@ -21,6 +21,14 @@ main[data-width="wide"] {
   max-width: var(--content-width);
 }
 
+/* A playable game takes the tools' workbench column. `main` is border-box with
+   the page gutter as padding, so this is the same box the tools' root draws
+   (`[data-type="tool-page"]` in shared.css): breadcrumb, title and game share one
+   left edge and one width on every tool and game page. */
+main[data-width="workbench"] {
+  max-width: var(--tool-width);
+}
+
 /* Full-bleed content: interactive games (nav present, data-fluid) and the home
    hero (no standard nav, data-bare). Both escape the centered column entirely. */
 main[data-bare],

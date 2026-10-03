@@ -1,8 +1,3 @@
-div[data-type="fg-game"] {
-  max-width: var(--max-width);
-  margin: 0 auto;
-}
-
 div[data-type="fg-titlebar"] {
   display: flex;
   align-items: baseline;

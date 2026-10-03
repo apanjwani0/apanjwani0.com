@@ -5,11 +5,6 @@
  * a tenth byte-identical copy of the same six declarations (see AGENTS.md —
  * Design System). Only the role-specific overrides below are per-game. */
 
-div[data-type="ds-game"] {
-  max-width: var(--max-width);
-  margin: 0 auto;
-}
-
 div[data-type="ds-titlebar"] {
   display: flex;
   align-items: baseline;

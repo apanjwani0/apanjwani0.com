@@ -107,6 +107,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
   description={pageDescription}
   keywords={game.keywords}
   noindex={!GameTag}
+  workbench={Boolean(GameTag)}
   starfield={false}
   loadFonts={false}
   clientRouter={false}
@@ -116,7 +117,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
       breadcrumb stays: it pairs with the visible trail below. */}
   {GameTag && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
-  <Breadcrumbs items={crumbs} inset />
+  <Breadcrumbs items={crumbs} />
   {GameTag && (
     <GameTag data-game={game.slug}>
       <h1>{game.title}</h1>

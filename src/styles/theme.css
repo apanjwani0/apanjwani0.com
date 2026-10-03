@@ -128,7 +128,7 @@
   /* Layout measurements, not rungs: a gutter and a header height are fixed by
      what they measure, so they sit outside the ordered scale above. */
   --space-page-x: 1.25rem;  /* page side gutter                 */
-  --space-header-offset: 4.75rem; /* height of the sticky header — scroll-padding for anchors */
+  --space-header-offset: 4rem; /* the nav's height before JS measures it (--nav-h); 4.125rem on a phone, in shared.css */
 
   /* ── State ───────────────────────────────────────────────── */
   /* One "this control is dead" value for the whole site. Before this token the

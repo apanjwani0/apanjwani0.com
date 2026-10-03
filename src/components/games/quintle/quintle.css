@@ -11,11 +11,6 @@
    familiar yellow, so the palette stays on-brand; the how-to-play legend explains it,
    and the shareable emoji grid still uses the universal 🟩/🟨/⬛ so results read anywhere. */
 
-div[data-type="q-game"] {
-  max-width: var(--max-width);
-  margin: 0 auto;
-}
-
 /* ── header ── */
 div[data-type="q-titlebar"] {
   display: flex;

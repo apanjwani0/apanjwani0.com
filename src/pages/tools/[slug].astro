@@ -214,9 +214,9 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
       <p>{tool.intro || tool.description}</p>
     </dns-sightline-tool>
   )}
-  {toolSeoContentHtml && <section data-type="seo-support" set:html={toolSeoContentHtml} />}
-  <RelatedLinks heading="Read about it" items={stories} />
-  <RelatedLinks heading="More tools" items={relatedTools} />
+  {toolSeoContentHtml && <section data-type="seo-support" data-inset set:html={toolSeoContentHtml} />}
+  <RelatedLinks heading="Read about it" items={stories} inset />
+  <RelatedLinks heading="More tools" items={relatedTools} inset />
 </ToolBase>
 
 <script>

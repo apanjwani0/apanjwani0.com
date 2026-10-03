@@ -2,12 +2,6 @@ twenty48-game[data-game="2048"] {
   min-height: 44rem;
 }
 
-div[data-type="tw-game"] {
-  width: min(100%, calc(100vw - 2 * var(--space-page-x)));
-  max-width: var(--max-width);
-  margin: 0 auto;
-}
-
 div[data-type="tw-titlebar"] {
   display: flex;
   align-items: baseline;

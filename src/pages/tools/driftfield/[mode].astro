@@ -88,40 +88,45 @@ const breadcrumbLd = breadcrumbListJsonLd([
   <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
 
-  <h1>{mode.title}</h1>
-  <p data-type="page-intro">{mode.description}</p>
+  {/* The tools' workbench root, so a mode takes the same width and gutter as
+      every tool: without it the title and the mode switcher sat against the
+      viewport edge and the engine kept its own narrow column. */}
+  <div data-type="tool-page" data-tool="driftfield">
+    <h1>{mode.title}</h1>
+    <p data-type="page-intro">{mode.description}</p>
 
-  <nav data-type="driftfield-modes" aria-label="Driftfield modes">
-    {DRIFTFIELD_MODES.map(m => (
-      <a
-        href={`/tools/${DRIFTFIELD_SLUG}/${m.slug}`}
-        aria-current={m.slug === mode.slug ? 'page' : undefined}
-      >{m.title}</a>
+    <nav data-type="driftfield-modes" aria-label="Driftfield modes">
+      {DRIFTFIELD_MODES.map(m => (
+        <a
+          href={`/tools/${DRIFTFIELD_SLUG}/${m.slug}`}
+          aria-current={m.slug === mode.slug ? 'page' : undefined}
+        >{m.title}</a>
+      ))}
+    </nav>
+
+    {EngineTag ? (
+      <div data-type="driftfield-stage">
+        <EngineTag data-game={mode.slug} />
+      </div>
+    ) : (
+      <p>This mode is not wired up yet.</p>
+    )}
+
+    {/* The export controls used to live here, as a single "Download PNG" the shell
+        wired to whatever canvas the engine had drawn. That is now the shared export
+        bar the engine attaches to itself (src/lib/canvas-export.ts), which adds the
+        GIF, the resolution choice and — the part that was missing — a preview of
+        the file before it is written. Two export buttons on one screen doing almost
+        the same thing was worse than either alone. */}
+
+    {stories.map(story => (
+      <p data-type="driftfield-story">
+        Where this came from: <a href={`/learnings/${story.slug}`}>{story.title}</a>.
+      </p>
     ))}
-  </nav>
+  </div>
 
-  {EngineTag ? (
-    <div data-type="driftfield-stage">
-      <EngineTag data-game={mode.slug} />
-    </div>
-  ) : (
-    <p>This mode is not wired up yet.</p>
-  )}
-
-  {/* The export controls used to live here, as a single "Download PNG" the shell
-      wired to whatever canvas the engine had drawn. That is now the shared export
-      bar the engine attaches to itself (src/lib/canvas-export.ts), which adds the
-      GIF, the resolution choice and — the part that was missing — a preview of
-      the file before it is written. Two export buttons on one screen doing almost
-      the same thing was worse than either alone. */}
-
-  {stories.map(story => (
-    <p data-type="driftfield-story">
-      Where this came from: <a href={`/learnings/${story.slug}`}>{story.title}</a>.
-    </p>
-  ))}
-
-  <RelatedLinks heading="More Driftfield modes" items={siblings} />
+  <RelatedLinks heading="More Driftfield modes" items={siblings} inset />
 
   <script>
     import { mountEmbed } from '../../../lib/game-mount'

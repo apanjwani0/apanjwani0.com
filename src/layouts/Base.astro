@@ -18,6 +18,9 @@ interface Props {
   keywords?: string
   bare?: boolean
   wide?: boolean
+  /** The tools' workbench column (`--tool-width`), for a page that hosts a
+   *  playable game, so a game sits in the same frame as every tool. */
+  workbench?: boolean
   fluid?: boolean
   starfield?: boolean
   /** The home hero's drifting sky behind the page (the tools, games and learnings hubs). */
@@ -42,6 +45,7 @@ const {
   keywords,
   bare = false,
   wide = false,
+  workbench = false,
   fluid = false,
   starfield = true,
   sky = false,
@@ -98,7 +102,7 @@ const ogImage = ogImageMeta(site, ogCard, title)
       tabindex="-1"
       data-bare={bare ? '' : undefined}
       data-fluid={fluid ? '' : undefined}
-      data-width={wide ? 'wide' : undefined}
+      data-width={workbench ? 'workbench' : wide ? 'wide' : undefined}
     >
       <slot />
     </main>

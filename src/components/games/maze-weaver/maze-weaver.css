@@ -1,8 +1,3 @@
-div[data-type="mw-game"] {
-  max-width: var(--max-width);
-  margin: 0 auto;
-}
-
 div[data-type="mw-titlebar"] {
   display: flex;
   align-items: baseline;

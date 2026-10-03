@@ -6,6 +6,11 @@ section[data-type="seo-support"] {
   color: var(--color-text);
 }
 
+/* A tool page renders outside <main>'s gutter (see RelatedLinks), so it leaves one. */
+section[data-type="seo-support"][data-inset] {
+  width: min(var(--max-width), 100% - 2 * var(--space-page-x));
+}
+
 section[data-type="seo-support"] h2 {
   margin: 0 0 0.75rem;
   font-size: var(--text-title);

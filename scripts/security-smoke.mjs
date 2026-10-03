@@ -1135,6 +1135,46 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   }
 }
 
+/* ─────  tools, games and Driftfield modes share one frame  ───────────── */
+
+// A tool draws its column itself (`--tool-width`, on its root). A game page is
+// Base's, whose `main` is the prose column unless asked for the workbench, and the
+// games sat in it: 728px beside the tools' 1,120 to 1,800, with the breadcrumb a
+// gutter to the right of the title. Driftfield's mode pages had no root at all, so
+// the title and the mode switcher touched the viewport edge while the engine kept
+// a 768px column of its own, and Type Trial's root added a second gutter. A sweep
+// of every page at 20 widths (320 to 3,440) found them identical once these held,
+// so each is pinned; the sweep itself needs a browser and is not part of the gate.
+{
+  const read = async rel => readFile(new URL(`../src/${rel}`, import.meta.url), 'utf-8')
+  const strip = css => css.replace(/\/\*[\s\S]*?\*\//g, '')
+  assert.match(await read('layouts/Base.astro'), /data-width=\{workbench \? 'workbench'/, 'Base can render main as the workbench column')
+  assert.match(strip(await read('styles/global.css')), /main\[data-width="workbench"\]\s*\{\s*max-width:\s*var\(--tool-width\)/, "the workbench main is the tools' column, from the same token")
+  const gamePage = await read('pages/games/[slug].astro')
+  assert.match(gamePage, /workbench=\{Boolean\(GameTag\)\}/, 'a playable game page takes the workbench column; a coming-soon page keeps the prose one')
+  assert.doesNotMatch(gamePage, /<Breadcrumbs[^>]*\binset\b/, "main already carries the gutter, so a game page's breadcrumb must not add a second")
+  const modePage = await read('pages/tools/driftfield/[mode].astro')
+  assert.match(modePage, /<div data-type="tool-page" data-tool="driftfield">/, "a Driftfield mode renders the tools' root, so it takes their width and gutter")
+  // Outside <main>'s gutter, the foot of the page leaves its own (RelatedLinks `inset`).
+  for (const [name, src] of [['tools/[slug].astro', await read('pages/tools/[slug].astro')], ['tools/driftfield/[mode].astro', modePage]]) {
+    const all = src.match(/<RelatedLinks\b[^>]*>/g) ?? []
+    assert.ok(all.length > 0 && all.every(tag => /\binset\b/.test(tag)), `${name} renders RelatedLinks outside main's gutter, so every one takes inset (on a phone the links ran to the screen edge)`)
+  }
+
+  const gamesDir = new URL('../src/components/games/', import.meta.url)
+  for (const dir of (await readdir(gamesDir, { withFileTypes: true })).filter(d => d.isDirectory())) {
+    for (const file of await readdir(new URL(`${dir.name}/`, gamesDir))) {
+      if (file.endsWith('.css')) {
+        const css = strip(await readFile(new URL(`${dir.name}/${file}`, gamesDir), 'utf-8'))
+        assert.doesNotMatch(css, /\[data-type=["'][a-z0-9]+-game["']\]\s*\{[^}]*max-width/, `${dir.name}/${file} caps its own root: the page's frame owns the width (the cap does nothing in an article and is a second, narrower column on a game page)`)
+      } else if (file.endsWith('.ts')) {
+        const src = await readFile(new URL(`${dir.name}/${file}`, gamesDir), 'utf-8')
+        assert.ok(!src.includes('data-type="tool-page"'), `${dir.name}/${file} renders the tools' root inside a game, which adds a gutter and a width of its own`)
+      }
+    }
+  }
+}
+
 {
   const poker = await import('../src/components/games/poker-trainer/engine/equity.ts')
 
@@ -9560,6 +9600,19 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   assert.match(shared, /html\[data-js\] main > :is\(\[data-tool\], \[data-game\]\):not\(:defined\) > :not\(h1\)\s*\{\s*display:\s*none/, 'before a tool or game upgrades, the intro is hidden only while JS runs, so a visitor without it keeps the text')
   assert.match(shared, /html\[data-js\] :is\(\[data-tool\], \[data-game\]\):not\(:defined\)::after\s*\{[^}]*min-height:\s*var\(--skeleton-height\)/, 'a not-yet-upgraded tool, game, Driftfield stage or learning figure holds a panel where it lands, so the page does not jump')
   assert.doesNotMatch(shared.match(/:not\(:defined\)::after\s*\{[^}]*\}/)?.[0] ?? '', /animation|transition/, 'the skeleton is static: nothing here pulses')
+  // The pending host keeps the tool column before and after it upgrades; only the pending one carries the gutter.
+  assert.match(shared, /\[data-type="tool-page"\],\s*\[data-tool\]\s*\{[^}]*max-width:\s*var\(--tool-width\)/, "the tool host keeps the column once its component lands: a host that took it only while pending changed its own box at mount, which the browser scored as a layout shift")
+  assert.match(shared, /\[data-type="tool-page"\],\s*\[data-tool\]:not\(:defined\)\s*\{[^}]*padding:/, 'only the pending host carries the gutter; the real root supplies it afterwards')
+  // What follows a pending workbench is held invisible, not removed.
+  const hold = shared.match(/(html\[data-js\] main > :is\(\[data-tool\], \[data-game\]\):not\(:defined\) ~ \*,[^{]*)\{([^}]*)\}/)
+  assert.ok(hold && /visibility:\s*hidden/.test(hold[2]), 'while a workbench is pending, what follows it is held invisible: a short tool pulled the footer into view and a tall one pushed a link out of it, both scored as layout shift')
+  assert.ok(/~ footer(?![\w-])/.test(hold[1]) && hold[1].includes('driftfield-stage'), 'the hold reaches the footer and a Driftfield mode, whose host sits two levels down')
+  // A tooltip box is laid out while hidden; held at both the root and body, or a phone zooms out to fit it.
+  assert.match(shared, /html\s*\{[^}]*overflow-x:\s*clip/, 'html clips sideways overflow (body alone would propagate to the viewport instead)')
+  assert.match(shared, /(?<![\w-])body\s*\{[^}]*overflow-x:\s*clip/, "body clips sideways overflow: Oat's nowrap tooltip is laid out while hidden, and a long one near the right edge widened the page")
+  // The nav's height before JS measures it: the pair measured in a browser (64px, 66px stacked).
+  assert.match(await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8'), /--space-header-offset:\s*4rem;/, "the pre-JS nav height is the nav's real 64px, or the page jumps when the measured one lands")
+  assert.match(shared, /@media \(max-width: 640px\)\s*\{\s*:root\s*\{\s*--space-header-offset:\s*4\.125rem/, 'the stacked phone nav has its own pre-JS height (66px)')
 }
 
 console.log('home hero: one hero and no switch, its text sits above the scrim, nothing blinks, it names no tools or games or the host, and its dev hooks compile out of production')

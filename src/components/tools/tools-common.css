@@ -236,10 +236,10 @@ section[data-type="sg-card"] h2 {
    the tools lane's idiom, so it lives with the lane's other shared chrome (the
    toolbar, the button language, the card container) rather than in shared.css:
    the games lane writes its own per-game header instead, and the one game that
-   renders this markup — Type Trial — renders the whole tools workbench root
-   (`data-type="tool-page"`, `data-tool="type-trial"`) because it used to BE a
-   tool. That is a straggler to unpick in TypeTrial.ts, not a reason to push a
-   tools-lane rule into the sheet the whole site loads.
+   still renders this markup — Type Trial, because it used to BE a tool — does
+   not load this sheet, so its header gets only the base element rules. That is
+   a straggler, not a reason to push a tools-lane rule into the sheet the whole
+   site loads.
 
    Hoisted from TWO byte-identical unscoped copies, in audio-transcriber.css and
    draftboard.css. Per-tool sheets then shared one page bundle, so an unscoped rule in

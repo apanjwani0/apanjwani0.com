@@ -2,11 +2,6 @@
    Chrome colours/fonts/sizes/radii come from theme.css tokens only; the swatches
    themselves are coloured inline from the game's own random data. */
 
-div[data-type="hue-game"] {
-  max-width: var(--max-width);
-  margin: 0 auto;
-}
-
 /* ── header ── */
 div[data-type="hue-titlebar"] {
   display: flex;
