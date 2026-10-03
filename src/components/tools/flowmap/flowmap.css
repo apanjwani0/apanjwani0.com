@@ -1,5 +1,5 @@
 /* Flowmap — canvas-first. Controls come from the kit (src/styles/controls.css,
-   `data-kit` on the root); this sheet only lays the page out. Tokens only.
+   `data-controls` on the root); this sheet only lays the page out. Tokens only.
 
    Width and gutter come from the shared `[data-type="tool-page"]` rule. */
 [data-tool='flowmap'] {

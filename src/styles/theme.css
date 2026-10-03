@@ -155,7 +155,7 @@
 
   /* ── Controls ────────────────────────────────────────────────
      One control kit, drawn by src/styles/controls.css for any tool or game
-     root carrying `data-kit`. Every control reads these, and these read the
+     root carrying `data-controls`. Every control reads these, and these read the
      --font-* and --color-* tokens, so a typeface or a colour changes in one
      place. Serif reads, mono operates: controls and labels are mono. */
   --control-font: var(--font-mono);

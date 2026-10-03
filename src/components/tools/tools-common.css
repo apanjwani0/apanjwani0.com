@@ -40,7 +40,7 @@ div[data-type="tool-page"] kbd {
    that share this exact language (list-forge / epoch-wizard / chroma-lab /
    codec-forge / hash-smith) so it lives in one place instead of five identical
    copies. These lists are on their way out: a tool that moves to the control
-   kit (src/styles/controls.css, opted into with `data-kit` on its root, as
+   kit (src/styles/controls.css, opted into with `data-controls` on its root, as
    Flowmap is) leaves all four lists in the same change. A new tool joins the
    kit, not these lists.
 

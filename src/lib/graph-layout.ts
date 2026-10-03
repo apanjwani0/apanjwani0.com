@@ -63,40 +63,57 @@ export function tidyTree(
     along += rankExtent[d] + gap.rank
   }
 
+  // Iterative walks: a long chain (a pasted outline, a share link) is as deep
+  // as it is long, and recursion overflows the stack at a few thousand levels.
+  const preorder = (root: string): string[] => {
+    const order: string[] = []
+    const stack = [root]
+    while (stack.length) {
+      const id = stack.pop()!
+      order.push(id)
+      const kids = children.get(id) ?? []
+      for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i])
+    }
+    return order
+  }
   const span = new Map<string, number>()
-  const measure = (id: string): number => {
-    const kids = children.get(id) ?? []
-    const own = breadth(id)
-    const total = kids.reduce((sum, k) => sum + measure(k), 0) + gap.sibling * Math.max(0, kids.length - 1)
-    const width = Math.max(own, total)
-    span.set(id, width)
-    return width
-  }
   const across = new Map<string, number>()
-  const place = (id: string, start: number) => {
-    const width = span.get(id)!
-    across.set(id, start + width / 2)
-    const kids = children.get(id) ?? []
-    const total = kids.reduce((sum, k) => sum + span.get(k)!, 0) + gap.sibling * Math.max(0, kids.length - 1)
-    let cursor = start + (width - total) / 2
-    for (const k of kids) {
-      place(k, cursor)
-      cursor += span.get(k)! + gap.sibling
-    }
-    // Over the middle of its first and last child, which is where the eye
-    // expects it when the children differ in size; kept inside its own span so
-    // it cannot reach a neighbour's.
-    if (kids.length) {
-      const own = breadth(id)
-      const mid = (across.get(kids[0])! + across.get(kids[kids.length - 1])!) / 2
-      across.set(id, Math.min(Math.max(mid, start + own / 2), start + width - own / 2))
-    }
-  }
+  const kidsTotal = (kids: string[]) =>
+    kids.reduce((sum, k) => sum + span.get(k)!, 0) + gap.sibling * Math.max(0, kids.length - 1)
   let cursor = 0
   for (const root of roots) {
-    const width = measure(root)
-    place(root, cursor)
-    cursor += width + gap.sibling * 2
+    const order = preorder(root)
+    // Children before parents: a subtree is as wide as its children, or itself.
+    for (let i = order.length - 1; i >= 0; i--) {
+      const id = order[i]
+      span.set(id, Math.max(breadth(id), kidsTotal(children.get(id) ?? [])))
+    }
+    // Parents before children: each child starts where its parent's row puts it.
+    const start = new Map<string, number>([[root, cursor]])
+    for (const id of order) {
+      const at = start.get(id)!
+      const width = span.get(id)!
+      across.set(id, at + width / 2)
+      const kids = children.get(id) ?? []
+      let next = at + (width - kidsTotal(kids)) / 2
+      for (const k of kids) {
+        start.set(k, next)
+        next += span.get(k)! + gap.sibling
+      }
+    }
+    // Children before parents again: each parent sits over the middle of its
+    // first and last child, which is where the eye expects it when the children
+    // differ in size; kept inside its own span so it cannot reach a neighbour's.
+    for (let i = order.length - 1; i >= 0; i--) {
+      const id = order[i]
+      const kids = children.get(id) ?? []
+      if (!kids.length) continue
+      const own = breadth(id)
+      const at = start.get(id)!
+      const mid = (across.get(kids[0])! + across.get(kids[kids.length - 1])!) / 2
+      across.set(id, Math.min(Math.max(mid, at + own / 2), at + span.get(id)! - own / 2))
+    }
+    cursor += span.get(root)! + gap.sibling * 2
   }
 
   const positions: Record<string, { x: number; y: number }> = {}

@@ -1058,6 +1058,33 @@ assert.equal(decodeGraph(dangling).edges.length, 0, 'edges to missing nodes are 
     const loop = tidyTree(['a', 'b', 'c'], [{ source: 'a', target: 'b' }, { source: 'b', target: 'c' }, { source: 'c', target: 'a' }], () => ({ w: 40, h: 20 }), 'TB')
     assert.deepEqual(Object.keys(loop).sort(), ['a', 'b', 'c'], 'a cycle places every node')
     assert.ok(Object.values(loop).every(p => Number.isFinite(p.x) && Number.isFinite(p.y)), 'a cycle places every node somewhere real')
+    // A pasted outline is as deep as it is long; the walk must not recurse.
+    const chain = Array.from({ length: 20000 }, (_, i) => `n${i}`)
+    const deep = tidyTree(chain, chain.slice(1).map((id, i) => ({ source: chain[i], target: id })), () => ({ w: 40, h: 20 }), 'TB')
+    assert.equal(Object.keys(deep).length, chain.length, 'a 20,000-deep chain lays out without overflowing the stack')
+  }
+  // Nodes and edges share Cytoscape's id space, which throws on a repeat or a
+  // dangling end and leaves the board dead (and a stored board dead on every
+  // visit). A mermaid node named like a parser's edge id, a repeated id in a
+  // link and a stored board all pass through normalizeGraph.
+  {
+    const { normalizeGraph } = await import('../src/lib/graph-text.ts')
+    const unique = g => {
+      const ids = [...g.nodes, ...g.edges].map(x => x.id)
+      return new Set(ids).size === ids.length
+    }
+    const clash = normalizeGraph(parseMermaid('e0 --> e1'))
+    assert.ok(unique(clash), 'a mermaid node called e0 must not share an id with the first edge')
+    assert.equal(clash.edges.length, 1)
+    const forged = decodeGraph(encodeGraph({
+      nodes: [{ id: 'a', label: 'A' }, { id: 'a', label: 'again' }, { id: 'b', label: 'B' }],
+      edges: [{ id: 'x', source: 'a', target: 'b' }, { id: 'x', source: 'b', target: 'a' }, { id: 'b', source: 'a', target: 'b' }],
+    }))
+    assert.ok(unique(forged), 'a link that repeats ids decodes to unique ids')
+    assert.equal(forged.nodes.length, 2, 'the first node keeps a repeated id')
+    assert.equal(forged.edges.length, 3, 'an edge with a taken id is renamed, not dropped')
+    assert.ok(/decodeGraph\(encodeGraph\(saved\)\)/.test(await readFile(new URL('../src/components/tools/flowmap/Flowmap.ts', import.meta.url), 'utf-8')),
+      'a stored board is held to the share link\'s checks before it reaches the canvas')
   }
   // The renderer maps every shape the model allows; a new name without a mapping
   // would silently draw as the Cytoscape default.
@@ -1170,7 +1197,7 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     // The root itself, alone or in a selector list; not a descendant rule that
     // merely starts with it (a floating panel inside may cap its own width).
     const rootWidthRule = new RegExp(
-      `(?:^|[},/])\\s*(?:div)?\\[data-tool=["']${dir.name}["']\\]\\s*(?:,[^{]*)?\\{[^}]*max-width`,
+      `(?:^|[{},/])\\s*(?:div)?\\[data-tool=["']${dir.name}["']\\]\\s*(?:,[^{]*)?\\{[^}]*max-width`,
     )
     assert.ok(
       !rootWidthRule.test(css),
@@ -1986,13 +2013,13 @@ for (const p of smokeProjects) {
     'flowmap handles the wheel in the capture phase, non-passive, bound to its signal')
   // Flowmap now draws its controls with the kit, whose floor is below.
   assert.ok(
-    /data-tool="flowmap" data-kit/.test(flowmap),
+    /data-tool="flowmap" data-controls/.test(flowmap),
     'flowmap opts into the control kit on its root',
   )
 }
 
 // ── The control kit (src/styles/controls.css) ──
-// One look for every control in a tool or game that opts in with `data-kit`.
+// One look for every control in a tool or game that opts in with `data-controls`.
 // Configurable means one token changes everything, so: every kit token theme.css
 // declares is read by the kit (a dead token is a knob wired to nothing), the
 // kit names no literal colour or family, its hover never lights a dead control,
@@ -2005,10 +2032,22 @@ for (const p of smokeProjects) {
   assert.ok(/@import '\.\/controls\.css';/.test(shared), 'shared.css imports the kit, so both shells carry it')
   const kitTokens = [...theme.matchAll(/^\s*(--(?:control|tab|badge|field|label)-[\w-]+)\s*:/gm)].map(m => m[1])
   assert.ok(kitTokens.length >= 10, `expected the kit tokens in theme.css, found ${kitTokens.length}`)
+  const kitCode = kit.replace(/\/\*[\s\S]*?\*\//g, '')
   for (const token of kitTokens) {
-    assert.ok(kit.includes(`var(${token})`), `theme.css declares ${token} but controls.css never reads it`)
+    assert.ok(kitCode.includes(`var(${token})`), `theme.css declares ${token} but controls.css never reads it`)
   }
-  const kitBody = kit.replace(/\/\*[\s\S]*?\*\//g, '')
+  const kitBody = kitCode
+  // The opt-in is its own attribute: html[data-kit] is the starred-tools count
+  // the head bootstrap sets, and a kit keyed on it would restyle every control
+  // on the site the moment a visitor stars a tool.
+  const { ROOT_STATE_ATTRS } = await import('../src/lib/theme.ts')
+  for (const sel of kitBody.matchAll(/([^{}]+)\{/g)) {
+    if (/^\s*@/.test(sel[1])) continue
+    for (const part of sel[1].split(/,(?![^(]*\))/)) {
+      assert.ok(part.trim().startsWith('[data-controls]'), `kit rule "${part.trim()}" must sit under [data-controls]`)
+    }
+  }
+  assert.ok(!ROOT_STATE_ATTRS.includes('data-controls'), 'data-controls is a tool root\'s opt-in, never root state on <html>')
   assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(kitBody), 'controls.css names a literal colour; read a --color-* token')
   assert.ok(!/font-family\s*:|font\s*:[^;]*(?:serif|monospace|')/.test(kitBody.replace(/var\(--[\w-]+\)/g, '')),
     'controls.css names a font family; read --control-font or --font-*')
@@ -2019,9 +2058,9 @@ for (const p of smokeProjects) {
       }
     }
   }
-  const dead = kitBody.match(/\[data-kit\] button:disabled\s*\{([^}]*)\}/)
+  const dead = kitBody.match(/\[data-controls\] button:disabled\s*\{([^}]*)\}/)
   assert.ok(dead && dead[1].includes('var(--opacity-disabled)'), 'the kit dims disabled buttons with var(--opacity-disabled)')
-  assert.ok(/@media \(pointer: coarse\)\s*\{\s*\[data-kit\]\s*\{\s*--control-h:/.test(kitBody), 'the kit raises --control-h on a touch screen')
+  assert.ok(/@media \(pointer: coarse\)\s*\{\s*\[data-controls\]\s*\{\s*--control-h:/.test(kitBody), 'the kit raises --control-h on a touch screen')
 
   // A kit tool must leave the per-tool lists: both would style its buttons.
   const kitTools = []
@@ -2030,13 +2069,13 @@ for (const p of smokeProjects) {
     for (const f of await readdir(new URL(`../src/components/tools/${dir.name}/`, import.meta.url))) {
       if (!f.endsWith('.ts')) continue
       const src = await readFile(new URL(`../src/components/tools/${dir.name}/${f}`, import.meta.url), 'utf-8')
-      const m = src.match(/data-tool="([\w-]+)"[^>]*\sdata-kit\b/)
+      const m = src.match(/data-tool="([\w-]+)"[^>]*\sdata-controls\b/)
       if (m) kitTools.push(m[1])
     }
   }
   assert.ok(kitTools.includes('flowmap'), 'flowmap is a kit tool')
   for (const slug of kitTools) {
-    assert.ok(!toolsCommon.includes(`div[data-tool="${slug}"] button`), `${slug} uses the kit and must leave the tools-common button lists`)
+    assert.ok(!toolsCommon.includes(`div[data-tool="${slug}"] `), `${slug} uses the kit and must leave every tools-common.css list`)
   }
 
   // Tones: every colour name the graph model allows has a token in both

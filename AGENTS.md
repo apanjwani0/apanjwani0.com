@@ -637,7 +637,11 @@ fixture is the worked example.
   adds a child on click and connects on drag; on touch it follows the selected
   node). Scroll pans and Ctrl/pinch zooms, taken from Cytoscape in the capture
   phase. The canvas is updated by a diff (`reconcile`), never by removing every
-  element: that leaves Cytoscape's pointer-target cache stale. Asserted.
+  element: that leaves Cytoscape's pointer-target cache stale. Every graph
+  that reaches the canvas (drawn, linked or stored) passes `normalizeGraph`,
+  because Cytoscape throws on a repeated id or a dangling edge and a bad stored
+  board would keep the tool dead on every visit. `tidyTree` walks iteratively,
+  since an outline is as deep as it is long. Asserted.
 - **Heavy dependencies load per route.** `cytoscape` is only ever a dynamic
   `import()`: in `Flowmap.ts`'s `connectedCallback`, and in `Draftboard.ts`
   when the Map view first opens. Never import it statically. Every Cytoscape layout
@@ -692,7 +696,7 @@ shared idioms in `shared.css`); Oat is the base layer under it.
   < section`, declared smallest first. The only other `--space-*` tokens are
   layout measurements (`page-x`, `header-offset`). Asserted.
 - **One control kit**: `src/styles/controls.css`, imported by `shared.css`,
-  styles the controls inside any root carrying `data-kit` (buttons with
+  styles the controls inside any root carrying `data-controls` (buttons with
   `data-variant="primary|ghost|danger"`, `aria-pressed` for "on",
   `[data-type="segmented"]`, `toolbar`, fields, `section-label`, `field`, tabs
   with `data-tabs="pill"` inside a pane, `details[data-type="menu"]`, badges with
@@ -701,8 +705,10 @@ shared idioms in `shared.css`); Oat is the base layer under it.
   `--font-*` and `--color-*`, so one token changes every control. Controls are
   36px, 44px on a coarse pointer; at most one primary per view. Its hover rules
   carry `:not(:disabled)`. Every kit token is read by the kit, no literal
-  colour or family, and a kit tool is in none of the `tools-common.css` lists.
-  Asserted. The kit loads after a tool's own sheet, so a tool rule that must
+  colour or family, every rule sits under `[data-controls]`, and a kit tool
+  is in none of the `tools-common.css` lists. Asserted. Not `data-kit`: that is
+  the starred-tools count on `<html>`, and a kit keyed on it would restyle
+  every control on the site. The kit loads after a tool's own sheet, so a tool rule that must
   beat it is prefixed with the tool root (`[data-tool='flowmap'] …`). New
   tools join the kit; Flowmap is the reference.
 - **One disabled treatment**: `--opacity-disabled`. The lane floors
@@ -735,7 +741,8 @@ shared idioms in `shared.css`); Oat is the base layer under it.
 
 ## UI refresh (2026-09)
 
-Item A (the foundation) is built; B–G are paused. The direction: refine the dark
+Item A (the foundation) is built, and G (the control kit) is built with Flowmap
+as its first tool; B–F are paused. The direction: refine the dark
 look, not a rebrand, with tasteful motion and `prefers-reduced-motion` as the
 off switch.
 
@@ -770,8 +777,8 @@ string.
 
 B (theme toggle everywhere), C (command palette, `?` sheet, smart 404), D
 (toolkit: stars, shelf, `/tools/kit`, bookmarks export), E (shells, nav, motion,
-the home hero seam), F (hub thumbnails and share cards) and G (one control kit)
-are designed, not built. The plan (`ui-refresh/ui-plan.md`, the worker brief and
+the home hero seam) and F (hub thumbnails and share cards) are designed, not
+built. The plan (`ui-refresh/ui-plan.md`, the worker brief and
 item A's report) is only on the remote branch `origin/wip/ui-refresh-notes`:
 read it before building any of them, and keep that branch. Until they are built, `kit.ts`
 and `fuzzy.ts` have no UI caller; `security:smoke` covers them so they don't rot, and each

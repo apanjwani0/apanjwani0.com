@@ -353,8 +353,33 @@ export function decodeGraph(encoded: string): Graph | null {
         target: e.target,
         ...(typeof e.label === 'string' ? { label: e.label } : {}),
       }))
-    return { nodes, edges }
+    return normalizeGraph({ nodes, edges })
   } catch {
     return null
   }
+}
+
+/**
+ * One id per element, and every edge between two nodes that exist.
+ *
+ * Nodes and edges share Cytoscape's id space, which throws on a repeat or a
+ * dangling end and leaves the board dead. A mermaid node may be called `e0`,
+ * the same as a parser's first edge, and a link or a stored board may repeat
+ * an id. The first node keeps a repeated id; an edge whose id is taken gets a
+ * fresh one.
+ */
+export function normalizeGraph(graph: Graph): Graph {
+  const taken = new Set<string>()
+  const nodes = graph.nodes.filter(n => !taken.has(n.id) && taken.add(n.id))
+  const nodeIds = new Set(taken)
+  const edges = graph.edges
+    .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
+    .map(e => {
+      if (!taken.has(e.id)) { taken.add(e.id); return e }
+      let n = 0
+      while (taken.has(`${e.id}~${n}`)) n++
+      taken.add(`${e.id}~${n}`)
+      return { ...e, id: `${e.id}~${n}` }
+    })
+  return { nodes, edges }
 }

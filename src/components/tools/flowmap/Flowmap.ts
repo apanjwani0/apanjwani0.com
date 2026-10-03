@@ -12,7 +12,7 @@
  * The page is canvas-first: one command bar, a source drawer that is open while
  * the board is empty and folds away after a draw, the board at full width, and
  * a floating toolbar for whatever is selected. Controls come from the shared
- * kit (`data-kit`, src/styles/controls.css).
+ * kit (`data-controls`, src/styles/controls.css).
  *
  * Rendering is Cytoscape.js, which is ~400KB and therefore **lazy-loaded here
  * and nowhere else** — it is imported inside connectedCallback, so no other page
@@ -34,6 +34,7 @@ import {
   encodeGraph,
   isGraphShape,
   isGraphTone,
+  normalizeGraph,
   parseGraphText,
   toMermaid,
   type Graph,
@@ -172,7 +173,7 @@ class FlowmapTool extends HTMLElement {
     const mac = /Mac|iP(hone|ad|od)/.test(navigator.platform)
     const mod = mac ? '⌘' : 'Ctrl'
     this.innerHTML = `
-      <div data-type="tool-page" data-tool="flowmap" data-kit>
+      <div data-type="tool-page" data-tool="flowmap" data-controls>
         <div data-type="tool-header">
           <h1>Flowmap</h1>
           <p>Paste an outline or a mermaid flowchart and it draws itself. Move things around, then share it as a link, an image or mermaid.</p>
@@ -281,10 +282,12 @@ class FlowmapTool extends HTMLElement {
     `
 
     this.restore()
-    this.abort = new AbortController()
+    const abort = new AbortController()
+    this.abort = abort
     // Cytoscape is the heavy part and only this page needs it.
     const cytoscape = (await import('cytoscape')).default
-    if (!this.isConnected) return
+    // Moved or re-attached while it loaded: a later mount owns the board.
+    if (!this.isConnected || this.abort !== abort) return
     this.initCanvas(cytoscape)
     this.wire()
     this.setSource(this.graph.nodes.length === 0)
@@ -348,9 +351,14 @@ class FlowmapTool extends HTMLElement {
     }
     try {
       const saved = JSON.parse(localStorage.getItem(FM_STORE) ?? 'null')
-      if (saved && Array.isArray(saved.nodes) && Array.isArray(saved.edges)) {
-        this.graph = saved
-        this.seq = saved.nodes.length
+      // Held to the same checks as a share link: a board saved by an older
+      // build, or by a bug, must not keep the tool dead on every visit.
+      const valid = saved && Array.isArray(saved.nodes) && Array.isArray(saved.edges)
+        ? decodeGraph(encodeGraph(saved))
+        : null
+      if (valid) {
+        this.graph = valid
+        this.seq = valid.nodes.length
       }
     } catch {
       // Corrupt storage degrades to an empty board, never a broken tool.
@@ -406,6 +414,8 @@ class FlowmapTool extends HTMLElement {
   private travel(from: TrSnapshot[], to: TrSnapshot[]) {
     const target = from.pop()
     if (!target) return
+    // The node a connection started from may not exist on the other board.
+    this.endConnect()
     to.push(this.snapshot())
     this.graph = structuredClone(target.graph)
     this.seq = Math.max(this.seq, this.graph.nodes.length)
@@ -635,11 +645,12 @@ class FlowmapTool extends HTMLElement {
       this.say('Paste an outline or a flowchart first.')
       return
     }
-    const parsed = parseGraphText(text)
+    const parsed = normalizeGraph(parseGraphText(text))
     if (!parsed.nodes.length) {
       this.say('Nothing recognisable in there. Try one item per line, or A --> B.')
       return
     }
+    this.endConnect()
     this.commit()
     this.graph = parsed
     this.seq = parsed.nodes.length
@@ -680,6 +691,10 @@ class FlowmapTool extends HTMLElement {
   }
 
   private connect(source: string, target: string) {
+    if (!this.cy.getElementById(source).length || !this.cy.getElementById(target).length) {
+      this.endConnect('That node is gone. Connection cancelled.')
+      return
+    }
     this.commit()
     const id = `e${this.graph.edges.length}_${Date.now().toString(36)}`
     this.graph.edges.push({ id, source, target })
@@ -931,7 +946,7 @@ class FlowmapTool extends HTMLElement {
         const ids = nodes.map((n: any) => n.id())
         const current = this.cy.nodes(':selected').first()
         const at = current.length ? ids.indexOf(current.id()) : -1
-        const next = ids[(at + (event.shiftKey ? -1 : 1) + ids.length + 1) % ids.length]
+        const next = ids[at < 0 ? (event.shiftKey ? ids.length - 1 : 0) : (at + (event.shiftKey ? -1 : 1) + ids.length) % ids.length]
         this.cy.elements().unselect()
         const target = this.cy.getElementById(next)
         target.select()
