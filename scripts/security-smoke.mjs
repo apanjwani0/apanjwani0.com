@@ -1156,21 +1156,22 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   const modePage = await read('pages/tools/driftfield/[mode].astro')
   assert.match(modePage, /<div data-type="tool-page" data-tool="driftfield">/, "a Driftfield mode renders the tools' root, so it takes their width and gutter")
   // Outside <main>'s gutter, the foot of the page leaves its own (RelatedLinks `inset`).
-  for (const [name, src] of [['tools/[slug].astro', await read('pages/tools/[slug].astro')], ['tools/driftfield/[mode].astro', modePage]]) {
+  const toolPage = await read('pages/tools/[slug].astro')
+  for (const [name, src] of [['tools/[slug].astro', toolPage], ['tools/driftfield/[mode].astro', modePage]]) {
     const all = src.match(/<RelatedLinks\b[^>]*>/g) ?? []
     assert.ok(all.length > 0 && all.every(tag => /\binset\b/.test(tag)), `${name} renders RelatedLinks outside main's gutter, so every one takes inset (on a phone the links ran to the screen edge)`)
   }
+  assert.match(toolPage, /<section data-type="seo-support" data-inset\b/, "the SEO block sits outside main's gutter as well, so it takes the same inset")
 
+  // Recursive: poker-trainer keeps its engine and UI in subfolders, which a one-level scan never reached.
   const gamesDir = new URL('../src/components/games/', import.meta.url)
-  for (const dir of (await readdir(gamesDir, { withFileTypes: true })).filter(d => d.isDirectory())) {
-    for (const file of await readdir(new URL(`${dir.name}/`, gamesDir))) {
-      if (file.endsWith('.css')) {
-        const css = strip(await readFile(new URL(`${dir.name}/${file}`, gamesDir), 'utf-8'))
-        assert.doesNotMatch(css, /\[data-type=["'][a-z0-9]+-game["']\]\s*\{[^}]*max-width/, `${dir.name}/${file} caps its own root: the page's frame owns the width (the cap does nothing in an article and is a second, narrower column on a game page)`)
-      } else if (file.endsWith('.ts')) {
-        const src = await readFile(new URL(`${dir.name}/${file}`, gamesDir), 'utf-8')
-        assert.ok(!src.includes('data-type="tool-page"'), `${dir.name}/${file} renders the tools' root inside a game, which adds a gutter and a width of its own`)
-      }
+  for (const file of await readdir(gamesDir, { recursive: true })) {
+    if (file.endsWith('.css')) {
+      const css = strip(await readFile(new URL(file, gamesDir), 'utf-8'))
+      assert.doesNotMatch(css, /\[data-type=["'][a-z0-9]+-game["']\]\s*\{[^}]*max-width/, `${file} caps its own root: the page's frame owns the width (the cap does nothing in an article and is a second, narrower column on a game page)`)
+    } else if (file.endsWith('.ts')) {
+      const src = await readFile(new URL(file, gamesDir), 'utf-8')
+      assert.ok(!src.includes('data-type="tool-page"'), `${file} renders the tools' root inside a game, which adds a gutter and a width of its own`)
     }
   }
 }
@@ -9032,6 +9033,22 @@ console.log('dns sightline follow-ups: no finding rests on a lookup that got no 
   assert.match(code, /else if \(response\.status >= 500\) \{\s*response\.headers\.set\('Cache-Control', 'no-store'\)/, 'any 5xx is sent no-store')
 }
 console.log('ui refresh: a rerouted 404 carries the nonce its CSP names (guard at source, statuses held to astro\'s own list, and the deployed probe in origin-check)')
+
+/* ─────  origin-check's beacon check fails closed  ─────
+   It must never print a pass for a page it did not read. Two traps are pinned: a
+   `curl | grep -q` pipe (under pipefail an early match closes the pipe, curl exits
+   23, and the pipeline reads as "no match": a pass at the moment the beacon is
+   there), and a page that was never read (a curl error, a timeout or a 403 bot
+   challenge shows no beacon because there was no page). Run on the script with its
+   comments dropped, so a comment can neither trip nor satisfy an assertion. */
+{
+  const code = (await readFile(new URL('./origin-check.sh', import.meta.url), 'utf-8'))
+    .replace(/\\\n\s*/g, ' ').split('\n').filter(line => !/^\s*#/.test(line)).join('\n')
+  assert.doesNotMatch(code, /\bcurl\b[^\n]*\|\s*grep\s+-q/, 'origin-check never pipes curl into `grep -q`: an early match closes the pipe, curl exits 23, and pipefail reads it as "no match"')
+  assert.ok(code.includes('[[ $page == *cloudflareinsights* ]]'), 'origin-check matches the beacon in a page it has already captured')
+  assert.ok(code.includes('(( page_rc != 0 )) || [[ $page_code != 200 ]]'), 'origin-check fails, rather than passes, when it could not read / as a browser (a curl error, a timeout, a bot challenge)')
+}
+console.log('origin-check: the beacon check reads the page before it matches, and fails rather than passes when it could not read it')
 
 /* ── The spacing rungs increase in their documented order ──────────────────
    --space-xs (0.45rem) once sat ABOVE --space-sm (0.4rem), so "a little more

@@ -50,18 +50,21 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 
 ## Current state (2026-10-03)
 
-- **Live** = `origin/main` (last merge 2026-10-03, PR #31, which shipped PR #30:
-  the bounded SPF walk and two home layout fixes, plus
-  `docs/plans/review-response.md`, the plan answering two outside reviews;
-  before it, PR #27 on 2026-10-01: the UI refresh foundation, the home hero,
-  `/llms.txt` and the review passes). Branch flow: feature → `develop` → `main`,
-  by PR. Local `main` is stale (2026-07-07); compare against `origin/main`.
-- **On `develop`, not live:** the `origin:check` Web Analytics beacon check
-  (`scripts/origin-check.sh`). The next `develop` → `main` PR ships it.
+- **Live** = `origin/main`. On 2026-10-03 `develop` went to `main` as a direct
+  fast-forward push, not a PR (the `main` ruleset blocks force pushes and
+  deletion, not direct pushes), after `develop` merged `origin/main` back in:
+  every PR merge leaves a merge commit that `develop` lacks, and a push that is
+  not a fast-forward is refused. It shipped the `origin:check` beacon check, one
+  frame for tools, games and Driftfield modes, and the layout-shift fixes. Before
+  it: PR #31 (2026-10-03; PR #30's bounded SPF walk and two home layout fixes,
+  plus `docs/plans/review-response.md`, the plan answering two outside reviews)
+  and PR #27 (2026-10-01; the UI refresh foundation, the home hero, `/llms.txt`
+  and the review passes). Branch flow: feature → `develop` → `main`, by PR. Local
+  `main` is stale (2026-07-07); compare against `origin/main`.
 - **Owner's pending moves:**
   1. Purge the Cloudflare cache and run the post-deploy checks in
-     `docs/plans/release-followups.md`, after #27 and again after #31 (merged
-     2026-10-03).
+     `docs/plans/release-followups.md`, after #27, after #31 and again after this
+     push.
   2. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
@@ -241,7 +244,11 @@ Cloudflare, the origin IP not serving the app, `max-age=0`, `s-maxage` present,
 the response proxied, matching header and body nonces on three 404 shapes, and
 no Web Analytics beacon in a browser's copy of `/`. Cloudflare injects that
 beacon only for a browser user agent and copies the page's nonce onto it, so a
-plain `curl` never sees it. Run it after any Cloudflare change.
+plain `curl` never sees it. A page it could not read in full (a curl error, a
+timeout, a non-200 such as a bot challenge) fails the check rather than passing
+it. The beacon is matched in a captured page, never through `curl | grep -q`:
+under `pipefail` an early match closes the pipe and reads as "no match".
+Asserted. Run it after any Cloudflare change.
 
 ### Rate limits must be bounded
 

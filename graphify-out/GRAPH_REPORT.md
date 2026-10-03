@@ -1,16 +1,16 @@
 # Graph Report - portfolio-apanjwani0  (2026-10-03)
 
 ## Corpus Check
-- 188 files · ~390,405 words
+- 188 files · ~390,900 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3143 nodes · 7004 edges · 128 communities (112 shown, 16 thin omitted)
+- 3143 nodes · 7004 edges · 127 communities (111 shown, 16 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 36 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `eeb2b3dd`
+- Built from commit: `6bf0c087`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -74,7 +74,6 @@
 - [[_COMMUNITY_Community 57|Community 57]]
 - [[_COMMUNITY_Community 58|Community 58]]
 - [[_COMMUNITY_Community 59|Community 59]]
-- [[_COMMUNITY_Community 60|Community 60]]
 - [[_COMMUNITY_Community 61|Community 61]]
 - [[_COMMUNITY_Community 62|Community 62]]
 - [[_COMMUNITY_Community 63|Community 63]]
@@ -177,7 +176,7 @@
 - **Client-side interactive browser tools** — audio_transcriber_audiotranscribertool, md_enhanced_mdenhancedtool, layouts_toolbase_layout [INFERRED 0.75]
 - **Admin content editor tabs save via /api/admin/save with allowed types** — pages_admin, pages_admin_tabs, pages_admin_save_handler, admin_save_route, admin_save_allowed_types [INFERRED 0.85]
 
-## Communities (128 total, 16 thin omitted)
+## Communities (127 total, 16 thin omitted)
 
 ### Community 0 - "Content Types + AdminSavePlugin Dispatch"
 Cohesion: 0.08
@@ -224,8 +223,8 @@ Cohesion: 0.12
 Nodes (24): CW_DAYS_IN_MONTH, CW_DOW_MAP, CW_DOW_NAMES, CW_FIELD_RANGE, CW_MONTH_MAP, CW_MONTH_NAMES, CW_NICKNAMES, CW_ZONE_FALLBACK (+16 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.13
-Nodes (19): isFromCloudflare(), bump(), flushVisits(), looksAutomated(), mergeRow(), mergeStore(), pending, pruneVisits() (+11 more)
+Cohesion: 0.14
+Nodes (18): bump(), flushVisits(), looksAutomated(), mergeRow(), mergeStore(), pending, pruneVisits(), recordVisit() (+10 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.06
@@ -272,8 +271,8 @@ Cohesion: 0.11
 Nodes (17): 1. How the reviews hold up, 2. What the reviews missed, 3. Decisions (owner, 2026-10-02), 4. The work, 5. Not doing, 6. Ads: what each option costs, 7. Interaction with existing plans, 8. Summary and order (+9 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.20
-Nodes (24): GET(), allowAttempt, POST(), POST(), POST(), summarizeAnalytics(), isConfigType(), ADMIN_LOGIN_LIMITS (+16 more)
+Cohesion: 0.19
+Nodes (26): GET(), allowAttempt, POST(), POST(), POST(), summarizeAnalytics(), isConfigType(), ADMIN_LOGIN_LIMITS (+18 more)
 
 ### Community 32 - "Community 32"
 Cohesion: 0.09
@@ -365,7 +364,7 @@ Nodes (12): clamp(), drawStars(), driftStars(), lineAlpha(), makeStars(), SkyCol
 
 ### Community 55 - "Community 55"
 Cohesion: 0.04
-Nodes (54): AMBER, BODY, CacheFacts, CacheKind, CHIP, COLO_CITY, countryName(), DEMOS (+46 more)
+Nodes (56): AMBER, BODY, CacheFacts, CacheKind, CHIP, COLO_CITY, countryName(), DEMOS (+48 more)
 
 ### Community 56 - "Community 56"
 Cohesion: 0.14
@@ -382,10 +381,6 @@ Nodes (32): WI_DISCOVERY_HASHES, wiDecodeSecret(), wiDetectScheme(), WiDigestEnc
 ### Community 59 - "Community 59"
 Cohesion: 0.15
 Nodes (26): cardKey(), combinations(), FULL_DECK, handClass(), outsAgainst(), RANK_COST, rankHand(), remainingDeck() (+18 more)
-
-### Community 60 - "Community 60"
-Cohesion: 0.29
-Nodes (7): create(), hopsOf(), linksOf(), makeSprites(), part(), readPaint(), readTiming()
 
 ### Community 61 - "Community 61"
 Cohesion: 0.29
@@ -433,7 +428,7 @@ Nodes (57): isServerTool(), SERVER_TOOLS, allow, apiNoStore, board, cache404, CS
 
 ### Community 74 - "Community 74"
 Cohesion: 0.13
-Nodes (29): allowClear, allowPlayback, DELETE(), GET(), NO_STORE, TOO_MANY(), ALL(), allowCapture (+21 more)
+Nodes (28): allowClear, allowPlayback, DELETE(), GET(), NO_STORE, TOO_MANY(), ALL(), allowCapture (+20 more)
 
 ### Community 75 - "Community 75"
 Cohesion: 0.25
@@ -508,8 +503,8 @@ Cohesion: 0.18
 Nodes (20): SG_KNOWN_CAS, SG_TYPES, sgCanonicalRecord(), sgCountByLevel(), sgPickAnswer(), sgTxtValue(), ../../components/tools/dns-sightline/DnsSightline.ts, SgResponse (+12 more)
 
 ### Community 98 - "Community 98"
-Cohesion: 0.19
-Nodes (14): ago(), clamp(), drawScreen(), fmtClock(), fmtMs(), layoutLabels(), layoutLine(), lineX() (+6 more)
+Cohesion: 0.13
+Nodes (19): ago(), clamp(), create(), drawScreen(), fmtClock(), fmtMs(), hopsOf(), layoutLine() (+11 more)
 
 ### Community 99 - "Community 99"
 Cohesion: 0.15
