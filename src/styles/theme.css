@@ -21,6 +21,8 @@
    its output by theme, so every cached page is the same for every visitor.
    ============================================================================= */
 
+@import './fonts.css';
+
 :root {
   /* The scheme the UA and Oat resolve against. Oat declares
      `color-scheme: light dark` on the root inside @layer theme, which let every
@@ -54,6 +56,13 @@
      4.68:1 there and 4.93:1 on --color-surface — the same green to the eye. */
   --color-success: #1e7a4c;  /* success, correct input          */
   --color-shadow: rgba(0, 0, 0, 0.5); /* drop-shadow / elevation ink */
+  /* Tones: colours a visitor gives to their own content (Flowmap's nodes). A
+     tone is a border and a faint tint under --color-text, never text ink. */
+  --tone-blue: #2f6fd6;
+  --tone-green: #1e8a55;
+  --tone-amber: #c27a0e;
+  --tone-red: #c7413a;
+  --tone-violet: #7a5bd8;
 
   /* ── Elevation ───────────────────────────────────────────────
      Three steps, smallest first: a resting control, a lifted card, a surface
@@ -77,8 +86,10 @@
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* ── Fonts ───────────────────────────────────────────────── */
-  --font-serif: 'Source Serif 4', Georgia, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* The faces are declared in fonts.css. Change a typeface here: every text
+     style and control reads one of these two tokens, nothing names a family. */
+  --font-serif: 'Source Serif 4', 'Source Serif 4 Fallback', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* ── Type scale ──────────────────────────────────────────────
      Raised across the board in Aug 2026: the site read as small on desktop,
@@ -143,35 +154,30 @@
   --opacity-disabled: 0.45;
 
   /* ── Controls ────────────────────────────────────────────────
-     One control kit. The defaults are the tools lane's mono outline, the
-     dialect most of the site already speaks; the lane floors and the site
-     chrome read these instead of restating values. */
+     One control kit, drawn by src/styles/controls.css for any tool or game
+     root carrying `data-controls`. Every control reads these, and these read the
+     --font-* and --color-* tokens, so a typeface or a colour changes in one
+     place. Serif reads, mono operates: controls and labels are mono. */
   --control-font: var(--font-mono);
   --control-fs: var(--text-xs);
-  --control-pad-y: 0.32rem;
+  --control-h: 2.25rem;                    /* 36px; 44px on a touch screen, below */
   --control-pad-x: 0.85rem;
   --control-radius: var(--radius-md);
-  --control-ink: var(--color-muted);
-  --control-ink-hover: var(--color-text);
+  --control-ink: var(--color-text);        /* secondary buttons read as live, not as disabled */
   --control-border: var(--color-border);
   --control-border-hover: var(--color-muted);
-  /* Tabs are the underline style: no box, a rule under the selected one. */
-  --tab-font: var(--control-font);
-  --tab-fs: var(--control-fs);
-  --tab-pad-y: 0.4rem;
-  --tab-pad-x: 0.9rem;
-  --tab-radius: 0;
+  --field-fs: var(--text-sm);              /* typed text is a step larger than a button label */
+  --label-tracking: 0.06em;                /* uppercase section headings */
+  /* Tabs: underline for page-level views, a soft pill for tabs inside a pane. */
   --tab-ink: var(--color-muted);
   --tab-ink-active: var(--color-text);
   --tab-rule: 2px;                         /* underline thickness          */
   --tab-rule-active: var(--color-accent);  /* underline under the chosen tab */
-  /* Badges: the status pills on hub cards (live, server, wip, streak). */
-  --badge-font: var(--font-mono);
+  /* Badges: small status pills. */
   --badge-fs: var(--text-xs);
   --badge-pad-y: var(--space-2xs);
   --badge-pad-x: var(--space-sm);
-  --badge-radius: var(--radius);
-  --badge-tracking: 0.03em;
+  --badge-radius: var(--radius-pill);
 
   /* ── Layout ──────────────────────────────────────────────── */
   /* Radius scale — corner rounding from fine UI up to panels. Component CSS
@@ -226,6 +232,11 @@
   --color-accent-soft: #1a1733;
   --color-error: #ff6b6b;
   --color-success: #4ade80;
+  --tone-blue: #5b9bff;
+  --tone-green: #3fcf86;
+  --tone-amber: #f2a93b;
+  --tone-red: #ff7a72;
+  --tone-violet: #a98cff;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6), 0 4px 14px rgba(0, 0, 0, 0.45);

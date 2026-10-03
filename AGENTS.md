@@ -14,11 +14,19 @@ experience / blogs / learnings / games / tools sections.
 - **Adapter**: `@astrojs/node` in Docker on an OCI VM behind Cloudflare;
   `@astrojs/cloudflare` is the swap-in. `astro.config.mjs` is the only
   deployment-specific file.
-- **Oat UI**: a forked WebComponents design system, vendored as
-  `public/oat.min.{css,js}`. To update it, run `make` in the fork
+- **Oat, the base layer**: a forked WebComponents library, vendored as
+  `public/oat.min.{css,js}`. It supplies element defaults (buttons, inputs,
+  tables, details), `title` tooltips and a few behaviours (tabs, dropdown,
+  toast, dialog). The look on top is the site's own design system (see
+  *Design System*). To update Oat, run `make` in the fork
   (github.com/apanjwani0/oat) and copy `dist/oat.min.*` into `public/`. Keep
   it out of Vite: its CSS minifier merges Oat's `@layer` blocks and restyles
   buttons. No React/Vue/Svelte.
+- **Lightweight**: no JS framework, no CSS framework or runtime component
+  library. A component Oat lacks is built here, small and dependency-free, on
+  the tokens. Every dependency earns its place, and the heavy ones (cytoscape,
+  html2canvas, gifenc, marked) load per route, so a page pays only for what it
+  uses.
 - **TypeScript** throughout; `@astrojs/check` for type checking.
 - **marked** + **dompurify** for markdown; **html2canvas** for tools;
   **gifenc** for GIF export; **cytoscape** for the Flowmap and Draftboard graphs.
@@ -67,6 +75,13 @@ dev-only and writes `src/config/*.ts`, which ships through git.
      push.
   2. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
+- **On `develop`, not live:** the pending-workbench hold now releases itself
+  after 4 s (a tool whose chunk never loads keeps its footer); the related-links
+  block is one scrolling row of chips with the hub link pinned at the end; the
+  footer tagline is gone; the docs no longer describe the site as Oat-dependent;
+  the fonts are self-hosted and load on tool and game pages too; the control kit
+  exists and Flowmap is rebuilt on it (canvas-first, node colours, a tidy-tree
+  Flow layout), waiting on the owner's review before other tools move.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
 
 ## Build / Test / Run
@@ -542,8 +557,11 @@ fixture is the worked example.
   wholesale. Asserted: each slug is `live` and calls an `/api/` route, and the
   number word in the intro copy matches the set's size. The `/games` intro's
   daily count is checked against `DAILY_SLUGS` the same way.
-- **Oat UI semantics**: style standard elements and `data-*` attributes rather
-  than custom classes. Fixes to Oat go in the fork.
+- **Semantic elements and `data-type` idioms**: style standard elements and
+  `data-*` attributes rather than custom classes, with tokens only. Oat is a
+  base layer the site builds on, not the design system. A component Oat lacks
+  is built here, small and dependency-free. Fixes to Oat's own rules go in the
+  fork; anything site-specific stays in this repo.
 - **SSR everywhere**, `/tools` included: KV reads and the middleware headers
   need it.
 - **SEO support copy is off.** `seoContent` still renders when set, but every
@@ -561,9 +579,19 @@ fixture is the worked example.
   the tab is hidden, one still frame under reduced motion, the canvas capped at
   1.5 device pixels. Listing cards are opaque so no star lands in their copy.
   Only those three hubs render it. Asserted.
-- **Tool and game detail pages** pass `loadFonts={false}` (no CLS, no
-  render-blocking font request) and `clientRouter={false}` (no router bundle) to
-  `Head`.
+- **Tool and game detail pages** pass `clientRouter={false}` (no router bundle)
+  to `Head`.
+- **Fonts are self-hosted and load on every page.** Source Serif 4 and
+  JetBrains Mono (variable, Latin subset, OFL) live in `src/assets/fonts`;
+  `src/styles/fonts.css` declares them, Vite hashes them into `/_astro/`, and
+  `Head` preloads the two upright faces through the same `?url` import. Each
+  family has a metric-matched local fallback face (`size-adjust` and the
+  overrides, measured over the site's own text), so the swap moves no text
+  (at most 0.022 with fonts delayed 1.2 s, phone width). Serif is for reading
+  (titles, prose, card titles), mono for operating (controls, labels, nav,
+  code). No stylesheet names a family: everything reads `--font-serif` or
+  `--font-mono`, so a typeface changes in one token. No Google Fonts host, and
+  CSP `font-src` is `'self'`. Asserted.
 - **A tool or game holds a skeleton until its element upgrades.** The server
   renders a bare `<h1>` and intro inside the custom element, which the
   component then replaces, so raw it flashed unstyled text and the page jumped
@@ -600,6 +628,20 @@ fixture is the worked example.
   nothing to a phone's page width; `body` needs it too. The fix proper is in the
   Oat fork, which owns that rule. Asserted.
 - **No JS framework.**
+- **Flowmap's colours and layout.** A node's colour is a name from
+  `GRAPH_TONES` (`src/lib/graph-text.ts`), matched on decode like its shape and
+  drawn from the `--tone-*` tokens (set in both palettes, a border plus a faint
+  tint under `--color-text`). "Flow" is `tidyTree` (`src/lib/graph-layout.ts`):
+  each parent centred over its own children, in either direction. The board
+  identifies what is under the pointer (cursor, a lifted node, a "+" handle that
+  adds a child on click and connects on drag; on touch it follows the selected
+  node). Scroll pans and Ctrl/pinch zooms, taken from Cytoscape in the capture
+  phase. The canvas is updated by a diff (`reconcile`), never by removing every
+  element: that leaves Cytoscape's pointer-target cache stale. Every graph
+  that reaches the canvas (drawn, linked or stored) passes `normalizeGraph`,
+  because Cytoscape throws on a repeated id or a dangling edge and a bad stored
+  board would keep the tool dead on every visit. `tidyTree` walks iteratively,
+  since an outline is as deep as it is long. Asserted.
 - **Heavy dependencies load per route.** `cytoscape` is only ever a dynamic
   `import()`: in `Flowmap.ts`'s `connectedCallback`, and in `Draftboard.ts`
   when the Map view first opens. Never import it statically. Every Cytoscape layout
@@ -622,7 +664,8 @@ fixture is the worked example.
 ## Design System
 
 All visual design comes from the tokens in `src/styles/theme.css`. Re-theme by
-editing tokens only.
+editing tokens only. The design system is the site's own (the tokens plus the
+shared idioms in `shared.css`); Oat is the base layer under it.
 
 - **Never hardcode** a colour, font, size or spacing in a stylesheet; use
   `var(--color-*)`, `var(--font-*)`, `var(--text-*)`, `var(--space-*)`.
@@ -652,12 +695,27 @@ editing tokens only.
 - **Spacing rungs increase in name order**: `2xs < xs < sm < md < lg < xl < card
   < section`, declared smallest first. The only other `--space-*` tokens are
   layout measurements (`page-x`, `header-offset`). Asserted.
+- **One control kit**: `src/styles/controls.css`, imported by `shared.css`,
+  styles the controls inside any root carrying `data-controls` (buttons with
+  `data-variant="primary|ghost|danger"`, `aria-pressed` for "on",
+  `[data-type="segmented"]`, `toolbar`, fields, `section-label`, `field`, tabs
+  with `data-tabs="pill"` inside a pane, `details[data-type="menu"]`, badges with
+  `data-tone`, `status-line`). It reads only the `--control-*`, `--tab-*`,
+  `--badge-*`, `--field-fs` and `--label-tracking` tokens, and those read
+  `--font-*` and `--color-*`, so one token changes every control. Controls are
+  36px, 44px on a coarse pointer; at most one primary per view. Its hover rules
+  carry `:not(:disabled)`. Every kit token is read by the kit, no literal
+  colour or family, every rule sits under `[data-controls]`, and a kit tool
+  is in none of the `tools-common.css` lists. Asserted. Not `data-kit`: that is
+  the starred-tools count on `<html>`, and a kit keyed on it would restyle
+  every control on the site. The kit loads after a tool's own sheet, so a tool rule that must
+  beat it is prefixed with the tool root (`[data-tool='flowmap'] …`). New
+  tools join the kit; Flowmap is the reference.
 - **One disabled treatment**: `--opacity-disabled`. The lane floors
   (`tools-common.css`, `games-common.css`) neutralise `:hover` by re-stating the
   hovered properties at equal specificity, declared after. Not
   `:hover:not(:disabled)`: that raises specificity and repaints per-tool tab
-  opt-outs. A tool joining the shared button chrome adds its selector to three
-  lists in `tools-common.css`: toolbar, button and `button:disabled`.
+  opt-outs. Those lists are being retired tool by tool as each moves to the kit.
 - **Contrast is asserted.** `security:smoke` parses both palettes and holds
   every text pairing to WCAG AA (4.5:1). Headroom is thin on
   `--color-surface-2` (accent 4.59 and success 4.68 in light, muted 4.76 in
@@ -683,7 +741,8 @@ editing tokens only.
 
 ## UI refresh (2026-09)
 
-Item A (the foundation) is built; B–G are paused. The direction: refine the dark
+Item A (the foundation) is built, and G (the control kit) is built with Flowmap
+as its first tool; B–F are paused. The direction: refine the dark
 look, not a rebrand, with tasteful motion and `prefers-reduced-motion` as the
 off switch.
 
@@ -718,16 +777,15 @@ string.
 
 B (theme toggle everywhere), C (command palette, `?` sheet, smart 404), D
 (toolkit: stars, shelf, `/tools/kit`, bookmarks export), E (shells, nav, motion,
-the home hero seam), F (hub thumbnails and share cards) and G (one control kit)
-are designed, not built. The plan (`ui-refresh/ui-plan.md`, the worker brief and
+the home hero seam) and F (hub thumbnails and share cards) are designed, not
+built. The plan (`ui-refresh/ui-plan.md`, the worker brief and
 item A's report) is only on the remote branch `origin/wip/ui-refresh-notes`:
 read it before building any of them, and keep that branch. Until they are built, `kit.ts`
 and `fuzzy.ts` have no UI caller; `security:smoke` covers them so they don't rot, and each
 item's assertions go in its labelled region at the end of that script. Planned
 names nothing renders yet: `button[data-type="kit-star"]`,
-`section[data-type="kit-shelf"]`, `div[data-type="detail-actions"]`, and badges
-(`[data-type="badge"][data-tone]`, planned for a `src/styles/controls.css` that
-does not exist yet). The
+`section[data-type="kit-shelf"]`, `div[data-type="detail-actions"]`. Item G's
+control kit now exists (`src/styles/controls.css`, see *Design System*). The
 view-transition plan: `vt-title` is the page h1 and, during a navigation, the
 clicked card's title, with `html[data-vt-source]` clearing the source page's h1
 (two elements with one name abort the transition); `vt-nav` is the fixed nav;
@@ -814,15 +872,15 @@ gate, the probe to loopback-only dev middleware, and the hero to its own chunk.
 ## Skills & Commands
 
 - **`/browser-debug [url] [what to check]`** — a subagent that fetches the dev
-  server, validates nav routes, HTML structure and Oat asset linking. Use after
-  any layout, component or page change.
+  server, validates nav routes, HTML structure and asset linking (Oat's base
+  files, per-tool stylesheets). Use after any layout, component or page change.
 - **`/antigravity <task>`** — hands small, well-scoped edits to a faster
   subagent. Keep architecture, multi-file changes, debugging and
   `astro.config.mjs` here.
 - **`/frontent-design`** — UI generation under the portfolio override: no custom
-  classes, fonts or Tailwind; semantic HTML plus Oat `data-*` attributes. Motion
-  only in the tasteful sense: short transitions from the `--motion-*` and
-  `--ease-*` tokens, never looping decoration. `shared.css` neutralises every
+  classes, fonts or Tailwind; semantic HTML plus the site's `data-type` idioms
+  and tokens. Motion only in the tasteful sense: short transitions from the
+  `--motion-*` and `--ease-*` tokens, never looping decoration. `shared.css` neutralises every
   transition and animation under `prefers-reduced-motion: reduce`; motion driven
   from script checks the query itself.
 - **`/update-project-memory`** — saves non-obvious learnings to memory.

@@ -25,7 +25,6 @@ interface Props {
   starfield?: boolean
   /** The home hero's drifting sky behind the page (the tools, games and learnings hubs). */
   sky?: boolean
-  loadFonts?: boolean
   clientRouter?: boolean
   ogType?: 'website' | 'article'
   publishedTime?: string
@@ -49,7 +48,6 @@ const {
   fluid = false,
   starfield = true,
   sky = false,
-  loadFonts = true,
   clientRouter = true,
   ogType = 'website',
   publishedTime,
@@ -87,7 +85,6 @@ const ogImage = ogImageMeta(site, ogCard, title)
       ogType={ogType}
       publishedTime={publishedTime}
       handle={site.handle}
-      loadFonts={loadFonts}
       clientRouter={clientRouter}
       theme={site.theme}
     />

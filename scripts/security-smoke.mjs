@@ -1017,6 +1017,75 @@ assert.equal(decodeGraph(dangling).edges.length, 0, 'edges to missing nodes are 
       `shape ${JSON.stringify(bad)} is not in GRAPH_SHAPES and must be dropped, not rendered`,
     )
   }
+  // A tone is matched against GRAPH_TONES on decode, like a shape: the value
+  // reaches a renderer, and the link may be a stranger's.
+  {
+    const { GRAPH_TONES } = await import('../src/lib/graph-text.ts')
+    const keep = decodeGraph(encodeGraph({ nodes: [{ id: 'a', label: 'A', tone: GRAPH_TONES[0] }], edges: [] }))
+    assert.equal(keep.nodes[0].tone, GRAPH_TONES[0], 'a known tone survives the share link')
+    for (const bad of ['#ff0000', 'red; background: url(x)', 'Blue', 7]) {
+      const g = decodeGraph(encodeGraph({ nodes: [{ id: 'a', label: 'A', tone: bad }], edges: [] }))
+      assert.equal(g.nodes[0].tone, undefined, `tone ${JSON.stringify(bad)} must be dropped on decode`)
+    }
+  }
+  // Flow's tidy tree: each parent centred over its own children, children one
+  // rank further along the flow, no two nodes in a rank overlapping, and a
+  // cycle still placing every node once.
+  {
+    const { tidyTree } = await import('../src/lib/graph-layout.ts')
+    const g = parseOutline('- A\n  - B\n    - D\n    - E\n  - C\n- F\n  - G')
+    const size = id => ({ w: 60 + (id.length % 3) * 20, h: 30 })
+    for (const dir of ['TB', 'LR']) {
+      const at = tidyTree(g.nodes.map(n => n.id), g.edges, size, dir)
+      const across = id => (dir === 'TB' ? at[id].x : at[id].y)
+      const along = id => (dir === 'TB' ? at[id].y : at[id].x)
+      const breadth = id => (dir === 'TB' ? size(id).w : size(id).h)
+      for (const n of g.nodes) {
+        const kids = g.edges.filter(e => e.source === n.id).map(e => e.target)
+        if (!kids.length) continue
+        const xs = kids.map(across)
+        assert.ok(Math.abs(across(n.id) - (Math.min(...xs) + Math.max(...xs)) / 2) < 0.5, `${dir}: ${n.label} is centred over its children`)
+        for (const k of kids) assert.ok(along(k) > along(n.id), `${dir}: a child comes after its parent along the flow`)
+      }
+      const ranks = new Map()
+      for (const n of g.nodes) ranks.set(along(n.id), [...(ranks.get(along(n.id)) ?? []), n.id])
+      for (const ids of ranks.values()) {
+        for (const a of ids) for (const b of ids) {
+          if (a < b) assert.ok(Math.abs(across(a) - across(b)) >= (breadth(a) + breadth(b)) / 2, `${dir}: ${a} and ${b} overlap in a rank`)
+        }
+      }
+    }
+    const loop = tidyTree(['a', 'b', 'c'], [{ source: 'a', target: 'b' }, { source: 'b', target: 'c' }, { source: 'c', target: 'a' }], () => ({ w: 40, h: 20 }), 'TB')
+    assert.deepEqual(Object.keys(loop).sort(), ['a', 'b', 'c'], 'a cycle places every node')
+    assert.ok(Object.values(loop).every(p => Number.isFinite(p.x) && Number.isFinite(p.y)), 'a cycle places every node somewhere real')
+    // A pasted outline is as deep as it is long; the walk must not recurse.
+    const chain = Array.from({ length: 20000 }, (_, i) => `n${i}`)
+    const deep = tidyTree(chain, chain.slice(1).map((id, i) => ({ source: chain[i], target: id })), () => ({ w: 40, h: 20 }), 'TB')
+    assert.equal(Object.keys(deep).length, chain.length, 'a 20,000-deep chain lays out without overflowing the stack')
+  }
+  // Nodes and edges share Cytoscape's id space, which throws on a repeat or a
+  // dangling end and leaves the board dead (and a stored board dead on every
+  // visit). A mermaid node named like a parser's edge id, a repeated id in a
+  // link and a stored board all pass through normalizeGraph.
+  {
+    const { normalizeGraph } = await import('../src/lib/graph-text.ts')
+    const unique = g => {
+      const ids = [...g.nodes, ...g.edges].map(x => x.id)
+      return new Set(ids).size === ids.length
+    }
+    const clash = normalizeGraph(parseMermaid('e0 --> e1'))
+    assert.ok(unique(clash), 'a mermaid node called e0 must not share an id with the first edge')
+    assert.equal(clash.edges.length, 1)
+    const forged = decodeGraph(encodeGraph({
+      nodes: [{ id: 'a', label: 'A' }, { id: 'a', label: 'again' }, { id: 'b', label: 'B' }],
+      edges: [{ id: 'x', source: 'a', target: 'b' }, { id: 'x', source: 'b', target: 'a' }, { id: 'b', source: 'a', target: 'b' }],
+    }))
+    assert.ok(unique(forged), 'a link that repeats ids decodes to unique ids')
+    assert.equal(forged.nodes.length, 2, 'the first node keeps a repeated id')
+    assert.equal(forged.edges.length, 3, 'an edge with a taken id is renamed, not dropped')
+    assert.ok(/decodeGraph\(encodeGraph\(saved\)\)/.test(await readFile(new URL('../src/components/tools/flowmap/Flowmap.ts', import.meta.url), 'utf-8')),
+      'a stored board is held to the share link\'s checks before it reaches the canvas')
+  }
   // The renderer maps every shape the model allows; a new name without a mapping
   // would silently draw as the Cytoscape default.
   const flowmapSrc = await readFile(new URL('../src/components/tools/flowmap/Flowmap.ts', import.meta.url), 'utf-8')
@@ -1125,8 +1194,10 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
       new URL(`../src/components/tools/${dir.name}/${file}`, import.meta.url),
       'utf-8',
     )
+    // The root itself, alone or in a selector list; not a descendant rule that
+    // merely starts with it (a floating panel inside may cap its own width).
     const rootWidthRule = new RegExp(
-      `\\[data-tool=["']${dir.name}["']\\][^{]*\\{[^}]*max-width`,
+      `(?:^|[{},/])\\s*(?:div)?\\[data-tool=["']${dir.name}["']\\]\\s*(?:,[^{]*)?\\{[^}]*max-width`,
     )
     assert.ok(
       !rootWidthRule.test(css),
@@ -1931,11 +2002,91 @@ for (const p of smokeProjects) {
     /data-action="undo"[^>]*\sdisabled/.test(flowmap) && /\.disabled = this\.(history|future)\.length === 0/.test(flowmap),
     'flowmap Undo/Redo still ship disabled and toggle at runtime — the case tools-common.css now covers',
   )
-  const toolsCommon = sheets.find(([n]) => n === 'tools/tools-common.css')[1]
+  // The board is brought to the model by a diff, never by removing and re-adding
+  // every element: that left Cytoscape's cached list of pointer targets stale,
+  // and after an edit some nodes ignored hover, clicks and drags.
+  assert.ok(/private reconcile\(\)/.test(flowmap) && !/\.elements\(\)\.remove\(\)/.test(flowmap),
+    'flowmap reconciles the canvas with a diff; elements().remove() breaks hit-testing after edits')
+  // Scroll pans and Ctrl/pinch zooms: the board takes the wheel before
+  // Cytoscape (capture), may cancel it (not passive), and lets go on unmount.
+  assert.ok(/addEventListener\('wheel'[\s\S]{0,1500}?\{ capture: true, passive: false, signal \}/.test(flowmap),
+    'flowmap handles the wheel in the capture phase, non-passive, bound to its signal')
+  // Flowmap now draws its controls with the kit, whose floor is below.
   assert.ok(
-    /div\[data-tool="flowmap"\] button:disabled/.test(toolsCommon),
-    'flowmap must be in the shared disabled selector list, not just the live one',
+    /data-tool="flowmap" data-controls/.test(flowmap),
+    'flowmap opts into the control kit on its root',
   )
+}
+
+// ── The control kit (src/styles/controls.css) ──
+// One look for every control in a tool or game that opts in with `data-controls`.
+// Configurable means one token changes everything, so: every kit token theme.css
+// declares is read by the kit (a dead token is a knob wired to nothing), the
+// kit names no literal colour or family, its hover never lights a dead control,
+// and a kit tool is never also in the per-tool lists it replaces.
+{
+  const kit = await readFile(new URL('../src/styles/controls.css', import.meta.url), 'utf-8')
+  const shared = await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')
+  const theme = await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8')
+  const toolsCommon = await readFile(new URL('../src/components/tools/tools-common.css', import.meta.url), 'utf-8')
+  assert.ok(/@import '\.\/controls\.css';/.test(shared), 'shared.css imports the kit, so both shells carry it')
+  const kitTokens = [...theme.matchAll(/^\s*(--(?:control|tab|badge|field|label)-[\w-]+)\s*:/gm)].map(m => m[1])
+  assert.ok(kitTokens.length >= 10, `expected the kit tokens in theme.css, found ${kitTokens.length}`)
+  const kitCode = kit.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const token of kitTokens) {
+    assert.ok(kitCode.includes(`var(${token})`), `theme.css declares ${token} but controls.css never reads it`)
+  }
+  const kitBody = kitCode
+  // The opt-in is its own attribute: html[data-kit] is the starred-tools count
+  // the head bootstrap sets, and a kit keyed on it would restyle every control
+  // on the site the moment a visitor stars a tool.
+  const { ROOT_STATE_ATTRS } = await import('../src/lib/theme.ts')
+  for (const sel of kitBody.matchAll(/([^{}]+)\{/g)) {
+    if (/^\s*@/.test(sel[1])) continue
+    for (const part of sel[1].split(/,(?![^(]*\))/)) {
+      assert.ok(part.trim().startsWith('[data-controls]'), `kit rule "${part.trim()}" must sit under [data-controls]`)
+    }
+  }
+  assert.ok(!ROOT_STATE_ATTRS.includes('data-controls'), 'data-controls is a tool root\'s opt-in, never root state on <html>')
+  assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(kitBody), 'controls.css names a literal colour; read a --color-* token')
+  assert.ok(!/font-family\s*:|font\s*:[^;]*(?:serif|monospace|')/.test(kitBody.replace(/var\(--[\w-]+\)/g, '')),
+    'controls.css names a font family; read --control-font or --font-*')
+  for (const m of kitBody.matchAll(/([^{}]+)\{/g)) {
+    for (const sel of m[1].split(',')) {
+      if (/:hover/.test(sel) && /button|\[role='tab'\]/.test(sel)) {
+        assert.ok(/:hover:not\(:disabled\)/.test(sel), `kit hover "${sel.trim()}" must carry :not(:disabled), or a dead control lights up`)
+      }
+    }
+  }
+  const dead = kitBody.match(/\[data-controls\] button:disabled\s*\{([^}]*)\}/)
+  assert.ok(dead && dead[1].includes('var(--opacity-disabled)'), 'the kit dims disabled buttons with var(--opacity-disabled)')
+  assert.ok(/@media \(pointer: coarse\)\s*\{\s*\[data-controls\]\s*\{\s*--control-h:/.test(kitBody), 'the kit raises --control-h on a touch screen')
+
+  // A kit tool must leave the per-tool lists: both would style its buttons.
+  const kitTools = []
+  for (const dir of await readdir(new URL('../src/components/tools/', import.meta.url), { withFileTypes: true })) {
+    if (!dir.isDirectory()) continue
+    for (const f of await readdir(new URL(`../src/components/tools/${dir.name}/`, import.meta.url))) {
+      if (!f.endsWith('.ts')) continue
+      const src = await readFile(new URL(`../src/components/tools/${dir.name}/${f}`, import.meta.url), 'utf-8')
+      const m = src.match(/data-tool="([\w-]+)"[^>]*\sdata-controls\b/)
+      if (m) kitTools.push(m[1])
+    }
+  }
+  assert.ok(kitTools.includes('flowmap'), 'flowmap is a kit tool')
+  for (const slug of kitTools) {
+    assert.ok(!toolsCommon.includes(`div[data-tool="${slug}"] `), `${slug} uses the kit and must leave every tools-common.css list`)
+  }
+
+  // Tones: every colour name the graph model allows has a token in both
+  // palettes and a swatch in Flowmap, or a node would draw in the fallback.
+  const { GRAPH_TONES } = await import('../src/lib/graph-text.ts')
+  const fmCss = await readFile(new URL('../src/components/tools/flowmap/flowmap.css', import.meta.url), 'utf-8')
+  for (const tone of GRAPH_TONES) {
+    assert.equal((theme.match(new RegExp(`--tone-${tone}:`, 'g')) ?? []).length, 2, `--tone-${tone} must be set in the light and the dark palette`)
+    assert.ok(fmCss.includes(`[data-tone='${tone}'] { --swatch: var(--tone-${tone}); }`), `flowmap.css needs a swatch for ${tone}`)
+  }
+  console.log(`kit: ${kitTokens.length} tokens all read by controls.css, ${kitTools.length} kit tool(s): ${kitTools.join(', ')}`)
 }
 
 
@@ -5935,11 +6086,12 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
   // documents its blocks at length, and the old first-`indexOf` parse would
   // have started at the first comment that mentioned `:root` and stopped at the
   // first brace a comment quoted. Only hex tokens participate — `--color-bg-blur`
-  // is an rgba() over whatever is behind it and has no fixed ratio.
+  // is an rgba() over whatever is behind it and has no fixed ratio. A block may
+  // follow a rule's `}` or a statement's `;` (the @import of fonts.css).
   const themeCode = themeSrc.replace(/\/\*[\s\S]*?\*\//g, '')
   const blockOf = (selector) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const found = [...themeCode.matchAll(new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))]
+    const found = [...themeCode.matchAll(new RegExp(`(?:^|[};])\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))]
     assert.equal(found.length, 1, `theme.css defines exactly one ${selector} block`)
     return found[0][1]
   }
@@ -9057,7 +9209,7 @@ console.log('origin-check: the beacon check reads the page before it matches, an
    (mutation: swap the xs/sm values back → fails) */
 {
   const themeCode = (await readFile(new URL('../src/styles/theme.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
-  const rootBlock = themeCode.match(/(?:^|\})\s*:root\s*\{([^}]*)\}/)[1]
+  const rootBlock = themeCode.match(/(?:^|[};])\s*:root\s*\{([^}]*)\}/)[1]
   const declared = [...rootBlock.matchAll(/--space-([a-z0-9-]+)\s*:\s*([\d.]+)rem\s*;/g)].map(m => [m[1], Number(m[2])])
   const RUNGS = ['2xs', 'xs', 'sm', 'md', 'lg', 'xl', 'card', 'section']
   const MEASUREMENTS = ['page-x', 'header-offset']
@@ -9624,6 +9776,10 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
   const hold = shared.match(/(html\[data-js\] main > :is\(\[data-tool\], \[data-game\]\):not\(:defined\) ~ \*,[^{]*)\{([^}]*)\}/)
   assert.ok(hold && /visibility:\s*hidden/.test(hold[2]), 'while a workbench is pending, what follows it is held invisible: a short tool pulled the footer into view and a tall one pushed a link out of it, both scored as layout shift')
   assert.ok(/~ footer(?![\w-])/.test(hold[1]) && hold[1].includes('driftfield-stage'), 'the hold reaches the footer and a Driftfield mode, whose host sits two levels down')
+  // A component whose script never loads never upgrades, so the hold must let go by itself.
+  const release = hold[2].match(/animation:\s*([\w-]+)\s+0s\s+(\d+(?:\.\d+)?)s\s+forwards/)
+  assert.ok(release && Number(release[2]) > 0 && Number(release[2]) <= 8, 'the hold releases itself after a few seconds: a chunk that never loads must not leave the page without its footer forever')
+  assert.match(shared, new RegExp(`@keyframes ${release[1]}\\s*\\{\\s*to\\s*\\{\\s*visibility:\\s*visible`), 'the release keyframe makes the held content visible')
   // A tooltip box is laid out while hidden; held at both the root and body, or a phone zooms out to fit it.
   assert.match(shared, /html\s*\{[^}]*overflow-x:\s*clip/, 'html clips sideways overflow (body alone would propagate to the viewport instead)')
   assert.match(shared, /(?<![\w-])body\s*\{[^}]*overflow-x:\s*clip/, "body clips sideways overflow: Oat's nowrap tooltip is laid out while hidden, and a long one near the right edge widened the page")
@@ -9633,6 +9789,64 @@ console.log('ui refresh: the kit parse is bounded and its bookmarks export write
 }
 
 console.log('home hero: one hero and no switch, its text sits above the scrim, nothing blinks, it names no tools or games or the host, and its dev hooks compile out of production')
+
+/* ── Fonts: self-hosted, loaded on every page, named only through the tokens ──
+   Tool and game pages once skipped the Google Fonts link (loadFonts={false}) and
+   rendered Georgia and the system mono, so a component looked different on its
+   own page and in an article. The faces now ship from src/assets/fonts on both
+   shells, and a typeface is changed in one token. */
+{
+  const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf-8')
+  const theme = await read('src/styles/theme.css')
+  const fontsCss = await read('src/styles/fonts.css')
+  const head = await read('src/components/Head.astro')
+  assert.match(theme, /@import\s+['"]\.\/fonts\.css['"]/, 'theme.css imports fonts.css, so both shells declare the faces')
+  const faces = [...fontsCss.matchAll(/@font-face\s*\{([^}]*)\}/g)].map((m) => m[1])
+  const family = (body) => body.match(/font-family:\s*'([^']+)'/)?.[1]
+  for (const token of ['--font-serif', '--font-mono']) {
+    const value = theme.match(new RegExp(`${token}:\\s*([^;]+);`))?.[1] ?? ''
+    const [primary, fallback] = [...value.matchAll(/'([^']+)'/g)].map((m) => m[1])
+    const own = faces.filter((f) => family(f) === primary)
+    assert.ok(own.length > 0, `${token} names '${primary}', which fonts.css declares`)
+    for (const f of own) {
+      const src = f.match(/url\('\.\.\/assets\/fonts\/([\w.-]+\.woff2)'\)/)?.[1]
+      assert.ok(src, `every '${primary}' face is a woff2 from src/assets/fonts (hashed, cached), never a third-party host`)
+      await readFile(new URL(`../src/assets/fonts/${src}`, import.meta.url))
+      assert.match(f, /font-display:\s*swap/, `'${primary}' swaps in, so text is never invisible while it loads`)
+    }
+    assert.equal(fallback, `${primary} Fallback`, `${token}'s second family is the metric-matched fallback face, so the swap moves no text`)
+    const fb = faces.find((f) => family(f) === fallback)
+    assert.ok(fb && /src:\s*local\(/.test(fb) && /size-adjust:\s*[\d.]+%/.test(fb) && /ascent-override/.test(fb), `'${fallback}' is a local font scaled to the real one`)
+    const upright = own.find((f) => /font-style:\s*normal/.test(f)).match(/url\('\.\.\/(assets\/fonts\/[\w.-]+\.woff2)'\)/)[1]
+    const imp = head.match(new RegExp(`import (\\w+) from '\\.\\./${upright.replace(/[.]/g, '\\.')}\\?url'`))
+    assert.ok(imp && new RegExp(`<link rel="preload" href=\\{${imp[1]}\\} as="font" type="font/woff2" crossorigin />`).test(head), `Head preloads '${primary}' through the same file the face names`)
+  }
+  assert.ok(!/\{\s*\w+\s*&&[^}]*rel="preload"[^>]*as="font"/.test(head), 'the font preloads are unconditional: every page, both shells')
+  const files = []
+  const walk = async (dir) => {
+    for (const e of await readdir(new URL(`../${dir}`, import.meta.url), { withFileTypes: true })) {
+      const path = `${dir}/${e.name}`
+      if (e.isDirectory()) await walk(path)
+      else if (/\.(css|astro|ts)$/.test(e.name)) files.push(path)
+    }
+  }
+  await walk('src')
+  for (const path of files) {
+    const src = await read(path)
+    assert.ok(!/fonts\.(googleapis|gstatic)\.com/.test(src), `${path} reaches no Google Fonts host; the faces are self-hosted`)
+    assert.ok(!/\bloadFonts\b/.test(src), `${path}: no page opts out of the fonts`)
+    if (!/\.(css|astro)$/.test(path) || path === 'src/styles/fonts.css') continue
+    for (const m of src.matchAll(/(?<![\w-])font(?:-family)?:\s*([^;}]+)/g)) {
+      const v = m[1].trim()
+      // --control-font is the kit's alias for --font-mono, read the same way.
+      const literal = /^font-family/.test(m[0]) ? !/^(var\(--(?:font-[\w-]+|control-font)\)|inherit)$/.test(v) : !/(var\(--(?:font-[\w-]+|control-font)\)|^inherit)\s*(!important)?$/.test(v)
+      assert.ok(!literal, `${path}: "${m[0].trim()}" names a family; use var(--font-serif) or var(--font-mono), so one token changes the typeface everywhere`)
+    }
+  }
+  assert.match(middlewareSrc, /"font-src 'self'"/, "the CSP allows fonts from this origin only")
+}
+
+console.log('fonts: both families self-hosted with metric-matched fallbacks, preloaded on every page, and named only through the --font-* tokens')
 
 /* ══════════════  UI refresh · anchor regions for items B–G  ══════════════
 

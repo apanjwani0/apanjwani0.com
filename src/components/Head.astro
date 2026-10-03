@@ -1,4 +1,6 @@
 ---
+import serifFont from '../assets/fonts/source-serif-4.woff2?url'
+import monoFont from '../assets/fonts/jetbrains-mono.woff2?url'
 import { ClientRouter } from 'astro:transitions'
 import { ROOT_BOOT_JS, THEME_COLOR, type Theme } from '../lib/theme'
 
@@ -26,7 +28,6 @@ interface Props {
   ogType?: 'website' | 'article'
   /** ISO date (YYYY-MM-DD) for article:published_time; only used when ogType === 'article'. */
   publishedTime?: string
-  loadFonts?: boolean
   clientRouter?: boolean
   /** The site config's theme — what the server renders before the visitor's own choice is applied. */
   theme?: Theme
@@ -48,7 +49,6 @@ const {
   ogType = 'website',
   publishedTime,
   handle,
-  loadFonts = true,
   clientRouter = true,
   theme = 'dark',
 } = Astro.props
@@ -103,23 +103,11 @@ const cspNonce = (Astro.locals as { cspNonce?: string }).cspNonce
 {image && <meta name="twitter:image" content={image} />}
 {image && imageAlt && <meta name="twitter:image:alt" content={imageAlt} />}
 
-{loadFonts && (
-  <>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- dns-prefetch fallback for the font origins: some engines drop a preconnect
-         under load or don't support it, so this is cheap insurance that the DNS is
-         still resolved early. Ignored where the preconnect above already applies. -->
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
-    <!-- Plain stylesheet load keeps CSP script attributes locked down. `display=swap`
-         already shows fallback text immediately, so there is no invisible-text flash. -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
-      rel="stylesheet"
-    />
-  </>
-)}
+{/* The two upright faces every page paints first (fonts.css). The italic is
+    left to load on use. Same ?url import as the stylesheet's url(), so the
+    preload and the @font-face name one hashed file. */}
+<link rel="preload" href={serifFont} as="font" type="font/woff2" crossorigin />
+<link rel="preload" href={monoFont} as="font" type="font/woff2" crossorigin />
 <link rel="icon" href="/favicon.ico" sizes="48x48" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="icon" href="/favicon-96x96.png" type="image/png" sizes="96x96" />

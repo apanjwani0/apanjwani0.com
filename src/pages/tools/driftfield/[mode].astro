@@ -126,7 +126,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
     ))}
   </div>
 
-  <RelatedLinks heading="More Driftfield modes" items={siblings} inset />
+  <RelatedLinks heading="More Driftfield modes" items={siblings} all={{ label: 'Driftfield', href: `/tools/${DRIFTFIELD_SLUG}` }} inset />
 
   <script>
     import { mountEmbed } from '../../../lib/game-mount'

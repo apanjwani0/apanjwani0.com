@@ -151,7 +151,7 @@ div[data-type="md-map-canvas"] {
 textarea[data-type="md-input"] {
   width: 100%;
   height: var(--md-pane-h);
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   line-height: 1.6;
   padding: 0.75rem;
@@ -190,7 +190,7 @@ div[data-type="md-preview"] h5,
 div[data-type="md-preview"] h6 { font-size: 1rem; margin: 0.6rem 0 0.2rem; }
 div[data-type="md-preview"] p  { margin: 0.5rem 0; }
 div[data-type="md-preview"] code {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.85em;
   background: var(--color-border);
   padding: 0.1em 0.3em;

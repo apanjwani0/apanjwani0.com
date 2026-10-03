@@ -1,8 +1,9 @@
 # portfolio-apanjwani0
 
 The source of [apanjwani0.com](https://apanjwani0.com): a server-rendered
-[Astro](https://astro.build) site on [Oat UI](https://oat.ink), with browser
-tools and games. The rules for working in it are in [AGENTS.md](AGENTS.md).
+[Astro](https://astro.build) site with its own lightweight design system
+(vendored [Oat](https://oat.ink) is the base layer), with browser tools and
+games. The rules for working in it are in [AGENTS.md](AGENTS.md).
 
 ## Run locally
 
