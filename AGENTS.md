@@ -50,16 +50,18 @@ dev-only and writes `src/config/*.ts`, which ships through git.
 
 ## Current state (2026-10-03)
 
-- **Live** = `origin/main` (last merge 2026-10-01, PR #27: the UI refresh
-  foundation, the home hero, `/llms.txt` and the review passes). Branch flow:
-  feature → `develop` → `main`, by PR. Local `main` is stale (2026-07-07);
-  compare against `origin/main`.
-- **Merged into `develop`, not live:** PR #30 (the bounded SPF walk and two
-  home layout fixes) and `docs/plans/review-response.md`, the plan answering
-  two outside reviews. PR #31 (`develop` → `main`) ships them.
+- **Live** = `origin/main` (last merge 2026-10-03, PR #31, which shipped PR #30:
+  the bounded SPF walk and two home layout fixes, plus
+  `docs/plans/review-response.md`, the plan answering two outside reviews;
+  before it, PR #27 on 2026-10-01: the UI refresh foundation, the home hero,
+  `/llms.txt` and the review passes). Branch flow: feature → `develop` → `main`,
+  by PR. Local `main` is stale (2026-07-07); compare against `origin/main`.
+- **On `develop`, not live:** the `origin:check` Web Analytics beacon check
+  (`scripts/origin-check.sh`). The next `develop` → `main` PR ships it.
 - **Owner's pending moves:**
   1. Purge the Cloudflare cache and run the post-deploy checks in
-     `docs/plans/release-followups.md`, after #27 and again after #31.
+     `docs/plans/release-followups.md`, after #27 and again after #31 (merged
+     2026-10-03).
   2. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).

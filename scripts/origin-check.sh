@@ -119,7 +119,19 @@ printf '\n\033[1mNo Cloudflare beacon injected\033[0m\n'
 # into what looks like a browser loading a page, hence the user agent: a plain
 # curl gets a clean page and would pass while every visitor gets the beacon.
 browser_ua='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
-if curl -sS -m 15 -A "$browser_ua" -H 'Accept: text/html' "$SITE/" 2>/dev/null | grep -q cloudflareinsights; then
+# Fetch first, search second, and no pipe: `curl | grep -q` lets an early match
+# close the pipe, curl exits 23, and pipefail turns that into "no match", a pass
+# at the moment the beacon is found. The page must also have been read in full:
+# a timeout, a curl error or a bot challenge answering a spoofed browser shows no
+# beacon because there was no page, and that is not a clean bill of health.
+page=$(curl -sS -m 15 -A "$browser_ua" -H 'Accept: text/html' -w $'\n%{http_code}' "$SITE/" 2>/dev/null)
+page_rc=$?
+page_code=${page##*$'\n'}
+if (( page_rc != 0 )) || [[ $page_code != 200 ]]; then
+  bad "could not read / as a browser (HTTP ${page_code:-none}, curl rc=$page_rc), so the beacon check did not run"
+  note "A challenge or error page says nothing about the beacon. Re-run, or"
+  note "view the page source in a browser."
+elif [[ $page == *cloudflareinsights* ]]; then
   bad "the page carries Cloudflare's Web Analytics beacon"
   note "Turn off its automatic setup: Analytics & Logs → Web Analytics → this"
   note "site → Manage site. AGENTS.md (Analytics) keeps it off."
