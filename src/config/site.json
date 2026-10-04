@@ -1,11 +1,11 @@
 {
-  "url": "https://apanjwani0.com",
   "name": "Aman Panjwani",
   "handle": "apanjwani0",
+  "url": "https://apanjwani0.com",
   "theme": "dark",
-  "tagline": "SDE 2 · Payments @ Chalo",
-  "bio": "Backend engineer specialising in payments infrastructure and fintech systems. Currently scaling transaction pipelines at Chalo Mobility — processing 100k+ daily transactions across digital wallets and prepaid cards. Passionate about reliability, financial data consistency, and open source.",
-  "footerBio": "Aman builds payments systems at Chalo by day, and small developer tools that get the hard details right here.",
+  "tagline": "Just a developer turning server space into useful tools and random games.",
+  "bio": "Four years of building, breaking, and scaling systems taught me how things fit together, so now I spend my time steering products and collaborating with AI. I don't hand-write much code these days. The tools and games on this site aren't built from scratch—they are just me connecting the dots, wiring models together, and letting AI handle the execution. This space is a sandbox for those random ideas, mostly so I can still tinker under the hood when I want to.",
+  "footerBio": "Designed by Aman. Coded by AI. Zero SLAs, just free tools and games.",
   "avatar": "/avatar.webp",
   "nav": [
     {
