@@ -11,6 +11,7 @@ import { render } from '../../lib/markdown'
 import { validateSession } from '../../lib/session'
 import { getSessionToken } from '../../lib/security'
 import { learningsAboutEmbed } from '../../lib/learnings'
+import { CRON_PRESETS, CRON_WHISPERER_SLUG, isCronWhispererPublic } from '../../lib/cron-presets'
 import '../../styles/seo-support.css'
 import toolsCommonCss from '../../components/tools/tools-common.css?url'
 
@@ -91,6 +92,10 @@ const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
 // The article about this tool, if one is published.
 const stories = learningsAboutEmbed(tool.slug, learnings)
   .map(l => ({ title: l.title, href: `/learnings/${l.slug}` }))
+// Cron Whisperer's preset pages: one crawlable link each from the tool's own page.
+const cronPresetLinks = slug === CRON_WHISPERER_SLUG && isCronWhispererPublic(tools)
+  ? CRON_PRESETS.map(p => ({ title: p.title, href: `/tools/${CRON_WHISPERER_SLUG}/${p.slug}` }))
+  : []
 // Card only when the generator emits one AND the PNG is really on disk — a
 // forgotten `npm run og` must degrade to the avatar, not a 404ing og:image.
 const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug) : undefined
@@ -207,6 +212,7 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
     </dns-sightline-tool>
   )}
   {toolSeoContentHtml && <section data-type="seo-support" data-inset set:html={toolSeoContentHtml} />}
+  <RelatedLinks heading="Common schedules" items={cronPresetLinks} inset />
   <RelatedLinks heading="Read about it" items={stories} inset />
 </ToolBase>
 

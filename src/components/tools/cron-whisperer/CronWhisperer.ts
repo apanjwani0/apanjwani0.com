@@ -284,6 +284,13 @@ class CronWhispererTool extends HTMLElement {
   connectedCallback() {
     this.settings = this.loadSettings()
 
+    // A preset page (/tools/cron-whisperer/<slug>) sets the expression, a title
+    // and a server-rendered paragraph of derived copy on the host. Read them
+    // before the template replaces the host's children.
+    const presetExpr = this.presetExpr = this.readPresetExpr()
+    const presetTitle = presetExpr ? this.dataset.presetTitle?.trim() : ''
+    const presetCopy = presetExpr ? this.querySelector('[data-type="preset-copy"]') : null
+
     this.innerHTML = `
       <div data-type="tool-page" data-tool="cron-whisperer">
         <div data-type="tool-header">
@@ -417,6 +424,8 @@ class CronWhispererTool extends HTMLElement {
     `
 
     this.root = this.querySelector('[data-type="tool-page"]') as HTMLElement
+    if (presetTitle) this.q('[data-type="tool-header"] h1').textContent = presetTitle
+    if (presetCopy) this.q('[data-type="tool-header"] h1').after(presetCopy)
     this.input = this.q('[data-input="expr"]')
     this.statusEl = this.q('[data-type="cw-status"]')
     this.describeEl = this.q('[data-for="describe"]')
@@ -439,8 +448,10 @@ class CronWhispererTool extends HTMLElement {
     this.fillZones()
     this.reflectSettings()
 
+    // Link fragment, then the page's preset, then this device's last expression.
+    // A preset page is a specific answer, so a saved expression must not replace it.
     const saved = this.readLS(CW_LS_EXPR)
-    this.input.value = link.expr ?? saved ?? '*/5 * * * *'
+    this.input.value = link.expr ?? presetExpr ?? saved ?? '*/5 * * * *'
 
     this.input.addEventListener('input', () => this.evaluate())
     this.root.querySelectorAll<HTMLSelectElement>('[data-control]').forEach(el =>
@@ -462,6 +473,8 @@ class CronWhispererTool extends HTMLElement {
   disconnectedCallback() {
     this.removeEventListener('keydown', this.onKeydown)
   }
+
+  private presetExpr?: string
 
   private q<T extends HTMLElement = HTMLElement>(sel: string): T {
     return this.querySelector(sel) as T
@@ -577,7 +590,8 @@ class CronWhispererTool extends HTMLElement {
 
   private evaluate() {
     const expr = this.input.value
-    this.writeLS(CW_LS_EXPR, expr)
+    // Opening a preset page must not overwrite the crontab this device remembers.
+    if (expr !== this.presetExpr) this.writeLS(CW_LS_EXPR, expr)
     this.autoGrow()
 
     if (!expr.trim()) {
@@ -1135,6 +1149,12 @@ class CronWhispererTool extends HTMLElement {
     const rendered = f.values.map(name)
     if (rendered.length <= 8) return rendered.join(', ')
     return `${rendered.slice(0, 4).join(', ')} … ${rendered[rendered.length - 1]} (${f.values.length} values)`
+  }
+
+  /** The preset page's expression: one bounded line, or nothing. */
+  private readPresetExpr(): string | undefined {
+    const expr = this.dataset.presetExpr?.trim()
+    return expr && expr.length <= CW_MAX_LINK_EXPR && !/[\r\n]/.test(expr) ? expr : undefined
   }
 
   // ── shareable link ────────────────────────────────────────────────────────

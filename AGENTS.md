@@ -50,6 +50,9 @@ JSON, with the `Site` type declared in `src/config/site.ts`.
 - `src/lib/caa.ts` — the CAA vocabulary shared by DNS Sightline and Chainsaw.
 - `src/lib/sky.ts` — the drifting stars the home hero and the hubs share;
   `src/lib/sky-ui.ts` mounts them behind the hubs.
+- `src/lib/cron-presets.ts` — Cron Whisperer's preset pages
+  (`/tools/cron-whisperer/<slug>`): the slug/expression list, their one
+  predicate and the engine-derived copy.
 - `src/lib/site-index.ts` — the site's real pages, derived once for the
   sitemap, `/llms.txt`, the command palette and the 404.
 - `src/lib/theme.ts`, `src/lib/site-ui.ts`, `src/lib/kit.ts`,
@@ -950,6 +953,13 @@ kind has one predicate, and every consumer reads it:
 - **Driftfield**: `isDriftfieldPublic()` (`src/lib/driftfield.ts`), true when the
   `driftfield` tools entry is `live`. The hub, every mode route, the sitemap and
   `scripts/generate-og.mjs` read it; it is stricter than `/tools/[slug]`.
+- **Cron Whisperer presets**: `isCronWhispererPublic()` (`src/lib/cron-presets.ts`),
+  true when the `cron-whisperer` tools entry is `live`. The route, the sitemap
+  and the site index read it; a preset has no share card. Its sentences are
+  derived from `cwDescribe` and `cwIsFixedTime`, never written per preset
+  (hand-written copy is the filler this site declines). The tool reads
+  `data-preset-expr` after a share link and before the saved expression, and
+  never saves it over one.
 
 The sitemap (`indexablePaths`) and `/llms.txt` (`buildSiteIndex`) derive from
 `src/lib/site-index.ts`, asserted to agree; the planned palette and smart 404
