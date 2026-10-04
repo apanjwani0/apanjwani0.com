@@ -34,7 +34,9 @@ experience / blogs / learnings / games / tools sections.
 **Content**: `src/config/*.ts` holds the interfaces and default data. The
 accessors in `src/lib/config.ts` read a KV override (Workers) or
 `data/{key}.json` (Node) when present, else those defaults. `/admin` is
-dev-only and writes `src/config/*.ts`, which ships through git.
+dev-only and writes `src/config/*.ts`, which ships through git; the site's
+personal data is the exception: `src/config/site.json`, reviewable as plain
+JSON, with the `Site` type declared in `src/config/site.ts`.
 
 **Where key modules live**
 - `src/lib/config.ts` — the only sanctioned way to read config.
@@ -77,8 +79,11 @@ dev-only and writes `src/config/*.ts`, which ships through git.
      origin is reachable around Cloudflare.
 - **On `develop`, not live:** the pending-workbench hold now releases itself
   after 4 s (a tool whose chunk never loads keeps its footer); the related-links
-  block is one scrolling row of chips with the hub link pinned at the end; the
-  footer tagline is gone; the docs no longer describe the site as Oat-dependent;
+  block is one scrolling row of chips with the hub link pinned at the end, and
+  only the "Read about it" and Driftfield rows remain (the "More
+  tools/games/learnings" sibling rows are gone); the footer is two columns (an
+  "About the developer" block with `footerBio`, then the section links) and site
+  data lives in `src/config/site.json`; the docs no longer describe the site as Oat-dependent;
   the fonts are self-hosted and load on tool and game pages too; the control kit
   exists and Flowmap is rebuilt on it (canvas-first, node colours, a tidy-tree
   Flow layout), waiting on the owner's review before other tools move.
@@ -893,7 +898,9 @@ Every content section is manageable through `/admin` in dev. To add one:
 2. A `get{Section}()` accessor in `src/lib/config.ts`.
 3. A `generate{Section}()` function and `case '{section}'` in the
    `astro.config.mjs` Vite middleware. It must mirror the interface, or saves
-   silently drop fields.
+   silently drop fields. `site` is the exception: its generator writes
+   `src/config/site.json` (plain JSON), and a new `Site` field also goes in the
+   `Site` interface (`src/config/site.ts`) and `validSite`.
 4. `'{section}'` in `CONFIG_TYPES` (`src/lib/config-schema.ts`), the gate
    `src/pages/api/admin/save.ts` validates against.
 5. A tab, form and save handler in `src/pages/admin.astro`.
@@ -960,7 +967,8 @@ Asserted: the subset relation, no Driftfield mode is a game, and every
 
 A cross-link is derived, never stored twice: `learningsAboutEmbed()` finds the
 article about an embed from the article's own `embed`. `RelatedLinks.astro`
-cross-links siblings on detail pages; feed it indexable items only. It derives
+links the article about a tool or game and Driftfield's sibling modes; feed it
+indexable items only. It derives
 its heading `id` from the heading text, since a page can render it twice.
 
 ### Learnings: writing, not just rendering

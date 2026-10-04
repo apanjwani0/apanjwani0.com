@@ -1232,6 +1232,24 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     const all = src.match(/<RelatedLinks\b[^>]*>/g) ?? []
     assert.ok(all.length > 0 && all.every(tag => /\binset\b/.test(tag)), `${name} renders RelatedLinks outside main's gutter, so every one takes inset (on a phone the links ran to the screen edge)`)
   }
+  // Sibling chip rows ("More tools/games/learnings") were removed: the hub is one click away and a
+  // row of every product on every product page is crawl noise. Only the article-about-it row and
+  // Driftfield's family of sub-pages (which has no other crawl links) keep one.
+  for (const [name, src] of [['tools/[slug].astro', toolPage], ['games/[slug].astro', await read('pages/games/[slug].astro')], ['learnings/[slug].astro', await read('pages/learnings/[slug].astro')]]) {
+    const headings = [...src.matchAll(/<RelatedLinks\b[^>]*\bheading="([^"]+)"/g)].map(m => m[1])
+    assert.ok(headings.every(h => h === 'Read about it'), `${name} renders a sibling row again: ${headings.join(', ')}`)
+  }
+  assert.match(modePage, /heading="More Driftfield modes"/, "Driftfield modes keep their sibling row: it is their only crawl route to each other")
+  // The footer's bio is part of the site config and its validator, so an admin save can't drop it.
+  assert.ok(typeof site.footerBio === 'string' && site.footerBio.trim().length > 0, 'site.json carries a footerBio')
+  assert.equal(validateConfigData('site', site), true, 'the shipped site.json passes the schema the admin save uses')
+  assert.equal(validateConfigData('site', { ...site, footerBio: undefined }), false, 'a site without footerBio fails validation')
+  // The nav's admin link exists only where /admin does: behind the same check its routes 404 by.
+  const navSrc = await read('components/Nav.astro')
+  assert.match(navSrc, /const showAdmin = isAdminRequestAllowed\(\)/, 'the nav decides the admin link with isAdminRequestAllowed(), the check the /admin routes use')
+  const adminLinks = navSrc.match(/\{showAdmin && \([\s\S]*?href="\/admin"/g) ?? []
+  assert.equal((navSrc.match(/href="\/admin"/g) ?? []).length, 1, 'the nav links /admin exactly once')
+  assert.equal(adminLinks.length, 1, 'the nav renders its /admin link only under showAdmin')
   assert.match(toolPage, /<section data-type="seo-support" data-inset\b/, "the SEO block sits outside main's gutter as well, so it takes the same inset")
 
   // Recursive: poker-trainer keeps its engine and UI in subfolders, which a one-level scan never reached.

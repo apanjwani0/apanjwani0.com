@@ -49,6 +49,7 @@ function validSite(value: unknown): boolean {
     && isString(value.handle)
     && isString(value.tagline)
     && isString(value.bio)
+    && isString(value.footerBio)
     && safeInternalPath(value.avatar) !== null
     && (value.theme === 'light' || value.theme === 'dark')
     && safeExternalUrl(value.url) !== null

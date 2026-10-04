@@ -4,14 +4,20 @@
  *
  * Rendered on every standard page (see Base.astro / ToolBase.astro); the layouts
  * deliberately skip it on the full-bleed home hero so that flagship stays a single
- * immersive screen. It gives every other route three things it lacked:
+ * immersive screen. Two columns on a wide screen, one on a phone:
+ *   - left, "About the developer": the name (a link home), a short bio
+ *     (`site.footerBio`) and the identity links;
+ *   - right, the section links as a vertical list in `nav[aria-label="Footer"]`;
+ *   - below both, a divider and the copyright line.
+ * It gives every other route three things it lacked:
  *   1. a `contentinfo` landmark (a11y — screen readers can jump to it);
  *   2. a crawlable link mesh to home + every section from every page, including
  *      deep /tools/x and /games/x detail routes that otherwise only linked one
  *      level up via the breadcrumb (SEO — flatter crawl depth, spread equity);
  *   3. visible authorship + a rel="me" identity signal on every page.
  *
- * Styling is tokens-only and self-contained here.
+ * Serif reads (name, bio), mono operates (label, links). Styling is tokens-only
+ * and self-contained here.
  */
 import { getSite, navLinks, type Site } from '../lib/config'
 import { safeExternalUrl } from '../lib/security'
@@ -39,24 +45,28 @@ const year = new Date().getFullYear()
 
 <footer data-type="site-footer">
   <div data-type="footer-inner">
-    <nav data-type="footer-nav" aria-label="Footer">
+    <div data-type="footer-about">
+      <p data-type="footer-label">About the developer</p>
       {/* Same accessible name as the header wordmark (Nav.astro) — one home
           link, one label, wherever it appears. */}
-      <a href="/" data-type="footer-wordmark" aria-label={`${site.name} — home`}>{site.handle}</a>
+      <a href="/" data-type="footer-name" aria-label={`${site.name} — home`}>{site.name}</a>
+      {site.footerBio && <p data-type="footer-bio">{site.footerBio}</p>}
+      {social.length > 0 && (
+        <div data-type="footer-social">
+          {social.map(([platform, url]) => (
+            <a
+              href={url}
+              target="_blank"
+              rel="me noopener noreferrer"
+              aria-label={`${site.name} on ${platform} (opens in a new tab)`}
+            >{platform}</a>
+          ))}
+        </div>
+      )}
+    </div>
+    <nav data-type="footer-nav" aria-label="Footer">
       {links.map((link) => <a href={link.href}>{link.label}</a>)}
     </nav>
-    {social.length > 0 && (
-      <div data-type="footer-social">
-        {social.map(([platform, url]) => (
-          <a
-            href={url}
-            target="_blank"
-            rel="me noopener noreferrer"
-            aria-label={`${site.name} on ${platform} (opens in a new tab)`}
-          >{platform}</a>
-        ))}
-      </div>
-    )}
     <p data-type="footer-legal">© {year} {site.name}</p>
   </div>
 </footer>
@@ -70,30 +80,66 @@ const year = new Date().getFullYear()
     padding: var(--space-section) var(--space-page-x);
     font-family: var(--font-mono);
     font-size: var(--text-label);
-    letter-spacing: 0.04em;
     color: var(--color-muted);
   }
 
   div[data-type="footer-inner"] {
     max-width: var(--content-width);
     margin-inline: auto;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.7rem 1.15rem;
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: var(--space-section) var(--space-card);
   }
 
-  footer[data-type="site-footer"] nav[data-type="footer-nav"],
+  /* A phone: one column, the about block first, then the section links. */
+  @media (max-width: 40rem) {
+    div[data-type="footer-inner"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  footer[data-type="site-footer"] div[data-type="footer-about"] {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-lg);
+    max-width: 38rem;
+  }
+
+  footer[data-type="site-footer"] p {
+    margin: 0;
+  }
+
+  footer[data-type="site-footer"] p[data-type="footer-label"] {
+    text-transform: uppercase;
+    letter-spacing: var(--label-tracking);
+    font-weight: 600;
+  }
+
+  footer[data-type="site-footer"] a[data-type="footer-name"] {
+    font-family: var(--font-serif);
+    font-size: var(--text-card);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  footer[data-type="site-footer"] p[data-type="footer-bio"] {
+    font-family: var(--font-serif);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+  }
+
+  footer[data-type="site-footer"] nav[data-type="footer-nav"] {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-lg);
+  }
+
   footer[data-type="site-footer"] div[data-type="footer-social"] {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0.7rem 1.15rem;
-  }
-
-  /* Push the social cluster to the trailing edge on a wide single row. */
-  footer[data-type="site-footer"] div[data-type="footer-social"] {
-    margin-inline-start: auto;
+    gap: var(--space-md) var(--space-card);
   }
 
   footer[data-type="site-footer"] a {
@@ -108,14 +154,15 @@ const year = new Date().getFullYear()
     text-underline-offset: 0.3em;
   }
 
-  /* The wordmark reads as primary; the rest of the row stays muted. */
-  footer[data-type="site-footer"] a[data-type="footer-wordmark"] {
-    color: var(--color-text);
+  footer[data-type="site-footer"] a:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
   }
 
-  /* Authorship drops to its own full-width row beneath the links. */
+  /* Authorship sits under both columns, behind a thin rule. */
   footer[data-type="site-footer"] p[data-type="footer-legal"] {
-    flex-basis: 100%;
-    margin: 0;
+    grid-column: 1 / -1;
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--color-border);
   }
 </style>

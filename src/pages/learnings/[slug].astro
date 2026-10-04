@@ -3,7 +3,6 @@ export const prerender = false
 
 import Base from '../../layouts/Base.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
-import RelatedLinks from '../../components/RelatedLinks.astro'
 import { getSite, getLearnings } from '../../lib/config'
 import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
 import { isPublishedLearning, learningEmbedTag, readingTime, retiredLearningTarget } from '../../lib/learnings'
@@ -71,10 +70,6 @@ const segments = splitOnEmbeds(learning.content).map(seg => ({
   view: seg.view,
 }))
 const minutes = readingTime(learning.content)
-
-const related = learnings
-  .filter(l => isPublishedLearning(l) && l.slug !== learning.slug)
-  .map(l => ({ title: l.title, href: `/learnings/${l.slug}` }))
 
 // Card only when the generator emits one AND the PNG is really on disk — a
 // forgotten `npm run og` degrades to the avatar, never a 404ing og:image.
@@ -156,7 +151,6 @@ const breadcrumbLd = breadcrumbListJsonLd([
       </>
     ))}
   </article>
-  <RelatedLinks heading="More learnings" items={related} all={{ label: 'All learnings', href: '/learnings' }} />
 
   {EmbedTag && (
     <script>

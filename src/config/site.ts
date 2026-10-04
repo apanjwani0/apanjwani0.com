@@ -1,40 +1,32 @@
-export const site = {
-  "url": "https://apanjwani0.com",
-  "name": "Aman Panjwani",
-  "handle": "apanjwani0",
-  "theme": "dark",
-  "tagline": "SDE 2 · Payments @ Chalo",
-  "bio": "Backend engineer specialising in payments infrastructure and fintech systems. Currently scaling transaction pipelines at Chalo Mobility — processing 100k+ daily transactions across digital wallets and prepaid cards. Passionate about reliability, financial data consistency, and open source.",
-  "avatar": "/avatar.webp",
-  "nav": [
-    {
-      "label": "projects",
-      "href": "/projects"
-    },
-    {
-      "label": "tools",
-      "href": "/tools"
-    },
-    {
-      "label": "learnings",
-      "href": "/learnings"
-    },
-    {
-      "label": "blogs",
-      "href": "/blogs"
-    },
-    {
-      "label": "games",
-      "href": "/games"
-    }
-  ],
-  "social": {
-    "github": "https://github.com/apanjwani0",
-    "linkedin": "https://www.linkedin.com/in/apanjwani0"
-  },
-  "sections": {
-    "projects": false,
-    "blogs": false,
-    "experience": false
-  }
-} as const
+import data from './site.json'
+
+/** One nav entry. `children` renders as a dropdown and is flattened by navLinks(). */
+export interface NavItem {
+  label: string
+  href: string
+  children?: NavItem[]
+}
+
+/**
+ * The site's personal data, as callers receive it. The values live in
+ * `site.json` (reviewable on its own, written by /admin); this file owns the
+ * types, which are declared rather than inferred from the JSON so nothing is a
+ * literal: at runtime KV or data/site.json may carry any valid nav (with
+ * `children`), either theme, and either state of any section flag.
+ */
+export interface Site {
+  url: string
+  name: string
+  handle: string
+  theme: 'light' | 'dark'
+  tagline: string
+  bio: string
+  /** The short blurb in the footer's "About the developer" column. */
+  footerBio: string
+  avatar: string
+  nav: NavItem[]
+  social: { github: string; linkedin: string }
+  sections: Record<string, boolean>
+}
+
+export const site: Site = data as Site

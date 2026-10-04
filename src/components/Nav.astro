@@ -1,5 +1,6 @@
 ---
 import { getSite, navLinks, type Site } from '../lib/config'
+import { isAdminRequestAllowed } from '../lib/security'
 
 interface Props {
   site?: Site
@@ -19,6 +20,9 @@ const isActive = (href: string) =>
   current === href || (href !== '/' && current.startsWith(href + '/'))
 
 const links = navLinks(site)
+// The config editor, linked only where /admin exists: the same check its routes
+// answer 404 by. It is import.meta.env.DEV, so a production build drops the link.
+const showAdmin = isAdminRequestAllowed()
 // The wordmark is a link home, which goes nowhere on the home page itself.
 const onHome = current === '/'
 ---
@@ -37,6 +41,13 @@ const onHome = current === '/'
         aria-current={isActive(link.href) ? 'page' : undefined}
       >{link.label}</a>
     ))}
+    {showAdmin && (
+      <a
+        href="/admin"
+        data-active={isActive('/admin') ? true : undefined}
+        aria-current={isActive('/admin') ? 'page' : undefined}
+      >admin</a>
+    )}
   </span>
 </nav>
 {!bare && (

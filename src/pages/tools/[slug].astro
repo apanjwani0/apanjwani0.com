@@ -88,15 +88,7 @@ const breadcrumbLd = breadcrumbListJsonLd([
   { name: tool.title, url: `${site.url}/tools/${tool.slug}` },
 ])
 const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
-// Sibling links, so this page is not a dead end for a crawler or a visitor who
-// arrived here from a search. Only `live` tools — the same set the sitemap and
-// the hub's ItemList list, so nothing here points at a noindex page.
-const relatedTools = tools
-  .filter(t => t.status === 'live' && t.slug !== tool.slug)
-  .map(t => ({ title: t.title, href: `/tools/${t.slug}` }))
-
-// …and the article about this tool, if one is published — same reasoning as the
-// siblings above, one section over.
+// The article about this tool, if one is published.
 const stories = learningsAboutEmbed(tool.slug, learnings)
   .map(l => ({ title: l.title, href: `/learnings/${l.slug}` }))
 // Card only when the generator emits one AND the PNG is really on disk — a
@@ -216,7 +208,6 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
   )}
   {toolSeoContentHtml && <section data-type="seo-support" data-inset set:html={toolSeoContentHtml} />}
   <RelatedLinks heading="Read about it" items={stories} inset />
-  <RelatedLinks heading="More tools" items={relatedTools} all={{ label: 'All tools', href: '/tools' }} inset />
 </ToolBase>
 
 <script>
