@@ -1236,10 +1236,11 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   }
   // Sibling chip rows ("More tools/games/learnings") were removed: the hub is one click away and a
   // row of every product on every product page is crawl noise. Only the article-about-it row and
-  // Driftfield's family of sub-pages (which has no other crawl links) keep one.
+  // a tool's own family of sub-pages (Driftfield's modes, Cron Whisperer's "Common schedules"),
+  // which have no other crawl links, keep one.
   for (const [name, src] of [['tools/[slug].astro', toolPage], ['games/[slug].astro', await read('pages/games/[slug].astro')], ['learnings/[slug].astro', await read('pages/learnings/[slug].astro')]]) {
     const headings = [...src.matchAll(/<RelatedLinks\b[^>]*\bheading="([^"]+)"/g)].map(m => m[1])
-    assert.ok(headings.every(h => h === 'Read about it'), `${name} renders a sibling row again: ${headings.join(', ')}`)
+    assert.ok(headings.every(h => h === 'Read about it' || (name === 'tools/[slug].astro' && h === 'Common schedules')), `${name} renders a sibling row again: ${headings.join(', ')}`)
   }
   assert.match(modePage, /heading="More Driftfield modes"/, "Driftfield modes keep their sibling row: it is their only crawl route to each other")
   // The footer's bio is part of the site config and its validator, so an admin save can't drop it.

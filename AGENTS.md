@@ -977,7 +977,8 @@ Asserted: the subset relation, no Driftfield mode is a game, and every
 
 A cross-link is derived, never stored twice: `learningsAboutEmbed()` finds the
 article about an embed from the article's own `embed`. `RelatedLinks.astro`
-links the article about a tool or game and Driftfield's sibling modes; feed it
+links the article about a tool or game, Driftfield's sibling modes and Cron
+Whisperer's presets (no product-to-product rows); feed it
 indexable items only. It derives
 its heading `id` from the heading text, since a page can render it twice.
 
