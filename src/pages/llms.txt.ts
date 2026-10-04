@@ -8,7 +8,7 @@ import { buildSiteIndex, loadSiteConfigs, type IndexKind } from '../lib/site-ind
 // can never name a page the sitemap doesn't have.
 const GROUPS: readonly [string, readonly IndexKind[]][] = [
   ['Pages', ['section']],
-  ['Tools', ['tool', 'mode']],
+  ['Tools', ['tool', 'mode', 'preset']],
   ['Games', ['game']],
   ['Learnings', ['learning']],
   ['Blog', ['post']],

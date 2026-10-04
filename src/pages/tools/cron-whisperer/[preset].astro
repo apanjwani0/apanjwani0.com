@@ -1,0 +1,95 @@
+---
+export const prerender = false
+
+import ToolBase from '../../../layouts/ToolBase.astro'
+import Breadcrumbs from '../../../components/Breadcrumbs.astro'
+import RelatedLinks from '../../../components/RelatedLinks.astro'
+import { getSite, getTools } from '../../../lib/config'
+import { breadcrumbListJsonLd, webAppJsonLd } from '../../../lib/jsonld'
+import { CRON_PRESETS, CRON_WHISPERER_SLUG, cronPreset, cronPresetCopy, isCronWhispererPublic } from '../../../lib/cron-presets'
+import '../../../styles/seo-support.css'
+import toolsCommonCss from '../../../components/tools/tools-common.css?url'
+
+const { preset: presetSlug } = Astro.params
+const preset = cronPreset(presetSlug)
+
+if (!preset) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+
+const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
+
+// The same predicate the sitemap and the site index read: a withdrawn Cron
+// Whisperer takes its preset pages with it. See src/lib/cron-presets.ts.
+if (!isCronWhispererPublic(tools)) {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
+}
+const tool = tools.find(t => t.slug === CRON_WHISPERER_SLUG)!
+
+// The tool's own stylesheet, linked on this page only (see tools/[slug].astro).
+const TOOL_CSS = import.meta.glob<string>('../../../components/tools/*/*.css', { query: '?url', import: 'default', eager: true })
+const toolCss = TOOL_CSS[`../../../components/tools/${CRON_WHISPERER_SLUG}/${CRON_WHISPERER_SLUG}.css`]
+
+// Every sentence comes from the engine, never from the preset's own text.
+const { describe, dst } = cronPresetCopy(preset.expr)
+const canonicalUrl = `${site.url}/tools/${CRON_WHISPERER_SLUG}/${preset.slug}`
+const cspNonce = (Astro.locals as any).cspNonce
+const description = `${preset.title}: ${preset.expr}. ${describe}`
+const keywords = `${preset.title.toLowerCase()}, cron ${preset.expr}, cron expression ${preset.expr}`
+
+const ldJson = webAppJsonLd({
+  name: `${preset.title} — ${tool.title}`,
+  description,
+  url: canonicalUrl,
+  authorName: site.name,
+  authorUrl: site.url,
+  applicationCategory: 'DeveloperApplication',
+  keywords,
+})
+
+const crumbs = [
+  { label: 'home', href: '/' },
+  { label: 'tools', href: '/tools' },
+  { label: tool.title, href: `/tools/${CRON_WHISPERER_SLUG}` },
+  { label: preset.title },
+]
+const breadcrumbLd = breadcrumbListJsonLd([
+  { name: 'Home', url: site.url },
+  { name: 'Tools', url: `${site.url}/tools` },
+  { name: tool.title, url: `${site.url}/tools/${CRON_WHISPERER_SLUG}` },
+  { name: preset.title, url: canonicalUrl },
+])
+
+const siblings = CRON_PRESETS
+  .filter(p => p.slug !== preset.slug)
+  .map(p => ({ title: p.title, href: `/tools/${CRON_WHISPERER_SLUG}/${p.slug}` }))
+---
+
+<ToolBase
+  toolTitle={`${preset.title} — ${tool.title}`}
+  seoTitle={`${preset.title} (${preset.expr}) — Cron Expression Explained`}
+  metaDescription={description}
+  keywords={keywords}
+>
+  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
+  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <link slot="head" rel="stylesheet" href={toolsCommonCss} />
+  {toolCss && <link slot="head" rel="stylesheet" href={toolCss} />}
+  <Breadcrumbs items={crumbs} inset />
+  <cron-whisperer-tool data-tool="cron-whisperer" data-preset-expr={preset.expr} data-preset-title={preset.title}>
+    <h1>{preset.title}</h1>
+    <p data-type="preset-copy"><code>{preset.expr}</code> reads: {describe} {dst}</p>
+  </cron-whisperer-tool>
+  <RelatedLinks heading="More cron schedules" items={siblings} all={{ label: tool.title, href: `/tools/${CRON_WHISPERER_SLUG}` }} inset />
+</ToolBase>
+
+<script>
+  // Same mount as tools/[slug].astro: on first load and after every navigation.
+  function mountTool() {
+    if (document.querySelector('[data-tool]')?.getAttribute('data-tool') === 'cron-whisperer') {
+      import('../../../components/tools/cron-whisperer/CronWhisperer.ts')
+    }
+  }
+  document.addEventListener('astro:page-load', mountTool)
+  mountTool()
+</script>

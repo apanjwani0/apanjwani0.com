@@ -28,13 +28,14 @@ import { getGames, getLearnings, getPosts, getProjects, getSite, getTools, isBlo
 import { isPlayableGame } from './games'
 import { isPublishedLearning } from './learnings'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from './driftfield'
+import { CRON_PRESETS, CRON_WHISPERER_SLUG, cronPresetCopy, isCronWhispererPublic } from './cron-presets'
 import type { Game } from '../config/games'
 import type { Learning } from '../config/learnings'
 import type { Post } from '../config/blogs'
 import type { Project } from '../config/projects'
 import type { Tool } from '../config/tools'
 
-export type IndexKind = 'section' | 'tool' | 'mode' | 'game' | 'learning' | 'project' | 'post'
+export type IndexKind = 'section' | 'tool' | 'mode' | 'preset' | 'game' | 'learning' | 'project' | 'post'
 
 /** One searchable page. Short keys: it is to be serialised into /search.json. */
 export interface IndexEntry {
@@ -108,6 +109,7 @@ function realPages(c: SiteConfigs) {
     // noindex; external and disabled 404). The Driftfield hub is one of these.
     tools: c.tools.filter(t => t.status === 'live'),
     modes: isDriftfieldPublic(c.tools) ? DRIFTFIELD_MODES : [],
+    presets: isCronWhispererPublic(c.tools) ? CRON_PRESETS : [],
     // A hidden /projects lists no cards anywhere, not even in the palette.
     projects: isProjectsPublic(c.site) ? c.projects : [],
   }
@@ -115,7 +117,7 @@ function realPages(c: SiteConfigs) {
 
 /**
  * Every indexable page, in sitemap order: the section hubs, then posts,
- * learnings, games, tools and Driftfield modes.
+ * learnings, games, tools, Driftfield modes and Cron Whisperer presets.
  *
  * Only authored content carries a date. The /blogs and /learnings hubs are
  * stamped with their newest entry — /blogs from every post, local or not, since
@@ -137,6 +139,7 @@ export function indexablePaths(c: SiteConfigs): IndexablePath[] {
     ...pages.games.map(g => ({ path: `/games/${g.slug}` })),
     ...pages.tools.map(t => ({ path: `/tools/${t.slug}` })),
     ...pages.modes.map(m => ({ path: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` })),
+    ...pages.presets.map(p => ({ path: `/tools/${CRON_WHISPERER_SLUG}/${p.slug}` })),
   ]
 }
 
@@ -194,6 +197,9 @@ export function buildSiteIndex(c: SiteConfigs): IndexEntry[] {
     })),
     ...pages.modes.map((m): IndexEntry => ({
       k: 'mode', t: m.title, u: `/tools/${DRIFTFIELD_SLUG}/${m.slug}`, d: summarize(m.description), w: words(m.keywords), s: m.slug,
+    })),
+    ...pages.presets.map((p): IndexEntry => ({
+      k: 'preset', t: p.title, u: `/tools/${CRON_WHISPERER_SLUG}/${p.slug}`, d: cronPresetCopy(p.expr).describe, w: p.expr, s: p.slug,
     })),
     ...pages.projects.map((p, i): IndexEntry => ({
       k: 'project', t: p.title, u: `/projects#${anchors[i]}`, d: summarize(p.description), w: words(p.tags.join(', '), p.keywords), s: anchors[i],
