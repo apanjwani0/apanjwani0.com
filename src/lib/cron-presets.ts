@@ -72,6 +72,6 @@ export function cronPresetCopy(expr: string): CronPresetCopy {
   const describe = cwDescribe(parsed)
   const dst = cwIsFixedTime(parsed)
     ? 'This job names one fixed time of day. If daylight saving skips that time when the clocks go forward, cron still runs the job once, right after the change. If the clocks go back and that time comes round twice, cron runs the job only once, not twice.'
-    : 'This schedule follows the wall clock. When the clocks go forward, the runs that fall inside the skipped hour never happen, so the schedule loses runs in spring. When the clocks go back, the runs inside the repeated hour happen twice, so it gains runs in autumn.'
+    : 'This schedule follows the wall clock. When the clocks go forward, any run that falls inside the skipped hour never happens. When the clocks go back, any run inside the repeated hour happens twice.'
   return { describe, dst }
 }
