@@ -7,8 +7,7 @@
  * immersive screen. Two columns on a wide screen, one on a phone:
  *   - left, "About the developer": the name (a link home), a short bio
  *     (`site.footerBio`) and the identity links;
- *   - right, the section links as a vertical list in `nav[aria-label="Footer"]`;
- *   - below both, a divider and the copyright line.
+ *   - right, the section links as a vertical list in `nav[aria-label="Footer"]`.
  * It gives every other route three things it lacked:
  *   1. a `contentinfo` landmark (a11y — screen readers can jump to it);
  *   2. a crawlable link mesh to home + every section from every page, including
@@ -39,8 +38,6 @@ const social = Object.entries(site.social)
   .map(([platform, url]) => [platform, safeExternalUrl(url)] as const)
   .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
 
-// Rendered at request time (SSR), so the copyright year never goes stale.
-const year = new Date().getFullYear()
 ---
 
 <footer data-type="site-footer">
@@ -67,7 +64,6 @@ const year = new Date().getFullYear()
     <nav data-type="footer-nav" aria-label="Footer">
       {links.map((link) => <a href={link.href}>{link.label}</a>)}
     </nav>
-    <p data-type="footer-legal">© {year} {site.name}</p>
   </div>
 </footer>
 
@@ -157,12 +153,5 @@ const year = new Date().getFullYear()
   footer[data-type="site-footer"] a:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-  }
-
-  /* Authorship sits under both columns, behind a thin rule. */
-  footer[data-type="site-footer"] p[data-type="footer-legal"] {
-    grid-column: 1 / -1;
-    padding-top: var(--space-xl);
-    border-top: 1px solid var(--color-border);
   }
 </style>
