@@ -63,6 +63,7 @@ import {
 import {
   CwZoneClock,
   cwCollectRuns,
+  cwDescribe,
   cwFiringCount,
   cwIsFixedTime,
   cwOffsetLabel,
@@ -70,6 +71,7 @@ import {
   cwZoneValid,
 } from '../src/components/tools/cron-whisperer/schedule.ts'
 import { DRIFTFIELD_MODES, MOVED_GAMES } from '../src/lib/driftfield.ts'
+import { CRON_PRESETS } from '../src/lib/cron-presets.ts'
 import { validateConfigData } from '../src/lib/config-schema.ts'
 import {
   algParams,
@@ -1232,6 +1234,25 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     const all = src.match(/<RelatedLinks\b[^>]*>/g) ?? []
     assert.ok(all.length > 0 && all.every(tag => /\binset\b/.test(tag)), `${name} renders RelatedLinks outside main's gutter, so every one takes inset (on a phone the links ran to the screen edge)`)
   }
+  // Sibling chip rows ("More tools/games/learnings") were removed: the hub is one click away and a
+  // row of every product on every product page is crawl noise. Only the article-about-it row and
+  // a tool's own family of sub-pages (Driftfield's modes, Cron Whisperer's "Common schedules"),
+  // which have no other crawl links, keep one.
+  for (const [name, src] of [['tools/[slug].astro', toolPage], ['games/[slug].astro', await read('pages/games/[slug].astro')], ['learnings/[slug].astro', await read('pages/learnings/[slug].astro')]]) {
+    const headings = [...src.matchAll(/<RelatedLinks\b[^>]*\bheading="([^"]+)"/g)].map(m => m[1])
+    assert.ok(headings.every(h => h === 'Read about it' || (name === 'tools/[slug].astro' && h === 'Common schedules')), `${name} renders a sibling row again: ${headings.join(', ')}`)
+  }
+  assert.match(modePage, /heading="More Driftfield modes"/, "Driftfield modes keep their sibling row: it is their only crawl route to each other")
+  // The footer's bio is part of the site config and its validator, so an admin save can't drop it.
+  assert.ok(typeof site.footerBio === 'string' && site.footerBio.trim().length > 0, 'site.json carries a footerBio')
+  assert.equal(validateConfigData('site', site), true, 'the shipped site.json passes the schema the admin save uses')
+  assert.equal(validateConfigData('site', { ...site, footerBio: undefined }), false, 'a site without footerBio fails validation')
+  // The nav's admin link exists only where /admin does: behind the same check its routes 404 by.
+  const navSrc = await read('components/Nav.astro')
+  assert.match(navSrc, /const showAdmin = isAdminRequestAllowed\(\)/, 'the nav decides the admin link with isAdminRequestAllowed(), the check the /admin routes use')
+  const adminLinks = navSrc.match(/\{showAdmin && \([\s\S]*?href="\/admin"/g) ?? []
+  assert.equal((navSrc.match(/href="\/admin"/g) ?? []).length, 1, 'the nav links /admin exactly once')
+  assert.equal(adminLinks.length, 1, 'the nav renders its /admin link only under showAdmin')
   assert.match(toolPage, /<section data-type="seo-support" data-inset\b/, "the SEO block sits outside main's gutter as well, so it takes the same inset")
 
   // Recursive: poker-trainer keeps its engine and UI in subfolders, which a one-level scan never reached.
@@ -2827,6 +2848,86 @@ console.log('projects link only at pages this site serves')
     /\.\.\.\(isDriftfieldPublic\(tools\) \? DRIFTFIELD_MODES : \[\]\)\.map\(/,
     'the card generator must gate the mode cards on the same predicate — a card must not outlive its page',
   )
+}
+
+/* ══════════  Cron Whisperer presets: derived copy, one predicate, two states  ══════════
+
+   `/tools/cron-whisperer/<slug>` pages are programmatic SEO, which is only worth
+   shipping if every page says something true. So the copy is not written per
+   preset: it is the engine's own reading (`cwDescribe`) plus a daylight-saving
+   sentence chosen by `cwIsFixedTime`, and the gate below holds each expression to
+   the parser and each page to the one predicate the sitemap reads.
+   (mutations: break a preset's expr → fails; drop the gate from the route or the
+   index → fails; swap the DST branches → fails) */
+{
+  const { CRON_PRESETS, CRON_WHISPERER_SLUG, cronPreset, cronPresetCopy, isCronWhispererPublic } =
+    await import('../src/lib/cron-presets.ts')
+  const { buildSiteIndex, indexablePaths, loadSiteConfigs } = await import('../src/lib/site-index.ts')
+
+  assert.ok(CRON_PRESETS.length >= 10, 'the presets are the common schedules, not a token few')
+  assert.equal(new Set(CRON_PRESETS.map(p => p.slug)).size, CRON_PRESETS.length, 'preset slugs are unique')
+  assert.equal(new Set(CRON_PRESETS.map(p => p.expr)).size, CRON_PRESETS.length, 'two slugs for one expression would be duplicate pages')
+  for (const p of CRON_PRESETS) {
+    assert.match(p.slug, /^[a-z0-9]+(-[a-z0-9]+)*$/, `preset slug "${p.slug}" is kebab-case`)
+    assert.equal(cronPreset(p.slug), p, `cronPreset finds "${p.slug}"`)
+    assert.doesNotThrow(() => cwParse(p.expr), `preset "${p.slug}" expression "${p.expr}" must parse`)
+    assert.equal(p.expr.trim().split(/\s+/).length, 5, `preset "${p.slug}" is a standard 5-field expression`)
+    assert.ok(p.title.trim(), `preset "${p.slug}" has a title`)
+    const copy = cronPresetCopy(p.expr)
+    assert.equal(copy.describe, cwDescribe(cwParse(p.expr)), `preset "${p.slug}" describes itself with the engine's own sentence`)
+    assert.ok(copy.describe.length > 0)
+    assert.match(
+      copy.dst, cwIsFixedTime(cwParse(p.expr)) ? /one fixed time of day/ : /follows the wall clock/,
+      `preset "${p.slug}" gets the daylight-saving sentence its own fixed-time answer selects`,
+    )
+  }
+  assert.equal(cronPreset('nope'), undefined)
+  assert.equal(cronPreset(undefined), undefined)
+  // Both branches are exercised by the shipped list, or the swap mutation survives.
+  assert.ok(CRON_PRESETS.some(p => cwIsFixedTime(cwParse(p.expr))) && CRON_PRESETS.some(p => !cwIsFixedTime(cwParse(p.expr))))
+
+  const asStatus = status => tools.map(t => (t.slug === CRON_WHISPERER_SLUG ? { ...t, status } : t))
+  assert.equal(isCronWhispererPublic(tools), true, 'cron-whisperer ships live')
+  for (const status of ['wip', 'external', 'disabled']) {
+    assert.equal(isCronWhispererPublic(asStatus(status)), false, `a "${status}" cron-whisperer has no public presets`)
+  }
+  assert.equal(isCronWhispererPublic(tools.filter(t => t.slug !== CRON_WHISPERER_SLUG)), false, 'no entry means no presets')
+  assert.equal(isCronWhispererPublic([{ slug: 'json-tidy', status: 'live' }]), false, 'the predicate reads the cron-whisperer entry, not "some tool is live"')
+
+  // Both states, through the real index builders.
+  const configsFor = async toolsConfig =>
+    loadSiteConfigs({ runtime: { env: { SITE_CONFIG: { get: async key => (key === 'tools' ? toolsConfig : null) } } } })
+  const live = await configsFor(asStatus('live'))
+  const wip = await configsFor(asStatus('wip'))
+  const livePaths = new Set(indexablePaths(live).map(p => p.path))
+  const wipPaths = new Set(indexablePaths(wip).map(p => p.path))
+  const liveEntries = new Set(buildSiteIndex(live).map(e => e.u))
+  const wipEntries = new Set(buildSiteIndex(wip).map(e => e.u))
+  for (const p of CRON_PRESETS) {
+    const path = `/tools/${CRON_WHISPERER_SLUG}/${p.slug}`
+    assert.ok(livePaths.has(path), `${path} is sitemapped while cron-whisperer is live`)
+    assert.ok(liveEntries.has(path), `${path} is in the site index (llms.txt) while cron-whisperer is live`)
+    assert.ok(!wipPaths.has(path), `${path} must leave the sitemap with cron-whisperer`)
+    assert.ok(!wipEntries.has(path), `${path} must leave the site index with cron-whisperer`)
+  }
+  assert.ok(wipPaths.has('/tools/json-tidy'), 'withdrawing cron-whisperer drops its presets, not the other tools')
+
+  // The route, the component and the tool's own page: matched on the guard and the call.
+  const presetRoute = await readFile(new URL('../src/pages/tools/cron-whisperer/[preset].astro', import.meta.url), 'utf-8')
+  assert.match(presetRoute, /if \(!preset\)\s*\{\s*\n\s*return new Response\(null, \{ status: 404/, 'an unknown preset 404s')
+  assert.match(presetRoute, /if \(!isCronWhispererPublic\(tools\)\)\s*\{\s*\n\s*return new Response\(null, \{ status: 404/, 'the preset route 404s when cron-whisperer is not public')
+  assert.match(presetRoute, /getTools\(Astro\.locals\)/, 'the preset route loads the tools config it gates on')
+  assert.match(presetRoute, /cronPresetCopy\(preset\.expr\)/, "the page's sentences come from the engine, not from the preset")
+  assert.match(presetRoute, /<cron-whisperer-tool data-tool="cron-whisperer" data-preset-expr=\{preset\.expr\}/, "the preset page mounts the real tool's host, preloaded")
+  assert.ok((presetRoute.match(/<RelatedLinks\b[^>]*>/g) ?? []).every(t => /\binset\b/.test(t)), 'RelatedLinks on a ToolBase page takes inset')
+  assert.doesNotMatch(presetRoute, /ogCard/, 'a preset has no share card of its own, so it names none')
+  const cwComponent = await readFile(new URL('../src/components/tools/cron-whisperer/CronWhisperer.ts', import.meta.url), 'utf-8')
+  assert.match(cwComponent, /link\.expr \?\? presetExpr \?\? saved/, 'precedence: shared link, then preset, then the saved expression')
+  assert.match(cwComponent, /expr\.length <= CW_MAX_LINK_EXPR/, 'a preset attribute is bounded like a link value')
+  assert.match(cwComponent, /if \(expr !== this\.presetExpr\) this\.writeLS\(CW_LS_EXPR/, 'opening a preset page must not overwrite the remembered crontab')
+  const slugRoute = await readFile(new URL('../src/pages/tools/[slug].astro', import.meta.url), 'utf-8')
+  assert.match(slugRoute, /slug === CRON_WHISPERER_SLUG && isCronWhispererPublic\(tools\)/, "the tool's own page links its presets only when they are public")
+  console.log('cron presets: every expression parses, the copy is the engine\'s own, and the pages follow cron-whisperer in both states (sitemap, llms.txt, route)')
 }
 
 /* ─────  Share cards: a NOTICE, deliberately not a gate  ─────
@@ -9428,6 +9529,7 @@ console.log('origin-check: the beacon check reads the page before it matches, an
       ...gs.filter(isPlayableGame).map(g => ({ loc: `/games/${g.slug}` })),
       ...ts.filter(t => t.status === 'live').map(t => ({ loc: `/tools/${t.slug}` })),
       ...(isDriftfieldPublic(ts) ? DRIFTFIELD_MODES.map(m => ({ loc: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` })) : []),
+      ...(ts.some(t => t.slug === 'cron-whisperer' && t.status === 'live') ? CRON_PRESETS.map(p => ({ loc: `/tools/cron-whisperer/${p.slug}` })) : []),
     ]
     const rows = pages.map(u => `  <url><loc>${escapeHtml(normalize(u.loc))}</loc>${u.lastmod ? `<lastmod>${escapeHtml(u.lastmod)}</lastmod>` : ''}</url>`)
     return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.join('\n')}\n</urlset>`

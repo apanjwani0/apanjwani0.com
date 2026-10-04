@@ -11,7 +11,7 @@ import { promises as dns } from 'node:dns';
 
 /** @param {unknown} data */
 function generateSite(data) {
-  return `export const site = ${JSON.stringify(data, null, 2)} as const\n`
+  return `${JSON.stringify(data, null, 2)}\n`
 }
 
 /** @param {unknown} data */
@@ -193,7 +193,7 @@ const adminSavePlugin = {
           switch (type) {
             case 'site':
               content = generateSite(data)
-              filename = 'site.ts'
+              filename = 'site.json'
               break
             case 'projects':
               content = generateProjects(data)

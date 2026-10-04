@@ -40,14 +40,7 @@ if (!game) {
 // For a "coming soon" page, point the visitor at a game that's actually
 // playable right now so the page is an invitation, not a dead end.
 const liveGame = games.find(g => isPlayableGame(g) && g.slug !== slug)
-// Sibling links, so this page is not a dead end for a crawler or a visitor who
-// arrived here from a search. Only playable games — the same set the sitemap and
-// the hub's ItemList list, so nothing here points at a noindex page.
-const relatedGames = games
-  .filter(g => isPlayableGame(g) && g.slug !== slug)
-  .map(g => ({ title: g.title, href: `/games/${g.slug}` }))
-
-// …and the article about this game, if one is published. The article embeds this
+// The article about this game, if one is published. The article embeds this
 // very component, which makes this page the most relevant one on the site to
 // link it from — and the article's own hub is otherwise its only way in.
 const stories = learningsAboutEmbed(slug as string, learnings)
@@ -158,7 +151,6 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
   )}
   {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
   <RelatedLinks heading="Read about it" items={stories} />
-  <RelatedLinks heading="More games" items={relatedGames} all={{ label: 'All games', href: '/games' }} />
 
   {GameTag && (
     <script>

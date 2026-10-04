@@ -13,7 +13,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { site as staticSite } from '../config/site'
+import { site as staticSite, type NavItem, type Site } from '../config/site'
 import { projects as staticProjects } from '../config/projects'
 import { experience as staticExperience } from '../config/experience'
 import { posts as staticPosts } from '../config/blogs'
@@ -71,32 +71,9 @@ async function getConfig<T>(locals: unknown, key: string, fallback: T): Promise<
   return validateConfigData(key, config) ? config : fallback
 }
 
-/** One nav entry. `children` renders as a dropdown and is flattened by navLinks(). */
-export interface NavItem {
-  label: string
-  href: string
-  children?: NavItem[]
-}
+export type { NavItem } from '../config/site'
 
-/**
- * The site config as callers actually receive it.
- *
- * `staticSite` is declared `as const`, so its `nav` infers as a readonly tuple of
- * readonly literal objects. That is false precision — at runtime the value can come
- * from KV or data/site.json and carry any valid nav, including entries with
- * `children`, which the literal type has no room for. It also broke narrowing in
- * Nav's flatMap badly enough that the call sites fell back to `any`. Widen `nav`
- * once here, at the boundary where the override actually happens.
- */
-export type Site = Omit<typeof staticSite, 'nav' | 'theme' | 'sections'> & {
-  nav: NavItem[]
-  theme: 'light' | 'dark'
-  // Widened for the same reason as `nav` above: `as const` makes each flag its
-  // own literal type, so `sections.blogs === true` reads as comparing `false`
-  // to `true` and TypeScript calls it unreachable — while at runtime KV can set
-  // it to either. A flag whose type says it can never change is not a flag.
-  sections: Record<string, boolean>
-}
+export type { Site } from '../config/site'
 
 /**
  * The site's section links as a flat list — dropdown children hoisted to top
@@ -147,7 +124,7 @@ export function navLinks(site: Site): NavItem[] {
 }
 
 export async function getSite(locals: unknown): Promise<Site> {
-  return getConfig(locals, 'site', staticSite as unknown as Site)
+  return getConfig(locals, 'site', staticSite)
 }
 
 export async function getProjects(locals: unknown): Promise<Project[]> {

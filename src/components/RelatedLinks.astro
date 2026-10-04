@@ -1,28 +1,24 @@
 ---
 /**
- * Sibling links at the foot of a product page — other tools on a tool page,
- * other games on a game page.
+ * Links at the foot of a page, as one row of chips: the article about a tool or
+ * game ("Read about it"), and a family of sub-pages (Driftfield's modes).
  *
- * Without them a detail page is a crawl leaf: the only links out are the
- * breadcrumb up to the hub and the site footer, so every product page is
- * reachable by exactly one internal route and both crawl attention and internal
- * link equity pool on the hub instead of reaching the pages that actually answer
- * a search query. Eleven sibling links give each page eleven ways in, and give a
- * visitor who landed on one from a search a reason to see the rest.
+ * Without them a Driftfield mode is a crawl leaf: the only links out are the
+ * breadcrumb and the site footer, so each mode would be reachable by one
+ * internal route. A sibling row gives every mode a way in from every other.
  *
  * One row that never wraps: compact chips that scroll sideways, the hub link
  * pinned at the end. A wrapping list ran to five lines on a phone, at the very
- * bottom of the page, where the job is to be crawlable and unobtrusive. The
- * hub's card grid is where the products get sold.
+ * bottom of the page, where the job is to be crawlable and unobtrusive.
  */
 interface Props {
-  /** Section heading, e.g. 'More tools' — also the nav's accessible name. */
+  /** Section heading, e.g. 'Read about it' — also the nav's accessible name. */
   heading: string
   items: { title: string; href: string }[]
   /** For a page rendered outside <main>'s gutter (every tool page, in ToolBase):
    *  the block leaves a gutter of its own, as `Breadcrumbs` does. */
   inset?: boolean
-  /** The hub these items come from, pinned after the row ('All tools'). */
+  /** The hub these items come from, pinned after the row ('Driftfield'). */
   all?: { label: string; href: string }
 }
 

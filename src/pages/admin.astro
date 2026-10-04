@@ -83,6 +83,7 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
       <label>site url<input name="url" value={siteConfig.url} /></label>
       <label>tagline<input name="tagline" value={siteConfig.tagline} /></label>
       <label>bio<textarea name="bio">{siteConfig.bio}</textarea></label>
+      <label>footer bio<textarea name="footerBio">{siteConfig.footerBio}</textarea></label>
       <label>avatar path<input name="avatar" value={siteConfig.avatar} /></label>
       <label>theme
         <select name="theme">
@@ -826,6 +827,7 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
       theme,
       tagline: fd.get('tagline'),
       bio: fd.get('bio'),
+      footerBio: fd.get('footerBio'),
       avatar: fd.get('avatar'),
       nav: JSON.parse(fd.get('nav') as string),
       social: {
