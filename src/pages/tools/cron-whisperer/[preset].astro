@@ -3,9 +3,11 @@ export const prerender = false
 
 import ToolBase from '../../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../../components/Breadcrumbs.astro'
+import JsonLd from '../../../components/JsonLd.astro'
+import { buildBreadcrumbs } from '../../../lib/breadcrumbs'
 import RelatedLinks from '../../../components/RelatedLinks.astro'
 import { getSite, getTools } from '../../../lib/config'
-import { breadcrumbListJsonLd, webAppJsonLd } from '../../../lib/jsonld'
+import { webAppJsonLd } from '../../../lib/jsonld'
 import { CRON_PRESETS, CRON_WHISPERER_SLUG, cronPreset, cronPresetCopy, isCronWhispererPublic } from '../../../lib/cron-presets'
 import '../../../styles/seo-support.css'
 import toolsCommonCss from '../../../components/tools/tools-common.css?url'
@@ -33,7 +35,6 @@ const toolCss = TOOL_CSS[`../../../components/tools/${CRON_WHISPERER_SLUG}/${CRO
 // Every sentence comes from the engine, never from the preset's own text.
 const { describe, dst } = cronPresetCopy(preset.expr)
 const canonicalUrl = `${site.url}/tools/${CRON_WHISPERER_SLUG}/${preset.slug}`
-const cspNonce = (Astro.locals as any).cspNonce
 const description = `${preset.title}: ${preset.expr}. ${describe}`
 const keywords = `${preset.title.toLowerCase()}, cron ${preset.expr}, cron expression ${preset.expr}`
 
@@ -47,18 +48,12 @@ const ldJson = webAppJsonLd({
   keywords,
 })
 
-const crumbs = [
-  { label: 'home', href: '/' },
-  { label: 'tools', href: '/tools' },
-  { label: tool.title, href: `/tools/${CRON_WHISPERER_SLUG}` },
-  { label: preset.title },
-]
-const breadcrumbLd = breadcrumbListJsonLd([
-  { name: 'Home', url: site.url },
-  { name: 'Tools', url: `${site.url}/tools` },
-  { name: tool.title, url: `${site.url}/tools/${CRON_WHISPERER_SLUG}` },
-  { name: preset.title, url: canonicalUrl },
-])
+const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
+  { label: 'home', path: '/' },
+  { label: 'tools', path: '/tools' },
+  { label: tool.title, path: `/tools/${CRON_WHISPERER_SLUG}` },
+  { label: preset.title, path: `/tools/${CRON_WHISPERER_SLUG}/${preset.slug}` },
+], site.url)
 
 const siblings = CRON_PRESETS
   .filter(p => p.slug !== preset.slug)
@@ -71,8 +66,8 @@ const siblings = CRON_PRESETS
   metaDescription={description}
   keywords={keywords}
 >
-  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
-  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <JsonLd json={ldJson} />
+  <JsonLd json={breadcrumbLd} />
   <link slot="head" rel="stylesheet" href={toolsCommonCss} />
   {toolCss && <link slot="head" rel="stylesheet" href={toolCss} />}
   <Breadcrumbs items={crumbs} inset />

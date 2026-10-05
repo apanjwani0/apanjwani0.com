@@ -2,6 +2,7 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
+import JsonLd from '../components/JsonLd.astro'
 import { getSite } from '../lib/config'
 import { personJsonLd, webSiteJsonLd } from '../lib/jsonld'
 import { safeExternalUrl } from '../lib/security'
@@ -9,7 +10,6 @@ import '../styles/home.css'
 import '../styles/hero-network.css'
 
 const site = await getSite(Astro.locals)
-const cspNonce = (Astro.locals as any).cspNonce
 
 // Bespoke hero line for the landing page. site.tagline stays the role line used
 // for SEO/meta and the rest of the site. The owner asked for no tools or games
@@ -48,8 +48,8 @@ const siteLd = webSiteJsonLd({
 ---
 
 <Base bare starfield={false} description={homeDescription} keywords={`${site.name}, ${site.handle}, portfolio, software engineer, developer tools, browser games`}>
-  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
-  <script nonce={cspNonce} type="application/ld+json" set:html={siteLd} />
+  <JsonLd json={ldJson} />
+  <JsonLd json={siteLd} />
 
   {/* The hero replays this page load on a canvas that is dark at every hour,
       so it pins the dark palette for its own subtree whatever theme the

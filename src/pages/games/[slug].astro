@@ -5,8 +5,10 @@ import Base from '../../layouts/Base.astro'
 import { getSite, getGames, getLearnings } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import JsonLd from '../../components/JsonLd.astro'
+import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import RelatedLinks from '../../components/RelatedLinks.astro'
-import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import { webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
 import { MOVED_GAMES } from '../../lib/driftfield'
@@ -30,7 +32,6 @@ const [site, games, learnings] = await Promise.all([
   getGames(Astro.locals),
   getLearnings(Astro.locals),
 ])
-const cspNonce = (Astro.locals as any).cspNonce
 const game = games.find(g => g.slug === slug && g.enabled)
 
 if (!game) {
@@ -66,16 +67,11 @@ const ldJson = webAppJsonLd({
 // markup and the structured data match, so neither is emitted without the other.
 // Interactive games render the trail above their component (which draws its own
 // h1), exactly as the tool pages do.
-const crumbs = [
-  { label: 'home', href: '/' },
-  { label: 'games', href: '/games' },
-  { label: game.title },
-]
-const breadcrumbLd = breadcrumbListJsonLd([
-  { name: 'Home', url: site.url },
-  { name: 'Games', url: `${site.url}/games` },
-  { name: game.title, url: `${site.url}/games/${game.slug}` },
-])
+const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
+  { label: 'home', path: '/' },
+  { label: 'games', path: '/games' },
+  { label: game.title, path: `/games/${game.slug}` },
+], site.url)
 
 // One custom-element tag per playable game. Every mount renders the identical
 // body (h1 + intro), so a single dynamic-tag block replaces twelve copies that
@@ -107,8 +103,8 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
 >
   {/* A coming-soon page is noindex, so it claims no playable game either. The
       breadcrumb stays: it pairs with the visible trail below. */}
-  {GameTag && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
-  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  {GameTag && <JsonLd json={ldJson} />}
+  <JsonLd json={breadcrumbLd} />
   <Breadcrumbs items={crumbs} />
   {GameTag && (
     <GameTag data-game={game.slug}>

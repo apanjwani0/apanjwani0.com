@@ -1,0 +1,40 @@
+---
+/**
+ * The hubs' card anatomy (shared.css): card-head (title link, then an optional
+ * card-badges group), card-desc, then an optional card-meta pinned to the bottom.
+ * The whole card is its link through the title anchor's stretched ::after.
+ *
+ * Slots: `badges` (the group is rendered only when the slot is passed),
+ * `desc` (the description's content), `meta` (the card-meta paragraph, rendered
+ * only when passed). With no `href` the title is plain text (a coming-soon card).
+ */
+interface Props {
+  title: string
+  href?: string | null
+  /** Opens in a new tab: adds target, rel and an "(opens in a new tab)" label. */
+  external?: boolean
+  /** `data-status` on the card. */
+  status?: string
+  /** Element holding the description: a `p` for plain text, a `div` for rendered markdown. */
+  descAs?: 'p' | 'div'
+}
+
+const { title, href, external = false, status, descAs = 'div' } = Astro.props
+const Desc = descAs
+---
+
+<li data-status={status}>
+  <div data-type="card-head">
+    <h2 data-type="card-title">
+      {href
+        ? <a
+            href={href}
+            {...(external ? { target: '_blank', rel: 'noopener noreferrer', 'aria-label': `${title} (opens in a new tab)` } : {})}
+          >{title}</a>
+        : title}
+    </h2>
+    {Astro.slots.has('badges') && <span data-type="card-badges"><slot name="badges" /></span>}
+  </div>
+  <Desc data-type="card-desc"><slot name="desc" /></Desc>
+  {Astro.slots.has('meta') && <p data-type="card-meta"><slot name="meta" /></p>}
+</li>

@@ -3,15 +3,16 @@ export const prerender = false
 
 import Base from '../../layouts/Base.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import JsonLd from '../../components/JsonLd.astro'
+import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import { getSite, getPosts, isBlogsPublic } from '../../lib/config'
-import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
+import { blogPostingJsonLd } from '../../lib/jsonld'
 import { render } from '../../lib/markdown'
 import { formatDisplayDate } from '../../lib/date'
 
 const { slug } = Astro.params
 const [site, posts] = await Promise.all([getSite(Astro.locals), getPosts(Astro.locals)])
 const noindex = !isBlogsPublic(site)
-const cspNonce = (Astro.locals as any).cspNonce
 
 // Robust matching: normalize both the href from config and the URL slug
 // so "/blogs/foo", "blogs/foo", and "foo" all match the slug "foo".
@@ -35,21 +36,16 @@ const ldJson = blogPostingJsonLd({
 })
 
 // Visible trail + matching BreadcrumbList (see src/components/Breadcrumbs.astro).
-const crumbs = [
-  { label: 'home', href: '/' },
-  { label: 'blogs', href: '/blogs' },
-  { label: post.title },
-]
-const breadcrumbLd = breadcrumbListJsonLd([
-  { name: 'Home', url: site.url },
-  { name: 'Blogs', url: `${site.url}/blogs` },
-  { name: post.title, url: canonicalUrl },
-])
+const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
+  { label: 'home', path: '/' },
+  { label: 'blogs', path: '/blogs' },
+  { label: post.title, path: `/blogs/${normalize(post.href)}` },
+], site.url)
 ---
 
 <Base title={post.title} description={post.summary} keywords={post.keywords} ogType="article" publishedTime={post.date} noindex={noindex}>
-  {!noindex && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
-  {!noindex && <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />}
+  {!noindex && <JsonLd json={ldJson} />}
+  {!noindex && <JsonLd json={breadcrumbLd} />}
   <Breadcrumbs items={crumbs} />
   <article>
     <header>
