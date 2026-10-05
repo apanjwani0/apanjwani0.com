@@ -229,7 +229,7 @@ table[data-type='pt-lines'] td {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  padding: 1.25rem;
+  padding: var(--space-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
@@ -248,7 +248,7 @@ table[data-type='pt-lines'] td {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: var(--space-md);
 }
 
 [data-type='pt-label'] {
@@ -265,7 +265,7 @@ table[data-type='pt-lines'] td {
 [data-type='pt-hidden'] {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-xs);
 }
 
 [data-type='pt-facedown'] {
@@ -287,7 +287,7 @@ table[data-type='pt-lines'] td {
 }
 
 [data-type='pt-rangetag'] {
-  padding: 0.15rem 0.6rem;
+  padding: var(--space-2xs) var(--space-md);
   border: 1px solid var(--color-accent);
   border-radius: var(--radius-pill);
   color: var(--color-text);
@@ -299,7 +299,7 @@ table[data-type='pt-lines'] td {
 }
 
 [data-type='pt-ask'] {
-  margin: 0.4rem 0 0;
+  margin: var(--space-xs) 0 0;
   font-size: var(--text-lg);
 }
 
@@ -311,7 +311,7 @@ table[data-type='pt-lines'] td {
 
 [data-type='pt-choices'] button {
   flex: 1 1 8rem;
-  padding: 0.7rem 1rem;
+  padding: 0.7rem var(--space-xl);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -344,7 +344,7 @@ table[data-type='pt-lines'] td {
 
 [data-type='pt-spotcard'] > button[data-action='next'] {
   align-self: flex-start;
-  padding: 0.6rem 1.1rem;
+  padding: var(--space-md) 1.1rem;
   border: 1px solid var(--color-accent);
   border-radius: var(--radius-md);
   background: var(--color-accent);
@@ -357,12 +357,12 @@ table[data-type='pt-lines'] td {
 /* Best/worst combos side by side — the shape behind the average. */
 [data-type='pt-splits'] {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-xl);
   grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
 }
 
 [data-type='pt-splits'] h3 {
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-muted);
@@ -382,7 +382,7 @@ table[data-type='pt-lines'] td {
 [data-type='pt-term'] {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem var(--space-lg);
 }
 
 [data-type='pt-caveat'] summary,
@@ -394,7 +394,7 @@ table[data-type='pt-lines'] td {
 
 [data-type='pt-caveat'] p,
 [data-type='pt-term'] p {
-  margin: 0.6rem 0 0;
+  margin: var(--space-md) 0 0;
   font-size: var(--text-sm);
   line-height: 1.6;
   max-width: 44rem;
@@ -405,7 +405,7 @@ table[data-type='pt-lines'] td {
 [data-type='pt-controls'] {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-xl);
 }
 
 [data-type='pt-controls'] label,
@@ -423,7 +423,7 @@ table[data-type='pt-lines'] td {
 [data-type='pt-controls'] select,
 [data-type='pt-rangebox'] select,
 [data-type='pt-rangebox'] input {
-  padding: 0.4rem 0.5rem;
+  padding: var(--space-xs) 0.5rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -438,7 +438,7 @@ table[data-type='pt-lines'] td {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 1rem;
+  padding: var(--space-xl);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
 }
@@ -469,7 +469,7 @@ table[data-type='pt-lines'] td {
 }
 
 [data-type='pt-learn'] h2 {
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-xl);
   font-size: 1.5em;
   text-transform: none;
 }

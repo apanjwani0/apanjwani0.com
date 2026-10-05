@@ -3,7 +3,7 @@ div[data-tool="type-trial"] [data-group="categories"] {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 0.5rem 0 1.25rem;
+  margin: 0.5rem 0 var(--space-card);
 }
 
 div[data-tool="type-trial"] [data-group="categories"] button {
@@ -34,10 +34,10 @@ div[data-tool="type-trial"] [data-group="categories"] button[data-active] {
 p[data-type="tt-ghost"] {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: var(--space-md);
   align-items: center;
-  margin: 0 0 1rem;
-  padding: 0.5rem 0.75rem;
+  margin: 0 0 var(--space-xl);
+  padding: 0.5rem var(--space-lg);
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-accent);
   border-radius: var(--radius-md);
@@ -55,7 +55,7 @@ p[data-type="tt-ghost"][hidden] {
 }
 
 p[data-type="tt-ghost"] button {
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem var(--space-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: none;
@@ -172,7 +172,7 @@ div[data-type="tt-overlay"] span {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--color-text);
-  padding: 0.4rem 0.9rem;
+  padding: var(--space-xs) 0.9rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -183,7 +183,7 @@ div[data-type="tt-overlay"] span {
 div[data-type="tt-stats"] {
   display: flex;
   gap: clamp(1.5rem, 6vw, 3rem);
-  margin: 1.25rem 0 0.5rem;
+  margin: var(--space-card) 0 0.5rem;
 }
 
 div[data-type="tt-stats"] [data-stat] {
@@ -210,8 +210,8 @@ div[data-type="tt-stats"] span[data-type="tt-lbl"] {
 
 /* ── Result card ─────────────────────────────────────────── */
 div[data-type="tt-result"] {
-  margin: 1rem 0 0;
-  padding: 1rem 1.25rem;
+  margin: var(--space-xl) 0 0;
+  padding: var(--space-xl) var(--space-card);
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-success);
   border-radius: var(--radius-lg);
@@ -249,7 +249,7 @@ div[data-tool="type-trial"] [data-group="actions"] {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 1.25rem 0 0;
+  margin: var(--space-card) 0 0;
 }
 
 div[data-tool="type-trial"] [data-group="actions"] button {
@@ -278,7 +278,7 @@ div[data-tool="type-trial"] [data-group="actions"] [data-type="tt-hint"] {
 }
 
 p[data-type="tt-best"] {
-  margin: 1rem 0 0;
+  margin: var(--space-xl) 0 0;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-muted);
@@ -286,7 +286,7 @@ p[data-type="tt-best"] {
 
 p[data-type="tt-best"] [data-action="reset-best"] {
   margin-left: 0.5rem;
-  padding: 0.1rem 0.45rem;
+  padding: 0.1rem var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: none;
@@ -305,7 +305,7 @@ p[data-type="tt-best"] [data-action="reset-best"]:hover {
 /* ── Daily race: leaderboard panel ───────────────────────── */
 section[data-type="tt-daily"] {
   margin-top: 1.75rem;
-  padding: 1rem 1.1rem 1.15rem;
+  padding: var(--space-xl) 1.1rem 1.15rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-surface);
@@ -317,7 +317,7 @@ section[data-type="tt-daily"] h2 {
 }
 
 section[data-type="tt-daily"] p[data-type="tt-daily-meta"] {
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-lg);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-muted);
@@ -326,9 +326,9 @@ section[data-type="tt-daily"] p[data-type="tt-daily-meta"] {
 form[data-type="tt-daily-form"] {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: var(--space-md);
   align-items: flex-end;
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-lg);
 }
 
 form[data-type="tt-daily-form"] label {
@@ -341,7 +341,7 @@ form[data-type="tt-daily-form"] label {
 }
 
 form[data-type="tt-daily-form"] input {
-  padding: 0.4rem 0.6rem;
+  padding: var(--space-xs) var(--space-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -379,7 +379,7 @@ form[data-type="tt-daily-form"] button:disabled {
 }
 
 p[data-type="tt-daily-note"] {
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-lg);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-muted);
@@ -394,8 +394,8 @@ ol[data-type="tt-daily-board"] {
 ol[data-type="tt-daily-board"] li {
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
-  padding: 0.35rem 0.4rem;
+  gap: var(--space-lg);
+  padding: 0.35rem var(--space-xs);
   border-top: 1px solid var(--color-border);
   font-family: var(--font-mono);
   font-size: var(--text-sm);

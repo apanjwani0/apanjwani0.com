@@ -12,12 +12,12 @@ section[data-type="seo-support"][data-inset] {
 }
 
 section[data-type="seo-support"] h2 {
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-lg);
   font-size: var(--text-title);
 }
 
 section[data-type="seo-support"] h3 {
-  margin: 1.3rem 0 0.45rem;
+  margin: 1.3rem 0 var(--space-sm);
   font-size: var(--text-lg);
 }
 
