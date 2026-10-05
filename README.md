@@ -7,6 +7,8 @@ games. The rules for working in it are in [AGENTS.md](AGENTS.md).
 
 ## Run locally
 
+Node 22.12 or newer.
+
 ```bash
 npm install
 npm run dev        # http://localhost:4321
@@ -18,6 +20,8 @@ files; commit them to publish. `/admin` does not exist in production. Leave
 `.env.sample`) to require a password.
 
 ## Before committing
+
+The gate (details in AGENTS.md):
 
 ```bash
 npm run build && npm run check && npm run security:smoke && npm run poker:check && npm run boot:check

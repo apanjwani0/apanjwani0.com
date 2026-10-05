@@ -326,7 +326,6 @@ for the owner's go-ahead first (§9 step 3).
 - Then fix the worst first, from the candidates already in `release-followups.md`:
   - split `games-embed.css` (about 91 KB on every game and article page; this needs a rule change);
   - the long-TTL Cache Rule for `/oat.min.*` (dashboard);
-  - self-hosted fonts;
   - the 1200×630 home share card.
 - Search Console: which queries already land, and on which pages. That decides Phase 4's order.
 

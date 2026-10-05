@@ -36,7 +36,6 @@ last one. Line numbers are as of `9433d9a`.
 - **Oat's files revalidate on every page view** (`/oat.min.*` is not hashed).
   A Cloudflare Cache Rule giving them a long edge and browser TTL fixes it;
   serving them through Vite does not (see AGENTS.md *Stack*).
-- **Self-hosting the Google Fonts** removes one render-blocking request.
 - **Game and article pages load every game's CSS** (about 91 KB), because
   `games-embed.css` is the one list of component stylesheets. Splitting it
   means changing that rule.
