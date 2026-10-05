@@ -34,7 +34,10 @@
  */
 
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
+import { clamp, cappedDpr } from '../../../lib/math'
+import { lsGet, lsSet, lsGetNumber } from '../../../lib/storage'
+import { downloadBlob } from '../../../lib/download'
 
 interface Palette {
   id: string
@@ -103,33 +106,6 @@ const LEGACY_PALETTE: Record<string, string> = {
   sand: 'ember',
   mono: 'mono',
   aurora: 'ocean',
-}
-
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
-
-function readStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function readStoredNumber(key: string, fallback: number): number {
-  const raw = readStored(key)
-  if (raw === null) return fallback
-  const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
-function writeStored(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* storage disabled — the forge still works for this session */
-  }
 }
 
 function randomSeed() {
@@ -269,17 +245,17 @@ class WallpaperForgeTool extends HTMLElement {
     this.resolveThemePalette()
 
     // restore prefs
-    const savedPattern = readStored(LS_PATTERN) as PatternId | null
-    const savedPalette = readStored(LS_PALETTE)
-    const savedAspect = readStored(LS_ASPECT) as AspectId | null
+    const savedPattern = lsGet(LS_PATTERN) as PatternId | null
+    const savedPalette = lsGet(LS_PALETTE)
+    const savedAspect = lsGet(LS_ASPECT) as AspectId | null
     this.pattern = WF_PATTERNS.some(p => p.id === savedPattern) ? (savedPattern as PatternId) : 'aurora'
     this.palette = WF_PALETTES.find(p => p.id === savedPalette) || WF_PALETTES[2]
     if (this.palette.id === 'theme' && this.palette.colors.length === 0) this.palette = WF_PALETTES[2]
     this.aspect = WF_ASPECTS.some(a => a.id === savedAspect) ? (savedAspect as AspectId) : 'phone'
-    this.densityRaw = clamp(readStoredNumber(LS_DENSITY, 50), 0, 100)
-    this.detailRaw = clamp(readStoredNumber(LS_DETAIL, 50), 0, 100)
-    this.grainRaw = clamp(readStoredNumber(LS_GRAIN, 12), 0, 100)
-    const savedSeed = Math.floor(readStoredNumber(LS_SEED, 0))
+    this.densityRaw = clamp(lsGetNumber(LS_DENSITY, 50), 0, 100)
+    this.detailRaw = clamp(lsGetNumber(LS_DETAIL, 50), 0, 100)
+    this.grainRaw = clamp(lsGetNumber(LS_GRAIN, 12), 0, 100)
+    const savedSeed = Math.floor(lsGetNumber(LS_SEED, 0))
     this.seed = Number.isSafeInteger(savedSeed) && savedSeed > 0 ? savedSeed : randomSeed()
 
     const legacy = readLegacyPatternForgeHash(location.hash)
@@ -288,13 +264,13 @@ class WallpaperForgeTool extends HTMLElement {
       this.palette = WF_PALETTES.find(p => p.id === legacy.palette) || this.palette
       this.densityRaw = legacy.densityRaw
       this.seed = legacy.seed
-      writeStored(LS_PATTERN, this.pattern)
-      writeStored(LS_PALETTE, this.palette.id)
-      writeStored(LS_DENSITY, String(this.densityRaw))
-      writeStored(LS_SEED, String(this.seed))
+      lsSet(LS_PATTERN, this.pattern)
+      lsSet(LS_PALETTE, this.palette.id)
+      lsSet(LS_DENSITY, String(this.densityRaw))
+      lsSet(LS_SEED, String(this.seed))
       history.replaceState(null, '', location.pathname + location.search)
     }
-    writeStored(LS_SEED, String(this.seed))
+    lsSet(LS_SEED, String(this.seed))
 
     this.innerHTML = `
       <div data-type="tool-page" data-tool="wallpaper-forge">
@@ -448,7 +424,7 @@ class WallpaperForgeTool extends HTMLElement {
   /* ── geometry / preview sizing ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private target() {
@@ -835,7 +811,7 @@ class WallpaperForgeTool extends HTMLElement {
     this.querySelectorAll<HTMLButtonElement>('[data-pattern]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.pattern = btn.dataset.pattern as PatternId
-        writeStored(LS_PATTERN, this.pattern)
+        lsSet(LS_PATTERN, this.pattern)
         this.querySelectorAll('[data-pattern]').forEach(b =>
           b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.pattern === this.pattern)))
         this.refreshDensityOut()
@@ -846,7 +822,7 @@ class WallpaperForgeTool extends HTMLElement {
     this.querySelectorAll<HTMLButtonElement>('[data-aspect]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.aspect = btn.dataset.aspect as AspectId
-        writeStored(LS_ASPECT, this.aspect)
+        lsSet(LS_ASPECT, this.aspect)
         this.querySelectorAll('[data-aspect]').forEach(b =>
           b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.aspect === this.aspect)))
         this.resizeAndRender()
@@ -857,7 +833,7 @@ class WallpaperForgeTool extends HTMLElement {
       btn.addEventListener('click', () => {
         const id = btn.dataset.palette as string
         this.palette = WF_PALETTES.find(p => p.id === id) || this.palette
-        writeStored(LS_PALETTE, id)
+        lsSet(LS_PALETTE, id)
         this.querySelectorAll('[data-palette]').forEach(b =>
           b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.palette === id)))
         this.renderPreview()
@@ -883,7 +859,7 @@ class WallpaperForgeTool extends HTMLElement {
       if (Number.isSafeInteger(n) && n > 0 && n <= 0xffffffff) {
         this.seed = n
         seedInput.value = String(this.seed)
-        writeStored(LS_SEED, String(this.seed))
+        lsSet(LS_SEED, String(this.seed))
         this.renderPreview()
       } else {
         seedInput.value = String(this.seed)
@@ -903,7 +879,7 @@ class WallpaperForgeTool extends HTMLElement {
       const raw = Number(input.value)
       const label = apply(raw)
       if (out) out.textContent = label
-      writeStored(lsKey, String(raw))
+      lsSet(lsKey, String(raw))
       this.renderPreview()
     })
   }
@@ -918,43 +894,20 @@ class WallpaperForgeTool extends HTMLElement {
 
   private regenerate() {
     this.seed = randomSeed()
-    writeStored(LS_SEED, String(this.seed))
+    lsSet(LS_SEED, String(this.seed))
     const seedInput = this.querySelector('#wf-seed') as HTMLInputElement | null
     if (seedInput) seedInput.value = String(this.seed)
     this.renderPreview()
   }
 
   private copySeed() {
-    const text = String(this.seed)
-    if (!navigator.clipboard?.writeText) {
-      this.flashCopyStatus('Copy unavailable')
-      return
-    }
-    navigator.clipboard.writeText(text)
-      .then(() => this.flashCopyStatus('Copied'))
-      .catch(() => this.flashCopyStatus('Copy failed'))
-  }
-
-  private flashCopyStatus(label: string) {
-    if (!this.isConnected) return
     const btn = this.querySelector('[data-action="copy-seed"]') as HTMLButtonElement | null
-    flashLabel(btn, label, 1200)
+    void copyText(String(this.seed), btn)
   }
 
   private setExportStatus(message: string) {
     const output = this.querySelector('[data-type="wf-export-status"]')
     if (output) output.textContent = message
-  }
-
-  private downloadBlob(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   private async exportImage() {
@@ -970,7 +923,7 @@ class WallpaperForgeTool extends HTMLElement {
       this.setExportStatus('Image export failed')
       return
     }
-    this.downloadBlob(blob, `wallpaper-${this.pattern}-${this.aspect}-${this.seed}.png`)
+    downloadBlob(blob, `wallpaper-${this.pattern}-${this.aspect}-${this.seed}.png`)
     this.setExportStatus('Image downloaded')
   }
 
@@ -1008,7 +961,7 @@ class WallpaperForgeTool extends HTMLElement {
       const bytes = gif.bytes()
       const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
       const blob = new Blob([buffer], { type: 'image/gif' })
-      this.downloadBlob(blob, `wallpaper-${this.pattern}-${this.aspect}-${this.seed}.gif`)
+      downloadBlob(blob, `wallpaper-${this.pattern}-${this.aspect}-${this.seed}.gif`)
       this.setExportStatus(`GIF downloaded · ${width}×${height}`)
     } catch {
       this.setExportStatus('GIF export failed')

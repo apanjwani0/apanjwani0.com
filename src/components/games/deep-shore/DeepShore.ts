@@ -35,7 +35,7 @@
  */
 
 import { attachCanvasExport, type AnimationFrames, type AnimationRefusal } from '../../../lib/canvas-export'
-import { flashLabel } from '../../../lib/flash'
+import { flashLabel, copyText } from '../../../lib/flash'
 import {
   DS_TOUR_HOLD_FRAMES,
   DS_TOUR_MAX_STOPS,
@@ -74,6 +74,9 @@ import {
   type DsMode,
   type DsView,
 } from './escape'
+import { cappedDpr } from '../../../lib/math'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { escapeHtml } from '../../../lib/escape'
 
 interface DsPalette {
   id: string
@@ -184,22 +187,6 @@ const DS_TOUR_PREVIEW_PX = 300
 /** Rendering time one preview may spend (the GIF gets a longer budget). */
 const DS_TOUR_PREVIEW_BUDGET_MS = 2800
 
-function dsReadStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function dsWriteStored(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* storage disabled — Deep Shore still works for this session */
-  }
-}
-
 function dsToRGB(input: string): [number, number, number] {
   let s = input.trim()
   if (s.startsWith('#')) {
@@ -225,9 +212,8 @@ function dsStopLabel(stop: DsStop): string {
   return `${stop.re.toFixed(digits)} ${sign} ${Math.abs(stop.im).toFixed(digits)}i · ${dsFormatZoom(stop.zoom)}`
 }
 
-function dsEscapeAttr(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+function dsWriteStored(key: string, value: string) {
+  lsSet(key, value)
 }
 
 class DeepShoreGame extends HTMLElement {
@@ -295,7 +281,7 @@ class DeepShoreGame extends HTMLElement {
     this.palette = DS_PALETTES.find(p => p.id === this.view.palette) || DS_PALETTES[0]
     if (this.palette.colors.length === 0) this.palette = DS_PALETTES[0]
     this.view.palette = this.palette.id
-    this.peekOn = dsReadStored(DS_LS_PEEK) === '1'
+    this.peekOn = lsGet(DS_LS_PEEK) === '1'
 
     this.innerHTML = `
       <div data-type="ds-game">
@@ -335,7 +321,7 @@ class DeepShoreGame extends HTMLElement {
           <div data-group="places" role="group" aria-label="Places to visit">
             <span data-type="ds-group-label">Tour</span>
             ${DS_PLACES.map(p => `
-              <button data-place="${p.id}" type="button" title="${dsEscapeAttr(p.hint)}">${p.name}</button>`).join('')}
+              <button data-place="${p.id}" type="button" title="${escapeHtml(p.hint)}">${p.name}</button>`).join('')}
           </div>
           <div data-group="dive" role="group" aria-label="Dive recorder">
             <span data-type="ds-group-label">Dive</span>
@@ -451,7 +437,7 @@ class DeepShoreGame extends HTMLElement {
     // token, so `#tour=…` alone still lands you where the dive begins.
     const sharedDive = this.sharedTour()
     if (sharedDive) return sharedDive.view
-    const stored = dsReadStored(DS_LS_VIEW)
+    const stored = lsGet(DS_LS_VIEW)
     const decodedStored = stored ? dsDecodeView(stored) : null
     if (decodedStored) return decodedStored
     return { ...DS_DEFAULT_VIEW }
@@ -467,7 +453,7 @@ class DeepShoreGame extends HTMLElement {
   private initialStops(): DsStop[] {
     const shared = this.sharedTour()
     if (shared) return shared.stops
-    const stored = dsReadStored(DS_LS_TOUR)
+    const stored = lsGet(DS_LS_TOUR)
     const restored = stored ? dsDecodeTour(stored) : null
     return restored ? restored.stops : []
   }
@@ -553,7 +539,7 @@ class DeepShoreGame extends HTMLElement {
   /* ──────────────  geometry  ────────────── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize() {
@@ -1066,13 +1052,7 @@ class DeepShoreGame extends HTMLElement {
     // to afterwards.
     const start = dsEncodeView(dsTourViewAt(this.view, this.stops, 0))
     const url = `${location.origin}${location.pathname}#view=${start}&tour=${tour}`
-    if (!navigator.clipboard?.writeText) {
-      flashLabel(btn, 'Copy unavailable')
-      return
-    }
-    navigator.clipboard.writeText(url)
-      .then(() => flashLabel(btn, 'Dive link copied'))
-      .catch(() => flashLabel(btn, 'Copy failed'))
+    void copyText(url, btn, { copied: 'Dive link copied' })
   }
 
   private syncDive() {
@@ -1114,7 +1094,7 @@ class DeepShoreGame extends HTMLElement {
     list.innerHTML = this.stops.map((stop, i) => `
       <li>
         <button data-goto="${i}" type="button" title="Go to this stop">${i + 1}</button>
-        <span>${dsEscapeAttr(dsStopLabel(stop))}</span>
+        <span>${escapeHtml(dsStopLabel(stop))}</span>
         <button data-drop="${i}" type="button" title="Remove this stop" aria-label="Remove stop ${i + 1}">×</button>
       </li>`).join('')
     list.querySelectorAll<HTMLButtonElement>('[data-goto]').forEach(btn => {
@@ -1349,13 +1329,7 @@ class DeepShoreGame extends HTMLElement {
   private copyLink() {
     const btn = this.querySelector('[data-action="copy-link"]') as HTMLButtonElement | null
     const url = `${location.origin}${location.pathname}#view=${dsEncodeView(this.view)}`
-    if (!navigator.clipboard?.writeText) {
-      flashLabel(btn, 'Copy unavailable')
-      return
-    }
-    navigator.clipboard.writeText(url)
-      .then(() => flashLabel(btn, 'Link copied'))
-      .catch(() => flashLabel(btn, 'Copy failed'))
+    void copyText(url, btn, { copied: 'Link copied' })
   }
 }
 

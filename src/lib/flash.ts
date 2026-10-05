@@ -50,3 +50,45 @@ export function flashBadge(el: HTMLElement | null, label: string, ms = 1200): vo
   el.setAttribute('data-flash', label)
   rearm(el, ms, () => el.removeAttribute('data-flash'))
 }
+
+/** How long a copy button shows "Copied" before its label returns. */
+export const COPY_FLASH_MS = 1200
+
+/** Legacy path for insecure contexts or a refused clipboard permission. */
+function copyViaTextarea(text: string): boolean {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('readonly', '')
+  ta.style.position = 'absolute'
+  ta.style.left = '-9999px'
+  document.body.appendChild(ta)
+  try {
+    ta.select()
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    document.body.removeChild(ta)
+  }
+}
+
+/**
+ * Copy `text`, trying the async Clipboard API and then a textarea fallback, and
+ * report the result on `btn` ("Copied" / "Copy failed") when one is given.
+ * Resolves to whether the copy worked; call sites keep their own status line.
+ */
+export async function copyText(
+  text: string,
+  btn?: HTMLElement | null,
+  opts: { copied?: string; failed?: string; ms?: number } = {},
+): Promise<boolean> {
+  let ok = false
+  try {
+    await navigator.clipboard.writeText(text)
+    ok = true
+  } catch {
+    ok = copyViaTextarea(text)
+  }
+  if (btn) flashLabel(btn, ok ? (opts.copied ?? 'Copied') : (opts.failed ?? 'Copy failed'), opts.ms ?? COPY_FLASH_MS)
+  return ok
+}

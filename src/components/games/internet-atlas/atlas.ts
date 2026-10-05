@@ -19,6 +19,8 @@
  * shows a real one.
  */
 
+import { escapeHtml } from '../../../lib/escape'
+
 export interface InternetStep {
   /** Element ids that light up on this beat. */
   on: string[]
@@ -50,13 +52,10 @@ export interface InternetView {
 /* ── SVG helpers, the Diagram Atlas's vocabulary. ponytail: a second copy of
       its four helpers; move both to one module if a third figure needs them. ── */
 
-const esc = (s: string): string =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-
 /** Centred label, one line per entry. */
 function label(cx: number, cy: number, lines: string[], kind = 'label'): string {
   const dy = (lines.length - 1) * 8
-  const spans = lines.map((l, i) => `<tspan x="${cx}" y="${cy - dy + i * 16}">${esc(l)}</tspan>`).join('')
+  const spans = lines.map((l, i) => `<tspan x="${cx}" y="${cy - dy + i * 16}">${escapeHtml(l)}</tspan>`).join('')
   return `<text data-text="${kind}" text-anchor="middle">${spans}</text>`
 }
 
@@ -90,13 +89,13 @@ function actor(id: string, x: number, lines: string[], w = 112): string {
 
 /** A left-aligned line of monospace text that can light up on its own. */
 function line(id: string, x: number, y: number, text: string): string {
-  return `<g id="${id}" data-node="line"><text data-text="field" x="${x}" y="${y}">${esc(text)}</text></g>`
+  return `<g id="${id}" data-node="line"><text data-text="field" x="${x}" y="${y}">${escapeHtml(text)}</text></g>`
 }
 
 /** A labelled dot: a data centre on the map. */
 function site(id: string, x: number, y: number, name: string): string {
   return `<g id="${id}" data-node="site"><circle cx="${x}" cy="${y}" r="7"/>` +
-    `<text data-text="field" x="${x + 12}" y="${y + 1}">${esc(name)}</text></g>`
+    `<text data-text="field" x="${x + 12}" y="${y + 1}">${escapeHtml(name)}</text></g>`
 }
 
 /* ══ 1. Packets ══ */
@@ -202,7 +201,7 @@ const HANDSHAKES = [
 function card(x: number, y: number, w: number, h: number, name: string): string {
   return `<g data-node="type"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4"/>` +
     `<path data-node="divider" d="M${x} ${y + 30} H${x + w}"/>` +
-    `<text data-text="typename" x="${x + 12}" y="${y + 20}">${esc(name)}</text></g>`
+    `<text data-text="typename" x="${x + 12}" y="${y + 20}">${escapeHtml(name)}</text></g>`
 }
 
 const HTTP = [

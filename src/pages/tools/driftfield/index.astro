@@ -3,8 +3,10 @@ export const prerender = false
 
 import ToolBase from '../../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../../components/Breadcrumbs.astro'
+import JsonLd from '../../../components/JsonLd.astro'
+import { buildBreadcrumbs } from '../../../lib/breadcrumbs'
 import { getLearnings, getSite, getTools } from '../../../lib/config'
-import { breadcrumbListJsonLd, itemListJsonLd } from '../../../lib/jsonld'
+import { itemListJsonLd } from '../../../lib/jsonld'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from '../../../lib/driftfield'
 import { existingOgCardPath, toolHasOgCard } from '../../../lib/og'
 import { learningsAboutEmbed } from '../../../lib/learnings'
@@ -17,7 +19,6 @@ const [site, tools, learnings] = await Promise.all([
   getTools(Astro.locals),
   getLearnings(Astro.locals),
 ])
-const cspNonce = (Astro.locals as any).cspNonce
 const tool = tools.find(t => t.slug === DRIFTFIELD_SLUG)
 
 // The hub is a real route, but its listing and share card still come from the
@@ -36,16 +37,11 @@ const ldJson = itemListJsonLd(
   DRIFTFIELD_MODES.map(m => ({ name: m.title, url: `${canonicalUrl}/${m.slug}` })),
 )
 
-const crumbs = [
-  { label: 'home', href: '/' },
-  { label: 'tools', href: '/tools' },
-  { label: tool.title },
-]
-const breadcrumbLd = breadcrumbListJsonLd([
-  { name: 'Home', url: site.url },
-  { name: 'Tools', url: `${site.url}/tools` },
-  { name: tool.title, url: canonicalUrl },
-])
+const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
+  { label: 'home', path: '/' },
+  { label: 'tools', path: '/tools' },
+  { label: tool.title, path: `/tools/${DRIFTFIELD_SLUG}` },
+], site.url)
 ---
 
 <ToolBase
@@ -55,8 +51,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
   keywords={tool.keywords}
   ogCard={ogCard}
 >
-  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
-  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <JsonLd json={ldJson} />
+  <JsonLd json={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
 
   {/* The seeded studio — nine pattern engines with PNG and GIF export. This is

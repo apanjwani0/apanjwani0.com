@@ -49,18 +49,18 @@ import { cwParse, cwZoneValid, type CwParsed, type CwRun } from './schedule'
 // an unbounded walk over one is still a hang. A real crontab is tens of lines;
 // these are an order of magnitude past anything genuine.
 
-export const CW_CRONTAB_MAX_CHARS = 20_000
-export const CW_CRONTAB_MAX_LINES = 400
+const CW_CRONTAB_MAX_CHARS = 20_000
+const CW_CRONTAB_MAX_LINES = 400
 export const CW_CRONTAB_MAX_ENTRIES = 100
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type CwLineKind = 'blank' | 'comment' | 'env' | 'entry' | 'error'
+type CwLineKind = 'blank' | 'comment' | 'env' | 'entry' | 'error'
 
 /** Where an entry's zone came from. `null` = nothing said, use the daemon's. */
-export type CwZoneSource = 'CRON_TZ' | 'TZ' | null
+type CwZoneSource = 'CRON_TZ' | 'TZ' | null
 
-export interface CwEnvAssign {
+interface CwEnvAssign {
   name: string
   value: string
 }
@@ -84,7 +84,7 @@ export interface CwCrontabEntry {
   zoneOk: boolean
 }
 
-export interface CwCrontabLine {
+interface CwCrontabLine {
   n: number
   kind: CwLineKind
   text: string
@@ -104,7 +104,7 @@ export interface CwCrontabDoc {
   truncated: boolean
 }
 
-export interface CwCrontabOpts {
+interface CwCrontabOpts {
   /** System crontabs put a user between the schedule and the command. */
   systemUser?: boolean
 }
@@ -370,7 +370,7 @@ export function cwLooksLikeSystemCrontab(text: string): boolean {
 
 // ── Merging entries into one timeline ────────────────────────────────────────
 
-export interface CwTimelineRow {
+interface CwTimelineRow {
   ms: number
   /** Index into the entry list the rows were merged from. */
   entry: number
@@ -399,7 +399,7 @@ export interface CwTimelineRow {
  * are left out: this list answers "what runs", and the per-entry panel is where
  * the ones that do not run are explained.
  */
-export interface CwCollision {
+interface CwCollision {
   ms: number
   /** Indices of the entries that start together, ascending. */
   entries: number[]

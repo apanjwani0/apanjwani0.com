@@ -36,7 +36,7 @@
  */
 
 import { escapeHtml } from '../../../lib/escape'
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
 import {
   CW_FIELD_LABEL,
   CwZoneClock,
@@ -68,6 +68,8 @@ import {
   type CwCrontabDoc,
   type CwCrontabEntry,
 } from './crontab'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { MS_PER_DAY } from '../../../lib/date'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,7 +90,7 @@ const CW_LS_SETTINGS = 'cron-whisperer:settings:v1'
 const CW_DEFAULTS: CwSettings = { zone: 'local', hour12: false, runs: 5, systemUser: false }
 
 /** How far ahead the daylight-saving card looks. */
-const CW_DST_HORIZON_MS = 400 * 86400_000
+const CW_DST_HORIZON_MS = 400 * MS_PER_DAY
 /** Window either side of a transition that is searched for affected runs. */
 const CW_DST_WINDOW_MS = 6 * 3600_000
 
@@ -211,7 +213,7 @@ function cwRelFuture(ms: number, now: number): string {
   const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'always' })
   const units: [Intl.RelativeTimeFormatUnit, number][] = [
     ['year', 31557600000], ['month', 2629800000], ['week', 604800000],
-    ['day', 86400000], ['hour', 3600000], ['minute', 60000], ['second', 1000],
+    ['day', MS_PER_DAY], ['hour', 3600000], ['minute', 60000], ['second', 1000],
   ]
   for (const [unit, span] of units) {
     if (diff >= span || unit === 'second') return rtf.format(Math.round(diff / span), unit)
@@ -450,7 +452,7 @@ class CronWhispererTool extends HTMLElement {
 
     // Link fragment, then the page's preset, then this device's last expression.
     // A preset page is a specific answer, so a saved expression must not replace it.
-    const saved = this.readLS(CW_LS_EXPR)
+    const saved = lsGet(CW_LS_EXPR)
     this.input.value = link.expr ?? presetExpr ?? saved ?? '*/5 * * * *'
 
     this.input.addEventListener('input', () => this.evaluate())
@@ -736,11 +738,11 @@ class CronWhispererTool extends HTMLElement {
     // really does have fewer runs, and a 25-hour one really does have more.
     const cap = 2000
     const zoneName = this.zoneLabel()
-    const in24 = cwFiringCount(cwCollectRuns(P, nowMs, { count: cap, untilMs: nowMs + 86400000 }, clock))
+    const in24 = cwFiringCount(cwCollectRuns(P, nowMs, { count: cap, untilMs: nowMs + MS_PER_DAY }, clock))
     if (in24 > 0) {
       this.freqEl.textContent = `Runs ${this.count(in24, cap)} in the next 24 hours (${zoneName}).`
     } else {
-      const in7 = cwFiringCount(cwCollectRuns(P, nowMs, { count: cap, untilMs: nowMs + 7 * 86400000 }, clock))
+      const in7 = cwFiringCount(cwCollectRuns(P, nowMs, { count: cap, untilMs: nowMs + 7 * MS_PER_DAY }, clock))
       this.freqEl.textContent = in7 > 0
         ? `Runs ${this.count(in7, cap)} in the next 7 days (${zoneName}).`
         : `Runs rarely — nothing in the next 7 days (${zoneName}).`
@@ -1225,16 +1227,7 @@ class CronWhispererTool extends HTMLElement {
 
   private async copyText(text: string, btn: HTMLButtonElement) {
     if (!text || text === '—') { this.setStatus('Nothing to copy.'); return }
-    try {
-      await navigator.clipboard.writeText(text)
-      this.flash(btn, 'Copied!')
-    } catch {
-      this.flash(btn, 'Failed')
-    }
-  }
-
-  private flash(btn: HTMLButtonElement, label: string) {
-    flashLabel(btn, label, 1200)
+    await copyText(text, btn)
   }
 
   private setStatus(label: string) {
@@ -1260,7 +1253,7 @@ class CronWhispererTool extends HTMLElement {
   }
 
   private loadSettings(): CwSettings {
-    const raw = this.readLS(CW_LS_SETTINGS)
+    const raw = lsGet(CW_LS_SETTINGS)
     if (!raw) return { ...CW_DEFAULTS }
     try {
       const p = JSON.parse(raw) as Partial<CwSettings>
@@ -1282,12 +1275,9 @@ class CronWhispererTool extends HTMLElement {
     this.writeLS(CW_LS_SETTINGS, JSON.stringify(this.settings))
   }
 
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
 
   private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode */ }
+    lsSet(key, value)
   }
 }
 

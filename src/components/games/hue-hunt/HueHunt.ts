@@ -40,6 +40,7 @@ import {
   toHex,
 } from '../../../lib/hue-hunt-daily'
 import { recordDailyPlay } from '../../../lib/daily-streak'
+import { copyText } from '../../../lib/flash'
 
 type Mode = 'daily' | 'pick' | 'type'
 type DiffId = 'easy' | 'medium' | 'hard'
@@ -998,27 +999,8 @@ class HueHuntGame extends HTMLElement {
 
   private async shareDaily() {
     const text = this.dailyShareText()
-    try {
-      await navigator.clipboard.writeText(text)
-      this.flashShare('Copied — paste it anywhere.')
-      return
-    } catch {
-      /* clipboard API refused (insecure context, or permission) — fall through */
-    }
-    try {
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.setAttribute('readonly', '')
-      ta.style.position = 'absolute'
-      ta.style.left = '-9999px'
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-      this.flashShare('Copied — paste it anywhere.')
-    } catch {
-      this.flashShare('Copy failed — long-press to select the grid above.', true)
-    }
+    if (await copyText(text)) this.flashShare('Copied — paste it anywhere.')
+    else this.flashShare('Copy failed — long-press to select the grid above.', true)
   }
 
   private flashShare(msg: string, error = false) {

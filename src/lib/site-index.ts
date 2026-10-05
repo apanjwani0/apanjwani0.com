@@ -54,14 +54,14 @@ export interface IndexEntry {
 }
 
 /** A real page, as the sitemap lists it. */
-export interface IndexablePath {
+interface IndexablePath {
   path: string
   /** YYYY-MM-DD, only where the content carries an authored date */
   lastmod?: string
 }
 
 /** Everything the index is derived from — exactly what the accessors return. */
-export interface SiteConfigs {
+interface SiteConfigs {
   site: Site
   tools: Tool[]
   games: Game[]
@@ -162,7 +162,7 @@ export function projectAnchors(projects: readonly Pick<Project, 'title'>[]): str
 const SUMMARY_MAX = 160
 
 /** First paragraph, markdown marks dropped, capped at a word boundary — enough to tell two results apart. */
-export function summarize(text: string | undefined): string | undefined {
+function summarize(text: string | undefined): string | undefined {
   if (!text) return undefined
   const first = text.split(/\n\s*\n/)[0]
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')

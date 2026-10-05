@@ -6,15 +6,15 @@
 [data-type='canvas-export'] {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1rem;
+  gap: var(--space-lg);
+  margin-top: var(--space-xl);
 }
 
 [data-type='cx-actions'] {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.6rem;
+  gap: var(--space-md);
 }
 
 [data-type='cx-actions'] label {
@@ -29,7 +29,7 @@
 }
 
 [data-type='cx-actions'] select {
-  padding: 0.35rem 0.45rem;
+  padding: 0.35rem var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -42,7 +42,7 @@
 
 [data-type='cx-actions'] button,
 [data-type='cx-preview-actions'] button {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-sm) 0.9rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);

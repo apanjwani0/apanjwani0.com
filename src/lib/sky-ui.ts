@@ -11,6 +11,7 @@
  */
 import { drawStars, driftStars, makeStars, starCount, type SkyColors, type Star } from './sky'
 import { onThemeChange } from './theme'
+import { prefersReducedMotion } from './motion'
 
 // One star per this many px²: about half the hero's density, so the page reads
 // as a quiet backdrop and not a second hero.
@@ -40,7 +41,7 @@ export function mountSky(): void {
   mountedOn = host
 
   const ac = new AbortController()
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const reduced = prefersReducedMotion()
   const lowPower = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4
   let w = 0, h = 0, dpr = 1, raf = 0, last = 0, time = 0
   let stars: Star[] | null = null

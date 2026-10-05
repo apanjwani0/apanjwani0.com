@@ -75,7 +75,7 @@ function cardKey(card: Card): string {
  * different sets can spell the same key — `14s,2c` is unambiguous where `14s2c`
  * would depend on ranks never being able to run together.
  */
-export function cardsKey(cards: readonly Card[]): string {
+function cardsKey(cards: readonly Card[]): string {
   return cards.map(cardKey).sort().join(',')
 }
 

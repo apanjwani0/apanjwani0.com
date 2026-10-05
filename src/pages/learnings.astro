@@ -2,6 +2,8 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
+import Card from '../components/Card.astro'
+import JsonLd from '../components/JsonLd.astro'
 import { getSite, getLearnings } from '../lib/config'
 import { itemListJsonLd } from '../lib/jsonld'
 import { isPublishedLearning, readingTime } from '../lib/learnings'
@@ -9,7 +11,6 @@ import { render } from '../lib/markdown'
 import { formatDisplayDate } from '../lib/date'
 
 const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
-const cspNonce = (Astro.locals as any).cspNonce
 
 // Published only, newest first. Sort a copy — the accessor's array is shared, and
 // mutating it would reorder every other consumer in the same request. String
@@ -20,7 +21,7 @@ const ordered = learnings
   .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
 
 const ldJson = itemListJsonLd(
-  'Learnings by Aman Panjwani',
+  `Learnings by ${site.name}`,
   ordered.map(l => ({ name: l.title, url: `${site.url}/learnings/${l.slug}` })),
 )
 ---
@@ -33,7 +34,7 @@ const ldJson = itemListJsonLd(
   description="Short, visual explainers of how things work, with interactive diagrams you can play with while you read."
   keywords="interactive explainers, how things work, visual explanations, how the internet works, system diagrams"
 >
-  {ordered.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
+  {ordered.length > 0 && <JsonLd json={ldJson} />}
   <h1>learnings</h1>
   <p data-type="page-intro">
     Short, visual explainers of how things work. Each one has diagrams you can
@@ -42,17 +43,10 @@ const ldJson = itemListJsonLd(
   {ordered.length === 0 && <p>Nothing published yet — the first pieces are being written.</p>}
   <ul data-type="card-grid">
     {ordered.map(l => (
-      <li>
-        <div data-type="card-head">
-          <h2 data-type="card-title">
-            <a href={`/learnings/${l.slug}`}>{l.title}</a>
-          </h2>
-        </div>
-        <div data-type="card-desc" set:html={render(l.summary)} />
-        <p data-type="card-meta">
-          <span data-type="writing-date"><time datetime={l.date}>{formatDisplayDate(l.date)}</time> · {readingTime(l.content)} min read</span>
-        </p>
-      </li>
+      <Card title={l.title} href={`/learnings/${l.slug}`}>
+        <Fragment slot="desc" set:html={render(l.summary)} />
+        <span slot="meta" data-type="writing-date"><time datetime={l.date}>{formatDisplayDate(l.date)}</time> · {readingTime(l.content)} min read</span>
+      </Card>
     ))}
   </ul>
 </Base>

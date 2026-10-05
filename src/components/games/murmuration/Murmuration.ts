@@ -31,6 +31,10 @@
  */
 
 import { attachCanvasExport } from '../../../lib/canvas-export'
+import { prefersReducedMotion } from '../../../lib/motion'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { clamp, cappedDpr } from '../../../lib/math'
+import { downloadDataUrl } from '../../../lib/download'
 
 interface BoPalette {
   id: string
@@ -67,10 +71,6 @@ const BO_WEIGHT_MIN = 0, BO_WEIGHT_MAX = 200     // /100 -> rule weight (0..2)
 const BO_STEP_MS = 1000 / 60
 
 const BO_TAU = Math.PI * 2
-
-function boClamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
 
 /* Parse #rgb / #rrggbb (or leave rgb() alone) to a [r,g,b] triple. */
 function boToRGB(input: string): [number, number, number] | null {
@@ -143,22 +143,22 @@ class MurmurationGame extends HTMLElement {
 
   connectedCallback() {
     // restore prefs
-    const rawCount = Number(this.readLS(BO_LS_COUNT))
-    const rawSpeed = Number(this.readLS(BO_LS_SPEED))
-    const rawVision = Number(this.readLS(BO_LS_VISION))
-    const rawSep = this.readLS(BO_LS_SEP)
-    const rawAlign = this.readLS(BO_LS_ALIGN)
-    const rawCoh = this.readLS(BO_LS_COH)
-    const savedTrails = this.readLS(BO_LS_TRAILS)
-    const savedPointer = this.readLS(BO_LS_POINTER) as BoPointerMode | null
-    const savedPalette = this.readLS(BO_LS_PALETTE)
+    const rawCount = Number(lsGet(BO_LS_COUNT))
+    const rawSpeed = Number(lsGet(BO_LS_SPEED))
+    const rawVision = Number(lsGet(BO_LS_VISION))
+    const rawSep = lsGet(BO_LS_SEP)
+    const rawAlign = lsGet(BO_LS_ALIGN)
+    const rawCoh = lsGet(BO_LS_COH)
+    const savedTrails = lsGet(BO_LS_TRAILS)
+    const savedPointer = lsGet(BO_LS_POINTER) as BoPointerMode | null
+    const savedPalette = lsGet(BO_LS_PALETTE)
 
-    const countVal = boClamp(rawCount || 220, BO_COUNT_MIN, BO_COUNT_MAX)
-    const speedVal = boClamp(rawSpeed || 45, BO_SPEED_MIN, BO_SPEED_MAX)
-    const visionVal = boClamp(rawVision || 48, BO_VISION_MIN, BO_VISION_MAX)
-    const sepVal = boClamp(rawSep === null ? 150 : Number(rawSep), BO_WEIGHT_MIN, BO_WEIGHT_MAX)
-    const alignVal = boClamp(rawAlign === null ? 100 : Number(rawAlign), BO_WEIGHT_MIN, BO_WEIGHT_MAX)
-    const cohVal = boClamp(rawCoh === null ? 90 : Number(rawCoh), BO_WEIGHT_MIN, BO_WEIGHT_MAX)
+    const countVal = clamp(rawCount || 220, BO_COUNT_MIN, BO_COUNT_MAX)
+    const speedVal = clamp(rawSpeed || 45, BO_SPEED_MIN, BO_SPEED_MAX)
+    const visionVal = clamp(rawVision || 48, BO_VISION_MIN, BO_VISION_MAX)
+    const sepVal = clamp(rawSep === null ? 150 : Number(rawSep), BO_WEIGHT_MIN, BO_WEIGHT_MAX)
+    const alignVal = clamp(rawAlign === null ? 100 : Number(rawAlign), BO_WEIGHT_MIN, BO_WEIGHT_MAX)
+    const cohVal = clamp(rawCoh === null ? 90 : Number(rawCoh), BO_WEIGHT_MIN, BO_WEIGHT_MAX)
 
     this.count = countVal
     this.speedRaw = speedVal
@@ -269,7 +269,7 @@ class MurmurationGame extends HTMLElement {
       if (!this.isConnected) return
       this.resize()
       this.spawnAll()
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       if (reduced) {
         this.renderStatic()
         this.setPlaying(false)
@@ -312,7 +312,7 @@ class MurmurationGame extends HTMLElement {
   /* ── geometry ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize() {
@@ -333,8 +333,8 @@ class MurmurationGame extends HTMLElement {
     // keep boids inside the new frame after a resize
     if (hadBoids) {
       for (const bd of this.boids) {
-        bd.x = boClamp(bd.x, 0, this.w)
-        bd.y = boClamp(bd.y, 0, this.h)
+        bd.x = clamp(bd.x, 0, this.w)
+        bd.y = clamp(bd.y, 0, this.h)
       }
     }
   }
@@ -610,7 +610,7 @@ class MurmurationGame extends HTMLElement {
   private reset() {
     this.startle = 0
     this.spawnAll()
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (prefersReducedMotion()) {
       this.paintBackground()
       this.renderStatic()
     } else {
@@ -622,7 +622,7 @@ class MurmurationGame extends HTMLElement {
   private scatter() {
     if (!this.ptrActive) { this.ptrX = this.w / 2; this.ptrY = this.h / 2 }
     this.startle = 26
-    if (!this.playing && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!this.playing && !prefersReducedMotion()) {
       this.setPlaying(true)
     }
   }
@@ -633,32 +633,31 @@ class MurmurationGame extends HTMLElement {
     this.querySelector('[data-action="play"]')?.addEventListener('click', () => this.setPlaying(!this.playing))
     this.querySelector('[data-action="scatter"]')?.addEventListener('click', () => this.scatter())
     this.querySelector('[data-action="reset"]')?.addEventListener('click', () => this.reset())
-    this.querySelector('[data-action="download"]')?.addEventListener('click', () => this.download())
     this.querySelector('[data-action="trails"]')?.addEventListener('click', () => this.toggleTrails())
 
     this.bindSlider('#bo-count', '#bo-count-out', BO_LS_COUNT, raw => {
-      this.count = boClamp(raw, BO_COUNT_MIN, BO_COUNT_MAX)
+      this.count = clamp(raw, BO_COUNT_MIN, BO_COUNT_MAX)
       this.resizeCount()
       return String(this.count)
     })
     this.bindSlider('#bo-speed', '#bo-speed-out', BO_LS_SPEED, raw => {
-      this.speedRaw = boClamp(raw, BO_SPEED_MIN, BO_SPEED_MAX)
+      this.speedRaw = clamp(raw, BO_SPEED_MIN, BO_SPEED_MAX)
       return `${(this.speedRaw / 45).toFixed(1)}×`
     })
     this.bindSlider('#bo-vision', '#bo-vision-out', BO_LS_VISION, raw => {
-      this.visionRaw = boClamp(raw, BO_VISION_MIN, BO_VISION_MAX)
+      this.visionRaw = clamp(raw, BO_VISION_MIN, BO_VISION_MAX)
       return `${this.visionRaw}px`
     })
     this.bindSlider('#bo-sep', '#bo-sep-out', BO_LS_SEP, raw => {
-      this.sepW = boClamp(raw, BO_WEIGHT_MIN, BO_WEIGHT_MAX) / 100
+      this.sepW = clamp(raw, BO_WEIGHT_MIN, BO_WEIGHT_MAX) / 100
       return this.sepW.toFixed(2)
     })
     this.bindSlider('#bo-align', '#bo-align-out', BO_LS_ALIGN, raw => {
-      this.aliW = boClamp(raw, BO_WEIGHT_MIN, BO_WEIGHT_MAX) / 100
+      this.aliW = clamp(raw, BO_WEIGHT_MIN, BO_WEIGHT_MAX) / 100
       return this.aliW.toFixed(2)
     })
     this.bindSlider('#bo-coh', '#bo-coh-out', BO_LS_COH, raw => {
-      this.cohW = boClamp(raw, BO_WEIGHT_MIN, BO_WEIGHT_MAX) / 100
+      this.cohW = clamp(raw, BO_WEIGHT_MIN, BO_WEIGHT_MAX) / 100
       return this.cohW.toFixed(2)
     })
 
@@ -666,7 +665,7 @@ class MurmurationGame extends HTMLElement {
       btn.addEventListener('click', () => {
         const mode = btn.dataset.pointer as BoPointerMode
         this.pointerMode = mode
-        this.writeLS(BO_LS_POINTER, mode)
+        lsSet(BO_LS_POINTER, mode)
         this.querySelectorAll('[data-pointer]').forEach(b =>
           b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.pointer === mode)))
       })
@@ -677,7 +676,7 @@ class MurmurationGame extends HTMLElement {
         const id = btn.dataset.palette as string
         this.palette = BO_PALETTES.find(p => p.id === id) || this.palette
         this.palRGB = []   // invalidate the parsed-colour cache for the new palette
-        this.writeLS(BO_LS_PALETTE, id)
+        lsSet(BO_LS_PALETTE, id)
         this.querySelectorAll('[data-palette]').forEach(b =>
           b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.palette === id)))
         this.recolour()
@@ -698,14 +697,14 @@ class MurmurationGame extends HTMLElement {
       const raw = Number(input.value)
       const label = apply(raw)
       if (out) out.textContent = label
-      this.writeLS(lsKey, String(raw))
+      lsSet(lsKey, String(raw))
       if (!this.playing) this.renderStatic()
     })
   }
 
   private toggleTrails() {
     this.trails = !this.trails
-    this.writeLS(BO_LS_TRAILS, this.trails ? '1' : '0')
+    lsSet(BO_LS_TRAILS, this.trails ? '1' : '0')
     const btn = this.querySelector('[data-action="trails"]') as HTMLButtonElement | null
     if (btn) {
       btn.textContent = `Trails: ${this.trails ? 'on' : 'off'}`
@@ -722,14 +721,6 @@ class MurmurationGame extends HTMLElement {
     this.ptrActive = true
   }
 
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
-
-  private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode */ }
-  }
-
   private onKey(e: KeyboardEvent) {
     switch (e.key) {
       case ' ': e.preventDefault(); this.setPlaying(!this.playing); break
@@ -742,15 +733,9 @@ class MurmurationGame extends HTMLElement {
 
   private download() {
     try {
-      const url = this.canvas.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `murmuration.png`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
+      downloadDataUrl(this.canvas.toDataURL('image/png'), `murmuration.png`)
     } catch {
-      /* toDataURL can throw on a tainted canvas — never happens here (no external images) */
+      /* toDataURL can throw on a tainted canvas — never here (no external images) */
     }
   }
 }

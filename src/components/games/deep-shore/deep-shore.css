@@ -5,57 +5,17 @@
  * a tenth byte-identical copy of the same six declarations (see AGENTS.md —
  * Design System). Only the role-specific overrides below are per-game. */
 
-div[data-type="ds-titlebar"] {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-bottom: 0.25rem;
-}
-
-div[data-type="ds-titlebar"] h1 {
-  margin: 0;
-}
-
-span[data-type="ds-badge"] {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.02em;
-  color: var(--color-accent);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-pill);
-  padding: 0.1rem 0.55rem;
-  white-space: nowrap;
-}
-
-div[data-type="ds-header"] p {
-  margin-top: 0;
-  color: var(--color-muted);
-  font-size: var(--text-base);
-  line-height: 1.55;
-}
-
 /* The stage is the positioning context for the Julia inset and the progress
    chip, both of which sit over the plane rather than reflowing it. */
 div[data-type="ds-stage"] {
   position: relative;
   width: 100%;
-  margin: 0.5rem 0 0.75rem;
+  margin: 0.5rem 0 var(--space-lg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   line-height: 0;
   background: var(--color-bg);
-}
-
-canvas[data-type="ds-canvas"] {
-  display: block;
-  width: 100%;
-  height: auto;
-  /* Without this a drag on a touch screen scrolls the page instead of panning
-     the plane, and a two-finger zoom fights the wheel handler. */
-  touch-action: none;
-  cursor: crosshair;
 }
 
 canvas[data-type="ds-canvas"]:active {
@@ -80,7 +40,7 @@ p[data-type="ds-progress"] {
   left: 0.6rem;
   top: 0.6rem;
   margin: 0;
-  padding: 0.1rem 0.45rem;
+  padding: 0.1rem var(--space-sm);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: 1.6;
@@ -119,55 +79,17 @@ p[data-type="ds-readout"] span[data-field="warn"] {
   color: var(--color-accent);
 }
 
-div[data-type="ds-controls"] {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-div[data-type="ds-controls"] [data-group] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 div[data-type="ds-controls"] [data-group][hidden] {
   display: none;
 }
 
 /* The primary action, matching the lane's one-filled-button convention. */
-div[data-type="ds-controls"] [data-group="transport"] button[data-action="zoom-in"] {
-  color: var(--color-bg);
-  background: var(--color-text);
-  border-color: var(--color-text);
-}
-
-div[data-type="ds-controls"] [data-group="transport"] button[data-action="zoom-in"]:hover {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
 div[data-type="ds-controls"] [data-mode][aria-pressed="true"],
 div[data-type="ds-controls"] [data-palette][aria-pressed="true"],
 div[data-type="ds-controls"] [data-action="play-dive"][aria-pressed="true"],
 div[data-type="ds-controls"] [data-action="peek"][aria-pressed="true"] {
   color: var(--color-text);
   border-color: var(--color-accent);
-}
-
-span[data-type="ds-swatch"] {
-  display: inline-flex;
-  gap: 2px;
-  vertical-align: middle;
-  margin-right: 0.4rem;
-}
-
-span[data-type="ds-swatch"] i {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: var(--radius-sm);
-  display: inline-block;
 }
 
 div[data-type="ds-controls"] label,
@@ -184,7 +106,7 @@ span[data-type="ds-seed-i"] {
 ol[data-type="ds-stops"] {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: var(--space-xs);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -197,7 +119,7 @@ ol[data-type="ds-stops"][hidden] {
 ol[data-type="ds-stops"] li {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-xs);
   padding: 0.1rem 0.25rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
@@ -214,33 +136,14 @@ ol[data-type="ds-stops"] li span {
    are an index and a dismiss inside a chip, so they carry the type scale's
    smallest step and no padding to speak of. */
 ol[data-type="ds-stops"] li button {
-  padding: 0 0.4rem;
+  padding: 0 var(--space-xs);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: 1.7;
 }
 
-div[data-type="ds-sliders"] {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem 1.25rem;
-}
-
-div[data-type="ds-slider"] {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 div[data-type="ds-slider"] label {
   min-width: 3.2rem;
-}
-
-div[data-type="ds-slider"] input[type="range"] {
-  flex: 1;
-  min-width: 0;
-  accent-color: var(--color-text);
-  cursor: pointer;
 }
 
 div[data-type="ds-slider"] output {
@@ -263,61 +166,8 @@ div[data-group="seed"] input[type="text"] {
 }
 
 /* ── "What you are looking at" explainer ── */
-details[data-type="ds-explainer"] {
-  margin-top: 1.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  padding: 0 1rem;
-}
-
-details[data-type="ds-explainer"] > summary {
-  cursor: pointer;
-  list-style: none;
-  padding: 0.75rem 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--color-text);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-details[data-type="ds-explainer"] > summary::-webkit-details-marker {
-  display: none;
-}
-
-details[data-type="ds-explainer"] > summary::before {
-  content: "›";
-  display: inline-block;
-  color: var(--color-accent);
-  transition: transform 0.15s ease;
-}
-
-details[data-type="ds-explainer"][open] > summary::before {
-  transform: rotate(90deg);
-}
-
-details[data-type="ds-explainer"] p {
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-  line-height: 1.6;
-}
-
-details[data-type="ds-explainer"] strong {
-  color: var(--color-text);
-}
-
-p[data-type="ds-try"] {
-  margin-bottom: 1rem;
-  padding: 0.6rem 0.75rem;
-  border-left: 2px solid var(--color-accent);
-  background: var(--color-bg);
-  border-radius: var(--radius);
-}
-
 p[data-type="ds-hint"] {
-  margin-top: 1rem;
+  margin-top: var(--space-xl);
   font-size: var(--text-xs);
   color: var(--color-muted);
   line-height: 1.9;

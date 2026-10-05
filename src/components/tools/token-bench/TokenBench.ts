@@ -41,6 +41,7 @@ import {
   type ParsedJwt,
 } from '../../../lib/jwt'
 import { diagnoseVerification, inspectTokenText, type TbFinding } from './diagnose'
+import { MS_PER_DAY } from '../../../lib/date'
 
 const TB_STORE = 'token-bench:v1'
 
@@ -55,8 +56,8 @@ function tbFormatTime(value: unknown): string | null {
   const unit: [Intl.RelativeTimeFormatUnit, number] =
     abs < 60_000 ? ['second', 1000]
     : abs < 3_600_000 ? ['minute', 60_000]
-    : abs < 86_400_000 ? ['hour', 3_600_000]
-    : ['day', 86_400_000]
+    : abs < MS_PER_DAY ? ['hour', 3_600_000]
+    : ['day', MS_PER_DAY]
   const rel = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
     .format(Math.round(delta / unit[1]), unit[0])
   return `${date.toISOString()} (${rel})`

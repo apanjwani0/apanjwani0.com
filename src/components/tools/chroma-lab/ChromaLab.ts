@@ -17,7 +17,10 @@
  * are cl-/CL_-prefixed because tool component files share one global script scope.
  */
 
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { clamp } from '../../../lib/math'
+import { escapeHtml } from '../../../lib/escape'
 
 interface ClRGB { r: number; g: number; b: number }   // channels 0–255 (ints)
 interface ClHSL { h: number; s: number; l: number }   // h 0–360, s/l 0–100
@@ -31,10 +34,6 @@ const CL_DEFAULT_FG = '#dde6f2'
 const CL_DEFAULT_BG = '#05070c'
 
 // ── Pure colour maths (no DOM) ───────────────────────────────────────────────
-
-function clClamp(n: number, min: number, max: number): number {
-  return n < min ? min : n > max ? max : n
-}
 
 function clRound(n: number): number { return Math.round(n) }
 
@@ -54,7 +53,7 @@ function clParseHex(input: string): { rgb: ClRGB; a: number } | null {
 }
 
 function clHex2(n: number): string {
-  return clClamp(clRound(n), 0, 255).toString(16).padStart(2, '0')
+  return clamp(clRound(n), 0, 255).toString(16).padStart(2, '0')
 }
 
 function clRgbToHex(rgb: ClRGB): string {
@@ -62,7 +61,7 @@ function clRgbToHex(rgb: ClRGB): string {
 }
 
 function clRgbToHexA(rgb: ClRGB, a: number): string {
-  return `${clRgbToHex(rgb)}${clHex2(clClamp(a, 0, 1) * 255)}`
+  return `${clRgbToHex(rgb)}${clHex2(clamp(a, 0, 1) * 255)}`
 }
 
 function clRgbToHsl(rgb: ClRGB): ClHSL {
@@ -84,8 +83,8 @@ function clRgbToHsl(rgb: ClRGB): ClHSL {
 
 function clHslToRgb(hsl: ClHSL): ClRGB {
   const h = ((hsl.h % 360) + 360) % 360
-  const s = clClamp(hsl.s, 0, 100) / 100
-  const l = clClamp(hsl.l, 0, 100) / 100
+  const s = clamp(hsl.s, 0, 100) / 100
+  const l = clamp(hsl.l, 0, 100) / 100
   const c = (1 - Math.abs(2 * l - 1)) * s
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
   const m = l - c / 2
@@ -167,10 +166,6 @@ function clFmt(n: number): string {
   // Trim to at most 1 decimal, drop a trailing .0.
   const r = Math.round(n * 10) / 10
   return Number.isInteger(r) ? String(r) : r.toFixed(1)
-}
-
-function clEsc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 // ── The WebComponent ─────────────────────────────────────────────────────────
@@ -338,7 +333,7 @@ class ChromaLabTool extends HTMLElement {
     if (key === 'picker') { this.setColor(clParseHex(el.value)!.rgb, this.alpha, 'picker'); return }
     if (key === 'r' || key === 'g' || key === 'b') { this.fromRgbFields(key); return }
     if (key === 'h' || key === 's' || key === 'l') { this.fromHslFields(key); return }
-    if (key === 'alpha') { this.alpha = clClamp(Number(el.value) / 100, 0, 1); this.afterColorChange('alpha'); return }
+    if (key === 'alpha') { this.alpha = clamp(Number(el.value) / 100, 0, 1); this.afterColorChange('alpha'); return }
 
     if (key === 'fg-hex') { this.fromContrastHex('fg', el); return }
     if (key === 'bg-hex') { this.fromContrastHex('bg', el); return }
@@ -380,7 +375,7 @@ class ChromaLabTool extends HTMLElement {
     const r = this.numOr('r', this.rgb.r)
     const g = this.numOr('g', this.rgb.g)
     const b = this.numOr('b', this.rgb.b)
-    this.rgb = { r: clClamp(r, 0, 255), g: clClamp(g, 0, 255), b: clClamp(b, 0, 255) }
+    this.rgb = { r: clamp(r, 0, 255), g: clamp(g, 0, 255), b: clamp(b, 0, 255) }
     this.afterColorChange(source)
   }
 
@@ -389,7 +384,7 @@ class ChromaLabTool extends HTMLElement {
     const h = this.numOr('h', cur.h)
     const s = this.numOr('s', cur.s)
     const l = this.numOr('l', cur.l)
-    this.rgb = clHslToRgb({ h: clClamp(h, 0, 360), s: clClamp(s, 0, 100), l: clClamp(l, 0, 100) })
+    this.rgb = clHslToRgb({ h: clamp(h, 0, 360), s: clamp(s, 0, 100), l: clamp(l, 0, 100) })
     this.afterColorChange(source)
   }
 
@@ -453,10 +448,10 @@ class ChromaLabTool extends HTMLElement {
     ]
     this.q('[data-type="cl-formats"]').innerHTML = rows.map(row => `
       <div data-type="cl-fmt-row">
-        <dt>${clEsc(row.k)}</dt>
+        <dt>${escapeHtml(row.k)}</dt>
         <dd>
-          <span data-type="cl-fmt-val">${clEsc(row.v)}</span>
-          <button data-action="copy" data-copy="${clEsc(row.v)}" type="button" aria-label="Copy ${clEsc(row.k)} value">Copy</button>
+          <span data-type="cl-fmt-val">${escapeHtml(row.v)}</span>
+          <button data-action="copy" data-copy="${escapeHtml(row.v)}" type="button" aria-label="Copy ${escapeHtml(row.k)} value">Copy</button>
         </dd>
       </div>`).join('')
   }
@@ -491,7 +486,7 @@ class ChromaLabTool extends HTMLElement {
   private swatchButton(rgb: ClRGB, label: string, isBase = false): string {
     const hex = clRgbToHex(rgb)
     return `<button data-load="${hex}" type="button" data-type="cl-swatch"${isBase ? ' data-base' : ''}
-      style="--cl-swatch: ${hex}" title="${clEsc(label)} — ${hex}" aria-label="Load ${clEsc(label)} ${hex}">
+      style="--cl-swatch: ${hex}" title="${escapeHtml(label)} — ${hex}" aria-label="Load ${escapeHtml(label)} ${hex}">
       <span data-type="cl-swatch-hex">${hex}</span>
     </button>`
   }
@@ -541,7 +536,7 @@ class ChromaLabTool extends HTMLElement {
       const pass = ratio >= c.min
       return `<div data-type="cl-badge" data-pass="${pass}">
         <span data-type="cl-badge-mark" aria-hidden="true">${pass ? '✓' : '✕'}</span>
-        <span data-type="cl-badge-label">${clEsc(c.label)}<small>${clEsc(c.note)}</small></span>
+        <span data-type="cl-badge-label">${escapeHtml(c.label)}<small>${escapeHtml(c.note)}</small></span>
         <span data-type="cl-badge-verdict">${pass ? 'Pass' : 'Fail'}</span>
       </div>`
     }).join('')
@@ -573,18 +568,8 @@ class ChromaLabTool extends HTMLElement {
   private async copyText(btn: HTMLButtonElement) {
     const text = btn.getAttribute('data-copy') ?? ''
     if (!text) { this.setStatus('Nothing to copy.'); return }
-    try {
-      await navigator.clipboard.writeText(text)
-      this.flash(btn, 'Copied!')
-      this.setStatus(`Copied ${text}`)
-    } catch {
-      this.flash(btn, 'Failed')
-      this.setStatus('Copy failed — clipboard access was blocked.')
-    }
-  }
-
-  private flash(btn: HTMLButtonElement, label: string) {
-    flashLabel(btn, label, 1100)
+    if (await copyText(text, btn)) this.setStatus(`Copied ${text}`)
+    else this.setStatus('Copy failed — clipboard access was blocked.')
   }
 
   private setStatus(label: string) {
@@ -594,32 +579,25 @@ class ChromaLabTool extends HTMLElement {
   // ── persistence ──────────────────────────────────────────────────────────────
 
   private persist() {
-    this.writeLS(CL_LS_COLOR, `${clRgbToHex(this.rgb)}|${clFmt(this.alpha)}`)
-    this.writeLS(CL_LS_FG, clRgbToHex(this.fg))
-    this.writeLS(CL_LS_BG, clRgbToHex(this.bg))
+    lsSet(CL_LS_COLOR, `${clRgbToHex(this.rgb)}|${clFmt(this.alpha)}`)
+    lsSet(CL_LS_FG, clRgbToHex(this.fg))
+    lsSet(CL_LS_BG, clRgbToHex(this.bg))
   }
 
   private loadState() {
-    const color = this.readLS(CL_LS_COLOR)
+    const color = lsGet(CL_LS_COLOR)
     if (color) {
       const [hex, a] = color.split('|')
       const p = clParseHex(hex ?? '')
       const alpha = Number(a)
-      if (p) { this.rgb = p.rgb; this.alpha = Number.isFinite(alpha) ? clClamp(alpha, 0, 1) : 1 }
+      if (p) { this.rgb = p.rgb; this.alpha = Number.isFinite(alpha) ? clamp(alpha, 0, 1) : 1 }
     }
-    const fg = clParseHex(this.readLS(CL_LS_FG) ?? '')
+    const fg = clParseHex(lsGet(CL_LS_FG) ?? '')
     if (fg) this.fg = fg.rgb
-    const bg = clParseHex(this.readLS(CL_LS_BG) ?? '')
+    const bg = clParseHex(lsGet(CL_LS_BG) ?? '')
     if (bg) this.bg = bg.rgb
   }
 
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
-
-  private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode */ }
-  }
 }
 
 if (!customElements.get('chroma-lab-tool')) {

@@ -31,7 +31,6 @@ export interface Card {
 
 export const SUITS: readonly Suit[] = ['c', 'd', 'h', 's']
 export const SUIT_SYMBOL: Record<Suit, string> = { c: '♣', d: '♦', h: '♥', s: '♠' }
-export const SUIT_COLOR: Record<Suit, 'red' | 'black'> = { c: 'black', s: 'black', d: 'red', h: 'red' }
 
 export const RANK_LABEL: Record<number, string> = {
   2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8',

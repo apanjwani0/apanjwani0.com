@@ -15,7 +15,11 @@
  * (see the astro:page-load wiring in tools/[slug].astro).
  */
 
-import { flashLabel } from '../../../lib/flash'
+import { flashLabel, copyText } from '../../../lib/flash'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { escapeHtml } from '../../../lib/escape'
+import { formatBytes } from '../../../lib/format'
+import { downloadBlob } from '../../../lib/download'
 
 type Indent = '2' | '3' | '4' | 'tab'
 type OutputKind = 'format' | 'minify' | 'stringify' | 'yaml' | 'csv' | 'xml' | 'repair'
@@ -496,19 +500,6 @@ function byteLength(s: string): number {
   return new TextEncoder().encode(s).length
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
 function isPrimitive(v: unknown): boolean {
   return v === null || typeof v !== 'object'
 }
@@ -813,13 +804,13 @@ class JsonTidyTool extends HTMLElement {
   private diffCopyBtn!: HTMLButtonElement
 
   connectedCallback() {
-    this.indent = (this.readLS(LS_INDENT) as Indent) || '2'
+    this.indent = (lsGet(LS_INDENT) as Indent) || '2'
     if (!['2', '3', '4', 'tab'].includes(this.indent)) this.indent = '2'
-    this.sort = this.readLS(LS_SORT) === '1'
-    this.auto = this.readLS(LS_AUTO) === '1'
-    this.view = this.readLS(LS_VIEW) === 'tree' ? 'tree' : 'text'
-    this.query = this.readLS(LS_SEARCH) || ''
-    this.mode = this.readLS(LS_MODE) === 'compare' ? 'compare' : 'format'
+    this.sort = lsGet(LS_SORT) === '1'
+    this.auto = lsGet(LS_AUTO) === '1'
+    this.view = lsGet(LS_VIEW) === 'tree' ? 'tree' : 'text'
+    this.query = lsGet(LS_SEARCH) || ''
+    this.mode = lsGet(LS_MODE) === 'compare' ? 'compare' : 'format'
 
     this.innerHTML = `
       <div data-type="tool-page" data-tool="json-tidy">
@@ -1027,11 +1018,11 @@ class JsonTidyTool extends HTMLElement {
     this.diffCopyBtn = this.querySelector('[data-action="diff-copy"]') as HTMLButtonElement
 
     // Restore prior session.
-    const saved = this.readLS(LS_INPUT)
+    const saved = lsGet(LS_INPUT)
     if (saved) this.input.value = saved
-    const savedB = this.readLS(LS_INPUT_B)
+    const savedB = lsGet(LS_INPUT_B)
     if (savedB) this.cmpB.value = savedB
-    const savedA = this.readLS(LS_INPUT_A)
+    const savedA = lsGet(LS_INPUT_A)
     if (savedA) this.cmpA.value = savedA
     this.searchInput.value = this.query
     ;(this.querySelector('[data-control="indent"]') as HTMLSelectElement).value = this.indent
@@ -1154,19 +1145,19 @@ class JsonTidyTool extends HTMLElement {
     const indentSel = this.querySelector('[data-control="indent"]') as HTMLSelectElement
     indentSel.addEventListener('change', () => {
       this.indent = indentSel.value as Indent
-      this.writeLS(LS_INDENT, this.indent)
+      lsSet(LS_INDENT, this.indent)
       this.reflowOutput()
     })
     const sortChk = this.querySelector('[data-control="sort"]') as HTMLInputElement
     sortChk.addEventListener('change', () => {
       this.sort = sortChk.checked
-      this.writeLS(LS_SORT, this.sort ? '1' : '0')
+      lsSet(LS_SORT, this.sort ? '1' : '0')
       this.reflowOutput()
     })
     const autoChk = this.querySelector('[data-control="auto"]') as HTMLInputElement
     autoChk.addEventListener('change', () => {
       this.auto = autoChk.checked
-      this.writeLS(LS_AUTO, this.auto ? '1' : '0')
+      lsSet(LS_AUTO, this.auto ? '1' : '0')
       if (this.auto) this.produce('format', true)
     })
 
@@ -1233,7 +1224,7 @@ class JsonTidyTool extends HTMLElement {
   private setMode(mode: JtMode, persist = true) {
     this.mode = mode
     this.root.dataset.mode = mode
-    if (persist) this.writeLS(LS_MODE, mode)
+    if (persist) lsSet(LS_MODE, mode)
     const compare = mode === 'compare'
     this.modeFormatBtn.setAttribute('aria-pressed', String(!compare))
     this.modeCompareBtn.setAttribute('aria-pressed', String(compare))
@@ -1404,12 +1395,7 @@ class JsonTidyTool extends HTMLElement {
     })
     const header = this.diffSummaryEl.textContent || 'JSON diff'
     const text = `JSON diff (A → B)\n${header}\n\n${lines.join('\n')}\n`
-    try {
-      await navigator.clipboard.writeText(text)
-      this.flash(this.diffCopyBtn, 'Copied!')
-    } catch {
-      this.flash(this.diffCopyBtn, 'Copy failed')
-    }
+    await copyText(text, this.diffCopyBtn)
   }
 
   private persistCompare() {
@@ -1622,7 +1608,7 @@ class JsonTidyTool extends HTMLElement {
   // ── View switching ───────────────────────────────────────────
   private setView(mode: ViewMode) {
     this.view = mode
-    this.writeLS(LS_VIEW, mode)
+    lsSet(LS_VIEW, mode)
     const tree = mode === 'tree'
     this.outEl.hidden = tree
     this.treeEl.hidden = !tree
@@ -1809,7 +1795,7 @@ class JsonTidyTool extends HTMLElement {
    */
   private applySearch(raw: string, scroll = false) {
     this.query = raw
-    this.writeLS(LS_SEARCH, raw)
+    lsSet(LS_SEARCH, raw)
     this.clearHighlights()
     this.syncCollapsedFromSet() // baseline: honour the user's manual collapses
     const q = raw.trim().toLowerCase()
@@ -1936,11 +1922,9 @@ class JsonTidyTool extends HTMLElement {
   private async copyPath(keyEl: HTMLElement) {
     const path = keyEl.dataset.path
     if (!path) return
-    try {
-      await navigator.clipboard.writeText(path)
-      keyEl.dataset.copied = ''
-      window.setTimeout(() => keyEl.removeAttribute('data-copied'), 900)
-    } catch { /* clipboard unavailable */ }
+    if (!await copyText(path)) return
+    keyEl.dataset.copied = ''
+    window.setTimeout(() => keyEl.removeAttribute('data-copied'), 900)
   }
 
   private loadFile() {
@@ -1965,12 +1949,7 @@ class JsonTidyTool extends HTMLElement {
   private async copy() {
     const text = this.view === 'tree' ? this.treeText() : this.output
     if (!text) return
-    try {
-      await navigator.clipboard.writeText(text)
-      this.flash(this.copyBtn, 'Copied!')
-    } catch {
-      this.flash(this.copyBtn, 'Copy failed')
-    }
+    await copyText(text, this.copyBtn)
   }
 
   private download() {
@@ -1980,14 +1959,7 @@ class JsonTidyTool extends HTMLElement {
     const { ext, mime } = OUTPUT_META[kind]
     try {
       const blob = new Blob([text], { type: `${mime};charset=utf-8` })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `json-tidy.${ext}`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      downloadBlob(blob, `json-tidy.${ext}`)
       this.flash(this.downloadBtn, 'Saved!')
     } catch {
       this.flash(this.downloadBtn, 'Failed')
@@ -2012,13 +1984,6 @@ class JsonTidyTool extends HTMLElement {
     } catch { /* ignore quota/private-mode errors */ }
   }
 
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
-
-  private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore */ }
-  }
 }
 
 if (!customElements.get('json-tidy-tool')) {

@@ -22,7 +22,9 @@
  * (see the astro:page-load wiring in tools/[slug].astro).
  */
 
-import { flashLabel } from '../../../lib/flash'
+import { flashLabel, copyText } from '../../../lib/flash'
+import { lsGet, lsSet, lsRemove } from '../../../lib/storage'
+import { formatBytes } from '../../../lib/format'
 
 type HsTab = 'text' | 'file' | 'uuid'
 type HsAlgo = 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512'
@@ -112,9 +114,7 @@ function hsNormalizeChecksum(s: string): string {
 
 /** Human-readable byte size. */
 function hsBytesLabel(n: number): string {
-  if (n < 1024) return `${n} byte${n === 1 ? '' : 's'}`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  return n < 1024 ? `${n} byte${n === 1 ? '' : 's'}` : formatBytes(n)
 }
 
 // ── UUID engine (pure — unit-testable) ───────────────────────────────────────
@@ -409,13 +409,13 @@ class HashSmithTool extends HTMLElement {
     this.reflectSettings()
 
     // Restore persisted inputs.
-    this.textEl.value = this.readLS(HS_LS_TEXT) ?? ''
+    this.textEl.value = lsGet(HS_LS_TEXT) ?? ''
     // HMAC keys are secrets: never retain them beyond this page session, and
     // remove the value written by the initial implementation.
     this.keyEl.value = ''
-    this.removeLS(HS_LS_KEY)
-    this.expectedEl.value = this.readLS(HS_LS_EXPECTED) ?? ''
-    this.uuidOutEl.value = this.readLS(HS_LS_UUIDS) ?? ''
+    lsRemove(HS_LS_KEY)
+    this.expectedEl.value = lsGet(HS_LS_EXPECTED) ?? ''
+    this.uuidOutEl.value = lsGet(HS_LS_UUIDS) ?? ''
 
     // Wire inputs.
     this.textEl.addEventListener('input', () => this.onTextInput())
@@ -728,12 +728,7 @@ class HashSmithTool extends HTMLElement {
       if (btn) this.flash(btn, 'Empty')
       return
     }
-    try {
-      await navigator.clipboard.writeText(text)
-      if (btn) this.flash(btn, 'Copied!')
-    } catch {
-      if (btn) this.flash(btn, 'Failed')
-    }
+    await copyText(text, btn)
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
@@ -752,15 +747,15 @@ class HashSmithTool extends HTMLElement {
 
   // ── localStorage (all guarded; storage may be unavailable or full) ──────────
   private persistInputs() {
-    if (this.textEl.value.length <= HS_MAX_PERSIST) this.writeLS(HS_LS_TEXT, this.textEl.value)
-    else this.removeLS(HS_LS_TEXT)
-    this.writeLS(HS_LS_EXPECTED, this.expectedEl.value)
-    if (this.uuidOutEl.value.length <= HS_MAX_PERSIST) this.writeLS(HS_LS_UUIDS, this.uuidOutEl.value)
-    else this.removeLS(HS_LS_UUIDS)
+    if (this.textEl.value.length <= HS_MAX_PERSIST) lsSet(HS_LS_TEXT, this.textEl.value)
+    else lsRemove(HS_LS_TEXT)
+    lsSet(HS_LS_EXPECTED, this.expectedEl.value)
+    if (this.uuidOutEl.value.length <= HS_MAX_PERSIST) lsSet(HS_LS_UUIDS, this.uuidOutEl.value)
+    else lsRemove(HS_LS_UUIDS)
   }
 
   private loadSettings(): HsSettings {
-    const raw = this.readLS(HS_LS_SETTINGS)
+    const raw = lsGet(HS_LS_SETTINGS)
     if (!raw) return { ...HS_DEFAULTS }
     try {
       const parsed = JSON.parse(raw) as Partial<HsSettings>
@@ -783,32 +778,9 @@ class HashSmithTool extends HTMLElement {
   }
 
   private saveSettings() {
-    this.writeLS(HS_LS_SETTINGS, JSON.stringify(this.settings))
+    lsSet(HS_LS_SETTINGS, JSON.stringify(this.settings))
   }
 
-  private readLS(key: string): string | null {
-    try {
-      return localStorage.getItem(key)
-    } catch {
-      return null
-    }
-  }
-
-  private writeLS(key: string, value: string) {
-    try {
-      localStorage.setItem(key, value)
-    } catch {
-      /* ignore quota / private-mode errors */
-    }
-  }
-
-  private removeLS(key: string) {
-    try {
-      localStorage.removeItem(key)
-    } catch {
-      /* ignore unavailable storage */
-    }
-  }
 }
 
 if (!customElements.get('hash-smith-tool')) {

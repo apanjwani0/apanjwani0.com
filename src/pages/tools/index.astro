@@ -2,6 +2,8 @@
 export const prerender = false
 
 import Base from '../../layouts/Base.astro'
+import Card from '../../components/Card.astro'
+import JsonLd from '../../components/JsonLd.astro'
 import { getSite, getTools } from '../../lib/config'
 import { itemListJsonLd } from '../../lib/jsonld'
 import { safeExternalUrl } from '../../lib/security'
@@ -12,10 +14,9 @@ import '../../styles/tools.css'
 // disabled tools) to an ItemList so search engines get an explicit, ordered map of
 // the hub — the listing-page counterpart to each tool's WebApplication schema.
 const [site, tools] = await Promise.all([getSite(Astro.locals), getTools(Astro.locals)])
-const cspNonce = (Astro.locals as any).cspNonce
 const listed = tools.filter(t => t.status === 'live' || t.status === 'external')
 const ldJson = itemListJsonLd(
-  'Tools by Aman Panjwani',
+  `Tools by ${site.name}`,
   listed.flatMap(t => {
     const url = t.status === 'external' ? safeExternalUrl(t.href) : `${site.url}/tools/${t.slug}`
     return url ? [{ name: t.title, url }] : []
@@ -48,7 +49,7 @@ const metaDescription =
   description={metaDescription}
   keywords="developer tools, online dev tools, webhook tester, webhook inspector, request bin, test webhook, http request inspector, link preview checker, open graph checker, twitter card validator, og tag tester, unfurl preview, ssl certificate checker, tls certificate checker, certificate chain checker, incomplete chain, missing intermediate certificate, check certificate expiry, jwt verifier, verify jwt signature, jwt decoder, mind map maker, flowchart from text, mermaid editor, diagram maker, json formatter, json repair, fix json, json fixer, json viewer, column to comma separated list, comma separator, list to csv converter, unix timestamp converter, epoch converter, color converter, wcag contrast checker, contrast ratio, base64 encoder, base64 decoder, url encoder, url decoder, query string parser, sha256 hash generator, hmac generator, checksum verifier, uuid generator, guid generator, cron expression explainer, crontab explainer, cron to english, cron next run, regex tester, regular expression tester, regex replace, regex online, wallpaper generator, gif generator, pattern generator, generative art maker, markdown editor, browser tools, free online tools, no-login tools"
 >
-  {listed.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
+  {listed.length > 0 && <JsonLd json={ldJson} />}
   <h1>tools</h1>
   <p data-type="page-intro">
     Small, single-purpose tools — no sign-ups, no tracking. Most run entirely
@@ -58,31 +59,26 @@ const metaDescription =
   </p>
   <ul data-type="card-grid">
     {cards.map(({ tool, href }) => (
-      <li data-status={tool.status}>
-        <div data-type="card-head">
-          <h2 data-type="card-title">
-            {tool.status === 'wip' || !href
-              ? tool.title
-              : <a
-                  href={href}
-                  {...(tool.status === 'external' ? { target: '_blank', rel: 'noopener noreferrer', 'aria-label': `${tool.title} (opens in a new tab)` } : {})}
-                >{tool.title}</a>
-            }
-          </h2>
-          <span data-type="card-badges">
-            {tool.status === 'wip' && <span data-type="tool-wip">coming soon</span>}
-            {/* The arrow is decorative — without aria-hidden a screen reader
-                announces "external north east arrow", same class of noise the
-                games badge already hides on its › glyph. */}
-            {tool.status === 'external' && <span data-type="tool-wip">external <span aria-hidden="true">↗</span></span>}
-            {/* The intro promises "four need a real server"; this is what makes
-                that claim point at something. Derived from src/lib/tools.ts, not
-                from a config field the admin middleware would regenerate away. */}
-            {tool.status === 'live' && isServerTool(tool.slug) && <span data-type="tool-server">server</span>}
-          </span>
-        </div>
-        <p data-type="card-desc">{tool.description}</p>
-      </li>
+      <Card
+        title={tool.title}
+        href={tool.status === 'wip' ? undefined : href}
+        external={tool.status === 'external'}
+        status={tool.status}
+        descAs="p"
+      >
+        <Fragment slot="badges">
+          {tool.status === 'wip' && <span data-type="tool-wip">coming soon</span>}
+          {/* The arrow is decorative — without aria-hidden a screen reader
+              announces "external north east arrow", same class of noise the
+              games badge already hides on its › glyph. */}
+          {tool.status === 'external' && <span data-type="tool-wip">external <span aria-hidden="true">↗</span></span>}
+          {/* The intro promises "four need a real server"; this is what makes
+              that claim point at something. Derived from src/lib/tools.ts, not
+              from a config field the admin middleware would regenerate away. */}
+          {tool.status === 'live' && isServerTool(tool.slug) && <span data-type="tool-server">server</span>}
+        </Fragment>
+        <Fragment slot="desc">{tool.description}</Fragment>
+      </Card>
     ))}
   </ul>
 </Base>

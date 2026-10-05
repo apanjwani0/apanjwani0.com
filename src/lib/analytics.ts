@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getRuntimeEnv } from './security'
+import { MS_PER_DAY } from './date'
 
 export type AnalyticsKind = 'tool' | 'game'
 
@@ -257,7 +258,7 @@ export function pruneAnalytics(
   now = new Date(),
   retentionDays = ANALYTICS_RETENTION_DAYS,
 ): Record<string, AnalyticsAggregate> {
-  const cutoff = new Date(now.getTime() - retentionDays * 86_400_000).toISOString().slice(0, 10)
+  const cutoff = new Date(now.getTime() - retentionDays * MS_PER_DAY).toISOString().slice(0, 10)
   return Object.fromEntries(
     Object.entries(data).filter((entry): entry is [string, AnalyticsAggregate] =>
       !!entry[1] && entry[1].date >= cutoff),
@@ -294,7 +295,7 @@ export async function readAnalyticsAggregates(locals: unknown): Promise<Analytic
   // Retention must also hold on the read path: keys written before expirationTtl
   // was set never expire on their own, and the local backend prunes on write —
   // without this filter the two backends would disagree about the 90-day window.
-  const cutoff = new Date(Date.now() - ANALYTICS_RETENTION_DAYS * 86_400_000)
+  const cutoff = new Date(Date.now() - ANALYTICS_RETENTION_DAYS * MS_PER_DAY)
     .toISOString()
     .slice(0, 10)
   const rows: AnalyticsAggregate[] = []

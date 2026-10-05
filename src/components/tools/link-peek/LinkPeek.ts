@@ -16,7 +16,7 @@
  * lp-/LP_-prefixed because tool component files share one global script scope.
  */
 import { escapeHtml as lpEsc } from '../../../lib/escape'
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
 import {
   lpFirst,
   lpLint,
@@ -26,6 +26,7 @@ import {
   type LpMeta,
   type LpPreviews,
 } from './unfurl'
+import { formatBytes } from '../../../lib/format'
 
 const LP_LS_URL = 'link-peek:url:v1'
 const LP_LS_UA = 'link-peek:ua:v1'
@@ -50,12 +51,6 @@ interface LpPageResponse {
   truncated?: boolean
   hops?: number
   meta?: LpMeta
-}
-
-function lpFmtSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 const LP_LEVEL_LABEL: Record<string, string> = { error: 'error', warn: 'warn', info: 'note' }
@@ -157,10 +152,7 @@ class LinkPeekTool extends HTMLElement {
   }
 
   private copy(text: string, btn: HTMLButtonElement) {
-    navigator.clipboard?.writeText(text).then(
-      () => flashLabel(btn, 'Copied'),
-      () => flashLabel(btn, 'Copy failed'),
-    )
+    void copyText(text, btn)
   }
 
   private setStatus(text: string) {
@@ -239,7 +231,7 @@ class LinkPeekTool extends HTMLElement {
 
     this.resultsEl.innerHTML = `
       <section data-type="lp-card" data-card="fetched" aria-label="Fetch result">
-        <p data-type="lp-fetchline">Fetched <a href="${lpEsc(finalUrl)}" rel="nofollow noopener noreferrer" target="_blank">${lpEsc(finalUrl)}</a>${hopNote} — HTTP ${data.status}, ${lpEsc(data.contentType || 'text/html')}, ${lpFmtSize(data.bytes ?? 0)}${truncNote}</p>
+        <p data-type="lp-fetchline">Fetched <a href="${lpEsc(finalUrl)}" rel="nofollow noopener noreferrer" target="_blank">${lpEsc(finalUrl)}</a>${hopNote} — HTTP ${data.status}, ${lpEsc(data.contentType || 'text/html')}, ${formatBytes(data.bytes ?? 0)}${truncNote}</p>
       </section>
 
       <section data-type="lp-card" data-card="previews" aria-labelledby="lp-prev-h">
@@ -433,7 +425,7 @@ class LinkPeekTool extends HTMLElement {
     }
     const line = document.createElement('p')
     line.setAttribute('data-type', 'lp-imgfact')
-    line.textContent = `Image measures ${w}×${h} px, ${lpFmtSize(bytes)}${verdict}.`
+    line.textContent = `Image measures ${w}×${h} px, ${formatBytes(bytes)}${verdict}.`
     this.resultsEl.querySelector('[data-card="previews"]')?.appendChild(line)
   }
 }

@@ -73,7 +73,7 @@ export interface DsStop {
   zoom: number
 }
 
-export interface DsTour {
+interface DsTour {
   /** Supplies mode / palette / density / iter / seed. Its own re/im/zoom are the
    *  first stop's, so a decoded tour is a view the explorer can simply adopt. */
   view: DsView
@@ -94,9 +94,9 @@ export const DS_TOUR_MIN_FRAMES = 8
 export const DS_TOUR_MAX_FRAMES = 48
 
 /** Rendering time one dive may spend, before encoding. */
-export const DS_TOUR_BUDGET_MS = 9000
+const DS_TOUR_BUDGET_MS = 9000
 /** Playback length aimed at when choosing the GIF frame delay. */
-export const DS_TOUR_TARGET_MS = 4200
+const DS_TOUR_TARGET_MS = 4200
 /** GIF's clock counts centiseconds, so delays are rounded to 10ms. */
 export const DS_TOUR_DELAY_MIN = 40
 export const DS_TOUR_DELAY_MAX = 200
@@ -118,7 +118,7 @@ export const DS_TOUR_MAX_TOKEN_CHARS = 800
 const DS_COUNT_RE = /^\d+$/
 
 /** Clamp one stop into the plane the explorer can actually show. */
-export function dsClampStop(stop: DsStop): DsStop {
+function dsClampStop(stop: DsStop): DsStop {
   return {
     re: dsClamp(stop.re, -DS_MAX_COORD, DS_MAX_COORD),
     im: dsClamp(stop.im, -DS_MAX_COORD, DS_MAX_COORD),
@@ -153,7 +153,7 @@ export function dsNormalizeStops(stops: readonly DsStop[]): DsStop[] {
  * place it was told to reach is a dive whose last frame disagrees with the
  * permalink it was minted from.
  */
-export function dsLogLerp(a: number, b: number, t: number): number {
+function dsLogLerp(a: number, b: number, t: number): number {
   if (t <= 0) return a
   if (t >= 1) return b
   if (!(a > 0) || !(b > 0)) return a

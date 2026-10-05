@@ -27,6 +27,8 @@
  * diagram-atlas.css.
  */
 
+import { escapeHtml } from '../../../lib/escape'
+
 /** One beat of a view's animation. */
 export interface AtlasStep {
   /** Element ids that light up on this beat. */
@@ -65,14 +67,11 @@ export interface AtlasView {
 /* ── SVG helpers. Terse on purpose: seven hand-written diagrams is the
       alternative, and it is four hundred lines longer. ── */
 
-const esc = (s: string): string =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-
 /** Centred label, one line per entry. */
 function label(cx: number, cy: number, lines: string[], kind = 'label'): string {
   const dy = (lines.length - 1) * 8
   const spans = lines
-    .map((l, i) => `<tspan x="${cx}" y="${cy - dy + i * 16}">${esc(l)}</tspan>`)
+    .map((l, i) => `<tspan x="${cx}" y="${cy - dy + i * 16}">${escapeHtml(l)}</tspan>`)
     .join('')
   return `<text data-text="${kind}" text-anchor="middle">${spans}</text>`
 }
@@ -176,7 +175,7 @@ const ACT = [
   ...LANES.map(
     l =>
       `<g data-node="lane"><rect x="16" y="${l.y}" width="648" height="104" rx="4"/></g>` +
-      `<text data-text="lane" x="26" y="${l.y + 18}">${esc(l.name)}</text>`,
+      `<text data-text="lane" x="26" y="${l.y + 18}">${escapeHtml(l.name)}</text>`,
   ),
   box({ id: 'a1', x: 110, y: 46, w: 130, h: 40, text: 'Order placed', kind: 'terminal', r: 20 }),
   bar('afork', 286, 40, 340),
@@ -242,13 +241,13 @@ const ST = [
 function typeBox(id: string, x: number, y: number, w: number, name: string, fields: string[]): string {
   const h = 34 + fields.length * 19 + 8
   const rows = fields
-    .map((f, i) => `<text data-text="field" x="${x + 12}" y="${y + 52 + i * 19}">${esc(f)}</text>`)
+    .map((f, i) => `<text data-text="field" x="${x + 12}" y="${y + 52 + i * 19}">${escapeHtml(f)}</text>`)
     .join('')
   return (
     `<g id="${id}" data-node="type">` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4"/>` +
     `<path data-node="divider" d="M${x} ${y + 30} H${x + w}"/>` +
-    `<text data-text="typename" text-anchor="middle" x="${x + w / 2}" y="${y + 20}">${esc(name)}</text>` +
+    `<text data-text="typename" text-anchor="middle" x="${x + w / 2}" y="${y + 20}">${escapeHtml(name)}</text>` +
     rows +
     `</g>`
   )
@@ -275,7 +274,7 @@ function machine(id: string, x: number, y: number, w: number, h: number, name: s
   return (
     `<g id="${id}" data-node="machine">` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>` +
-    `<text data-text="machine" x="${x + 14}" y="${y + 24}">${esc(name)}</text>` +
+    `<text data-text="machine" x="${x + 14}" y="${y + 24}">${escapeHtml(name)}</text>` +
     body +
     `</g>`
   )
@@ -299,13 +298,13 @@ const DEP = [
 function table(id: string, x: number, y: number, w: number, name: string, cols: string[]): string {
   const h = 32 + cols.length * 19 + 8
   const rows = cols
-    .map((c, i) => `<text data-text="field" x="${x + 12}" y="${y + 50 + i * 19}">${esc(c)}</text>`)
+    .map((c, i) => `<text data-text="field" x="${x + 12}" y="${y + 50 + i * 19}">${escapeHtml(c)}</text>`)
     .join('')
   return (
     `<g id="${id}" data-node="table">` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4"/>` +
     `<path data-node="divider" d="M${x} ${y + 28} H${x + w}"/>` +
-    `<text data-text="typename" x="${x + 12}" y="${y + 19}">${esc(name)}</text>` +
+    `<text data-text="typename" x="${x + 12}" y="${y + 19}">${escapeHtml(name)}</text>` +
     rows +
     `</g>`
   )

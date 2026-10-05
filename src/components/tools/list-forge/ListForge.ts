@@ -23,7 +23,9 @@
  * (see the astro:page-load wiring in tools/[slug].astro).
  */
 
-import { flashLabel } from '../../../lib/flash'
+import { flashLabel, copyText } from '../../../lib/flash'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { downloadBlob } from '../../../lib/download'
 
 type Quotes = 'none' | 'double' | 'single'
 type DelimKey =
@@ -479,9 +481,9 @@ class ListForgeTool extends HTMLElement {
     this.reflectSettings()
 
     // Restore both panes, then regenerate the non-source side from the source.
-    this.columnEl.value = this.readLS(LS_COLUMN) ?? ''
-    this.listEl.value = this.readLS(LS_LIST) ?? ''
-    this.source = this.readLS(LS_SOURCE) === 'list' ? 'list' : 'column'
+    this.columnEl.value = lsGet(LS_COLUMN) ?? ''
+    this.listEl.value = lsGet(LS_LIST) ?? ''
+    this.source = lsGet(LS_SOURCE) === 'list' ? 'list' : 'column'
 
     this.columnEl.addEventListener('input', () => this.onEdit('column'))
     this.listEl.addEventListener('input', () => this.onEdit('list'))
@@ -508,7 +510,7 @@ class ListForgeTool extends HTMLElement {
   private onEdit(side: Side) {
     if (this.syncing) return
     this.source = side
-    this.writeLS(LS_SOURCE, side)
+    lsSet(LS_SOURCE, side)
     this.render(true)
   }
 
@@ -527,7 +529,7 @@ class ListForgeTool extends HTMLElement {
       case 'sample':
         this.columnEl.value = SAMPLE_COLUMN
         this.source = 'column'
-        this.writeLS(LS_SOURCE, 'column')
+        lsSet(LS_SOURCE, 'column')
         this.render(true)
         break
       case 'reset':
@@ -537,7 +539,7 @@ class ListForgeTool extends HTMLElement {
         this.columnEl.value = ''
         this.listEl.value = ''
         this.source = 'column'
-        this.writeLS(LS_SOURCE, 'column')
+        lsSet(LS_SOURCE, 'column')
         this.render(false)
         this.setStatus('Reset to defaults.')
         break
@@ -607,14 +609,8 @@ class ListForgeTool extends HTMLElement {
       this.setStatus('Nothing to copy yet.')
       return
     }
-    try {
-      await navigator.clipboard.writeText(text)
-      if (btn) this.flash(btn, 'Copied!')
-      this.setStatus(`${side === 'list' ? 'List' : 'Column'} copied to clipboard.`)
-    } catch {
-      if (btn) this.flash(btn, 'Failed')
-      this.setStatus('Copy failed — your browser blocked clipboard access.')
-    }
+    if (await copyText(text, btn)) this.setStatus(`${side === 'list' ? 'List' : 'Column'} copied to clipboard.`)
+    else this.setStatus('Copy failed — your browser blocked clipboard access.')
   }
 
   private download(ext: string, mime: string, btn: HTMLButtonElement) {
@@ -625,12 +621,7 @@ class ListForgeTool extends HTMLElement {
     }
     try {
       const blob = new Blob([text], { type: `${mime};charset=utf-8` })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `list.${ext}`
-      a.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(blob, `list.${ext}`)
       this.flash(btn, 'Saved!')
     } catch {
       this.flash(btn, 'Failed')
@@ -661,12 +652,12 @@ class ListForgeTool extends HTMLElement {
   private persist() {
     const col = this.columnEl.value
     const list = this.listEl.value
-    if (col.length <= LF_MAX_PERSIST) this.writeLS(LS_COLUMN, col)
-    if (list.length <= LF_MAX_PERSIST) this.writeLS(LS_LIST, list)
+    if (col.length <= LF_MAX_PERSIST) lsSet(LS_COLUMN, col)
+    if (list.length <= LF_MAX_PERSIST) lsSet(LS_LIST, list)
   }
 
   private loadSettings(): LfSettings {
-    const raw = this.readLS(LS_SETTINGS)
+    const raw = lsGet(LS_SETTINGS)
     if (!raw) return { ...DEFAULTS }
     try {
       const parsed = JSON.parse(raw) as Partial<LfSettings>
@@ -680,16 +671,9 @@ class ListForgeTool extends HTMLElement {
   }
 
   private saveSettings() {
-    this.writeLS(LS_SETTINGS, JSON.stringify(this.settings))
+    lsSet(LS_SETTINGS, JSON.stringify(this.settings))
   }
 
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
-
-  private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode errors */ }
-  }
 }
 
 if (!customElements.get('list-forge-tool')) {
