@@ -32,6 +32,11 @@
  */
 
 import { attachCanvasExport } from '../../../lib/canvas-export'
+import { prefersReducedMotion } from '../../../lib/motion'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { clamp, cappedDpr } from '../../../lib/math'
+import { escapeHtml } from '../../../lib/escape'
+import { downloadDataUrl } from '../../../lib/download'
 
 interface FgPalette {
   id: string
@@ -88,10 +93,6 @@ const FG_THICK_MIN = 1, FG_THICK_MAX = 8
 const FG_MAX_STRLEN = 200000   // guard against exponential blow-up during rewriting
 const FG_TAU = Math.PI * 2
 
-function fgClamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
-
 /* xmur3 string hash → 32-bit seed, feeding a mulberry32 PRNG. Deterministic, so a
    given seed reproduces the same wobble every time. */
 function fgHash(str: string): number {
@@ -137,7 +138,7 @@ function fgToRGB(input: string): [number, number, number] {
 function fgSample(stops: [number, number, number][], t: number): string {
   if (stops.length === 0) return 'rgb(255,255,255)'
   if (stops.length === 1) return `rgb(${stops[0][0]},${stops[0][1]},${stops[0][2]})`
-  const pos = fgClamp(t, 0, 1) * (stops.length - 1)
+  const pos = clamp(t, 0, 1) * (stops.length - 1)
   const i = Math.min(stops.length - 2, Math.floor(pos))
   const f = pos - i
   const a = stops[i], b = stops[i + 1]
@@ -198,21 +199,21 @@ class LSystemGame extends HTMLElement {
   private leafColor = '#c6f06a'
 
   connectedCallback() {
-    const savedPreset = this.readLS(FG_LS_PRESET)
+    const savedPreset = lsGet(FG_LS_PRESET)
     this.preset = FG_PRESETS.find(p => p.id === savedPreset) || FG_PRESETS[0]
 
-    const savedIters = this.readLS(FG_LS_ITERS)
-    const savedAngle = this.readLS(FG_LS_ANGLE)
-    const savedWobble = this.readLS(FG_LS_WOBBLE)
-    const savedThick = this.readLS(FG_LS_THICK)
-    const savedLeaves = this.readLS(FG_LS_LEAVES)
-    const savedPalette = this.readLS(FG_LS_PALETTE)
-    const savedSeed = this.readLS(FG_LS_SEED)
+    const savedIters = lsGet(FG_LS_ITERS)
+    const savedAngle = lsGet(FG_LS_ANGLE)
+    const savedWobble = lsGet(FG_LS_WOBBLE)
+    const savedThick = lsGet(FG_LS_THICK)
+    const savedLeaves = lsGet(FG_LS_LEAVES)
+    const savedPalette = lsGet(FG_LS_PALETTE)
+    const savedSeed = lsGet(FG_LS_SEED)
 
-    this.iters = fgClamp(savedIters === null ? this.preset.iters : Number(savedIters), 1, this.preset.max)
-    this.angle = fgClamp(savedAngle === null ? this.preset.angle : Number(savedAngle), FG_ANGLE_MIN, FG_ANGLE_MAX)
-    this.wobble = fgClamp(savedWobble === null ? 0 : Number(savedWobble), FG_WOBBLE_MIN, FG_WOBBLE_MAX)
-    this.thick = fgClamp(savedThick === null ? 3 : Number(savedThick), FG_THICK_MIN, FG_THICK_MAX)
+    this.iters = clamp(savedIters === null ? this.preset.iters : Number(savedIters), 1, this.preset.max)
+    this.angle = clamp(savedAngle === null ? this.preset.angle : Number(savedAngle), FG_ANGLE_MIN, FG_ANGLE_MAX)
+    this.wobble = clamp(savedWobble === null ? 0 : Number(savedWobble), FG_WOBBLE_MIN, FG_WOBBLE_MAX)
+    this.thick = clamp(savedThick === null ? 3 : Number(savedThick), FG_THICK_MIN, FG_THICK_MAX)
     this.leaves = savedLeaves === null ? true : savedLeaves === '1'
     this.palette = FG_PALETTES.find(p => p.id === savedPalette) || FG_PALETTES[1]
     if (this.palette.id === 'theme' && this.palette.colors.length === 0) { /* resolved in readTheme */ }
@@ -266,7 +267,7 @@ class LSystemGame extends HTMLElement {
           </div>
           <div data-group="seed" role="group" aria-label="Wobble seed">
             <span data-type="fg-group-label">Seed</span>
-            <input id="fg-seed" type="text" value="${this.escapeAttr(this.seed)}" spellcheck="false" autocomplete="off"
+            <input id="fg-seed" type="text" value="${escapeHtml(this.seed)}" spellcheck="false" autocomplete="off"
               aria-label="Wobble seed — same seed reproduces the same plant" />
           </div>
           <div data-group="palette" role="group" aria-label="Colour palette">
@@ -305,7 +306,7 @@ class LSystemGame extends HTMLElement {
     this.raf = requestAnimationFrame(() => {
       if (!this.isConnected) return
       this.resizeCanvas()
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       this.build(!reduced)
     })
   }
@@ -342,7 +343,7 @@ class LSystemGame extends HTMLElement {
   /* ── geometry ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resizeCanvas(): boolean {
@@ -528,7 +529,7 @@ class LSystemGame extends HTMLElement {
   private render(animate: boolean) {
     this.stopGrow()
     this.paintBackground()
-    if (!animate || this.segs.length === 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!animate || this.segs.length === 0 || prefersReducedMotion()) {
       this.drawRange(0, this.segs.length)
       this.shown = this.segs.length
       this.updateGrowBtn()
@@ -567,7 +568,7 @@ class LSystemGame extends HTMLElement {
       this.updateGrowBtn()
       return
     }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (prefersReducedMotion()) {
       this.renderStatic()
       return
     }
@@ -592,33 +593,32 @@ class LSystemGame extends HTMLElement {
     this.querySelector('[data-action="grow"]')?.addEventListener('click', () => this.toggleGrow())
     this.querySelector('[data-action="reseed"]')?.addEventListener('click', () => this.reseed())
     this.querySelector('[data-action="leaves"]')?.addEventListener('click', () => this.toggleLeaves())
-    this.querySelector('[data-action="download"]')?.addEventListener('click', () => this.download())
 
     this.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach(btn => {
       btn.addEventListener('click', () => this.selectPreset(btn.dataset.preset as string))
     })
 
     this.bindSlider('#fg-iters', '#fg-iters-out', FG_LS_ITERS, raw => {
-      this.iters = fgClamp(Math.round(raw), 1, this.preset.max)
+      this.iters = clamp(Math.round(raw), 1, this.preset.max)
       return String(this.iters)
     })
     this.bindSlider('#fg-angle', '#fg-angle-out', FG_LS_ANGLE, raw => {
-      this.angle = fgClamp(raw, FG_ANGLE_MIN, FG_ANGLE_MAX)
+      this.angle = clamp(raw, FG_ANGLE_MIN, FG_ANGLE_MAX)
       return `${this.angle}°`
     })
     this.bindSlider('#fg-wobble', '#fg-wobble-out', FG_LS_WOBBLE, raw => {
-      this.wobble = fgClamp(Math.round(raw), FG_WOBBLE_MIN, FG_WOBBLE_MAX)
+      this.wobble = clamp(Math.round(raw), FG_WOBBLE_MIN, FG_WOBBLE_MAX)
       return `${this.wobble}%`
     })
     this.bindSlider('#fg-thick', '#fg-thick-out', FG_LS_THICK, raw => {
-      this.thick = fgClamp(raw, FG_THICK_MIN, FG_THICK_MAX)
+      this.thick = clamp(raw, FG_THICK_MIN, FG_THICK_MAX)
       return this.thick.toFixed(1)
     }, /* rebuildOnly */ true)
 
     const seedInput = this.querySelector('#fg-seed') as HTMLInputElement | null
     seedInput?.addEventListener('input', () => {
       this.seed = seedInput.value.trim() || 'garden'
-      this.writeLS(FG_LS_SEED, this.seed)
+      lsSet(FG_LS_SEED, this.seed)
       this.build(false)   // instant redraw while typing; space to replay the grow
     })
     seedInput?.addEventListener('keydown', e => { e.stopPropagation() })   // let space/R type normally
@@ -627,7 +627,7 @@ class LSystemGame extends HTMLElement {
       btn.addEventListener('click', () => {
         const id = btn.dataset.palette as string
         this.palette = FG_PALETTES.find(p => p.id === id) || this.palette
-        this.writeLS(FG_LS_PALETTE, id)
+        lsSet(FG_LS_PALETTE, id)
         this.refreshPalRGB()
         this.querySelectorAll('[data-palette]').forEach(b =>
           b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.palette === id)))
@@ -650,7 +650,7 @@ class LSystemGame extends HTMLElement {
       const raw = Number(input.value)
       const label = apply(raw)
       if (out) out.textContent = label
-      this.writeLS(lsKey, String(raw))
+      lsSet(lsKey, String(raw))
       if (light) { this.colorize(); this.renderStatic() }
       else { this.build(false) }   // instant redraw while dragging
     })
@@ -660,11 +660,11 @@ class LSystemGame extends HTMLElement {
     const p = FG_PRESETS.find(pr => pr.id === id)
     if (!p) return
     this.preset = p
-    this.iters = fgClamp(p.iters, 1, p.max)
+    this.iters = clamp(p.iters, 1, p.max)
     this.angle = p.angle
-    this.writeLS(FG_LS_PRESET, p.id)
-    this.writeLS(FG_LS_ITERS, String(this.iters))
-    this.writeLS(FG_LS_ANGLE, String(this.angle))
+    lsSet(FG_LS_PRESET, p.id)
+    lsSet(FG_LS_ITERS, String(this.iters))
+    lsSet(FG_LS_ANGLE, String(this.angle))
     // reflect the preset's defaults + ceiling into the sliders
     const iterInput = this.querySelector('#fg-iters') as HTMLInputElement | null
     if (iterInput) { iterInput.max = String(p.max); iterInput.value = String(this.iters) }
@@ -683,13 +683,13 @@ class LSystemGame extends HTMLElement {
     this.seed = Math.random().toString(36).slice(2, 8)
     const input = this.querySelector('#fg-seed') as HTMLInputElement | null
     if (input) input.value = this.seed
-    this.writeLS(FG_LS_SEED, this.seed)
+    lsSet(FG_LS_SEED, this.seed)
     this.build(true)
   }
 
   private toggleLeaves() {
     this.leaves = !this.leaves
-    this.writeLS(FG_LS_LEAVES, this.leaves ? '1' : '0')
+    lsSet(FG_LS_LEAVES, this.leaves ? '1' : '0')
     const btn = this.querySelector('[data-action="leaves"]') as HTMLButtonElement | null
     if (btn) {
       btn.textContent = `Leaves: ${this.leaves ? 'on' : 'off'}`
@@ -707,29 +707,11 @@ class LSystemGame extends HTMLElement {
     }
   }
 
-  private escapeAttr(s: string) {
-    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  }
-
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
-
-  private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode */ }
-  }
-
   private download() {
     try {
-      const url = this.canvas.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `fractal-garden-${this.preset.id}.png`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
+      downloadDataUrl(this.canvas.toDataURL('image/png'), `fractal-garden-${this.preset.id}.png`)
     } catch {
-      /* toDataURL can throw on a tainted canvas — never happens here (no external images) */
+      /* toDataURL can throw on a tainted canvas — never here (no external images) */
     }
   }
 }

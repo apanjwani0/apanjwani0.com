@@ -27,6 +27,10 @@
  * PALETTES…) would collide with the other games at `astro check` time.
  */
 
+import { prefersReducedMotion } from '../../../lib/motion'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { clamp, cappedDpr } from '../../../lib/math'
+
 const TW_SIZES = [3, 4, 5] as const
 type TwSize = (typeof TW_SIZES)[number]
 
@@ -66,10 +70,6 @@ interface TwSaved {
   score: number
   won: boolean       // has a 2048 tile ever appeared
   keepGoing: boolean // player chose to continue past the win
-}
-
-function twClamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
 }
 
 function twEaseOutCubic(t: number) {
@@ -135,7 +135,7 @@ class Twenty48Game extends HTMLElement {
   private ptrDown = false
 
   connectedCallback() {
-    const savedSize = Number(this.readLS(TW_LS_SIZE))
+    const savedSize = Number(lsGet(TW_LS_SIZE))
     this.size = (TW_SIZES as readonly number[]).includes(savedSize) ? (savedSize as TwSize) : TW_DEFAULT_SIZE
 
     this.innerHTML = `
@@ -193,7 +193,7 @@ class Twenty48Game extends HTMLElement {
     this.canvas = this.querySelector('[data-type="tw-canvas"]') as HTMLCanvasElement
     this.ctx = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
     this.overlay = this.querySelector('[data-type="tw-overlay"]') as HTMLElement
-    this.best = Number(this.readLS(twBestKey(this.size))) || 0
+    this.best = Number(lsGet(twBestKey(this.size))) || 0
     this.readTheme()
     this.wire()
     this.setText('#tw-best', String(this.best))
@@ -235,19 +235,19 @@ class Twenty48Game extends HTMLElement {
   /** Fill for a tile of the given value: low → accent → warm gold as it grows. */
   private tileFill(value: number): [number, number, number] {
     const e = Math.log2(value)              // 2→1, 4→2, … 2048→11
-    const t = twClamp((e - 1) / 10, 0, 1)   // 0 at "2", 1 at "2048"
+    const t = clamp((e - 1) / 10, 0, 1)   // 0 at "2", 1 at "2048"
     let col: [number, number, number]
     if (t <= 0.6) col = twMix(this.lowRGB, this.accentRGB, t / 0.6)
     else col = twMix(this.accentRGB, this.goldRGB, (t - 0.6) / 0.4)
     // tiles beyond 2048 keep warming toward gold/white so they stay distinct
-    if (e > 11) col = twMix(col, [255, 245, 210], twClamp((e - 11) / 5, 0, 0.6))
+    if (e > 11) col = twMix(col, [255, 245, 210], clamp((e - 11) / 5, 0, 0.6))
     return col
   }
 
   /* ── geometry ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize() {
@@ -462,7 +462,7 @@ class Twenty48Game extends HTMLElement {
   private refreshHud() {
     if (this.score > this.best) {
       this.best = this.score
-      this.writeLS(twBestKey(this.size), String(this.best))
+      lsSet(twBestKey(this.size), String(this.best))
     }
     this.setText('#tw-score', String(this.score))
     this.setText('#tw-best', String(this.best))
@@ -500,8 +500,8 @@ class Twenty48Game extends HTMLElement {
     // remember the current board, then load (or start) the target size's board
     this.saveState()
     this.size = n
-    this.writeLS(TW_LS_SIZE, String(n))
-    this.best = Number(this.readLS(twBestKey(n))) || 0
+    lsSet(TW_LS_SIZE, String(n))
+    this.best = Number(lsGet(twBestKey(n))) || 0
     this.history = []
     this.querySelectorAll('[data-size]').forEach(b =>
       b.setAttribute('aria-pressed', String(Number((b as HTMLElement).dataset.size) === n)))
@@ -519,7 +519,7 @@ class Twenty48Game extends HTMLElement {
   }
 
   private loadState(): boolean {
-    const raw = this.readLS(twStateKey(this.size))
+    const raw = lsGet(twStateKey(this.size))
     if (!raw) return false
     try {
       const s = JSON.parse(raw) as TwSaved
@@ -530,14 +530,6 @@ class Twenty48Game extends HTMLElement {
       else this.hideOverlay()
       return true
     } catch { return false }
-  }
-
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
-
-  private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode */ }
   }
 
   /* ── input ── */
@@ -596,7 +588,7 @@ class Twenty48Game extends HTMLElement {
   /* ── animation loop ── */
 
   private startAnim(onDone?: () => void) {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const reduced = prefersReducedMotion()
     if (reduced || this.w < 2) {
       this.drawStatic()
       onDone?.()
@@ -630,8 +622,8 @@ class Twenty48Game extends HTMLElement {
 
   private render(elapsed: number) {
     if (this.w < 2) return
-    const slide = twEaseOutCubic(twClamp(elapsed / TW_SLIDE_MS, 0, 1))
-    const pop = twClamp((elapsed - TW_SLIDE_MS) / TW_POP_MS, 0, 1)
+    const slide = twEaseOutCubic(clamp(elapsed / TW_SLIDE_MS, 0, 1))
+    const pop = clamp((elapsed - TW_SLIDE_MS) / TW_POP_MS, 0, 1)
     const N = this.size
     const board = this.w
     const gap = Math.max(4, Math.round(board * (N === 5 ? 0.02 : 0.028)))

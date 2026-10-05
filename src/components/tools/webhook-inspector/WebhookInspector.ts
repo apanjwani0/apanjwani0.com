@@ -20,7 +20,7 @@
 // included (attribute quoting is a call-site property). Shared with the server
 // so the escaping rule has exactly one home.
 import { escapeHtml as wiEsc } from '../../../lib/escape'
-import { flashLabel } from '../../../lib/flash'
+import { flashLabel, copyText } from '../../../lib/flash'
 import {
   wiDecodeSecret,
   wiDetectScheme,
@@ -29,6 +29,9 @@ import {
   type WiSecretEncoding,
   type WiVerification,
 } from './signature'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { formatBytes } from '../../../lib/format'
+import { downloadBlob } from '../../../lib/download'
 
 interface WiHeader { name: string; value: string }
 
@@ -74,12 +77,6 @@ function wiRelTime(ms: number, nowMs: number): string {
   const h = Math.floor(m / 60)
   if (h < 24) return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
-}
-
-function wiFmtSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 /** Signed age as a phrase: negative means the sender's clock is ahead of ours. */
@@ -204,7 +201,7 @@ class WebhookInspectorTool extends HTMLElement {
 
   connectedCallback() {
     this.binId = this.loadBinId()
-    this.paused = this.readLS(WI_LS_PAUSED) === '1'
+    this.paused = lsGet(WI_LS_PAUSED) === '1'
     this.secretEnc = this.loadSecretEnc()
 
     this.innerHTML = `
@@ -668,7 +665,7 @@ class WebhookInspectorTool extends HTMLElement {
       <summary data-type="wi-summary">
         <span data-type="wi-method" data-method="${method}">${method}</span>
         <span data-type="wi-when" data-ts="${r.receivedAt}" title="${wiEsc(abs)}">${wiEsc(rel)}</span>
-        <span data-type="wi-meta">${wiFmtSize(r.size)}${r.bodyTruncated ? ' · truncated' : ''}${r.query ? ' · has query' : ''}</span>
+        <span data-type="wi-meta">${formatBytes(r.size)}${r.bodyTruncated ? ' · truncated' : ''}${r.query ? ' · has query' : ''}</span>
         <span data-type="wi-verdict" data-verdict-badge="${wiEsc(r.id)}" data-state="${badgeState}"${badgeState ? '' : ' hidden'}>${wiEsc(badgeState ? verdict!.badge : '')}</span>
       </summary>`
     return `<li><details data-req="${wiEsc(r.id)}"${open}>${summary}${this.renderDetail(r, abs)}</details></li>`
@@ -685,7 +682,7 @@ class WebhookInspectorTool extends HTMLElement {
     parts.push(`<div data-type="wi-facts">
       <span><b>Received</b> ${wiEsc(abs)}</span>
       ${r.source ? `<span><b>Source</b> ${wiEsc(r.source)}</span>` : ''}
-      <span><b>Body size</b> ${wiFmtSize(r.size)}${r.bodyTruncated ? ' (truncated to 64 KB)' : ''}</span>
+      <span><b>Body size</b> ${formatBytes(r.size)}${r.bodyTruncated ? ' (truncated to 64 KB)' : ''}</span>
     </div>`)
 
     // Filled by paintVerdict(), not here: verification is async and the list is
@@ -835,16 +832,7 @@ class WebhookInspectorTool extends HTMLElement {
       requests: this.requests,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `webhook-inspector-${this.binId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.json`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    // Revoke on a tick: revoking synchronously races the click's navigation in
-    // some engines and yields an empty file.
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    downloadBlob(blob, `webhook-inspector-${this.binId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.json`)
     this.flash(btn, 'Saved!')
   }
 
@@ -904,8 +892,7 @@ class WebhookInspectorTool extends HTMLElement {
 
   private async copyText(text: string, btn: HTMLButtonElement) {
     if (!text) { this.setStatus('Nothing to copy.'); return }
-    try { await navigator.clipboard.writeText(text); this.flash(btn, 'Copied!') }
-    catch { this.flash(btn, 'Failed') }
+    await copyText(text, btn)
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
@@ -918,7 +905,7 @@ class WebhookInspectorTool extends HTMLElement {
 
   // ── persistence ────────────────────────────────────────────────────────────
   private loadBinId(): string {
-    const saved = this.readLS(WI_LS_BIN)
+    const saved = lsGet(WI_LS_BIN)
     if (saved && WI_BIN_RE.test(saved)) return saved
     const id = wiNewBinId()
     this.writeLS(WI_LS_BIN, id)
@@ -926,16 +913,13 @@ class WebhookInspectorTool extends HTMLElement {
   }
 
   private loadSecretEnc(): WiSecretEncoding {
-    const saved = this.readLS(WI_LS_SECRET_ENC)
+    const saved = lsGet(WI_LS_SECRET_ENC)
     return saved === 'hex' || saved === 'base64' ? saved : 'utf-8'
   }
 
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
 
   private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode */ }
+    lsSet(key, value)
   }
 }
 

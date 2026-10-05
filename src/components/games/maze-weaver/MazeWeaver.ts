@@ -1,4 +1,7 @@
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
+import { prefersReducedMotion } from '../../../lib/motion'
+import { clamp, cappedDpr } from '../../../lib/math'
+import { downloadDataUrl } from '../../../lib/download'
 /**
  * Maze Weaver — a seeded maze generator + pathfinding visualizer, zero deps.
  *
@@ -50,10 +53,6 @@ const LS_SOLVER = 'mw:solver'
 const COLS_MIN = 8, COLS_MAX = 56          // columns; rows derive from aspect
 const SPEED_MIN = 1, SPEED_MAX = 48        // generator/solver steps per frame
 const ASPECT = 0.62                        // rows/cols — keeps cells ~square
-
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
 
 /* Deterministic PRNG (mulberry32) — same seed, same stream. */
 function mulberry32(a: number) {
@@ -212,7 +211,7 @@ class MazeWeaverGame extends HTMLElement {
     requestAnimationFrame(() => {
       this.resize()
       // Build the first maze, then leave it solved so the page reads at a glance.
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       this.startGenerate(false)
       if (reduced) this.startSolve()
     })
@@ -275,7 +274,7 @@ class MazeWeaverGame extends HTMLElement {
   /* ── geometry ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize() {
@@ -576,7 +575,7 @@ class MazeWeaverGame extends HTMLElement {
   }
 
   private reduced() {
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    return prefersReducedMotion()
   }
 
   private startGenerate(newSeed: boolean) {
@@ -926,23 +925,14 @@ class MazeWeaverGame extends HTMLElement {
 
   private copySeed() {
     const btn = this.querySelector('[data-action="copy-seed"]') as HTMLButtonElement | null
-    const text = String(this.seed)
-    const done = () => flashLabel(btn, 'Copied')
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(done)
-    else done()
+    void copyText(String(this.seed), btn)
   }
 
   private download() {
     try {
-      const url = this.canvas.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `maze-${this.seed}.png`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
+      downloadDataUrl(this.canvas.toDataURL('image/png'), `maze-${this.seed}.png`)
     } catch {
-      /* toDataURL can throw on a tainted canvas — never tainted here (no external images) */
+      /* toDataURL can throw on a tainted canvas — never here (no external images) */
     }
   }
 }

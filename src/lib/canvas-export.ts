@@ -41,6 +41,8 @@
  */
 
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
+import { downloadBlob } from './download'
+import { formatBytes as formatBytesBase } from './format'
 
 export interface ExportSize {
   id: string
@@ -107,21 +109,11 @@ export function parseCustomSize(rawW: unknown, rawH: unknown): SizeResult {
   return { ok: true, w, h }
 }
 
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  // Revoke on the next frame, not immediately: Safari has not finished reading
-  // the blob when click() returns and produces a zero-byte file.
-  requestAnimationFrame(() => URL.revokeObjectURL(url))
-}
+/** Flowmap imports both from here; the implementations live in download.ts / format.ts. */
+export { downloadBlob }
 
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return formatBytesBase(bytes, 0)
 }
 
 /** Render a resolution-independent draw function into an offscreen canvas. */

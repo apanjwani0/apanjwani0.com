@@ -25,6 +25,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { dailyPassage } from './type-trial-daily'
+import { MS_PER_DAY } from './date'
 
 export interface DailyEntry {
   name: string
@@ -152,7 +153,7 @@ async function loadStore(): Promise<BoardStore> {
 
 /** Drop days beyond retention. Pure so the smoke test can assert it. */
 export function pruneBoard(board: BoardStore, now = new Date(), retainedDays = DAILY_RETAINED_DAYS): BoardStore {
-  const cutoff = new Date(now.getTime() - retainedDays * 86_400_000).toISOString().slice(0, 10)
+  const cutoff = new Date(now.getTime() - retainedDays * MS_PER_DAY).toISOString().slice(0, 10)
   return Object.fromEntries(Object.entries(board).filter(([day]) => day >= cutoff))
 }
 

@@ -32,7 +32,11 @@
  */
 
 import { attachCanvasExport } from '../../../lib/canvas-export'
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
+import { prefersReducedMotion } from '../../../lib/motion'
+import { clamp, cappedDpr } from '../../../lib/math'
+import { lsGet, lsSet, lsGetNumber } from '../../../lib/storage'
+import { downloadDataUrl } from '../../../lib/download'
 
 interface TbPalette {
   id: string
@@ -98,38 +102,11 @@ const TB_DA = 1.0
 const TB_DB = 0.5
 const TB_CONTRAST = 3.4
 
-function tbClamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
-
-function tbReadStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function tbReadStoredNumber(key: string, fallback: number): number {
-  const raw = tbReadStored(key)
-  if (raw === null) return fallback
-  const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
 function tbReadExact(key: string, lo: number, hi: number): number | null {
-  const raw = tbReadStored(key)
+  const raw = lsGet(key)
   if (raw === null) return null
   const parsed = Number(raw)
   return Number.isFinite(parsed) && parsed >= lo && parsed <= hi ? parsed : null
-}
-
-function tbWriteStored(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* storage disabled — Turing Bloom still works for this session */
-  }
 }
 
 /* Deterministic PRNG (mulberry32) — same seed, same initial scatter of specks. */
@@ -202,11 +179,11 @@ class TuringBloomGame extends HTMLElement {
     this.resolveThemePalette()
 
     // restore prefs
-    const rawFeed = tbClamp(tbReadStoredNumber(TB_LS_FEED, 109), TB_FEED_MIN, TB_FEED_MAX)
-    const rawKill = tbClamp(tbReadStoredNumber(TB_LS_KILL, 124), TB_KILL_MIN, TB_KILL_MAX)
-    const rawSpeed = tbClamp(tbReadStoredNumber(TB_LS_SPEED, 8), TB_SPEED_MIN, TB_SPEED_MAX)
-    const rawScale = tbClamp(tbReadStoredNumber(TB_LS_SCALE, 4), TB_SCALE_MIN, TB_SCALE_MAX)
-    const savedPalette = tbReadStored(TB_LS_PALETTE)
+    const rawFeed = clamp(lsGetNumber(TB_LS_FEED, 109), TB_FEED_MIN, TB_FEED_MAX)
+    const rawKill = clamp(lsGetNumber(TB_LS_KILL, 124), TB_KILL_MIN, TB_KILL_MAX)
+    const rawSpeed = clamp(lsGetNumber(TB_LS_SPEED, 8), TB_SPEED_MIN, TB_SPEED_MAX)
+    const rawScale = clamp(lsGetNumber(TB_LS_SCALE, 4), TB_SCALE_MIN, TB_SCALE_MAX)
+    const savedPalette = lsGet(TB_LS_PALETTE)
 
     this.feed = tbReadExact(TB_LS_FEED_EXACT, TB_FEED_MIN / TB_PARAM_SCALE, TB_FEED_MAX / TB_PARAM_SCALE) ?? rawFeed / TB_PARAM_SCALE
     this.kill = tbReadExact(TB_LS_KILL_EXACT, TB_KILL_MIN / TB_PARAM_SCALE, TB_KILL_MAX / TB_PARAM_SCALE) ?? rawKill / TB_PARAM_SCALE
@@ -308,7 +285,7 @@ class TuringBloomGame extends HTMLElement {
     this.ro.observe(this.querySelector('[data-type="tb-stage"]') as Element)
     requestAnimationFrame(() => {
       this.resize()                          // allocates the grid + seeds it
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       if (reduced) {
         this.runStatic(500)
         this.setPlaying(false)
@@ -357,7 +334,7 @@ class TuringBloomGame extends HTMLElement {
   /* ── geometry / allocation ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize() {
@@ -373,7 +350,7 @@ class TuringBloomGame extends HTMLElement {
     this.ctx.imageSmoothingEnabled = true
     this.ctx.imageSmoothingQuality = 'high'
 
-    const targetCols = tbClamp(Math.round(cssW / this.cell), TB_COLS_MIN, TB_COLS_MAX)
+    const targetCols = clamp(Math.round(cssW / this.cell), TB_COLS_MIN, TB_COLS_MAX)
     if (targetCols !== this.cols || this.A.length === 0) {
       this.initGrid(targetCols)
       this.seedGrid()
@@ -522,27 +499,26 @@ class TuringBloomGame extends HTMLElement {
     this.querySelector('[data-action="play"]')?.addEventListener('click', () => this.setPlaying(!this.playing))
     this.querySelector('[data-action="reseed"]')?.addEventListener('click', () => this.reseed(true))
     this.querySelector('[data-action="clear"]')?.addEventListener('click', () => { this.clear(); this.canvas.focus() })
-    this.querySelector('[data-action="download"]')?.addEventListener('click', () => this.download())
     this.querySelector('[data-action="copy-seed"]')?.addEventListener('click', () => this.copySeed())
 
     this.bindSlider('#tb-feed', '#tb-feed-out', TB_LS_FEED, raw => {
-      this.feed = tbClamp(raw, TB_FEED_MIN, TB_FEED_MAX) / TB_PARAM_SCALE
-      tbWriteStored(TB_LS_FEED_EXACT, this.feed.toFixed(4))
+      this.feed = clamp(raw, TB_FEED_MIN, TB_FEED_MAX) / TB_PARAM_SCALE
+      lsSet(TB_LS_FEED_EXACT, this.feed.toFixed(4))
       this.syncPresets()
       return this.feed.toFixed(4)
     })
     this.bindSlider('#tb-kill', '#tb-kill-out', TB_LS_KILL, raw => {
-      this.kill = tbClamp(raw, TB_KILL_MIN, TB_KILL_MAX) / TB_PARAM_SCALE
-      tbWriteStored(TB_LS_KILL_EXACT, this.kill.toFixed(4))
+      this.kill = clamp(raw, TB_KILL_MIN, TB_KILL_MAX) / TB_PARAM_SCALE
+      lsSet(TB_LS_KILL_EXACT, this.kill.toFixed(4))
       this.syncPresets()
       return this.kill.toFixed(4)
     })
     this.bindSlider('#tb-speed', '#tb-speed-out', TB_LS_SPEED, raw => {
-      this.steps = tbClamp(raw, TB_SPEED_MIN, TB_SPEED_MAX)
+      this.steps = clamp(raw, TB_SPEED_MIN, TB_SPEED_MAX)
       return `${this.steps}×`
     })
     this.bindSlider('#tb-scale', '#tb-scale-out', TB_LS_SCALE, raw => {
-      this.cell = tbClamp(raw, TB_SCALE_MIN, TB_SCALE_MAX)
+      this.cell = clamp(raw, TB_SCALE_MIN, TB_SCALE_MAX)
       // re-derive the grid at the new cell size and reseed
       this.cols = 0
       this.resize()
@@ -557,7 +533,7 @@ class TuringBloomGame extends HTMLElement {
       btn.addEventListener('click', () => {
         const id = btn.dataset.palette as string
         this.palette = TB_PALETTES.find(p => p.id === id) || this.palette
-        tbWriteStored(TB_LS_PALETTE, id)
+        lsSet(TB_LS_PALETTE, id)
         this.querySelectorAll('[data-palette]').forEach(b =>
           b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.palette === id)))
         this.buildRamp()
@@ -596,7 +572,7 @@ class TuringBloomGame extends HTMLElement {
       const raw = Number(input.value)
       const label = apply(raw)
       if (out) out.textContent = label
-      tbWriteStored(lsKey, String(raw))
+      lsSet(lsKey, String(raw))
     })
   }
 
@@ -653,10 +629,10 @@ class TuringBloomGame extends HTMLElement {
     if (kIn) kIn.value = String(killRaw)
     if (fOut) fOut.textContent = this.feed.toFixed(4)
     if (kOut) kOut.textContent = this.kill.toFixed(4)
-    tbWriteStored(TB_LS_FEED, String(feedRaw))
-    tbWriteStored(TB_LS_KILL, String(killRaw))
-    tbWriteStored(TB_LS_FEED_EXACT, p.f.toFixed(4))
-    tbWriteStored(TB_LS_KILL_EXACT, p.k.toFixed(4))
+    lsSet(TB_LS_FEED, String(feedRaw))
+    lsSet(TB_LS_KILL, String(killRaw))
+    lsSet(TB_LS_FEED_EXACT, p.f.toFixed(4))
+    lsSet(TB_LS_KILL_EXACT, p.k.toFixed(4))
     this.syncPresets()
     this.seedGrid()
     this.playOrSettle()
@@ -674,7 +650,7 @@ class TuringBloomGame extends HTMLElement {
 
   /** Start the loop, or (reduced-motion) settle a still frame and stay paused. */
   private playOrSettle() {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (prefersReducedMotion()) {
       this.runStatic(500)
       this.setPlaying(false)
     } else {
@@ -684,26 +660,14 @@ class TuringBloomGame extends HTMLElement {
 
   private copySeed() {
     const btn = this.querySelector('[data-action="copy-seed"]') as HTMLButtonElement | null
-    const text = String(this.seed)
-    const flash = (label: string) => flashLabel(btn, label)
-    if (!navigator.clipboard?.writeText) {
-      flash('Copy unavailable')
-      return
-    }
-    navigator.clipboard.writeText(text).then(() => flash('Copied')).catch(() => flash('Copy failed'))
+    void copyText(String(this.seed), btn)
   }
 
   private download() {
     try {
-      const url = this.canvas.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `turing-bloom-${this.seed}.png`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
+      downloadDataUrl(this.canvas.toDataURL('image/png'), `turing-bloom-${this.seed}.png`)
     } catch {
-      /* toDataURL can throw on a tainted canvas — it never is here (no external images) */
+      /* toDataURL can throw on a tainted canvas — never here (no external images) */
     }
   }
 }

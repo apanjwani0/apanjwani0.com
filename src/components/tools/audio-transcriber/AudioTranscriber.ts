@@ -1,4 +1,5 @@
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
+import { downloadBlob } from '../../../lib/download'
 
 const MIC_SVG = `<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <rect x="9" y="1" width="6" height="11" rx="3"/>
@@ -153,9 +154,7 @@ class AudioTranscriberTool extends HTMLElement {
         if (!btn) return
         switch (btn.dataset.action) {
           case 'copy':
-            navigator.clipboard.writeText(this.finalTranscript.trim()).then(() => {
-              flashLabel(btn, 'Copied', 1500)
-            })
+            void copyText(this.finalTranscript.trim(), btn, { ms: 1500 })
             break
           case 'clear':
             this.finalTranscript = ''
@@ -233,9 +232,7 @@ class AudioTranscriberTool extends HTMLElement {
   private downloadText() {
     const text = this.finalTranscript.trim()
     if (!text) return
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
-    Object.assign(document.createElement('a'), { href: url, download: 'transcript.txt' }).click()
-    URL.revokeObjectURL(url)
+    downloadBlob(new Blob([text], { type: 'text/plain' }), 'transcript.txt')
   }
 }
 

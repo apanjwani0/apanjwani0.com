@@ -2,7 +2,8 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { helpSections } from './help-content'
 import { parseHeadings, parseMarkdownOutline, type Graph } from '../../../lib/graph-text'
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
+import { downloadBlob } from '../../../lib/download'
 
 const STORAGE_KEY = 'draftboard-draft'
 const MAP_MODE_KEY = 'draftboard-map-mode'
@@ -294,9 +295,7 @@ class DraftboardTool extends HTMLElement {
         this.renderMap()
         break
       case 'copy':
-        navigator.clipboard.writeText(input.value).then(() => {
-          flashLabel(this.querySelector<HTMLButtonElement>('[data-action="copy"]'), 'Copied', 1500)
-        })
+        void copyText(input.value, this.querySelector<HTMLButtonElement>('[data-action="copy"]'), { ms: 1500 })
         break
       case 'help':
         this.toggleHelp()
@@ -347,9 +346,7 @@ class DraftboardTool extends HTMLElement {
   }
 
   private downloadBlob(content: string, filename: string, mime: string) {
-    const url = URL.createObjectURL(new Blob([content], { type: mime }))
-    Object.assign(document.createElement('a'), { href: url, download: filename }).click()
-    URL.revokeObjectURL(url)
+    downloadBlob(new Blob([content], { type: mime }), filename)
   }
 
   private exportPdf(preview: HTMLElement) {
@@ -382,9 +379,7 @@ class DraftboardTool extends HTMLElement {
       const canvas = await html2canvas(preview, { backgroundColor: '#ffffff', scale: 2 })
       canvas.toBlob(blob => {
         if (!blob) return
-        const url = URL.createObjectURL(blob)
-        Object.assign(document.createElement('a'), { href: url, download: 'document.png' }).click()
-        URL.revokeObjectURL(url)
+        downloadBlob(blob, 'document.png')
       })
     } finally {
       btn.disabled = false

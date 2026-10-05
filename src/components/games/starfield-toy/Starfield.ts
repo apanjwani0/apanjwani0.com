@@ -26,6 +26,9 @@
  */
 
 import { attachCanvasExport } from '../../../lib/canvas-export'
+import { prefersReducedMotion } from '../../../lib/motion'
+import { clamp, cappedDpr } from '../../../lib/math'
+import { downloadDataUrl } from '../../../lib/download'
 
 interface SfPalette {
   id: string
@@ -60,10 +63,6 @@ const SF_SPIN_MIN = -24, SF_SPIN_MAX = 24          // /5000 -> rad/frame
 const SF_MAX_Z = 4          // spawn depth (far plane)
 const SF_NEAR_Z = 0.12      // recycle once a star passes this (very close)
 const SF_TAU = Math.PI * 2
-
-function sfClamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
 
 /* Parse #rgb / #rrggbb (or leave rgb() alone) to a [r,g,b] triple. */
 function sfToRGB(input: string): [number, number, number] | null {
@@ -134,11 +133,11 @@ class StarfieldVoyagerGame extends HTMLElement {
     const rawSpin = localStorage.getItem(SF_LS_SPIN)
     const savedPalette = localStorage.getItem(SF_LS_PALETTE)
 
-    const densityVal = sfClamp(rawDensity || 400, SF_DENSITY_MIN, SF_DENSITY_MAX)
-    const speedVal = sfClamp(rawSpeed || 24, SF_SPEED_MIN, SF_SPEED_MAX)
-    const warpVal = sfClamp(rawWarp === null ? 11 : Number(rawWarp), SF_WARP_MIN, SF_WARP_MAX)
-    const sizeVal = sfClamp(rawSize || 10, SF_SIZE_MIN, SF_SIZE_MAX)
-    const spinVal = sfClamp(rawSpin === null ? 0 : Number(rawSpin), SF_SPIN_MIN, SF_SPIN_MAX)
+    const densityVal = clamp(rawDensity || 400, SF_DENSITY_MIN, SF_DENSITY_MAX)
+    const speedVal = clamp(rawSpeed || 24, SF_SPEED_MIN, SF_SPEED_MAX)
+    const warpVal = clamp(rawWarp === null ? 11 : Number(rawWarp), SF_WARP_MIN, SF_WARP_MAX)
+    const sizeVal = clamp(rawSize || 10, SF_SIZE_MIN, SF_SIZE_MAX)
+    const spinVal = clamp(rawSpin === null ? 0 : Number(rawSpin), SF_SPIN_MIN, SF_SPIN_MAX)
 
     this.count = densityVal
     this.speed = speedVal / 650
@@ -233,7 +232,7 @@ class StarfieldVoyagerGame extends HTMLElement {
       if (!this.isConnected) return
       this.resize()
       this.spawnAll()
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       if (reduced) {
         this.renderStatic()
         this.setPlaying(false)
@@ -276,7 +275,7 @@ class StarfieldVoyagerGame extends HTMLElement {
   /* ── geometry ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize() {
@@ -396,7 +395,7 @@ class StarfieldVoyagerGame extends HTMLElement {
       }
 
       const depth = 1 - s.z / SF_MAX_Z          // 0 far .. 1 close
-      const alpha = sfClamp(0.15 + depth * 0.95, 0, 1)
+      const alpha = clamp(0.15 + depth * 0.95, 0, 1)
       const radius = Math.max(0.4, this.size * dpr * (0.4 + depth * 1.8))
       const col = `rgba(${s.r},${s.g},${s.b},${alpha})`
 
@@ -453,7 +452,7 @@ class StarfieldVoyagerGame extends HTMLElement {
     this.curCX = this.targetCX = 0.5
     this.curCY = this.targetCY = 0.5
     this.spawnAll()
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (prefersReducedMotion()) {
       this.paintBackground()
       this.renderStatic()
     } else {
@@ -463,7 +462,7 @@ class StarfieldVoyagerGame extends HTMLElement {
 
   private fireBoost() {
     this.boost = 4.2
-    if (!this.playing && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!this.playing && !prefersReducedMotion()) {
       this.setPlaying(true)
     }
   }
@@ -474,30 +473,29 @@ class StarfieldVoyagerGame extends HTMLElement {
     this.querySelector('[data-action="play"]')?.addEventListener('click', () => this.setPlaying(!this.playing))
     this.querySelector('[data-action="boost"]')?.addEventListener('click', () => this.fireBoost())
     this.querySelector('[data-action="reset"]')?.addEventListener('click', () => this.reset())
-    this.querySelector('[data-action="download"]')?.addEventListener('click', () => this.download())
 
     this.bindSlider('#sf-density', '#sf-density-out', SF_LS_DENSITY, raw => {
-      this.count = sfClamp(raw, SF_DENSITY_MIN, SF_DENSITY_MAX)
+      this.count = clamp(raw, SF_DENSITY_MIN, SF_DENSITY_MAX)
       this.resizeCount()
       return String(this.count)
     })
     this.bindSlider('#sf-speed', '#sf-speed-out', SF_LS_SPEED, raw => {
-      const v = sfClamp(raw, SF_SPEED_MIN, SF_SPEED_MAX)
+      const v = clamp(raw, SF_SPEED_MIN, SF_SPEED_MAX)
       this.speed = v / 650
       return `${(v / 24).toFixed(1)}×`
     })
     this.bindSlider('#sf-warp', '#sf-warp-out', SF_LS_WARP, raw => {
-      const v = sfClamp(raw, SF_WARP_MIN, SF_WARP_MAX)
+      const v = clamp(raw, SF_WARP_MIN, SF_WARP_MAX)
       this.warp = v / 8
       return `${(v / 8).toFixed(1)}×`
     })
     this.bindSlider('#sf-size', '#sf-size-out', SF_LS_SIZE, raw => {
-      const v = sfClamp(raw, SF_SIZE_MIN, SF_SIZE_MAX)
+      const v = clamp(raw, SF_SIZE_MIN, SF_SIZE_MAX)
       this.size = v / 10
       return `${(v / 10).toFixed(1)}×`
     })
     this.bindSlider('#sf-spin', '#sf-spin-out', SF_LS_SPIN, raw => {
-      const v = sfClamp(raw, SF_SPIN_MIN, SF_SPIN_MAX)
+      const v = clamp(raw, SF_SPIN_MIN, SF_SPIN_MAX)
       this.spin = v / 5000
       return v === 0 ? 'off' : (v > 0 ? '↻' : '↺') + Math.abs(v)
     })
@@ -536,8 +534,8 @@ class StarfieldVoyagerGame extends HTMLElement {
   private steer(e: PointerEvent) {
     const rect = this.canvas.getBoundingClientRect()
     // clamp toward centre so the vanishing point never leaves the frame entirely
-    this.targetCX = sfClamp(0.5 + ((e.clientX - rect.left) / rect.width - 0.5) * 0.7, 0.12, 0.88)
-    this.targetCY = sfClamp(0.5 + ((e.clientY - rect.top) / rect.height - 0.5) * 0.7, 0.12, 0.88)
+    this.targetCX = clamp(0.5 + ((e.clientX - rect.left) / rect.width - 0.5) * 0.7, 0.12, 0.88)
+    this.targetCY = clamp(0.5 + ((e.clientY - rect.top) / rect.height - 0.5) * 0.7, 0.12, 0.88)
   }
 
   private onKey(e: KeyboardEvent) {
@@ -551,15 +549,9 @@ class StarfieldVoyagerGame extends HTMLElement {
 
   private download() {
     try {
-      const url = this.canvas.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `starfield-voyager.png`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
+      downloadDataUrl(this.canvas.toDataURL('image/png'), `starfield-voyager.png`)
     } catch {
-      /* toDataURL can throw on a tainted canvas — never happens here (no external images) */
+      /* toDataURL can throw on a tainted canvas — never here (no external images) */
     }
   }
 }

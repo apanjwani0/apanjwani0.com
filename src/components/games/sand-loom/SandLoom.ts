@@ -31,6 +31,9 @@
  */
 
 import { attachCanvasExport } from '../../../lib/canvas-export'
+import { prefersReducedMotion } from '../../../lib/motion'
+import { clamp, cappedDpr } from '../../../lib/math'
+import { downloadDataUrl } from '../../../lib/download'
 
 /* ── material ids ── */
 const SL_EMPTY = 0
@@ -116,10 +119,6 @@ const SL_LS_BRUSH = 'sl:brush'
 const SL_LS_SPEED = 'sl:speed'
 const SL_LS_SCALE = 'sl:scale'
 
-function slClamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
-
 function slReadStored(key: string): string | null {
   try { return localStorage.getItem(key) } catch { return null }
 }
@@ -202,9 +201,9 @@ class SandLoomGame extends HTMLElement {
 
     this.material = SL_MATERIALS.some(m => m.id === slReadStoredNumber(SL_LS_MAT, SL_SAND))
       ? slReadStoredNumber(SL_LS_MAT, SL_SAND) : SL_SAND
-    this.brush = slClamp(slReadStoredNumber(SL_LS_BRUSH, 4), SL_BRUSH_MIN, SL_BRUSH_MAX)
-    this.steps = slClamp(slReadStoredNumber(SL_LS_SPEED, 1), SL_SPEED_MIN, SL_SPEED_MAX)
-    this.cell = slClamp(slReadStoredNumber(SL_LS_SCALE, 4), SL_CELL_MIN, SL_CELL_MAX)
+    this.brush = clamp(slReadStoredNumber(SL_LS_BRUSH, 4), SL_BRUSH_MIN, SL_BRUSH_MAX)
+    this.steps = clamp(slReadStoredNumber(SL_LS_SPEED, 1), SL_SPEED_MIN, SL_SPEED_MAX)
+    this.cell = clamp(slReadStoredNumber(SL_LS_SCALE, 4), SL_CELL_MIN, SL_CELL_MAX)
 
     this.innerHTML = `
       <div data-type="sl-game">
@@ -287,7 +286,7 @@ class SandLoomGame extends HTMLElement {
       this.resize()                    // allocates the grid (unless zero-width)
       if (this.img) this.loadScene(1)  // welcome scene
       else this.pendingScene = 1       // …deferred until the stage has width
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       if (reduced) { this.runStatic(120); this.setPlaying(false) }
       else this.setPlaying(true)
     })
@@ -308,7 +307,7 @@ class SandLoomGame extends HTMLElement {
 
   /* ── geometry / allocation ── */
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize(force = false) {
@@ -323,7 +322,7 @@ class SandLoomGame extends HTMLElement {
     this.h = this.canvas.height = Math.round(cssH * dpr)
     this.ctx.imageSmoothingEnabled = false
 
-    const targetCols = slClamp(Math.round(cssW / this.cell), SL_COLS_MIN, SL_COLS_MAX)
+    const targetCols = clamp(Math.round(cssW / this.cell), SL_COLS_MIN, SL_COLS_MAX)
     if (force || targetCols !== this.cols || this.cellArr.length === 0) {
       this.reallocate(targetCols)
       if (this.pendingScene !== null) {
@@ -684,16 +683,15 @@ class SandLoomGame extends HTMLElement {
     this.querySelector('[data-action="step"]')?.addEventListener('click', () => { this.setPlaying(false); this.stepSim(); this.draw() })
     this.querySelector('[data-action="clear"]')?.addEventListener('click', () => { this.cellArr.fill(SL_EMPTY); this.aux.fill(0); this.draw(); this.canvas.focus() })
     this.querySelector('[data-action="scene"]')?.addEventListener('click', () => { this.loadScene(this.sceneIndex + 1); if (!this.playing) this.draw() })
-    this.querySelector('[data-action="download"]')?.addEventListener('click', () => this.download())
 
     this.querySelectorAll<HTMLButtonElement>('[data-mat]').forEach(btn => {
       btn.addEventListener('click', () => this.selectMaterial(btn.dataset.mat as string))
     })
 
-    this.bindSlider('#sl-brush', '#sl-brush-out', SL_LS_BRUSH, raw => { this.brush = slClamp(raw, SL_BRUSH_MIN, SL_BRUSH_MAX); return String(this.brush) })
-    this.bindSlider('#sl-speed', '#sl-speed-out', SL_LS_SPEED, raw => { this.steps = slClamp(raw, SL_SPEED_MIN, SL_SPEED_MAX); return `${this.steps}×` })
+    this.bindSlider('#sl-brush', '#sl-brush-out', SL_LS_BRUSH, raw => { this.brush = clamp(raw, SL_BRUSH_MIN, SL_BRUSH_MAX); return String(this.brush) })
+    this.bindSlider('#sl-speed', '#sl-speed-out', SL_LS_SPEED, raw => { this.steps = clamp(raw, SL_SPEED_MIN, SL_SPEED_MAX); return `${this.steps}×` })
     this.bindSlider('#sl-scale', '#sl-scale-out', SL_LS_SCALE, raw => {
-      this.cell = slClamp(raw, SL_CELL_MIN, SL_CELL_MAX)
+      this.cell = clamp(raw, SL_CELL_MIN, SL_CELL_MAX)
       // force = true, NOT `this.cols = 0`: zeroing cols made reallocate() skip
       // its proportional remap (oldCols > 0 guard) and wiped the drawing.
       this.resize(true)
@@ -735,7 +733,7 @@ class SandLoomGame extends HTMLElement {
   }
 
   private setBrush(v: number) {
-    this.brush = slClamp(v, SL_BRUSH_MIN, SL_BRUSH_MAX)
+    this.brush = clamp(v, SL_BRUSH_MIN, SL_BRUSH_MAX)
     const input = this.querySelector('#sl-brush') as HTMLInputElement | null
     const out = this.querySelector('#sl-brush-out') as HTMLOutputElement | null
     if (input) input.value = String(this.brush)
@@ -811,14 +809,10 @@ class SandLoomGame extends HTMLElement {
 
   private download() {
     try {
-      const url = this.canvas.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `sand-loom-${Date.now()}.png`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-    } catch { /* toDataURL can throw on a tainted canvas — it never is here (no external images) */ }
+      downloadDataUrl(this.canvas.toDataURL('image/png'), `sand-loom-${Date.now()}.png`)
+    } catch {
+      /* toDataURL can throw on a tainted canvas — never here (no external images) */
+    }
   }
 }
 

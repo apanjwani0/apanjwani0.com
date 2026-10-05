@@ -24,6 +24,8 @@
  *   here leaves the browser.
  */
 
+import { MS_PER_DAY } from './date'
+
 export const DAILY_SLUGS = ['quintle', 'type-trial', 'hue-hunt'] as const
 export type DailySlug = (typeof DAILY_SLUGS)[number]
 
@@ -84,7 +86,7 @@ export function currentStreak(state: StreakState | null, today: number): number 
 /** 'YYYY-MM-DD' (Type Trial's UTC day id) → raw UTC day number, or NaN. */
 export function utcDayFromDateString(day: string): number {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return NaN
-  return Math.floor(Date.parse(`${day}T00:00:00Z`) / 86400000)
+  return Math.floor(Date.parse(`${day}T00:00:00Z`) / MS_PER_DAY)
 }
 
 /* ── storage (browser-only; every call degrades silently without it) ── */

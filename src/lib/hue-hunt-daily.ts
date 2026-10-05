@@ -29,6 +29,8 @@
  * reshuffles these colours.
  */
 
+import { MS_PER_DAY } from './date'
+
 export type Rgb = { r: number; g: number; b: number }
 
 /** Colours in a daily run. Five is short enough to finish in a minute and long
@@ -45,7 +47,7 @@ export const HUE_GUESS_MAX_CHARS = 7
 
 /** Day zero of the daily, fixed forever. It exists only so a run carries a small
  *  human number ("Hue Hunt #231") rather than a 20,000-something epoch day. */
-const HH_EPOCH_DAY = Math.floor(Date.UTC(2025, 0, 1) / 86400000)
+const HH_EPOCH_DAY = Math.floor(Date.UTC(2025, 0, 1) / MS_PER_DAY)
 
 /**
  * Which daily is running, as a UTC day number.
@@ -57,12 +59,12 @@ const HH_EPOCH_DAY = Math.floor(Date.UTC(2025, 0, 1) / 86400000)
  * states plainly instead of leaving the reset to be a surprise.
  */
 export function hueDayNumber(now = Date.now()): number {
-  return Math.floor(now / 86400000) - HH_EPOCH_DAY
+  return Math.floor(now / MS_PER_DAY) - HH_EPOCH_DAY
 }
 
 /** Milliseconds until the next UTC midnight — the daily reset countdown. */
 export function msUntilHueReset(now = Date.now()): number {
-  return 86400000 - (now % 86400000)
+  return MS_PER_DAY - (now % MS_PER_DAY)
 }
 
 /** A day number the server is willing to talk about at all. Bounds the store key

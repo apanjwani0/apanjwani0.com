@@ -14,7 +14,7 @@
  * `cw`/`CW_` is Cron Whisperer's and `lp`/`LP_` is Link Peek's.
  */
 import { escapeHtml as csEsc } from '../../../lib/escape'
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
 import {
   caaRenewalOutlook,
   type CaaOutlook,
@@ -210,10 +210,7 @@ class ChainsawTool extends HTMLElement {
     else if (what === 'link') text = this.shareLink(report)
     else if (what === 'value') text = btn.dataset.value ?? ''
     if (!text) return
-    navigator.clipboard?.writeText(text).then(
-      () => flashLabel(btn, 'Copied'),
-      () => flashLabel(btn, 'Copy failed'),
-    )
+    void copyText(text, btn)
   }
 
   private shareLink(report: CsReport): string {

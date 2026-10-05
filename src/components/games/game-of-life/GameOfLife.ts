@@ -11,6 +11,9 @@
  * is torn down in disconnectedCallback so it never leaks across View Transitions.
  */
 
+import { prefersReducedMotion } from '../../../lib/motion'
+import { clamp, cappedDpr } from '../../../lib/math'
+
 interface PatternDef {
   id: string
   name: string
@@ -72,10 +75,6 @@ const MIN_SPEED = 1
 const MAX_SPEED = 30
 const LS_SPEED = 'gol:speed'
 const LS_WRAP = 'gol:wrap'
-
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
 
 function patternWidth(p: PatternDef) {
   return Math.max(...p.cells.map(c => c[0])) + 1
@@ -189,7 +188,7 @@ class GameOfLifeGame extends HTMLElement {
       this.resize()
       // Open on a recognisable, eye-catching pattern so the page explains itself.
       this.seedDefault()
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       if (!reduced) this.setPlaying(true)
       else this.draw()
     })
@@ -259,7 +258,7 @@ class GameOfLifeGame extends HTMLElement {
   /* ── geometry ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize() {
