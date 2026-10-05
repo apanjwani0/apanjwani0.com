@@ -44,27 +44,6 @@ div[data-tool="json-tidy"] [data-group="toolbar"] button[data-action="format"]:h
   border-color: var(--color-accent);
 }
 
-span[data-type="jt-sep"] {
-  width: 1px;
-  align-self: stretch;
-  min-height: 1.3rem;
-  background: var(--color-border);
-  margin: 0 var(--space-2xs);
-}
-
-label[data-type="jt-field"] {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-label[data-type="jt-field"][data-variant="check"] {
-  cursor: pointer;
-}
-
 label[data-type="jt-field"] select {
   padding: 0.28rem var(--space-xs);
   border: 1px solid var(--color-border);
@@ -185,16 +164,6 @@ pre[data-type="jt-output"][data-empty] {
 }
 
 /* ── Status bar ──────────────────────────────────────────── */
-div[data-type="jt-statusbar"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem var(--space-xl);
-  margin: var(--space-lg) 0 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
 span[data-type="jt-status"] {
   font-weight: 600;
   letter-spacing: 0.02em;

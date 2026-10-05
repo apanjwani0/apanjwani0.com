@@ -29,10 +29,9 @@ main[data-width="workbench"] {
   max-width: var(--tool-width);
 }
 
-/* Full-bleed content: interactive games (nav present, data-fluid) and the home
-   hero (no standard nav, data-bare). Both escape the centered column entirely. */
-main[data-bare],
-main[data-fluid] {
+/* Full-bleed content: the home hero (no standard nav, data-bare) escapes the
+   centered column entirely. */
+main[data-bare] {
   max-width: none;
   margin: 0;
   padding: 0;
@@ -269,8 +268,8 @@ div[data-type="sky"] canvas {
 @media (max-width: 560px) {
   /* Keep the side gutter on mobile: since the content column moved from <body>
      to <main>, the horizontal padding lives here (var(--space-page-x)) — a bare
-     `1.5rem 0` would let text run to the screen edges. Full-bleed pages
-     (main[data-bare]/[data-fluid]) still win via their higher-specificity rule. */
+     `1.5rem 0` would let text run to the screen edges. The full-bleed home page
+     (main[data-bare]) still wins via its higher-specificity rule. */
   main {
     padding-top: var(--nav-h, var(--space-header-offset));
     padding-right: var(--space-page-x);

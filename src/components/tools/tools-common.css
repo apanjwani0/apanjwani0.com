@@ -269,3 +269,64 @@ div[data-group="pane-actions"] button:disabled {
   opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
+
+/* Explainer paragraph: the collapsible "how it works" block under a tool. */
+:where([data-tool]) details[data-type="cl-explainer"] p,
+:where([data-tool]) details[data-type="cf-explainer"] p,
+:where([data-tool]) details[data-type="cw-explainer"] p,
+:where([data-tool]) details[data-type="ew-explainer"] p,
+:where([data-tool]) details[data-type="hs-explainer"] p,
+:where([data-tool]) details[data-type="rl-explainer"] p {
+  margin: var(--space-lg) 0 0.25rem;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  max-width: 72ch;
+}
+
+/* Field: an inline label wrapping a control in a toolbar. */
+:where([data-tool]) label[data-type="cf-field"],
+:where([data-tool]) label[data-type="cw-field"],
+:where([data-tool]) label[data-type="ew-field"],
+:where([data-tool]) label[data-type="hs-field"],
+:where([data-tool]) label[data-type="jt-field"],
+:where([data-tool]) label[data-type="lf-field"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+:where([data-tool]) label[data-type="cf-field"][data-variant="check"],
+:where([data-tool]) label[data-type="hs-field"][data-variant="check"],
+:where([data-tool]) label[data-type="jt-field"][data-variant="check"],
+:where([data-tool]) label[data-type="lf-field"][data-variant="check"] {
+  cursor: pointer;
+}
+
+/* Toolbar divider and status bar. */
+:where([data-tool]) span[data-type="cf-sep"],
+:where([data-tool]) span[data-type="hs-sep"],
+:where([data-tool]) span[data-type="jt-sep"],
+:where([data-tool]) span[data-type="lf-sep"] {
+  width: 1px;
+  align-self: stretch;
+  min-height: 1.3rem;
+  background: var(--color-border);
+  margin: 0 var(--space-2xs);
+}
+
+:where([data-tool]) div[data-type="cf-statusbar"],
+:where([data-tool]) div[data-type="hs-statusbar"],
+:where([data-tool]) div[data-type="jt-statusbar"],
+:where([data-tool]) div[data-type="lf-statusbar"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem var(--space-xl);
+  margin: var(--space-lg) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}

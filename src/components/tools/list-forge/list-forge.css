@@ -7,28 +7,7 @@ div[data-type="tool-page"][data-tool="list-forge"] {
 /* Toolbar layout, button chrome, and focus rings all come from the shared
    tools-common.css (hoisted; identical across the tool family). */
 
-span[data-type="lf-sep"] {
-  width: 1px;
-  align-self: stretch;
-  min-height: 1.3rem;
-  background: var(--color-border);
-  margin: 0 var(--space-2xs);
-}
-
 /* ── Fields (labels wrapping a select / input / checkbox) ── */
-label[data-type="lf-field"] {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-label[data-type="lf-field"][data-variant="check"] {
-  cursor: pointer;
-}
-
 label[data-type="lf-field"] select,
 label[data-type="lf-field"] input[type="text"] {
   padding: 0.28rem var(--space-xs);
@@ -113,16 +92,6 @@ div[data-tool="list-forge"] textarea::placeholder {
 }
 
 /* ── Status bar ──────────────────────────────────────────── */
-div[data-type="lf-statusbar"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem var(--space-xl);
-  margin: var(--space-lg) 0 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
 span[data-type="lf-count"] {
   color: var(--color-text);
 }

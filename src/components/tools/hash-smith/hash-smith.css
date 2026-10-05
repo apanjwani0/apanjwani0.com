@@ -40,28 +40,7 @@ div[data-tool="hash-smith"] [data-tab-btn][data-active] {
 /* Toolbar layout and button chrome come from the shared tools-common.css
    (hoisted; identical across the tool family). */
 
-span[data-type="hs-sep"] {
-  width: 1px;
-  align-self: stretch;
-  min-height: 1.3rem;
-  background: var(--color-border);
-  margin: 0 var(--space-2xs);
-}
-
 /* ── Fields ───────────────────────────────────────────────── */
-label[data-type="hs-field"] {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-label[data-type="hs-field"][data-variant="check"] {
-  cursor: pointer;
-}
-
 label[data-type="hs-field"] select,
 label[data-type="hs-field"] input[type="text"],
 label[data-type="hs-field"] input[type="number"] {
@@ -133,16 +112,6 @@ div[data-tool="hash-smith"] textarea::placeholder {
 }
 
 /* ── Status bar ───────────────────────────────────────────── */
-div[data-type="hs-statusbar"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem var(--space-xl);
-  margin: var(--space-lg) 0 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
 span[data-type="hs-count"] {
   color: var(--color-text);
 }
@@ -247,14 +216,6 @@ details[data-type="hs-explainer"] summary {
 
 details[data-type="hs-explainer"] summary:hover {
   color: var(--color-text);
-}
-
-details[data-type="hs-explainer"] p {
-  margin: var(--space-lg) 0 0.25rem;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-  line-height: 1.7;
-  max-width: 72ch;
 }
 
 details[data-type="hs-explainer"] strong {

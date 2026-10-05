@@ -366,14 +366,6 @@ details[data-type="cl-explainer"] summary {
 
 details[data-type="cl-explainer"] summary:hover { color: var(--color-text); }
 
-details[data-type="cl-explainer"] p {
-  margin: var(--space-lg) 0 0.25rem;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-  line-height: 1.7;
-  max-width: 72ch;
-}
-
 details[data-type="cl-explainer"] strong { color: var(--color-text); }
 
 div[data-type="cl-statusbar"] { margin-top: var(--space-xl); min-height: 1.2rem; }

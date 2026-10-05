@@ -12,36 +12,6 @@
    and the shareable emoji grid still uses the universal 🟩/🟨/⬛ so results read anywhere. */
 
 /* ── header ── */
-div[data-type="q-titlebar"] {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--space-md);
-  margin-bottom: 0.25rem;
-}
-
-div[data-type="q-titlebar"] h1 {
-  margin: 0;
-}
-
-span[data-type="q-badge"] {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.02em;
-  color: var(--color-accent);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-pill);
-  padding: 0.1rem 0.55rem;
-  white-space: nowrap;
-}
-
-div[data-type="q-header"] p {
-  margin-top: 0;
-  color: var(--color-muted);
-  font-size: var(--text-base);
-  line-height: 1.55;
-}
-
 /* ── controls ── */
 div[data-type="q-controls"] {
   display: flex;
@@ -411,41 +381,6 @@ details[data-type="q-explainer"] {
   padding: 0 var(--space-xl);
   margin-top: var(--space-card);
 }
-
-details[data-type="q-explainer"] > summary {
-  cursor: pointer;
-  list-style: none;
-  padding: var(--space-lg) 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--color-text);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-details[data-type="q-explainer"] > summary::-webkit-details-marker {
-  display: none;
-}
-
-details[data-type="q-explainer"] > summary::before {
-  content: "›";
-  display: inline-block;
-  color: var(--color-accent);
-  transition: transform 0.15s ease;
-}
-
-details[data-type="q-explainer"][open] > summary::before {
-  transform: rotate(90deg);
-}
-
-details[data-type="q-explainer"] p {
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-  line-height: 1.6;
-}
-
-details[data-type="q-explainer"] strong { color: var(--color-text); }
 
 details[data-type="q-explainer"] kbd {
   font-family: var(--font-mono);
