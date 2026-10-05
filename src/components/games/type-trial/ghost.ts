@@ -42,7 +42,7 @@
  * game.
  */
 
-export const GHOST_VERSION = 1
+const GHOST_VERSION = 1
 /** Hard ceiling on a token before any parsing — a fragment, not a file drop. */
 export const GHOST_MAX_TOKEN_CHARS = 4096
 /** More marks than any passage in either pool could need. */
@@ -57,7 +57,7 @@ export const GHOST_MAX_TOTAL_MS = 30 * 60_000
  *  quantisation is what keeps most deltas to a single varint byte. */
 const QUANT_MS = 10
 
-export type GhostKind = 'daily' | 'quotes' | 'code' | 'numbers'
+type GhostKind = 'daily' | 'quotes' | 'code' | 'numbers'
 
 const KIND_LETTER: Record<GhostKind, string> = {
   daily: 'd', quotes: 'q', code: 'c', numbers: 'n',
@@ -82,7 +82,7 @@ export interface DecodedGhost {
   marks: number[]
 }
 
-export interface GhostRunInput {
+interface GhostRunInput {
   kind: GhostKind
   day: string | null
   index: number

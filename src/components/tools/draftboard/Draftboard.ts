@@ -388,6 +388,8 @@ class DraftboardTool extends HTMLElement {
   }
 }
 
-customElements.define('draftboard-tool', DraftboardTool)
+if (!customElements.get('draftboard-tool')) {
+  customElements.define('draftboard-tool', DraftboardTool)
+}
 
 export {}

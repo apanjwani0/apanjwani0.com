@@ -29,7 +29,7 @@ import { MS_PER_DAY } from './date'
 export const DAILY_SLUGS = ['quintle', 'type-trial', 'hue-hunt'] as const
 export type DailySlug = (typeof DAILY_SLUGS)[number]
 
-export interface StreakState {
+interface StreakState {
   /** Day number (in that game's day-space) of the last finished daily. */
   last: number
   /** Consecutive days finished, ending at `last`. */
@@ -41,7 +41,7 @@ export interface StreakState {
 /** A century of dailies — nobody legitimately exceeds this. */
 export const MAX_STREAK = 36600
 /** Day numbers in every per-game day-space stay far below this. */
-export const MAX_DAY = 1_000_000
+const MAX_DAY = 1_000_000
 
 function isDay(v: unknown): v is number {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= MAX_DAY

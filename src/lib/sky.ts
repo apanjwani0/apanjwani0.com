@@ -17,7 +17,7 @@ export const SKY_NEAR = 0.62
 const EDGE = 40
 // How many stars, and how bright, against the first sky: the owner asked for
 // 115% so more of them show (2026-10-01).
-export const SKY_INTENSITY = 1.15
+const SKY_INTENSITY = 1.15
 
 function clamp(v: number, a: number, b: number): number { return v < a ? a : v > b ? b : v }
 

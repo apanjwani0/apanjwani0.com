@@ -53,12 +53,6 @@ export function todayUtcDay(now = new Date()): string {
   return now.toISOString().slice(0, 10)
 }
 
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
-
-export function isValidDay(value: unknown): value is string {
-  return typeof value === 'string' && DAY_RE.test(value)
-}
-
 /** FNV-1a over the day string — tiny, stable, and identical in every runtime.
  *  (Math.random-free: the whole point is that everyone computes the same pick.) */
 function fnv1a(text: string): number {

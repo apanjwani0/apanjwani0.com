@@ -37,7 +37,7 @@
 
 export type CwKind = 'second' | 'minute' | 'hour' | 'dom' | 'month' | 'dow'
 
-export interface CwSingle {
+interface CwSingle {
   kind: 'all' | 'stepAll' | 'range' | 'rangeStep' | 'single'
   step?: number
   a?: number
@@ -89,7 +89,7 @@ export interface CwTransition {
  *   'first'  the wall reading happens twice; this is the first pass.
  *   'second' …and this is the repeat.
  */
-export type CwDst = '' | 'gap' | 'first' | 'second'
+type CwDst = '' | 'gap' | 'first' | 'second'
 
 export interface CwRun {
   /** The instant the job fires. For a skipped gap run, the transition instant. */
@@ -103,11 +103,11 @@ export interface CwRun {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-export const CW_MONTH_NAMES = [
+const CW_MONTH_NAMES = [
   '', 'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
-export const CW_DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const CW_DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 const CW_MONTH_MAP: Record<string, number> = {
   january: 1, jan: 1, february: 2, feb: 2, march: 3, mar: 3, april: 4, apr: 4,
@@ -203,7 +203,7 @@ function cwAnalyzeSingle(part: string, max: number, kind: CwKind): CwSingle {
 }
 
 /** Parse and expand one cron field. Throws Error with a human message on bad input. */
-export function cwParseField(raw: string, kind: CwKind): CwField {
+function cwParseField(raw: string, kind: CwKind): CwField {
   const [min, max] = CW_FIELD_RANGE[kind]
   const label = CW_FIELD_LABEL[kind]
   const token = raw.trim()
@@ -616,18 +616,18 @@ export class CwZoneClock {
 
 const CW_DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
-export function cwDaysInMonth(y: number, mo: number): number {
+function cwDaysInMonth(y: number, mo: number): number {
   if (mo !== 2) return CW_DAYS_IN_MONTH[mo - 1]
   return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28
 }
 
 /** The reading as a UTC-naive timestamp — the shared currency of the zone maths. */
-export function cwWallToNaive(w: CwWall): number {
+function cwWallToNaive(w: CwWall): number {
   return Date.UTC(w.y, w.mo - 1, w.d, w.h, w.mi, w.s)
 }
 
 /** Day of week (0 = Sunday) for a calendar date. No zone is involved. */
-export function cwDowOf(w: CwWall): number {
+function cwDowOf(w: CwWall): number {
   return new Date(Date.UTC(w.y, w.mo - 1, w.d)).getUTCDay()
 }
 
@@ -667,7 +667,7 @@ export function cwIsFixedTime(P: CwParsed): boolean {
   return !P.hour.token.includes('*') && !P.minute.token.includes('*')
 }
 
-export interface CwCollectOpts {
+interface CwCollectOpts {
   /** How many runs that actually fire to return. Omit for "every run up to `untilMs`". */
   count?: number
   untilMs?: number

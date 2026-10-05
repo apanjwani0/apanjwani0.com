@@ -75,7 +75,7 @@ export const DS_MAX_TOKEN_CHARS = 200
 const DS_COORD_MAX_CHARS = 32
 /** `toFixed` accepts up to 100 places; past ~20 the extra digits describe a
  *  double that does not exist, so the encoder stops there. */
-export const DS_COORD_DIGITS_MAX = 20
+const DS_COORD_DIGITS_MAX = 20
 const DS_COORD_DIGITS_MIN = 6
 
 export type DsMode = 'mandelbrot' | 'julia'
@@ -101,7 +101,7 @@ export interface DsView {
 
 export const DS_DENSITY_MIN = 10
 export const DS_DENSITY_MAX = 200
-export const DS_DENSITY_SCALE = 100
+const DS_DENSITY_SCALE = 100
 
 /** The palette ids the decoder will accept. A fixed list and not an
  *  interpolation: the same reason the markdown callout `kind` is matched
@@ -212,7 +212,7 @@ export function dsEffectiveIter(view: Pick<DsView, 'iter' | 'zoom'>): number {
 
 /* ──────────────────────────  the iteration  ────────────────────────── */
 
-export interface DsEscape {
+interface DsEscape {
   /** Iterations survived. Equal to maxIter when the point never escaped. */
   n: number
   /** Smooth (continuous) iteration count; NaN when the point is inside. */
@@ -263,7 +263,7 @@ export function dsEscapeReference(
  * The invariant `n ≤ ν < n + 1` is asserted over a grid — it is what catches a
  * flipped sign or the wrong log base, both of which still produce a picture.
  */
-export function dsSmooth(n: number, r2: number): number {
+function dsSmooth(n: number, r2: number): number {
   return n + 1 - Math.log2(Math.log(Math.sqrt(r2)) / DS_LOG_BAILOUT)
 }
 

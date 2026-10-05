@@ -167,6 +167,22 @@ class AudioTranscriberTool extends HTMLElement {
       })
   }
 
+  disconnectedCallback() {
+    // Leaving the page must end the mic session: an open recognizer keeps the
+    // browser's recording indicator on, and its onend would restart it forever.
+    this.isRecording = false
+    if (this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
+    const rec = this.recognition
+    if (rec) {
+      rec.onresult = rec.onerror = rec.onend = null
+      try { rec.abort() } catch { /* already stopped */ }
+      this.recognition = null
+    }
+  }
+
   private toggleRecording() {
     if (this.isRecording) {
       this.stopRecording()
@@ -236,6 +252,8 @@ class AudioTranscriberTool extends HTMLElement {
   }
 }
 
-customElements.define('audio-transcriber-tool', AudioTranscriberTool)
+if (!customElements.get('audio-transcriber-tool')) {
+  customElements.define('audio-transcriber-tool', AudioTranscriberTool)
+}
 
 export {}
