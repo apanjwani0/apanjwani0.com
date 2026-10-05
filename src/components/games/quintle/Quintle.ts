@@ -26,6 +26,8 @@
 import { ANSWER_STR, VALID_STR } from './words'
 import { quintleDayNumber } from '../../../lib/quintle-daily'
 import { recordDailyPlay } from '../../../lib/daily-streak'
+import { prefersReducedMotion } from '../../../lib/motion'
+import { copyText } from '../../../lib/flash'
 
 /* ── word data ───────────────────────────────────────────────── */
 
@@ -233,7 +235,7 @@ class QuintleGame extends HTMLElement {
     this.stats = saved.stats
     this.daily = saved.daily
     this.practice = saved.practice
-    this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    this.reduced = prefersReducedMotion()
 
     // Roll the daily puzzle over if the saved one is from an earlier day.
     const today = quintleDayNumber(new Date())
@@ -814,27 +816,8 @@ class QuintleGame extends HTMLElement {
 
   private async share() {
     const text = this.buildShareText()
-    try {
-      await navigator.clipboard.writeText(text)
-      this.flash('Copied results to clipboard', 'win')
-      return
-    } catch {
-      /* fall through to the legacy path */
-    }
-    try {
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.setAttribute('readonly', '')
-      ta.style.position = 'absolute'
-      ta.style.left = '-9999px'
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-      this.flash('Copied results to clipboard', 'win')
-    } catch {
-      this.flash('Copy failed — long-press to select', 'error')
-    }
+    if (await copyText(text)) this.flash('Copied results to clipboard', 'win')
+    else this.flash('Copy failed — long-press to select', 'error')
   }
 
   /* ── messages ── */

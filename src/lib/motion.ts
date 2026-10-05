@@ -14,3 +14,8 @@
  * per document from `initSiteUI()` (src/lib/site-ui.ts).
  */
 export function initMotion(): void {}
+
+/** Whether the visitor asked for less motion. Client-only: reads matchMedia when called. */
+export function prefersReducedMotion(): boolean {
+  return matchMedia('(prefers-reduced-motion: reduce)').matches
+}

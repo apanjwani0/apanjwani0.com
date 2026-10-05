@@ -32,6 +32,461 @@
   outline-offset: 1px;
 }
 
+/* Explainer: the collapsible "how it works" block under every canvas game. */
+:where([data-game]) details[data-type="ds-explainer"],
+:where([data-game]) details[data-type="ff-explainer"],
+:where([data-game]) details[data-type="gol-explainer"],
+:where([data-game]) details[data-type="fg-explainer"],
+:where([data-game]) details[data-type="mw-explainer"],
+:where([data-game]) details[data-type="bo-explainer"],
+:where([data-game]) details[data-type="sl-explainer"],
+:where([data-game]) details[data-type="sf-explainer"],
+:where([data-game]) details[data-type="tb-explainer"],
+:where([data-game]) details[data-type="tw-explainer"] {
+  margin-top: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: 0 var(--space-xl);
+}
+
+:where([data-game]) details[data-type="ds-explainer"] > summary,
+:where([data-game]) details[data-type="ff-explainer"] > summary,
+:where([data-game]) details[data-type="gol-explainer"] > summary,
+:where([data-game]) details[data-type="hue-explainer"] > summary,
+:where([data-game]) details[data-type="fg-explainer"] > summary,
+:where([data-game]) details[data-type="mw-explainer"] > summary,
+:where([data-game]) details[data-type="bo-explainer"] > summary,
+:where([data-game]) details[data-type="q-explainer"] > summary,
+:where([data-game]) details[data-type="sl-explainer"] > summary,
+:where([data-game]) details[data-type="sf-explainer"] > summary,
+:where([data-game]) details[data-type="tb-explainer"] > summary,
+:where([data-game]) details[data-type="tw-explainer"] > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: var(--space-lg) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:where([data-game]) details[data-type="ds-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="ff-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="gol-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="hue-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="fg-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="mw-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="bo-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="q-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="sl-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="sf-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="tb-explainer"] > summary::-webkit-details-marker,
+:where([data-game]) details[data-type="tw-explainer"] > summary::-webkit-details-marker {
+  display: none;
+}
+
+:where([data-game]) details[data-type="ds-explainer"] > summary::before,
+:where([data-game]) details[data-type="ff-explainer"] > summary::before,
+:where([data-game]) details[data-type="gol-explainer"] > summary::before,
+:where([data-game]) details[data-type="hue-explainer"] > summary::before,
+:where([data-game]) details[data-type="fg-explainer"] > summary::before,
+:where([data-game]) details[data-type="mw-explainer"] > summary::before,
+:where([data-game]) details[data-type="bo-explainer"] > summary::before,
+:where([data-game]) details[data-type="q-explainer"] > summary::before,
+:where([data-game]) details[data-type="sl-explainer"] > summary::before,
+:where([data-game]) details[data-type="sf-explainer"] > summary::before,
+:where([data-game]) details[data-type="tb-explainer"] > summary::before,
+:where([data-game]) details[data-type="tw-explainer"] > summary::before {
+  content: "›";
+  display: inline-block;
+  color: var(--color-accent);
+  transition: transform 0.15s ease;
+}
+
+:where([data-game]) details[data-type="ds-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="ff-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="gol-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="hue-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="fg-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="mw-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="bo-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="q-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="sl-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="sf-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="tb-explainer"][open] > summary::before,
+:where([data-game]) details[data-type="tw-explainer"][open] > summary::before {
+  transform: rotate(90deg);
+}
+
+:where([data-game]) details[data-type="ds-explainer"] strong,
+:where([data-game]) details[data-type="ff-explainer"] strong,
+:where([data-game]) details[data-type="gol-explainer"] strong,
+:where([data-game]) details[data-type="hue-explainer"] strong,
+:where([data-game]) details[data-type="fg-explainer"] strong,
+:where([data-game]) details[data-type="mw-explainer"] strong,
+:where([data-game]) details[data-type="bo-explainer"] strong,
+:where([data-game]) details[data-type="q-explainer"] strong,
+:where([data-game]) details[data-type="sl-explainer"] strong,
+:where([data-game]) details[data-type="sf-explainer"] strong,
+:where([data-game]) details[data-type="tb-explainer"] strong,
+:where([data-game]) details[data-type="tw-explainer"] strong {
+  color: var(--color-text);
+}
+
+:where([data-game]) details[data-type="ds-explainer"] p,
+:where([data-game]) details[data-type="ff-explainer"] p,
+:where([data-game]) details[data-type="gol-explainer"] p,
+:where([data-game]) details[data-type="hue-explainer"] p,
+:where([data-game]) details[data-type="fg-explainer"] p,
+:where([data-game]) details[data-type="mw-explainer"] p,
+:where([data-game]) details[data-type="bo-explainer"] p,
+:where([data-game]) details[data-type="q-explainer"] p,
+:where([data-game]) details[data-type="sl-explainer"] p,
+:where([data-game]) details[data-type="sf-explainer"] p,
+:where([data-game]) details[data-type="tb-explainer"] p,
+:where([data-game]) details[data-type="tw-explainer"] p {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+/* Titlebar, badge and header: the title row above a game. */
+:where([data-game]) div[data-type="ds-titlebar"],
+:where([data-game]) div[data-type="ff-titlebar"],
+:where([data-game]) div[data-type="gol-titlebar"],
+:where([data-game]) div[data-type="hue-titlebar"],
+:where([data-game]) div[data-type="fg-titlebar"],
+:where([data-game]) div[data-type="mw-titlebar"],
+:where([data-game]) div[data-type="bo-titlebar"],
+:where([data-game]) div[data-type="q-titlebar"],
+:where([data-game]) div[data-type="sl-titlebar"],
+:where([data-game]) div[data-type="sf-titlebar"],
+:where([data-game]) div[data-type="tb-titlebar"],
+:where([data-game]) div[data-type="tw-titlebar"] {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-bottom: 0.25rem;
+}
+
+:where([data-game]) div[data-type="ds-titlebar"] h1,
+:where([data-game]) div[data-type="ff-titlebar"] h1,
+:where([data-game]) div[data-type="gol-titlebar"] h1,
+:where([data-game]) div[data-type="hue-titlebar"] h1,
+:where([data-game]) div[data-type="fg-titlebar"] h1,
+:where([data-game]) div[data-type="mw-titlebar"] h1,
+:where([data-game]) div[data-type="bo-titlebar"] h1,
+:where([data-game]) div[data-type="q-titlebar"] h1,
+:where([data-game]) div[data-type="sl-titlebar"] h1,
+:where([data-game]) div[data-type="sf-titlebar"] h1,
+:where([data-game]) div[data-type="tb-titlebar"] h1,
+:where([data-game]) div[data-type="tw-titlebar"] h1 {
+  margin: 0;
+}
+
+:where([data-game]) span[data-type="ds-badge"],
+:where([data-game]) span[data-type="ff-badge"],
+:where([data-game]) span[data-type="gol-badge"],
+:where([data-game]) span[data-type="hue-badge"],
+:where([data-game]) span[data-type="fg-badge"],
+:where([data-game]) span[data-type="mw-badge"],
+:where([data-game]) span[data-type="bo-badge"],
+:where([data-game]) span[data-type="q-badge"],
+:where([data-game]) span[data-type="sl-badge"],
+:where([data-game]) span[data-type="sf-badge"],
+:where([data-game]) span[data-type="tb-badge"],
+:where([data-game]) span[data-type="tw-badge"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.55rem;
+  white-space: nowrap;
+}
+
+:where([data-game]) div[data-type="ds-header"] p,
+:where([data-game]) div[data-type="ff-header"] p,
+:where([data-game]) div[data-type="gol-header"] p,
+:where([data-game]) div[data-type="hue-header"] p,
+:where([data-game]) div[data-type="fg-header"] p,
+:where([data-game]) div[data-type="mw-header"] p,
+:where([data-game]) div[data-type="bo-header"] p,
+:where([data-game]) div[data-type="q-header"] p,
+:where([data-game]) div[data-type="sl-header"] p,
+:where([data-game]) div[data-type="sf-header"] p,
+:where([data-game]) div[data-type="tb-header"] p,
+:where([data-game]) div[data-type="tw-header"] p {
+  margin-top: 0;
+  color: var(--color-muted);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+
+/* Controls cluster: a column of groups, each a wrapping row of controls. */
+:where([data-game]) div[data-type="ds-controls"],
+:where([data-game]) div[data-type="ff-controls"],
+:where([data-game]) div[data-type="gol-controls"],
+:where([data-game]) div[data-type="fg-controls"],
+:where([data-game]) div[data-type="mw-controls"],
+:where([data-game]) div[data-type="bo-controls"],
+:where([data-game]) div[data-type="sl-controls"],
+:where([data-game]) div[data-type="sf-controls"],
+:where([data-game]) div[data-type="tb-controls"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+:where([data-game]) div[data-type="ds-controls"] [data-group],
+:where([data-game]) div[data-type="ff-controls"] [data-group],
+:where([data-game]) div[data-type="gol-controls"] [data-group],
+:where([data-game]) div[data-type="fg-controls"] [data-group],
+:where([data-game]) div[data-type="mw-controls"] [data-group],
+:where([data-game]) div[data-type="bo-controls"] [data-group],
+:where([data-game]) div[data-type="sl-controls"] [data-group],
+:where([data-game]) div[data-type="sf-controls"] [data-group],
+:where([data-game]) div[data-type="tb-controls"] [data-group],
+:where([data-game]) div[data-type="tw-controls"] [data-group] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:where([data-game]) div[data-type="ff-controls"] button,
+:where([data-game]) div[data-type="gol-controls"] button,
+:where([data-game]) div[data-type="fg-controls"] button,
+:where([data-game]) div[data-type="mw-controls"] button,
+:where([data-game]) div[data-type="bo-controls"] button,
+:where([data-game]) div[data-type="sl-controls"] button,
+:where([data-game]) div[data-type="sf-controls"] button,
+:where([data-game]) div[data-type="tb-controls"] button {
+  padding: 0.32rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-serif);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+:where([data-game]) div[data-type="ff-controls"] label,
+:where([data-game]) span[data-type="ff-group-label"],
+:where([data-game]) div[data-type="gol-controls"] label,
+:where([data-game]) span[data-type="gol-group-label"],
+:where([data-game]) div[data-type="fg-controls"] label,
+:where([data-game]) span[data-type="fg-group-label"],
+:where([data-game]) div[data-type="mw-controls"] label,
+:where([data-game]) span[data-type="mw-group-label"],
+:where([data-game]) div[data-type="bo-controls"] label,
+:where([data-game]) span[data-type="bo-group-label"],
+:where([data-game]) div[data-type="sl-controls"] label,
+:where([data-game]) span[data-type="sl-group-label"],
+:where([data-game]) div[data-type="sf-controls"] label,
+:where([data-game]) span[data-type="sf-group-label"],
+:where([data-game]) div[data-type="tb-controls"] label,
+:where([data-game]) span[data-type="tb-group-label"] {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+:where([data-game]) div[data-type="ff-controls"] button:hover,
+:where([data-game]) div[data-type="gol-controls"] button:hover,
+:where([data-game]) div[data-type="fg-controls"] button:hover,
+:where([data-game]) div[data-type="mw-controls"] button:hover,
+:where([data-game]) div[data-type="bo-controls"] button:hover,
+:where([data-game]) div[data-type="sl-controls"] button:hover,
+:where([data-game]) div[data-type="sf-controls"] button:hover,
+:where([data-game]) div[data-type="tb-controls"] button:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+/* Transport: the one filled primary button of a controls cluster. */
+:where([data-game]) div[data-type="ds-controls"] [data-group="transport"] button[data-action="zoom-in"],
+:where([data-game]) div[data-type="ff-controls"] [data-group="transport"] button[data-action="play"],
+:where([data-game]) div[data-type="gol-controls"] [data-group="transport"] button[data-action="play"],
+:where([data-game]) div[data-type="fg-controls"] [data-group="transport"] button[data-action="grow"],
+:where([data-game]) div[data-type="mw-controls"] [data-group="transport"] button[data-action="solve"],
+:where([data-game]) div[data-type="bo-controls"] [data-group="transport"] button[data-action="play"],
+:where([data-game]) div[data-type="sl-controls"] [data-group="transport"] button[data-action="play"],
+:where([data-game]) div[data-type="sf-controls"] [data-group="transport"] button[data-action="play"],
+:where([data-game]) div[data-type="tb-controls"] [data-group="transport"] button[data-action="play"] {
+  color: var(--color-bg);
+  background: var(--color-text);
+  border-color: var(--color-text);
+}
+
+:where([data-game]) div[data-type="ds-controls"] [data-group="transport"] button[data-action="zoom-in"]:hover,
+:where([data-game]) div[data-type="ff-controls"] [data-group="transport"] button[data-action="play"]:hover,
+:where([data-game]) div[data-type="gol-controls"] [data-group="transport"] button[data-action="play"]:hover,
+:where([data-game]) div[data-type="fg-controls"] [data-group="transport"] button[data-action="grow"]:hover,
+:where([data-game]) div[data-type="mw-controls"] [data-group="transport"] button[data-action="solve"]:hover,
+:where([data-game]) div[data-type="bo-controls"] [data-group="transport"] button[data-action="play"]:hover,
+:where([data-game]) div[data-type="sl-controls"] [data-group="transport"] button[data-action="play"]:hover,
+:where([data-game]) div[data-type="sf-controls"] [data-group="transport"] button[data-action="play"]:hover,
+:where([data-game]) div[data-type="tb-controls"] [data-group="transport"] button[data-action="play"]:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* Stage, canvas and hints: the canvas frame, the line under it and the "try this" note. */
+:where([data-game]) div[data-type="ff-stage"],
+:where([data-game]) div[data-type="gol-stage"],
+:where([data-game]) div[data-type="fg-stage"],
+:where([data-game]) div[data-type="mw-stage"],
+:where([data-game]) div[data-type="bo-stage"],
+:where([data-game]) div[data-type="sl-stage"],
+:where([data-game]) div[data-type="sf-stage"],
+:where([data-game]) div[data-type="tb-stage"] {
+  width: 100%;
+  margin: 0.5rem 0 var(--space-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  line-height: 0;
+  background: var(--color-bg);
+}
+
+:where([data-game]) canvas[data-type="ds-canvas"],
+:where([data-game]) canvas[data-type="ff-canvas"],
+:where([data-game]) canvas[data-type="bo-canvas"],
+:where([data-game]) canvas[data-type="sf-canvas"],
+:where([data-game]) canvas[data-type="tb-canvas"] {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Without this a drag on a touch screen scrolls the page instead of panning
+     the plane, and a two-finger zoom fights the wheel handler. */
+  touch-action: none;
+  cursor: crosshair;
+}
+
+:where([data-game]) p[data-type="ff-hint"],
+:where([data-game]) p[data-type="gol-hint"],
+:where([data-game]) p[data-type="fg-hint"],
+:where([data-game]) p[data-type="mw-hint"],
+:where([data-game]) p[data-type="bo-hint"],
+:where([data-game]) p[data-type="sl-hint"],
+:where([data-game]) p[data-type="sf-hint"],
+:where([data-game]) p[data-type="tb-hint"] {
+  margin-top: var(--space-xl);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+:where([data-game]) p[data-type="ds-try"],
+:where([data-game]) p[data-type="ff-try"],
+:where([data-game]) p[data-type="gol-try"],
+:where([data-game]) p[data-type="fg-try"],
+:where([data-game]) p[data-type="mw-try"],
+:where([data-game]) p[data-type="bo-try"],
+:where([data-game]) p[data-type="sl-try"],
+:where([data-game]) p[data-type="sf-try"],
+:where([data-game]) p[data-type="tb-try"],
+:where([data-game]) p[data-type="tw-try"] {
+  margin-bottom: var(--space-xl);
+  padding: var(--space-md) var(--space-lg);
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-bg);
+  border-radius: var(--radius);
+}
+
+/* Swatches: a palette preview, three or more chips in a row. */
+:where([data-game]) span[data-type="ds-swatch"],
+:where([data-game]) span[data-type="ff-swatch"],
+:where([data-game]) span[data-type="fg-swatch"],
+:where([data-game]) span[data-type="bo-swatch"],
+:where([data-game]) span[data-type="sf-swatch"],
+:where([data-game]) span[data-type="tb-swatch"] {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+  margin-right: var(--space-xs);
+}
+
+:where([data-game]) span[data-type="ds-swatch"] i,
+:where([data-game]) span[data-type="ff-swatch"] i,
+:where([data-game]) span[data-type="fg-swatch"] i,
+:where([data-game]) span[data-type="bo-swatch"] i,
+:where([data-game]) span[data-type="sf-swatch"] i,
+:where([data-game]) span[data-type="tb-swatch"] i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+/* Sliders: a labelled range input with its readout. */
+:where([data-game]) div[data-type="ds-sliders"],
+:where([data-game]) div[data-type="ff-sliders"],
+:where([data-game]) div[data-type="fg-sliders"],
+:where([data-game]) div[data-type="mw-sliders"],
+:where([data-game]) div[data-type="bo-sliders"],
+:where([data-game]) div[data-type="sf-sliders"],
+:where([data-game]) div[data-type="tb-sliders"] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md) var(--space-card);
+}
+
+:where([data-game]) div[data-type="ds-slider"],
+:where([data-game]) div[data-type="ff-slider"],
+:where([data-game]) div[data-type="fg-slider"],
+:where([data-game]) div[data-type="mw-slider"],
+:where([data-game]) div[data-type="bo-slider"],
+:where([data-game]) div[data-type="sl-slider"],
+:where([data-game]) div[data-type="sf-slider"],
+:where([data-game]) div[data-type="tb-slider"] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:where([data-game]) div[data-type="ds-slider"] input[type="range"],
+:where([data-game]) div[data-type="ff-slider"] input[type="range"],
+:where([data-game]) div[data-type="fg-slider"] input[type="range"],
+:where([data-game]) div[data-type="mw-slider"] input[type="range"],
+:where([data-game]) div[data-type="bo-slider"] input[type="range"],
+:where([data-game]) div[data-type="sl-slider"] input[type="range"],
+:where([data-game]) div[data-type="sf-slider"] input[type="range"],
+:where([data-game]) div[data-type="tb-slider"] input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--color-text);
+  cursor: pointer;
+}
+
+:where([data-game]) div[data-type="ff-slider"] output,
+:where([data-game]) div[data-type="fg-slider"] output,
+:where([data-game]) div[data-type="bo-slider"] output,
+:where([data-game]) div[data-type="sf-slider"] output {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  min-width: 3.5ch;
+  text-align: right;
+}
+
+@media (max-width: 560px) {
+  :where([data-game]) div[data-type="ff-sliders"],
+  :where([data-game]) div[data-type="fg-sliders"],
+  :where([data-game]) div[data-type="mw-sliders"],
+  :where([data-game]) div[data-type="bo-sliders"],
+  :where([data-game]) div[data-type="sf-sliders"],
+  :where([data-game]) div[data-type="tb-sliders"] {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Shared button chrome for the games lane — the same move tools-common.css made
    for tools. Nine games (2048, maze-weaver, and the six Driftfield engines that
    still ship a games stylesheet) carry a byte-identical copy of this rule scoped

@@ -41,45 +41,19 @@
  */
 
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
-
-export interface ExportSize {
-  id: string
-  label: string
-  w: number
-  h: number
-}
-
-/**
- * Resolution presets, widened from the original four.
- *
- * The old list had one entry per device shape and no way to say a number, so
- * "give me a 4K desktop background" and "give me something small enough to
- * attach" were both unavailable. Custom is a real option, not a preset in
- * disguise — see `parseCustomSize`.
- */
-export const EXPORT_SIZES: ExportSize[] = [
-  { id: 'phone', label: 'Phone · 1080×2340', w: 1080, h: 2340 },
-  { id: 'phone-hi', label: 'Phone (large) · 1440×3120', w: 1440, h: 3120 },
-  { id: 'tablet', label: 'Tablet · 1668×2388', w: 1668, h: 2388 },
-  { id: 'desktop', label: 'Desktop · 2560×1440', w: 2560, h: 1440 },
-  { id: 'uhd', label: 'Desktop 4K · 3840×2160', w: 3840, h: 2160 },
-  { id: 'hd', label: 'HD · 1920×1080', w: 1920, h: 1080 },
-  { id: 'square', label: 'Square · 2048×2048', w: 2048, h: 2048 },
-  { id: 'square-sm', label: 'Square (small) · 1080×1080', w: 1080, h: 1080 },
-  { id: 'story', label: 'Story · 1080×1920', w: 1080, h: 1920 },
-  { id: 'ultrawide', label: 'Ultrawide · 3440×1440', w: 3440, h: 1440 },
-]
+import { downloadBlob } from './download'
+import { formatBytes as formatBytesBase } from './format'
 
 /** Beyond this a single canvas allocation starts failing on phones. */
 export const EXPORT_MAX_EDGE = 8192
 /** Total pixels, which is the constraint that actually bites: 8192² is 268MB at 4 bytes each. */
-export const EXPORT_MAX_PIXELS = 40_000_000
+const EXPORT_MAX_PIXELS = 40_000_000
 
-export interface SizeError {
+interface SizeError {
   ok: false
   reason: string
 }
-export type SizeResult = { ok: true; w: number; h: number } | SizeError
+type SizeResult = { ok: true; w: number; h: number } | SizeError
 
 /**
  * Validate a user-typed resolution.
@@ -89,7 +63,7 @@ export type SizeResult = { ok: true; w: number; h: number } | SizeError
  * one-sided-bound trap AGENTS.md describes for the Type Trial validator, in a
  * different costume.
  */
-export function parseCustomSize(rawW: unknown, rawH: unknown): SizeResult {
+function parseCustomSize(rawW: unknown, rawH: unknown): SizeResult {
   const w = Math.round(Number(rawW))
   const h = Math.round(Number(rawH))
   if (!Number.isFinite(w) || !Number.isFinite(h) || w < 16 || h < 16) {
@@ -107,21 +81,11 @@ export function parseCustomSize(rawW: unknown, rawH: unknown): SizeResult {
   return { ok: true, w, h }
 }
 
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  // Revoke on the next frame, not immediately: Safari has not finished reading
-  // the blob when click() returns and produces a zero-byte file.
-  requestAnimationFrame(() => URL.revokeObjectURL(url))
-}
+/** Flowmap imports both from here; the implementations live in download.ts / format.ts. */
+export { downloadBlob }
 
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return formatBytesBase(bytes, 0)
 }
 
 /** Render a resolution-independent draw function into an offscreen canvas. */
@@ -140,7 +104,7 @@ export function renderExport(
   return canvas
 }
 
-export interface GifOptions {
+interface GifOptions {
   width: number
   height: number
   frames?: number
@@ -162,7 +126,7 @@ export interface GifOptions {
  * content these engines produce: smooth gradients drifting through hue over the
  * loop. Per-frame palettes cost bytes and keep the gradients clean.
  */
-export async function encodeGif(
+async function encodeGif(
   drawFrame: (ctx: CanvasRenderingContext2D, w: number, h: number, frame: number, total: number) => void | Promise<void>,
   options: GifOptions,
 ): Promise<Blob> {
@@ -246,7 +210,7 @@ export interface AnimationRefusal {
  * `cancelled()` is polled by the engine between frames: a deep render is long
  * enough that the visitor must be able to stop it.
  */
-export interface AnimationSource {
+interface AnimationSource {
   /** Button label, e.g. "Record the dive". */
   label: string
   title?: string
@@ -262,7 +226,7 @@ export interface AnimationSource {
   hold?: number
 }
 
-export interface LiveExportOptions {
+interface LiveExportOptions {
   /** File-name stem, e.g. "murmuration". */
   name: string
   /** Seconds of animation to record into the GIF. */

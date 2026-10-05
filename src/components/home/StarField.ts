@@ -10,6 +10,9 @@
  * (--color-bg / --color-text / --color-accent) so re-theming needs no JS change.
  */
 
+import { prefersReducedMotion } from '../../lib/motion'
+import { cappedDpr } from '../../lib/math'
+
 const STAR_SPACING = 32 // css px between stars
 const WARP_RADIUS = 160 // px of pointer influence
 const WARP_PUSH = 1.1 // impulse strength per frame near the pointer
@@ -66,7 +69,7 @@ class StarField extends HTMLElement {
   private accent: RGB = [46, 77, 143]
 
   connectedCallback() {
-    this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+    this.reduced = prefersReducedMotion()
     this.canvas = document.createElement('canvas')
     this.canvas.setAttribute('data-type', 'starfield-canvas')
     this.appendChild(this.canvas)
@@ -91,7 +94,7 @@ class StarField extends HTMLElement {
   }
 
   private resize = () => {
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2)
+    this.dpr = cappedDpr()
     this.w = window.innerWidth
     this.h = window.innerHeight
     this.canvas.width = Math.round(this.w * this.dpr)

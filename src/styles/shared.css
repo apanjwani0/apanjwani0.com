@@ -140,7 +140,7 @@ nav[data-type="hero-nav"] {
   z-index: 10;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  column-gap: 1rem;
+  column-gap: var(--space-xl);
   align-items: center;
   padding: clamp(1rem, 3.5vw, 1.4rem) clamp(1.25rem, 5vw, 2rem);
   /* No background of its own at rest, and no bottom rule. A solid --color-bg
@@ -184,9 +184,7 @@ nav[data-type="hero-nav"]:focus-within {
 a[data-type="hero-wordmark"] {
   pointer-events: auto;
   justify-self: start;
-  font-size: var(--text-wordmark);
   text-decoration: none;
-  color: inherit;
 }
 
 /* centred link cluster — second grid column, wrapped for narrow screens.
@@ -244,7 +242,7 @@ nav[data-type="hero-nav"] a[data-active] {
     grid-template-columns: 1fr;
     justify-items: center;
     row-gap: var(--space-sm);
-    padding: 0.75rem var(--space-page-x);
+    padding: var(--space-lg) var(--space-page-x);
   }
 
   a[data-type="hero-wordmark"] {
@@ -253,7 +251,7 @@ nav[data-type="hero-nav"] a[data-active] {
 
   span[data-type="hero-links"] {
     grid-column: 1;
-    gap: 0.75rem 1.2rem;
+    gap: var(--space-lg) 1.2rem;
   }
 }
 

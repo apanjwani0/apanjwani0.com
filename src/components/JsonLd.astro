@@ -1,0 +1,17 @@
+---
+/**
+ * One JSON-LD block, carrying the response's CSP nonce.
+ *
+ * `json` is the string a helper in src/lib/jsonld.ts returns: those already pass
+ * through `serialize()`, which escapes `<`, so the raw string is safe to inject.
+ * Never hand this anything else.
+ */
+interface Props {
+  json: string
+}
+
+const { json } = Astro.props
+const nonce = (Astro.locals as { cspNonce?: string }).cspNonce
+---
+
+<script nonce={nonce} type="application/ld+json" set:html={json} />

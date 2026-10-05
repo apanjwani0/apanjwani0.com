@@ -21,7 +21,10 @@
  * are ef-/EF_-prefixed because tool component files share one global script scope.
  */
 
-import { flashBadge, flashLabel } from '../../../lib/flash'
+import { flashBadge, flashLabel, copyText } from '../../../lib/flash'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { escapeHtml } from '../../../lib/escape'
+import { MS_PER_DAY } from '../../../lib/date'
 
 type EfUnit = 'auto' | 's' | 'ms' | 'us' | 'ns'
 type EfTz = 'utc' | 'local'
@@ -121,7 +124,7 @@ function efRelative(ms: number, now: number): string {
     ['year', 31557600000],
     ['month', 2629800000],
     ['week', 604800000],
-    ['day', 86400000],
+    ['day', MS_PER_DAY],
     ['hour', 3600000],
     ['minute', 60000],
     ['second', 1000],
@@ -234,12 +237,6 @@ function efSnippets(sec: number): { lang: string; code: string }[] {
     { lang: 'MySQL', code: `SELECT UNIX_TIMESTAMP(NOW());\nSELECT FROM_UNIXTIME(${S});` },
     { lang: 'Shell', code: `date +%s\ndate -d @${S}   # macOS: date -r ${S}` },
   ]
-}
-
-function efEsc(s: string): string {
-  return s.replace(/[&<>"']/g, c => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
-  ))
 }
 
 // ── WebComponent ─────────────────────────────────────────────────────────────
@@ -466,10 +463,10 @@ class EpochWizardTool extends HTMLElement {
   private rowsHtml(rows: { k: string; v: string; copy?: string }[]): string {
     return rows.map(r => `
       <div data-type="ew-row">
-        <dt>${efEsc(r.k)}</dt>
+        <dt>${escapeHtml(r.k)}</dt>
         <dd>
-          <span data-type="ew-val">${efEsc(r.v)}</span>
-          ${r.copy !== undefined ? `<button data-action="copy-text" data-copy="${efEsc(r.copy)}" type="button" aria-label="Copy ${efEsc(r.k)}">Copy</button>` : ''}
+          <span data-type="ew-val">${escapeHtml(r.v)}</span>
+          ${r.copy !== undefined ? `<button data-action="copy-text" data-copy="${escapeHtml(r.copy)}" type="button" aria-label="Copy ${escapeHtml(r.k)}">Copy</button>` : ''}
         </dd>
       </div>`).join('')
   }
@@ -583,17 +580,17 @@ class EpochWizardTool extends HTMLElement {
     if (!grid) return
     grid.innerHTML = efSnippets(sec).map(s => `
       <button data-type="ew-snippet" data-action="copy-snippet" type="button" aria-label="Copy ${s.lang} snippet">
-        <span data-type="ew-snippet-lang">${efEsc(s.lang)}</span>
-        <code>${efEsc(s.code)}</code>
+        <span data-type="ew-snippet-lang">${escapeHtml(s.lang)}</span>
+        <code>${escapeHtml(s.code)}</code>
       </button>`).join('')
   }
 
   private emptyHint(msg: string): string {
-    return `<div data-type="ew-row" data-empty><dd><span data-type="ew-val" data-muted>${efEsc(msg)}</span></dd></div>`
+    return `<div data-type="ew-row" data-empty><dd><span data-type="ew-val" data-muted>${escapeHtml(msg)}</span></dd></div>`
   }
 
   private errHint(msg: string): string {
-    return `<div data-type="ew-row" data-error><dd><span data-type="ew-val">${efEsc(msg)}</span></dd></div>`
+    return `<div data-type="ew-row" data-error><dd><span data-type="ew-val">${escapeHtml(msg)}</span></dd></div>`
   }
 
   // ── actions ──────────────────────────────────────────────────────────────
@@ -658,14 +655,9 @@ class EpochWizardTool extends HTMLElement {
 
   private async copyText(text: string, btn: HTMLButtonElement) {
     if (!text) { this.setStatus('Nothing to copy.'); return }
-    try {
-      await navigator.clipboard.writeText(text)
-      this.flash(btn, 'Copied!')
-      this.setStatus('Copied to clipboard.')
-    } catch {
-      this.flash(btn, 'Failed')
-      this.setStatus('Copy failed — clipboard access was blocked.')
-    }
+    const ok = await copyText(text)
+    this.flash(btn, ok ? 'Copied' : 'Copy failed')
+    this.setStatus(ok ? 'Copied to clipboard.' : 'Copy failed — clipboard access was blocked.')
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
@@ -707,7 +699,7 @@ class EpochWizardTool extends HTMLElement {
 
   private restoreInputs() {
     const set = (k: string, ls: string) => {
-      const v = this.readLS(ls)
+      const v = lsGet(ls)
       if (v !== null) (this.q(`[data-input="${k}"]`) as HTMLInputElement).value = v
     }
     set('ts', EF_LS_TS)
@@ -717,14 +709,14 @@ class EpochWizardTool extends HTMLElement {
   }
 
   private persistInputs() {
-    this.writeLS(EF_LS_TS, (this.q('[data-input="ts"]') as HTMLInputElement).value)
-    this.writeLS(EF_LS_DATE, (this.q('[data-input="date"]') as HTMLInputElement).value)
-    this.writeLS(EF_LS_SE, (this.q('[data-input="se"]') as HTMLInputElement).value)
-    this.writeLS(EF_LS_DUR, (this.q('[data-input="dur"]') as HTMLInputElement).value)
+    lsSet(EF_LS_TS, (this.q('[data-input="ts"]') as HTMLInputElement).value)
+    lsSet(EF_LS_DATE, (this.q('[data-input="date"]') as HTMLInputElement).value)
+    lsSet(EF_LS_SE, (this.q('[data-input="se"]') as HTMLInputElement).value)
+    lsSet(EF_LS_DUR, (this.q('[data-input="dur"]') as HTMLInputElement).value)
   }
 
   private loadSettings(): EfSettings {
-    const raw = this.readLS(EF_LS_SETTINGS)
+    const raw = lsGet(EF_LS_SETTINGS)
     if (!raw) return { ...EF_DEFAULTS }
     try {
       const p = JSON.parse(raw) as Partial<EfSettings>
@@ -740,16 +732,9 @@ class EpochWizardTool extends HTMLElement {
   }
 
   private saveSettings() {
-    this.writeLS(EF_LS_SETTINGS, JSON.stringify(this.settings))
+    lsSet(EF_LS_SETTINGS, JSON.stringify(this.settings))
   }
 
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
-
-  private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode */ }
-  }
 }
 
 if (!customElements.get('epoch-wizard-tool')) {

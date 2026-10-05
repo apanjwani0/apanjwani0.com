@@ -43,20 +43,7 @@ a view that shows structure does not.
 8. `reassembly`: packets arriving out of order, a lost one sent again, and the
    page drawn.
 
-## Wiring checklist (from AGENTS.md)
-
-- `src/components/games/internet-atlas/`: `atlas.ts` holds the claims (views,
-  elements, beats, legends), `InternetAtlas.ts` the custom element, and
-  `internet-atlas.css` its styles.
-- `EMBED_TAGS` in `src/lib/embeds.ts`, `EMBED_NO_CHROME` if it writes no
-  chrome, a `mountGame()` branch in `src/lib/game-mount.ts`, and an `@import`
-  in `src/styles/games-embed.css`.
-- A learnings entry in `src/config/learnings.ts` (slug, title, summary, date,
-  content, embed, embedCaption, published, seoTitle, metaDescription,
-  keywords), with `{{embed:view}}` markers where each figure belongs.
-- `security:smoke`: mirror the `diagram-atlas` assertions (every view has a
-  legend, every beat lights an element that exists, tokens stay inside the
-  viewBox), check every shipped marker against the view list, and recompute
-  any number the article quotes, in every field that repeats it.
-- `npm run og` for the share card. The read time is derived.
-- Check facts before they go in; where the record is contested, say so.
+Wiring follows AGENTS.md (*Admin Config Management*, *Learnings: articles that
+mount a live component*); the figure's claims live in
+`src/components/games/internet-atlas/atlas.ts`. Check facts before they go in;
+where the record is contested, say so.

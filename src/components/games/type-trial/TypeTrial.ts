@@ -23,7 +23,7 @@
  */
 import { dailyPassage, msUntilUtcMidnight, todayUtcDay } from '../../../lib/type-trial-daily'
 import { recordDailyPlay, utcDayFromDateString } from '../../../lib/daily-streak'
-import { flashLabel } from '../../../lib/flash'
+import { flashLabel, copyText } from '../../../lib/flash'
 import {
   decodeGhostToken,
   encodeGhostToken,
@@ -33,6 +33,7 @@ import {
   verifyGhostPassage,
   type DecodedGhost,
 } from './ghost'
+import { escapeHtml } from '../../../lib/escape'
 
 type Category = 'daily' | 'quotes' | 'code' | 'numbers'
 
@@ -84,22 +85,6 @@ const TEXTS: Record<Exclude<Category, 'daily'>, string[]> = {
 const BESTS_KEY = 'type-trial:bests:v1'
 /** Remembered leaderboard display name — so submitting is one click next time. */
 const NAME_KEY = 'type-trial:name:v1'
-
-/** Whole-string HTML escape for untrusted text (leaderboard names). */
-function escText(s: string): string {
-  return s.replace(/[&<>"']/g, escapeHtml)
-}
-
-function escapeHtml(ch: string): string {
-  switch (ch) {
-    case '&': return '&amp;'
-    case '<': return '&lt;'
-    case '>': return '&gt;'
-    case '"': return '&quot;'
-    case "'": return '&#39;'
-    default: return ch
-  }
-}
 
 function pick(arr: string[], avoid?: string): string {
   if (arr.length <= 1) return arr[0]
@@ -765,7 +750,7 @@ class TypeTrialTool extends HTMLElement {
       const wpm = typeof v.wpm === 'number' ? Math.round(v.wpm) : 0
       const acc = typeof v.acc === 'number' ? Math.round(v.acc) : 0
       const yours = you && name.toLowerCase() === you ? ' data-you' : ''
-      return `<li${yours}><span data-type="tt-lb-rank">${i + 1}</span><span data-type="tt-lb-name">${escText(name)}</span><span data-type="tt-lb-score">${wpm} wpm · ${acc}%</span></li>`
+      return `<li${yours}><span data-type="tt-lb-rank">${i + 1}</span><span data-type="tt-lb-name">${escapeHtml(name)}</span><span data-type="tt-lb-score">${wpm} wpm · ${acc}%</span></li>`
     })
     this.dailyBoardEl.innerHTML = rows.join('')
     if (!rows.length) this.setDailyNote('No entries yet today — finish a run and be first on the board.')
@@ -937,12 +922,7 @@ class TypeTrialTool extends HTMLElement {
     const token = this.mintGhostToken()
     if (!token) { flashLabel(btn, 'Unavailable'); return }
     const url = `${location.origin}${location.pathname}#ghost=${token}`
-    try {
-      await navigator.clipboard.writeText(url)
-      flashLabel(btn, 'Link copied!')
-    } catch {
-      flashLabel(btn, 'Copy failed')
-    }
+    await copyText(url, btn, { copied: 'Link copied' })
   }
 
   private async copyResult(e: Event) {
@@ -967,13 +947,7 @@ class TypeTrialTool extends HTMLElement {
     const text = this.category === 'daily'
       ? `Type Trial daily ${this.dailyDay}: ${s.wpm} wpm at ${s.acc}% accuracy${ghostClause} — race the same passage at ${url}`
       : `I just typed ${s.wpm} wpm at ${s.acc}% accuracy on Type Trial${ghostClause} — beat me at ${url}`
-    try {
-      await navigator.clipboard.writeText(text)
-      btn.textContent = 'Copied!'
-    } catch {
-      btn.textContent = 'Copy failed'
-    }
-    setTimeout(() => { btn.textContent = 'Copy result' }, 1400)
+    await copyText(text, btn, { ms: 1400 })
   }
 }
 

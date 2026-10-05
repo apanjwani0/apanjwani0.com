@@ -24,7 +24,9 @@
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { escapeHtml } from '../../../lib/escape'
 
 const RL_LS_PATTERN = 'regex-lab:pattern:v1'
 const RL_LS_FLAGS = 'regex-lab:flags:v1'
@@ -113,10 +115,6 @@ const RL_REFERENCE: [string, [string, string][]][] = [
 
 // ── Pure helpers (no DOM) ─────────────────────────────────────────────────────
 
-function rlEsc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
 /** Sort a flag string into canonical order and drop anything unknown/duplicated. */
 function rlNormalizeFlags(flags: string): string {
   const seen = new Set<string>()
@@ -200,16 +198,16 @@ function rlBuildHighlight(text: string, matches: RegExpExecArray[]): string {
     const m = matches[i]
     const start = m.index
     const end = start + m[0].length
-    if (start > last) html += rlEsc(text.slice(last, start))
+    if (start > last) html += escapeHtml(text.slice(last, start))
     if (end === start) {
       html += `<mark data-empty="" data-alt="${i % 2}"></mark>`
     } else {
-      html += `<mark data-alt="${i % 2}">${rlEsc(text.slice(start, end))}</mark>`
+      html += `<mark data-alt="${i % 2}">${escapeHtml(text.slice(start, end))}</mark>`
       last = end
     }
     if (end > last) last = end
   }
-  html += rlEsc(text.slice(last))
+  html += escapeHtml(text.slice(last))
   // A trailing newline needs a spare glyph or the mirror loses the final line's height.
   if (text.endsWith('\n')) html += ' '
   return html
@@ -249,11 +247,11 @@ class RegexLabTool extends HTMLElement {
   }
 
   connectedCallback() {
-    const savedPattern = this.readLS(RL_LS_PATTERN)
-    const savedFlags = this.readLS(RL_LS_FLAGS)
-    const savedText = this.readLS(RL_LS_TEXT)
-    const savedReplace = this.readLS(RL_LS_REPLACE)
-    const savedTab = this.readLS(RL_LS_TAB)
+    const savedPattern = lsGet(RL_LS_PATTERN)
+    const savedFlags = lsGet(RL_LS_FLAGS)
+    const savedText = lsGet(RL_LS_TEXT)
+    const savedReplace = lsGet(RL_LS_REPLACE)
+    const savedTab = lsGet(RL_LS_TAB)
 
     this.flags = new Set(rlNormalizeFlags(savedFlags ?? RL_DEFAULT_FLAGS))
     this.tab = savedTab === 'replace' ? 'replace' : 'matches'
@@ -281,7 +279,7 @@ class RegexLabTool extends HTMLElement {
           </div>
           <div data-group="rl-flags" role="group" aria-label="Regular expression flags">
             ${RL_FLAGS.map(([f, label]) => `
-              <button data-flag="${f}" type="button" aria-pressed="false" title="${rlEsc(label)}">${f}</button>
+              <button data-flag="${f}" type="button" aria-pressed="false" title="${escapeHtml(label)}">${f}</button>
             `).join('')}
           </div>
           <div data-group="rl-actions">
@@ -336,8 +334,8 @@ class RegexLabTool extends HTMLElement {
           <div data-type="rl-example-grid">
             ${RL_EXAMPLES.map((ex, i) => `
               <button data-type="rl-example" data-example="${i}" type="button">
-                <code>/${rlEsc(ex.pattern)}/${ex.flags}</code>
-                <span>${rlEsc(ex.label)}</span>
+                <code>/${escapeHtml(ex.pattern)}/${ex.flags}</code>
+                <span>${escapeHtml(ex.label)}</span>
               </button>
             `).join('')}
           </div>
@@ -348,9 +346,9 @@ class RegexLabTool extends HTMLElement {
           <div data-type="rl-ref-grid">
             ${RL_REFERENCE.map(([group, rows]) => `
               <div data-type="rl-ref-col">
-                <h3>${rlEsc(group)}</h3>
+                <h3>${escapeHtml(group)}</h3>
                 ${rows.map(([tok, desc]) => `
-                  <div data-type="rl-ref-row"><code>${rlEsc(tok)}</code><span>${rlEsc(desc)}</span></div>
+                  <div data-type="rl-ref-row"><code>${escapeHtml(tok)}</code><span>${escapeHtml(desc)}</span></div>
                 `).join('')}
               </div>
             `).join('')}
@@ -419,9 +417,9 @@ class RegexLabTool extends HTMLElement {
     const text = this.textEl.value
     const flags = this.flagsString()
 
-    this.writeLS(RL_LS_PATTERN, pattern)
-    this.writeLS(RL_LS_TEXT, text)
-    this.writeLS(RL_LS_REPLACE, this.replaceEl.value)
+    lsSet(RL_LS_PATTERN, pattern)
+    lsSet(RL_LS_TEXT, text)
+    lsSet(RL_LS_REPLACE, this.replaceEl.value)
 
     if (!pattern) {
       this.root.removeAttribute('data-invalid')
@@ -472,7 +470,7 @@ class RegexLabTool extends HTMLElement {
   }
 
   private setHighlightPlain(text: string) {
-    this.highlightEl.innerHTML = rlEsc(text) + (text.endsWith('\n') ? ' ' : '')
+    this.highlightEl.innerHTML = escapeHtml(text) + (text.endsWith('\n') ? ' ' : '')
     this.syncScroll()
   }
 
@@ -502,15 +500,15 @@ class RegexLabTool extends HTMLElement {
         <div data-type="rl-groups">
           ${groups.map((g, gi) => {
             const num = gi + 1
-            const label = names[num] ? `Group ${num} · ${rlEsc(names[num])}` : `Group ${num}`
+            const label = names[num] ? `Group ${num} · ${escapeHtml(names[num])}` : `Group ${num}`
             const val = g === undefined ? '<em>undefined</em>'
               : g === '' ? '<em>(empty)</em>'
-              : rlEsc(g)
+              : escapeHtml(g)
             return `<div data-type="rl-grow"><span data-type="rl-gname">${label}</span><span data-type="rl-gval">${val}</span></div>`
           }).join('')}
         </div>`
 
-      const valHtml = full.length === 0 ? '<em>(empty match)</em>' : rlEsc(full)
+      const valHtml = full.length === 0 ? '<em>(empty match)</em>' : escapeHtml(full)
       return `
         <div data-type="rl-match">
           <div data-type="rl-match-head">
@@ -556,7 +554,7 @@ class RegexLabTool extends HTMLElement {
     if (!RL_FLAG_SET.has(flag)) return
     if (this.flags.has(flag)) this.flags.delete(flag)
     else this.flags.add(flag)
-    this.writeLS(RL_LS_FLAGS, this.flagsString())
+    lsSet(RL_LS_FLAGS, this.flagsString())
     this.reflectFlags()
     this.evaluate()
   }
@@ -571,7 +569,7 @@ class RegexLabTool extends HTMLElement {
 
   private setTab(tab: 'matches' | 'replace') {
     this.tab = tab
-    this.writeLS(RL_LS_TAB, tab)
+    lsSet(RL_LS_TAB, tab)
     this.reflectTab()
     if (tab === 'replace') this.replaceEl.focus()
   }
@@ -595,7 +593,7 @@ class RegexLabTool extends HTMLElement {
     // Only overwrite the test string when it's empty, so an example never
     // clobbers text the user is actively working with.
     if (!this.textEl.value.trim()) this.textEl.value = ex.sample
-    this.writeLS(RL_LS_FLAGS, this.flagsString())
+    lsSet(RL_LS_FLAGS, this.flagsString())
     this.reflectFlags()
     this.evaluate()
     this.patternEl.focus()
@@ -644,16 +642,7 @@ class RegexLabTool extends HTMLElement {
 
   private async copyText(text: string, btn: HTMLButtonElement) {
     if (!text) { this.setStatus('Nothing to copy.'); return }
-    try {
-      await navigator.clipboard.writeText(text)
-      this.flash(btn, 'Copied!')
-    } catch {
-      this.flash(btn, 'Failed')
-    }
-  }
-
-  private flash(btn: HTMLButtonElement, label: string) {
-    flashLabel(btn, label, 1200)
+    await copyText(text, btn)
   }
 
   private setStatus(label: string) {
@@ -661,13 +650,6 @@ class RegexLabTool extends HTMLElement {
   }
 
   // ── persistence ────────────────────────────────────────────────────────────
-  private readLS(key: string): string | null {
-    try { return localStorage.getItem(key) } catch { return null }
-  }
-
-  private writeLS(key: string, value: string) {
-    try { localStorage.setItem(key, value) } catch { /* ignore quota / private-mode */ }
-  }
 }
 
 if (!customElements.get('regex-lab-tool')) {

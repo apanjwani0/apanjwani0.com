@@ -18,7 +18,10 @@
  */
 
 import { attachCanvasExport } from '../../../lib/canvas-export'
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
+import { prefersReducedMotion } from '../../../lib/motion'
+import { clamp, cappedDpr } from '../../../lib/math'
+import { downloadDataUrl } from '../../../lib/download'
 
 interface Palette {
   id: string
@@ -49,10 +52,6 @@ const DETAIL_MIN = 5, DETAIL_MAX = 60        // /10000 -> noise scale
 const TRAILS_MIN = 0, TRAILS_MAX = 40        // /200 -> fade alpha 0–0.2
 
 const TAU = Math.PI * 2
-
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
 
 /* Deterministic PRNG (mulberry32) — same seed, same stream. */
 function mulberry32(a: number) {
@@ -230,7 +229,7 @@ class FlowFieldGame extends HTMLElement {
     requestAnimationFrame(() => {
       this.resize()
       this.regenerate(false)
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = prefersReducedMotion()
       if (reduced) {
         // Respect reduced-motion: paint a finished frame, then stay paused.
         this.renderStatic(500)
@@ -287,7 +286,7 @@ class FlowFieldGame extends HTMLElement {
   /* ── geometry ── */
 
   private dpr() {
-    return Math.min(window.devicePixelRatio || 1, 2)
+    return cappedDpr()
   }
 
   private resize() {
@@ -350,7 +349,7 @@ class FlowFieldGame extends HTMLElement {
     }
     this.paintBackground()
     this.spawnAll()
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (prefersReducedMotion()) {
       this.renderStatic(500)
     } else {
       this.setPlaying(true)
@@ -426,7 +425,6 @@ class FlowFieldGame extends HTMLElement {
     this.querySelector('[data-action="play"]')?.addEventListener('click', () => this.setPlaying(!this.playing))
     this.querySelector('[data-action="regen"]')?.addEventListener('click', () => this.regenerate(true))
     this.querySelector('[data-action="clear"]')?.addEventListener('click', () => this.clear())
-    this.querySelector('[data-action="download"]')?.addEventListener('click', () => this.download())
     this.querySelector('[data-action="copy-seed"]')?.addEventListener('click', () => this.copySeed())
 
     this.bindSlider('#ff-particles', '#ff-particles-out', LS_PARTICLES, raw => {
@@ -521,23 +519,14 @@ class FlowFieldGame extends HTMLElement {
 
   private copySeed() {
     const btn = this.querySelector('[data-action="copy-seed"]') as HTMLButtonElement | null
-    const text = String(this.seed)
-    const done = () => flashLabel(btn, 'Copied')
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(done)
-    else done()
+    void copyText(String(this.seed), btn)
   }
 
   private download() {
     try {
-      const url = this.canvas.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `flow-field-${this.seed}.png`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
+      downloadDataUrl(this.canvas.toDataURL('image/png'), `flow-field-${this.seed}.png`)
     } catch {
-      /* toDataURL can throw if the canvas is tainted — it never is here (no external images) */
+      /* toDataURL can throw on a tainted canvas — never here (no external images) */
     }
   }
 }

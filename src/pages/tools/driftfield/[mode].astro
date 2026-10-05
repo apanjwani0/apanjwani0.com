@@ -3,9 +3,11 @@ export const prerender = false
 
 import ToolBase from '../../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../../components/Breadcrumbs.astro'
+import JsonLd from '../../../components/JsonLd.astro'
+import { buildBreadcrumbs } from '../../../lib/breadcrumbs'
 import RelatedLinks from '../../../components/RelatedLinks.astro'
 import { getLearnings, getSite, getTools } from '../../../lib/config'
-import { breadcrumbListJsonLd, webAppJsonLd } from '../../../lib/jsonld'
+import { webAppJsonLd } from '../../../lib/jsonld'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, driftfieldMode, isDriftfieldPublic } from '../../../lib/driftfield'
 import { embedTag } from '../../../lib/embeds'
 import { existingOgCardPath } from '../../../lib/og'
@@ -35,7 +37,6 @@ if (!isDriftfieldPublic(tools)) {
   return new Response(null, { status: 404, statusText: 'Not Found' })
 }
 
-const cspNonce = (Astro.locals as any).cspNonce
 const canonicalUrl = `${site.url}/tools/${DRIFTFIELD_SLUG}/${mode.slug}`
 
 // The engine to mount. Driftfield modes are the same components the articles
@@ -63,18 +64,12 @@ const ldJson = webAppJsonLd({
   keywords: mode.keywords,
 })
 
-const crumbs = [
-  { label: 'home', href: '/' },
-  { label: 'tools', href: '/tools' },
-  { label: 'driftfield', href: `/tools/${DRIFTFIELD_SLUG}` },
-  { label: mode.title },
-]
-const breadcrumbLd = breadcrumbListJsonLd([
-  { name: 'Home', url: site.url },
-  { name: 'Tools', url: `${site.url}/tools` },
-  { name: 'Driftfield', url: `${site.url}/tools/${DRIFTFIELD_SLUG}` },
-  { name: mode.title, url: canonicalUrl },
-])
+const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
+  { label: 'home', path: '/' },
+  { label: 'tools', path: '/tools' },
+  { label: 'driftfield', path: `/tools/${DRIFTFIELD_SLUG}` },
+  { label: mode.title, path: `/tools/${DRIFTFIELD_SLUG}/${mode.slug}` },
+], site.url)
 ---
 
 <ToolBase
@@ -84,8 +79,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
   keywords={mode.keywords}
   ogCard={ogCard}
 >
-  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
-  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <JsonLd json={ldJson} />
+  <JsonLd json={breadcrumbLd} />
   <Breadcrumbs items={crumbs} inset />
 
   {/* The tools' workbench root, so a mode takes the same width and gutter as

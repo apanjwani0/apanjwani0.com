@@ -21,8 +21,8 @@ import { RANK_LABEL, SUIT_SYMBOL } from '../engine/types'
 /** Which suits paint red; the rest paint near-black. */
 const RED: Record<Suit, boolean> = { c: false, s: false, d: true, h: true }
 
-export const RED_INK = '#f0473b'
-export const DARK_INK = '#16161a'
+const RED_INK = '#f0473b'
+const DARK_INK = '#16161a'
 const CARD_FACE = '#f7f7f5'
 const BACK_BLUE = '#63a6ef'
 /** The one text face used inside SVG assets — import it, never re-declare. */
@@ -65,7 +65,7 @@ export function suitSvg(suit: Suit, color?: string): string {
    they drop into the same slot and scale identically. Add a back = add a
    `CardBackId` + a case in `cardBackSvg`. */
 
-export type CardBackId = 'classic' | 'crimson' | 'slate' | 'forest' | 'grape' | 'ivory'
+type CardBackId = 'classic' | 'crimson' | 'slate' | 'forest' | 'grape' | 'ivory'
 export const CARD_BACKS: readonly CardBackId[] = ['classic', 'crimson', 'slate', 'forest', 'grape', 'ivory']
 
 /**

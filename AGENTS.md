@@ -57,39 +57,32 @@ JSON, with the `Site` type declared in `src/config/site.ts`.
   sitemap, `/llms.txt`, the command palette and the 404.
 - `src/lib/theme.ts`, `src/lib/site-ui.ts`, `src/lib/kit.ts`,
   `src/lib/fuzzy.ts` — see *UI refresh*.
+- Client helpers shared by every tool and game (see *Key Conventions*):
+  `escape.ts`, `storage.ts`, `flash.ts` (`copyText`), `download.ts`,
+  `format.ts`, `math.ts`, `motion.ts`, `date.ts`.
+- `src/lib/breadcrumbs.ts`, `src/components/JsonLd.astro`,
+  `src/components/Card.astro` — the page-level building blocks (see
+  *Key Conventions*).
 - `src/styles/theme.css` — design tokens, the single source of truth.
 - `astro.config.mjs` — the adapter and the Vite middleware that persists
   `/admin` saves.
 
-## Current state (2026-10-03)
+## Current state (2026-10-05)
 
-- **Live** = `origin/main`. On 2026-10-03 `develop` went to `main` as a direct
-  fast-forward push, not a PR (the `main` ruleset blocks force pushes and
-  deletion, not direct pushes), after `develop` merged `origin/main` back in:
-  every PR merge leaves a merge commit that `develop` lacks, and a push that is
-  not a fast-forward is refused. It shipped the `origin:check` beacon check, one
-  frame for tools, games and Driftfield modes, and the layout-shift fixes. Before
-  it: PR #31 (2026-10-03; PR #30's bounded SPF walk and two home layout fixes,
-  plus `docs/plans/review-response.md`, the plan answering two outside reviews)
-  and PR #27 (2026-10-01; the UI refresh foundation, the home hero, `/llms.txt`
-  and the review passes). Branch flow: feature → `develop` → `main`, by PR. Local
-  `main` is stale (2026-07-07); compare against `origin/main`.
+- **Live** = `origin/main` = `origin/develop` (PR #33 and #35 merged `develop`
+  into `main`). Branch flow: feature → `develop` → `main`, by PR. A direct
+  fast-forward push to `main` is allowed (its ruleset blocks force pushes and
+  deletion, not direct pushes) only after `develop` has merged `origin/main`
+  back in: every PR merge leaves a merge commit `develop` lacks, and a push that
+  is not a fast-forward is refused. Local `main` is stale; compare against
+  `origin/main`.
 - **Owner's pending moves:**
   1. Purge the Cloudflare cache and run the post-deploy checks in
-     `docs/plans/release-followups.md`, after #27, after #31 and again after this
-     push.
+     `docs/plans/release-followups.md` after each deploy since #27.
   2. Close the origin lock (see *Origin exposure*). Until then port 80 on the
      origin is reachable around Cloudflare.
-- **On `develop`, not live:** the pending-workbench hold now releases itself
-  after 4 s (a tool whose chunk never loads keeps its footer); the related-links
-  block is one scrolling row of chips with the hub link pinned at the end, and
-  only the "Read about it" and Driftfield rows remain (the "More
-  tools/games/learnings" sibling rows are gone); the footer is two columns (an
-  "About the developer" block with `footerBio`, then the section links) and site
-  data lives in `src/config/site.json`; the docs no longer describe the site as Oat-dependent;
-  the fonts are self-hosted and load on tool and game pages too; the control kit
-  exists and Flowmap is rebuilt on it (canvas-first, node colours, a tidy-tree
-  Flow layout), waiting on the owner's review before other tools move.
+- **Awaiting the owner's review:** the control kit exists and Flowmap is rebuilt
+  on it; no other tool moves to the kit until then.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
 
 ## Build / Test / Run
@@ -496,10 +489,8 @@ fixture is the worked example.
   `inset`), and a Driftfield mode wraps its page in the tool root. No game or
   engine caps its own root (the cap does nothing in an article's 728px column and
   is a second, narrower column on a game page), and no game renders the tool root
-  (Type Trial did, and doubled the gutter). A page outside `main`'s gutter, which
-  is every tool page, gives `RelatedLinks` and the SEO block `inset`. Asserted. A
-  headless-Chrome sweep of every page at 20 widths (320 to 3,440) found them
-  identical; it needs a browser, so it is not in the gate.
+  (that doubles the gutter). A page outside `main`'s gutter, which is every
+  tool page, gives `RelatedLinks` and the SEO block `inset`. Asserted.
 - **A tool page links only its own stylesheet**, `tools/<slug>/<slug>.css`,
   through a `?url` glob in `tools/[slug].astro`, after `tools-common.css`. A
   static import of a per-tool sheet, in the route or in a tool module, puts it
@@ -560,6 +551,22 @@ fixture is the worked example.
   count comes from a measured frame, held end frames reuse the last ImageData,
   and a second click stops the render. Every bar joins one registry served by
   one guarded pair of swap listeners (`trackBar`).
+- **One copy of each client helper.** A tool or game imports these rather than
+  writing its own, because private copies drift (seven escapers had lost `'`,
+  two copy buttons said "Copied" on failure): `escapeHtml` (`escape.ts`);
+  `lsGet`/`lsSet`/`lsRemove`/`lsGetNumber` (`storage.ts`, never throws, keys
+  unprefixed); `copyText` (`flash.ts`: Clipboard API, textarea fallback, one
+  "Copied" / "Copy failed" flash); `downloadBlob`/`downloadDataUrl`
+  (`download.ts`, no encoder pulled in); `formatBytes` (`format.ts`);
+  `clamp`/`cappedDpr` (`math.ts`); `prefersReducedMotion` (`motion.ts`);
+  `MS_PER_DAY` (`date.ts`). None touches the DOM at module scope. A private
+  wrapper survives only where `security:smoke` asserts its literal text.
+- **Pages share their building blocks.** A detail page builds its visible
+  trail and BreadcrumbList JSON-LD from one list (`buildBreadcrumbs`), every
+  JSON-LD block goes through `<JsonLd json={…} />` (it reads the nonce; feed it
+  only `src/lib/jsonld.ts` output), except `projects.astro`'s ItemList, whose
+  inline `<script` the smoke test matches, and the hubs render `Card.astro`, the
+  one card anatomy. `tools/[slug].astro` renders one `<slug>-tool` host.
 - **The "server" badge on `/tools` is derived.** `SERVER_TOOLS` lives in
   `src/lib/tools.ts`, not `src/config/tools.ts`, which `/admin` regenerates
   wholesale. Asserted: each slug is `live` and calls an `/api/` route, and the
@@ -589,53 +596,43 @@ fixture is the worked example.
   Only those three hubs render it. Asserted.
 - **Tool and game detail pages** pass `clientRouter={false}` (no router bundle)
   to `Head`.
-- **Fonts are self-hosted and load on every page.** Source Serif 4 and
-  JetBrains Mono (variable, Latin subset, OFL) live in `src/assets/fonts`;
+- **Fonts are self-hosted and load on every page.** Source Serif 4 and JetBrains
+  Mono (variable, Latin subset, OFL) live in `src/assets/fonts`;
   `src/styles/fonts.css` declares them, Vite hashes them into `/_astro/`, and
   `Head` preloads the two upright faces through the same `?url` import. Each
   family has a metric-matched local fallback face (`size-adjust` and the
-  overrides, measured over the site's own text), so the swap moves no text
-  (at most 0.022 with fonts delayed 1.2 s, phone width). Serif is for reading
-  (titles, prose, card titles), mono for operating (controls, labels, nav,
-  code). No stylesheet names a family: everything reads `--font-serif` or
-  `--font-mono`, so a typeface changes in one token. No Google Fonts host, and
-  CSP `font-src` is `'self'`. Asserted.
+  overrides, measured over the site's own text), so the swap moves no text.
+  Serif is for reading (titles, prose, card titles), mono for operating
+  (controls, labels, nav, code). No stylesheet names a family: everything reads
+  `--font-serif` or `--font-mono`, so a typeface changes in one token. No Google
+  Fonts host, and CSP `font-src` is `'self'`. Asserted.
 - **A tool or game holds a skeleton until its element upgrades.** The server
-  renders a bare `<h1>` and intro inside the custom element, which the
-  component then replaces, so raw it flashed unstyled text and the page jumped
-  (layout shift 0.169 on a slow load). `shared.css` keeps the title, hides the
-  rest of a host that is a direct child of `main`, and draws a static
-  `--skeleton-height` panel on `html[data-js] :is([data-tool],
-  [data-game]):not(:defined)`; without JS the text stays. The panel also holds
-  the space of a Driftfield stage and a learning's figure, which render empty
-  and used to push the page down when they mounted. No animation. A new tool,
-  game or embed gets it free through its `data-tool` / `data-game` attribute.
+  renders a bare `<h1>` and intro inside the custom element, which the component
+  then replaces; raw, it flashed unstyled text and the page jumped. `shared.css`
+  keeps the title, hides the rest of a host that is a direct child of `main`,
+  and draws a static `--skeleton-height` panel on `html[data-js]
+  :is([data-tool], [data-game]):not(:defined)`; without JS the text stays. The
+  panel also holds the space of a Driftfield stage and a learning's figure,
+  which render empty and would push the page down when they mount. No animation.
+  A new tool, game or embed gets it free through its `data-tool` / `data-game`
+  attribute.
   - **What follows a pending workbench is `visibility: hidden`, not removed**
-    (the footer, the related links, a Driftfield story line). A short tool pulled
-    the footer up into view (0.15 on Chainsaw) and a tall one pushed a link out
-    of it (0.03 on Hue Hunt); a hidden box is not scored, so the panel's height
-    can stay generic (a tool is 490 to 1,900px at a laptop's width, and different
-    at every other).
+    (the footer, the related links, a Driftfield story line). A hidden box is
+    not scored, so the panel's height can stay generic (a short tool would
+    otherwise pull the footer into view, a tall one push a link out of it).
   - **The tool host keeps the column before and after it upgrades**; only the
     pending host carries the gutter. A host that took the column only while
-    pending changed its own box at mount, which the browser scored (0.088).
-  - Measured cold and throttled on the production build (a phone on slow 4G at 4x
-    CPU, a laptop, a tablet): 0 on the phone, at most 0.009 elsewhere, from Hue
-    Hunt's daily board changing height just after it mounts. The rules above are
-    asserted; the numbers need a browser, so they are not in the gate.
+    pending changed its own box at mount, which the browser scores.
 - **Measure layout in an observer, never at module evaluation.** `nav-ui.ts`
   reads the nav's height in a `ResizeObserver` callback, which runs after
   layout; a synchronous read made the script pay for the first layout. Until that
   lands, `main` pads by `--space-header-offset`, which must be the nav's real
-  height (64px, 66px stacked on a phone, measured in a browser): at 76px the whole
-  page jumped 10 to 12px when the measured one arrived. Asserted.
+  height (64px, 66px stacked on a phone, measured in a browser). Asserted.
 - **Sideways overflow is held on `html` and `body` together.** Oat's tooltip is a
   `white-space: nowrap` pseudo-element, laid out even while hidden, so a long one
-  on a button near the right edge widened the page (JSON Tidy's "Repair" made it
-  655px on a 390px phone, which zoomed out to fit). A clip on the root alone does
+  on a button near the right edge widens the page. A clip on the root alone does
   nothing to a phone's page width; `body` needs it too. The fix proper is in the
   Oat fork, which owns that rule. Asserted.
-- **No JS framework.**
 - **Flowmap's colours and layout.** A node's colour is a name from
   `GRAPH_TONES` (`src/lib/graph-text.ts`), matched on decode like its shape and
   drawn from the `--tone-*` tokens (set in both palettes, a border plus a faint
@@ -807,12 +804,9 @@ starfield: your device, your network, the ISP, DNS on a branch, Cloudflare's
 data centre (by city) and the server. A frame at the top left says what it
 shows, and a chat-like log at the bottom right tells each step with its real
 timing. The owner picked it on 2026-09-30 and retired the dev switch, the
-classic hero and the "how the internet works" story, whose topic becomes a
+classic hero and the "how the internet works" story, whose topic is now a
 learnings article. The frame, the name block and the log are the keepers; the
 line itself may be swapped later through the same contract.
-
-Liquid light, monsoon and the Hero Lab prototypes live in
-`~/Projects/screensavers/` (kept for future macOS screen savers), not here.
 
 - **Real data only, never a sample** (owner, 2026-09-28). The replay reads
   Navigation Timing, `/cdn-cgi/trace` (country, data centre, TLS) and one HEAD
@@ -836,12 +830,11 @@ Liquid light, monsoon and the Hero Lab prototypes live in
 - **Plain, explanatory copy** (owner, 2026-09-30): full, simple sentences a
   beginner can follow, in the frame, the log and the cards alike. No clipped
   one-liners or clever phrasing.
-- **Nothing blinks or pulses.** Blinking read as the page flickering twice, so
-  the status lights stay lit, the spotlight's glow is steady and its veil eases
-  in and out. The stars' slow twinkle is the only brightness driven by the
-  clock (asserted in the script and the stylesheets); they drift at 14 px/s,
-  and there are 115% as many, 15% brighter, as the first sky (`SKY_INTENSITY`,
-  owner 2026-10-01).
+- **Nothing blinks or pulses.** The status lights stay lit, the spotlight's glow
+  is steady and its veil eases in and out. The stars' slow twinkle is the only
+  brightness driven by the clock (asserted in the script and the stylesheets);
+  they drift at 14 px/s, and there are 115% as many, 15% brighter, as the first
+  sky (`SKY_INTENSITY`, owner 2026-10-01).
 - **A short screen scrolls**, at any width: a phone either way up, or a short
   laptop window. When the frame, the line and the text block cannot share one
   screen, the hero grows taller rather than squeezing the line into the name;
@@ -1031,7 +1024,7 @@ own chrome and runs the same `mountGame()` dispatch `/games/[slug]` uses.
   never animate and behavioural ones must; every beat lights an element that
   exists, tokens stay inside the viewBox, and only the activity view may show
   two tokens. Its deployment view draws a generic stack and never names the
-  host: its machine label once did. All asserted.
+  host. All asserted.
 - `internet-atlas` (`src/components/games/internet-atlas/`) is the same kind of
   figure for `/learnings/how-the-internet-works`: eight stops, each with a legend
   saying what it is, what it does on this trip and what happens when it goes

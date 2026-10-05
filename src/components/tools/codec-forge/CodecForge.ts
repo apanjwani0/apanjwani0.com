@@ -26,7 +26,10 @@
  * are cf-/CF_-prefixed because tool component files share one global script scope.
  */
 
-import { flashLabel } from '../../../lib/flash'
+import { flashLabel, copyText } from '../../../lib/flash'
+import { lsGet, lsSet } from '../../../lib/storage'
+import { formatBytes } from '../../../lib/format'
+import { downloadBlob } from '../../../lib/download'
 
 type CfTab = 'base64' | 'url' | 'query'
 type CfB64Variant = 'standard' | 'urlsafe'
@@ -242,9 +245,7 @@ function cfBuildQuery(pairsText: string): string {
 }
 
 function cfBytesLabel(n: number): string {
-  if (n < 1024) return `${n} byte${n === 1 ? '' : 's'}`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  return n < 1024 ? `${n} byte${n === 1 ? '' : 's'}` : formatBytes(n)
 }
 
 // ── WebComponent ─────────────────────────────────────────────────────────────
@@ -467,15 +468,15 @@ class CodecForgeTool extends HTMLElement {
     this.reflectSettings()
 
     // Restore pane contents + which side was last the source of truth.
-    this.b64TextEl.value = this.readLS(CF_LS_B64_TEXT) ?? ''
-    this.b64B64El.value = this.readLS(CF_LS_B64_B64) ?? ''
-    this.b64Source = this.readLS(CF_LS_B64_SRC) === 'b64' ? 'b64' : 'text'
-    this.urlTextEl.value = this.readLS(CF_LS_URL_TEXT) ?? ''
-    this.urlEncEl.value = this.readLS(CF_LS_URL_ENC) ?? ''
-    this.urlSource = this.readLS(CF_LS_URL_SRC) === 'enc' ? 'enc' : 'text'
-    this.qRawEl.value = this.readLS(CF_LS_Q_RAW) ?? ''
-    this.qPairsEl.value = this.readLS(CF_LS_Q_PAIRS) ?? ''
-    this.querySource = this.readLS(CF_LS_Q_SRC) === 'pairs' ? 'pairs' : 'raw'
+    this.b64TextEl.value = lsGet(CF_LS_B64_TEXT) ?? ''
+    this.b64B64El.value = lsGet(CF_LS_B64_B64) ?? ''
+    this.b64Source = lsGet(CF_LS_B64_SRC) === 'b64' ? 'b64' : 'text'
+    this.urlTextEl.value = lsGet(CF_LS_URL_TEXT) ?? ''
+    this.urlEncEl.value = lsGet(CF_LS_URL_ENC) ?? ''
+    this.urlSource = lsGet(CF_LS_URL_SRC) === 'enc' ? 'enc' : 'text'
+    this.qRawEl.value = lsGet(CF_LS_Q_RAW) ?? ''
+    this.qPairsEl.value = lsGet(CF_LS_Q_PAIRS) ?? ''
+    this.querySource = lsGet(CF_LS_Q_SRC) === 'pairs' ? 'pairs' : 'raw'
 
     // Pane edits set the source and regenerate the opposite side.
     this.b64TextEl.addEventListener('input', () => this.onEdit('base64', 'text'))
@@ -519,15 +520,15 @@ class CodecForgeTool extends HTMLElement {
     if (this.syncing) return
     if (tab === 'base64') {
       this.b64Source = side as CfB64Source
-      this.writeLS(CF_LS_B64_SRC, this.b64Source)
+      lsSet(CF_LS_B64_SRC, this.b64Source)
       this.renderBase64(false)
     } else if (tab === 'url') {
       this.urlSource = side as CfUrlSource
-      this.writeLS(CF_LS_URL_SRC, this.urlSource)
+      lsSet(CF_LS_URL_SRC, this.urlSource)
       this.renderUrl(false)
     } else {
       this.querySource = side as CfQuerySource
-      this.writeLS(CF_LS_Q_SRC, this.querySource)
+      lsSet(CF_LS_Q_SRC, this.querySource)
       this.renderQuery(false)
     }
   }
@@ -549,7 +550,7 @@ class CodecForgeTool extends HTMLElement {
       case 'b64-sample':
         this.b64TextEl.value = CF_SAMPLE_B64
         this.b64Source = 'text'
-        this.writeLS(CF_LS_B64_SRC, 'text')
+        lsSet(CF_LS_B64_SRC, 'text')
         this.renderBase64(false)
         break
       case 'b64-clear':
@@ -572,7 +573,7 @@ class CodecForgeTool extends HTMLElement {
       case 'url-sample':
         this.urlTextEl.value = CF_SAMPLE_URL
         this.urlSource = 'text'
-        this.writeLS(CF_LS_URL_SRC, 'text')
+        lsSet(CF_LS_URL_SRC, 'text')
         this.renderUrl(false)
         break
       case 'url-clear':
@@ -591,7 +592,7 @@ class CodecForgeTool extends HTMLElement {
       case 'query-sample':
         this.qRawEl.value = CF_SAMPLE_QUERY
         this.querySource = 'raw'
-        this.writeLS(CF_LS_Q_SRC, 'raw')
+        lsSet(CF_LS_Q_SRC, 'raw')
         this.renderQuery(false)
         break
       case 'query-clear':
@@ -728,7 +729,7 @@ class CodecForgeTool extends HTMLElement {
       const s = this.settings
       this.b64B64El.value = cfWrap(cfEncodeBytes(bytes, s.b64Variant === 'urlsafe'), s.b64Wrap)
       this.b64Source = 'b64'
-      this.writeLS(CF_LS_B64_SRC, 'b64')
+      lsSet(CF_LS_B64_SRC, 'b64')
       this.renderBase64(false)
 
       const dataUri = `data:${file.type || 'application/octet-stream'};base64,${cfEncodeBytes(bytes, false)}`
@@ -768,12 +769,7 @@ class CodecForgeTool extends HTMLElement {
         const data = new ArrayBuffer(bytes.byteLength)
         new Uint8Array(data).set(bytes)
         const blob = new Blob([data], { type })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = this.lastFileName || 'decoded.bin'
-      a.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(blob, this.lastFileName || 'decoded.bin')
       this.flash(btn, 'Saved!')
     } catch {
       this.flash(btn, 'Failed')
@@ -796,12 +792,7 @@ class CodecForgeTool extends HTMLElement {
       if (btn) this.flash(btn, 'Empty')
       return
     }
-    try {
-      await navigator.clipboard.writeText(text)
-      if (btn) this.flash(btn, 'Copied!')
-    } catch {
-      if (btn) this.flash(btn, 'Failed')
-    }
+    await copyText(text, btn)
   }
 
   private flash(btn: HTMLButtonElement, label: string) {
@@ -824,22 +815,22 @@ class CodecForgeTool extends HTMLElement {
 
   // ── localStorage (all guarded; storage may be unavailable or full) ──────────
   private persistBase64() {
-    if (this.b64TextEl.value.length <= CF_MAX_PERSIST) this.writeLS(CF_LS_B64_TEXT, this.b64TextEl.value)
-    if (this.b64B64El.value.length <= CF_MAX_PERSIST) this.writeLS(CF_LS_B64_B64, this.b64B64El.value)
+    if (this.b64TextEl.value.length <= CF_MAX_PERSIST) lsSet(CF_LS_B64_TEXT, this.b64TextEl.value)
+    if (this.b64B64El.value.length <= CF_MAX_PERSIST) lsSet(CF_LS_B64_B64, this.b64B64El.value)
   }
 
   private persistUrl() {
-    if (this.urlTextEl.value.length <= CF_MAX_PERSIST) this.writeLS(CF_LS_URL_TEXT, this.urlTextEl.value)
-    if (this.urlEncEl.value.length <= CF_MAX_PERSIST) this.writeLS(CF_LS_URL_ENC, this.urlEncEl.value)
+    if (this.urlTextEl.value.length <= CF_MAX_PERSIST) lsSet(CF_LS_URL_TEXT, this.urlTextEl.value)
+    if (this.urlEncEl.value.length <= CF_MAX_PERSIST) lsSet(CF_LS_URL_ENC, this.urlEncEl.value)
   }
 
   private persistQuery() {
-    if (this.qRawEl.value.length <= CF_MAX_PERSIST) this.writeLS(CF_LS_Q_RAW, this.qRawEl.value)
-    if (this.qPairsEl.value.length <= CF_MAX_PERSIST) this.writeLS(CF_LS_Q_PAIRS, this.qPairsEl.value)
+    if (this.qRawEl.value.length <= CF_MAX_PERSIST) lsSet(CF_LS_Q_RAW, this.qRawEl.value)
+    if (this.qPairsEl.value.length <= CF_MAX_PERSIST) lsSet(CF_LS_Q_PAIRS, this.qPairsEl.value)
   }
 
   private loadSettings(): CfSettings {
-    const raw = this.readLS(CF_LS_SETTINGS)
+    const raw = lsGet(CF_LS_SETTINGS)
     if (!raw) return { ...CF_DEFAULTS }
     try {
       const parsed = JSON.parse(raw) as Partial<CfSettings>
@@ -856,24 +847,9 @@ class CodecForgeTool extends HTMLElement {
   }
 
   private saveSettings() {
-    this.writeLS(CF_LS_SETTINGS, JSON.stringify(this.settings))
+    lsSet(CF_LS_SETTINGS, JSON.stringify(this.settings))
   }
 
-  private readLS(key: string): string | null {
-    try {
-      return localStorage.getItem(key)
-    } catch {
-      return null
-    }
-  }
-
-  private writeLS(key: string, value: string) {
-    try {
-      localStorage.setItem(key, value)
-    } catch {
-      /* ignore quota / private-mode errors */
-    }
-  }
 }
 
 if (!customElements.get('codec-forge-tool')) {

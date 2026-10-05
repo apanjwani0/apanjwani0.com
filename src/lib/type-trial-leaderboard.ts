@@ -25,8 +25,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { dailyPassage } from './type-trial-daily'
+import { MS_PER_DAY } from './date'
 
-export interface DailyEntry {
+interface DailyEntry {
   name: string
   wpm: number
   /** Accuracy percent, 0-100 integer. */
@@ -40,7 +41,7 @@ export interface DailyEntry {
 export const DAILY_NAME_MIN = 2
 export const DAILY_NAME_MAX = 24
 export const DAILY_MAX_ENTRIES_PER_DAY = 100
-export const DAILY_RETAINED_DAYS = 7
+const DAILY_RETAINED_DAYS = 7
 /** No verified human sustains 300+ wpm; anything above is a forged payload. */
 export const DAILY_WPM_CAP = 250
 const FLUSH_MS = 5_000
@@ -152,7 +153,7 @@ async function loadStore(): Promise<BoardStore> {
 
 /** Drop days beyond retention. Pure so the smoke test can assert it. */
 export function pruneBoard(board: BoardStore, now = new Date(), retainedDays = DAILY_RETAINED_DAYS): BoardStore {
-  const cutoff = new Date(now.getTime() - retainedDays * 86_400_000).toISOString().slice(0, 10)
+  const cutoff = new Date(now.getTime() - retainedDays * MS_PER_DAY).toISOString().slice(0, 10)
   return Object.fromEntries(Object.entries(board).filter(([day]) => day >= cutoff))
 }
 
@@ -185,7 +186,7 @@ export async function listDaily(day: string, limit = 50): Promise<DailyEntry[]> 
   return (board[day] ?? []).slice(0, limit)
 }
 
-export interface SubmitResult {
+interface SubmitResult {
   /** 1-based rank on the day's board, or null when the entry did not place. */
   rank: number | null
   /** True when an existing entry under the same name already had a better run. */

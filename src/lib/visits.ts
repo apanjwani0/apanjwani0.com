@@ -31,6 +31,7 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { MS_PER_DAY } from './date'
 
 const FLUSH_MS = 30_000
 const RETENTION_DAYS = 90
@@ -174,7 +175,7 @@ function mergeStore(target: VisitStore, source: VisitStore, capPaths = true): vo
 
 /** Drop days older than the retention window. Pure, so retention is testable. */
 export function pruneVisits(store: VisitStore, now = new Date(), retentionDays = RETENTION_DAYS): VisitStore {
-  const cutoff = new Date(now.getTime() - retentionDays * 86_400_000).toISOString().slice(0, 10)
+  const cutoff = new Date(now.getTime() - retentionDays * MS_PER_DAY).toISOString().slice(0, 10)
   return Object.fromEntries(Object.entries(store).filter(([date]) => date >= cutoff))
 }
 

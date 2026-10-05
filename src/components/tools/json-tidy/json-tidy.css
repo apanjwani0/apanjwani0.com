@@ -11,7 +11,7 @@ div[data-tool="json-tidy"] [data-group="toolbar"] {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.5rem 0 1rem;
+  margin: 0.5rem 0 var(--space-xl);
 }
 
 div[data-tool="json-tidy"] [data-group="toolbar"] button {
@@ -44,29 +44,8 @@ div[data-tool="json-tidy"] [data-group="toolbar"] button[data-action="format"]:h
   border-color: var(--color-accent);
 }
 
-span[data-type="jt-sep"] {
-  width: 1px;
-  align-self: stretch;
-  min-height: 1.3rem;
-  background: var(--color-border);
-  margin: 0 0.15rem;
-}
-
-label[data-type="jt-field"] {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-label[data-type="jt-field"][data-variant="check"] {
-  cursor: pointer;
-}
-
 label[data-type="jt-field"] select {
-  padding: 0.28rem 0.4rem;
+  padding: 0.28rem var(--space-xs);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -85,7 +64,7 @@ label[data-type="jt-field"] input[type="checkbox"] {
 div[data-tool="json-tidy"] [data-type="jt-panes"] {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: var(--space-xl);
   align-items: start;
 }
 
@@ -185,16 +164,6 @@ pre[data-type="jt-output"][data-empty] {
 }
 
 /* ── Status bar ──────────────────────────────────────────── */
-div[data-type="jt-statusbar"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 1rem;
-  margin: 0.75rem 0 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
 span[data-type="jt-status"] {
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -210,8 +179,8 @@ span[data-type="jt-meta"] {
 
 /* ── Error excerpt ───────────────────────────────────────── */
 pre[data-type="jt-error"] {
-  margin: 0.6rem 0 0;
-  padding: 0.75rem 1rem;
+  margin: var(--space-md) 0 0;
+  padding: var(--space-lg) var(--space-xl);
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-error);
   border-radius: var(--radius-lg);
@@ -239,9 +208,9 @@ div[data-type="jt-repair"] {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem 1rem;
-  margin: 0.6rem 0 0;
-  padding: 0.6rem 0.85rem;
+  gap: 0.5rem var(--space-xl);
+  margin: var(--space-md) 0 0;
+  padding: var(--space-md) 0.85rem;
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-accent);
   border-radius: var(--radius-lg);
@@ -367,7 +336,7 @@ div[data-tool="json-tidy"] input[data-control="tree-search"] {
   flex: 1 1 auto;
   min-width: 0;
   box-sizing: border-box;
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem var(--space-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -475,7 +444,7 @@ div[data-type="jt-tree"] [data-type="jt-toggle"] {
   justify-content: center;
   width: 1.1rem;
   height: 1.1rem;
-  margin-right: 0.15rem;
+  margin-right: var(--space-2xs);
   padding: 0;
   border: none;
   background: none;
@@ -531,7 +500,7 @@ div[data-type="jt-tree"] [data-type="jt-colon"] {
 }
 
 div[data-type="jt-tree"] [data-type="jt-count"] {
-  margin: 0 0.4rem;
+  margin: 0 var(--space-xs);
   color: var(--color-muted);
   font-size: 0.85em;
 }
@@ -636,7 +605,7 @@ div[data-tool="json-tidy"][data-mode="compare"] [data-type="jt-compare"] {
 div[data-type="jt-compare-inputs"] {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: var(--space-xl);
   align-items: start;
 }
 
@@ -658,7 +627,7 @@ div[data-type="jt-diff-head"] {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin: 1rem 0 0.5rem;
+  margin: var(--space-xl) 0 0.5rem;
 }
 
 span[data-type="jt-diff-summary"] {
@@ -718,8 +687,8 @@ div[data-type="jt-diff-row"] {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.15rem 0.5rem;
-  padding: 0.3rem 0.5rem 0.3rem 0.6rem;
+  gap: var(--space-2xs) 0.5rem;
+  padding: 0.3rem 0.5rem 0.3rem var(--space-md);
   border-left: 3px solid transparent;
   border-radius: var(--radius-sm);
   scroll-margin: 0.5rem;

@@ -26,3 +26,6 @@ export function formatDisplayDate(iso: string): string {
     timeZone: 'UTC',
   })
 }
+
+/** Milliseconds in a UTC day. */
+export const MS_PER_DAY = 86_400_000

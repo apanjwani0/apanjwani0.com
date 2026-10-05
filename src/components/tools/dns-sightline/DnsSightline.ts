@@ -18,7 +18,7 @@
  * sg-/SG_-prefixed because tool component files share one script namespace.
  */
 import { escapeHtml as sgEsc } from '../../../lib/escape'
-import { flashLabel } from '../../../lib/flash'
+import { copyText } from '../../../lib/flash'
 import { SG_KNOWN_CAS, SG_TYPES, sgCanonicalRecord, sgCountByLevel, sgPickAnswer } from './analyze'
 // Type-only, and erased at build: none of the resolver code in ./inspect ships.
 import type { SgInspection } from './inspect'
@@ -248,10 +248,7 @@ class DnsSightlineTool extends HTMLElement {
       text = r.spf.record ?? ''
     }
     if (!text) return
-    void navigator.clipboard.writeText(text).then(
-      () => flashLabel(btn, 'Copied'),
-      () => flashLabel(btn, 'Copy failed'),
-    )
+    void copyText(text, btn)
   }
 }
 

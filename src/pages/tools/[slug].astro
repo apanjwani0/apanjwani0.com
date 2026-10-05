@@ -3,9 +3,11 @@ export const prerender = false
 
 import ToolBase from '../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import JsonLd from '../../components/JsonLd.astro'
 import RelatedLinks from '../../components/RelatedLinks.astro'
 import { getSite, getTools, getLearnings } from '../../lib/config'
-import { breadcrumbListJsonLd, webAppJsonLd } from '../../lib/jsonld'
+import { webAppJsonLd } from '../../lib/jsonld'
+import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import { existingOgCardPath, toolHasOgCard } from '../../lib/og'
 import { render } from '../../lib/markdown'
 import { validateSession } from '../../lib/session'
@@ -48,7 +50,6 @@ const [site, tools, learnings] = await Promise.all([
   getTools(Astro.locals),
   getLearnings(Astro.locals),
 ])
-const cspNonce = (Astro.locals as any).cspNonce
 const tool = tools.find(t => t.slug === slug)
 
 if (!tool || tool.status === 'external') {
@@ -78,16 +79,22 @@ const ldJson = webAppJsonLd({
 
 // Visible trail + matching BreadcrumbList: gives the page an explicit way back up
 // to the hub and makes it eligible for a breadcrumb path in search results.
-const crumbs = [
-  { label: 'home', href: '/' },
-  { label: 'tools', href: '/tools' },
-  { label: tool.title },
-]
-const breadcrumbLd = breadcrumbListJsonLd([
-  { name: 'Home', url: site.url },
-  { name: 'Tools', url: `${site.url}/tools` },
-  { name: tool.title, url: `${site.url}/tools/${tool.slug}` },
+const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
+  { label: 'home', path: '/' },
+  { label: 'tools', path: '/tools' },
+  { label: tool.title, path: `/tools/${tool.slug}` },
+], site.url)
+// Every tool's host element is `<slug>-tool`, holding the title and intro the
+// component replaces on upgrade. The audio transcriber draws its own chrome and
+// renders an empty host. A slug outside the set renders no host, as before.
+const TOOL_SLUGS = new Set([
+  'draftboard', 'audio-transcriber', 'wallpaper-forge', 'json-tidy', 'list-forge',
+  'epoch-wizard', 'chroma-lab', 'codec-forge', 'hash-smith', 'cron-whisperer',
+  'regex-lab', 'flowmap', 'token-bench', 'webhook-inspector', 'link-peek',
+  'chainsaw', 'dns-sightline',
 ])
+const NO_CHROME = new Set(['audio-transcriber'])
+const ToolTag = TOOL_SLUGS.has(slug as string) ? `${slug}-tool` as any : undefined
 const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
 // The article about this tool, if one is published.
 const stories = learningsAboutEmbed(tool.slug, learnings)
@@ -109,107 +116,16 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
   ogCard={ogCard}
   noindex={tool.status !== 'live'}
 >
-  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
-  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <JsonLd json={ldJson} />
+  <JsonLd json={breadcrumbLd} />
   <link slot="head" rel="stylesheet" href={toolsCommonCss} />
   {toolCss && <link slot="head" rel="stylesheet" href={toolCss} />}
   <Breadcrumbs items={crumbs} inset />
-  {slug === 'draftboard' && (
-    <draftboard-tool data-tool="draftboard">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </draftboard-tool>
-  )}
-  {slug === 'audio-transcriber' && <audio-transcriber-tool data-tool="audio-transcriber"></audio-transcriber-tool>}
-  {slug === 'wallpaper-forge' && (
-    <wallpaper-forge-tool data-tool="wallpaper-forge">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </wallpaper-forge-tool>
-  )}
-  {slug === 'json-tidy' && (
-    <json-tidy-tool data-tool="json-tidy">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </json-tidy-tool>
-  )}
-  {slug === 'list-forge' && (
-    <list-forge-tool data-tool="list-forge">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </list-forge-tool>
-  )}
-  {slug === 'epoch-wizard' && (
-    <epoch-wizard-tool data-tool="epoch-wizard">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </epoch-wizard-tool>
-  )}
-  {slug === 'chroma-lab' && (
-    <chroma-lab-tool data-tool="chroma-lab">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </chroma-lab-tool>
-  )}
-  {slug === 'codec-forge' && (
-    <codec-forge-tool data-tool="codec-forge">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </codec-forge-tool>
-  )}
-  {slug === 'hash-smith' && (
-    <hash-smith-tool data-tool="hash-smith">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </hash-smith-tool>
-  )}
-  {slug === 'cron-whisperer' && (
-    <cron-whisperer-tool data-tool="cron-whisperer">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </cron-whisperer-tool>
-  )}
-  {slug === 'regex-lab' && (
-    <regex-lab-tool data-tool="regex-lab">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </regex-lab-tool>
-  )}
-  {slug === 'flowmap' && (
-    <flowmap-tool data-tool="flowmap">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </flowmap-tool>
-  )}
-  {slug === 'token-bench' && (
-    <token-bench-tool data-tool="token-bench">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </token-bench-tool>
-  )}
-  {slug === 'webhook-inspector' && (
-    <webhook-inspector-tool data-tool="webhook-inspector">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </webhook-inspector-tool>
-  )}
-  {slug === 'link-peek' && (
-    <link-peek-tool data-tool="link-peek">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </link-peek-tool>
-  )}
-  {slug === 'chainsaw' && (
-    <chainsaw-tool data-tool="chainsaw">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </chainsaw-tool>
-  )}
-  {slug === 'dns-sightline' && (
-    <dns-sightline-tool data-tool="dns-sightline">
-      <h1>{tool.title}</h1>
-      <p>{tool.intro || tool.description}</p>
-    </dns-sightline-tool>
+  {ToolTag && (
+    <ToolTag data-tool={slug}>
+      {!NO_CHROME.has(slug as string) && <h1>{tool.title}</h1>}
+      {!NO_CHROME.has(slug as string) && <p>{tool.intro || tool.description}</p>}
+    </ToolTag>
   )}
   {toolSeoContentHtml && <section data-type="seo-support" data-inset set:html={toolSeoContentHtml} />}
   <RelatedLinks heading="Common schedules" items={cronPresetLinks} inset />

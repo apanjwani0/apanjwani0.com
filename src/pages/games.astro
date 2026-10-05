@@ -2,6 +2,8 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
+import Card from '../components/Card.astro'
+import JsonLd from '../components/JsonLd.astro'
 import { getSite, getGames } from '../lib/config'
 import { render } from '../lib/markdown'
 import { itemListJsonLd } from '../lib/jsonld'
@@ -11,14 +13,13 @@ const [site, games] = await Promise.all([
   getSite(Astro.locals),
   getGames(Astro.locals).then(gs => gs.filter(g => g.enabled)),
 ])
-const cspNonce = (Astro.locals as any).cspNonce
 
 // Only playable games have an indexable detail page; the "coming soon"
 // placeholders render noindex, so keep them out of the structured item list.
 // Same predicate as the sitemap and the detail page's robots meta, so the three
 // cannot disagree. The card grid below still shows every enabled game.
 const ldJson = itemListJsonLd(
-  'Games by Aman Panjwani',
+  `Games by ${site.name}`,
   games.filter(isPlayableGame).map(g => ({ name: g.title, url: `${site.url}/games/${g.slug}` })),
 )
 
@@ -42,7 +43,7 @@ const metaDescription =
   description={metaDescription}
   keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, typing race, daily typing challenge, typing leaderboard, hex color game, color guessing game, guess the hex, daily color game, poker trainer, poker equity calculator, pot odds trainer, poker practice, mandelbrot set explorer, julia set generator, fractal zoom, fractal explorer online, daily games, daily puzzle, no-download games, playable experiments"
 >
-  {games.length > 0 && <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />}
+  {games.length > 0 && <JsonLd json={ldJson} />}
   <h1>games</h1>
   <p data-type="page-intro">
     Browser games and playable experiments — no downloads, no sign-up. Three
@@ -55,24 +56,21 @@ const metaDescription =
   ) : (
     <ul data-type="card-grid">
       {games.map(g => (
-        <li>
-          <div data-type="card-head">
-            <h2 data-type="card-title"><a href={`/games/${g.slug}`}>{g.title}</a></h2>
-            <span data-type="card-badges">
-              {isPlayableGame(g) ? (
-                <span data-type="game-badge" data-live>play <span aria-hidden="true">&rsaquo;</span></span>
-              ) : (
-                <span data-type="game-badge">coming soon</span>
-              )}
-            </span>
-          </div>
+        <Card title={g.title} href={`/games/${g.slug}`} descAs="div">
+          <Fragment slot="badges">
+            {isPlayableGame(g) ? (
+              <span data-type="game-badge" data-live>play <span aria-hidden="true">&rsaquo;</span></span>
+            ) : (
+              <span data-type="game-badge">coming soon</span>
+            )}
+          </Fragment>
           {/* First paragraph only. The full description is the product copy
               for /games/<slug> and runs to three paragraphs (Deep Shore is
               1,074 characters); every description's first paragraph is
               already written as its summary, and the card clamps it to three
               lines so the titles stay easy to scan. */}
-          <div data-type="card-desc" set:html={render(g.description.split(/\n\s*\n/)[0])} />
-        </li>
+          <Fragment slot="desc" set:html={render(g.description.split(/\n\s*\n/)[0])} />
+        </Card>
       ))}
     </ul>
   )}

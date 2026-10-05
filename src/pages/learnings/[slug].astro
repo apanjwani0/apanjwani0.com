@@ -3,8 +3,10 @@ export const prerender = false
 
 import Base from '../../layouts/Base.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import JsonLd from '../../components/JsonLd.astro'
+import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import { getSite, getLearnings } from '../../lib/config'
-import { blogPostingJsonLd, breadcrumbListJsonLd } from '../../lib/jsonld'
+import { blogPostingJsonLd } from '../../lib/jsonld'
 import { isPublishedLearning, learningEmbedTag, readingTime, retiredLearningTarget } from '../../lib/learnings'
 import { existingOgCardPath, learningHasOgCard } from '../../lib/og'
 import { render, splitOnEmbeds } from '../../lib/markdown'
@@ -28,7 +30,6 @@ if (retiredTo) {
 }
 
 const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
-const cspNonce = (Astro.locals as any).cspNonce
 
 const learning = learnings.find(l => l.slug === slug)
 
@@ -91,16 +92,11 @@ const ldJson = blogPostingJsonLd({
 // Visible trail + matching BreadcrumbList (see src/components/Breadcrumbs.astro).
 // Emitted together or not at all: a breadcrumb path only surfaces in search when
 // the markup and the structured data agree.
-const crumbs = [
-  { label: 'home', href: '/' },
-  { label: 'learnings', href: '/learnings' },
-  { label: learning.title },
-]
-const breadcrumbLd = breadcrumbListJsonLd([
-  { name: 'Home', url: site.url },
-  { name: 'Learnings', url: `${site.url}/learnings` },
-  { name: learning.title, url: canonicalUrl },
-])
+const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
+  { label: 'home', path: '/' },
+  { label: 'learnings', path: '/learnings' },
+  { label: learning.title, path: `/learnings/${learning.slug}` },
+], site.url)
 ---
 
 <Base
@@ -114,8 +110,8 @@ const breadcrumbLd = breadcrumbListJsonLd([
   ogCard={ogCard}
   starfield={starfield}
 >
-  <script nonce={cspNonce} type="application/ld+json" set:html={ldJson} />
-  <script nonce={cspNonce} type="application/ld+json" set:html={breadcrumbLd} />
+  <JsonLd json={ldJson} />
+  <JsonLd json={breadcrumbLd} />
   <Breadcrumbs items={crumbs} />
   <article>
     <header>

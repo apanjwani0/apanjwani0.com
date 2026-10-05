@@ -8,13 +8,13 @@ div[data-type="tool-page"][data-tool="codec-forge"] {
 div[data-tool="codec-forge"] [data-type="cf-tabs"] {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0.75rem 0 1.25rem;
+  gap: var(--space-xs);
+  margin: var(--space-lg) 0 var(--space-card);
   border-bottom: 1px solid var(--color-border);
 }
 
 div[data-tool="codec-forge"] [data-tab-btn] {
-  padding: 0.4rem 0.95rem;
+  padding: var(--space-xs) 0.95rem;
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: var(--radius-md) var(--radius-md) 0 0;
@@ -42,31 +42,10 @@ div[data-tool="codec-forge"] [data-tab-btn][data-active] {
 /* Toolbar layout and button chrome come from the shared tools-common.css
    (hoisted; identical across the tool family). */
 
-span[data-type="cf-sep"] {
-  width: 1px;
-  align-self: stretch;
-  min-height: 1.3rem;
-  background: var(--color-border);
-  margin: 0 0.15rem;
-}
-
 /* ── Fields ───────────────────────────────────────────────── */
-label[data-type="cf-field"] {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-label[data-type="cf-field"][data-variant="check"] {
-  cursor: pointer;
-}
-
 label[data-type="cf-field"] select,
 label[data-type="cf-field"] input[type="text"] {
-  padding: 0.28rem 0.4rem;
+  padding: 0.28rem var(--space-xs);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -91,7 +70,7 @@ label[data-type="cf-field"] input[type="file"] {
 div[data-tool="codec-forge"] [data-type="cf-panes"] {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: var(--space-xl);
   align-items: start;
 }
 
@@ -105,7 +84,7 @@ div[data-type="cf-pane-head"] {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--space-xs);
 }
 
 span[data-type="cf-pane-title"] {
@@ -117,7 +96,7 @@ span[data-type="cf-pane-title"] {
 }
 
 span[data-type="cf-pane-title"] small {
-  margin-left: 0.4rem;
+  margin-left: var(--space-xs);
   color: var(--color-muted);
   text-transform: none;
   letter-spacing: 0;
@@ -146,16 +125,6 @@ div[data-tool="codec-forge"] textarea::placeholder {
 }
 
 /* ── Status bar ───────────────────────────────────────────── */
-div[data-type="cf-statusbar"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 1rem;
-  margin: 0.75rem 0 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
 span[data-type="cf-count"] {
   color: var(--color-text);
 }
@@ -166,10 +135,10 @@ span[data-type="cf-status"] {
 
 /* ── Parsed-parameter table (query tab) ───────────────────── */
 div[data-type="cf-parsed"] {
-  margin-top: 1rem;
+  margin-top: var(--space-xl);
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-xs);
 }
 
 div[data-type="cf-parsed"]:empty {
@@ -181,7 +150,7 @@ div[data-type="cf-row"] {
   grid-template-columns: minmax(6rem, 14rem) 1fr auto;
   align-items: center;
   gap: 0.5rem 0.9rem;
-  padding: 0.45rem 0.7rem;
+  padding: var(--space-sm) 0.7rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -207,7 +176,7 @@ span[data-type="cf-val"][data-empty="true"] {
 }
 
 button[data-type="cf-row-copy"] {
-  padding: 0.2rem 0.6rem !important;
+  padding: 0.2rem var(--space-md) !important;
   font-size: var(--text-xs);
 }
 
@@ -216,12 +185,12 @@ div[data-type="cf-file-row"] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1rem;
+  gap: var(--space-lg) var(--space-xl);
   margin-top: 0.9rem;
 }
 
 p[data-type="cf-file-info"] {
-  margin: 0.75rem 0 0;
+  margin: var(--space-lg) 0 0;
   color: var(--color-muted);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -241,10 +210,10 @@ img[data-type="cf-file-preview"] {
 /* ── Disclosures (file block + explainers) ────────────────── */
 details[data-type="cf-block"],
 details[data-type="cf-explainer"] {
-  margin-top: 1.25rem;
+  margin-top: var(--space-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 0.6rem 0.9rem;
+  padding: var(--space-md) 0.9rem;
 }
 
 details[data-type="cf-block"] summary,
@@ -260,14 +229,6 @@ details[data-type="cf-explainer"] summary {
 details[data-type="cf-block"] summary:hover,
 details[data-type="cf-explainer"] summary:hover {
   color: var(--color-text);
-}
-
-details[data-type="cf-explainer"] p {
-  margin: 0.75rem 0 0.25rem;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-  line-height: 1.7;
-  max-width: 72ch;
 }
 
 details[data-type="cf-explainer"] strong {
