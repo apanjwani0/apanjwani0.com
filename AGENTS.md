@@ -564,8 +564,9 @@ fixture is the worked example.
 - **Pages share their building blocks.** A detail page builds its visible
   trail and BreadcrumbList JSON-LD from one list (`buildBreadcrumbs`), every
   JSON-LD block goes through `<JsonLd json={…} />` (it reads the nonce; feed it
-  only `src/lib/jsonld.ts` output), and the hubs render `Card.astro`, the one
-  card anatomy. `tools/[slug].astro` renders one `<slug>-tool` host.
+  only `src/lib/jsonld.ts` output), except `projects.astro`'s ItemList, whose
+  inline `<script` the smoke test matches, and the hubs render `Card.astro`, the
+  one card anatomy. `tools/[slug].astro` renders one `<slug>-tool` host.
 - **The "server" badge on `/tools` is derived.** `SERVER_TOOLS` lives in
   `src/lib/tools.ts`, not `src/config/tools.ts`, which `/admin` regenerates
   wholesale. Asserted: each slug is `live` and calls an `/api/` route, and the

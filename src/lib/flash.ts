@@ -56,6 +56,7 @@ export const COPY_FLASH_MS = 1200
 
 /** Legacy path for insecure contexts or a refused clipboard permission. */
 function copyViaTextarea(text: string): boolean {
+  const prev = document.activeElement as HTMLElement | null
   const ta = document.createElement('textarea')
   ta.value = text
   ta.setAttribute('readonly', '')
@@ -69,6 +70,7 @@ function copyViaTextarea(text: string): boolean {
     return false
   } finally {
     document.body.removeChild(ta)
+    prev?.focus({ preventScroll: true })
   }
 }
 

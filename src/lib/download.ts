@@ -13,9 +13,12 @@ export function downloadDataUrl(url: string, filename: string): void {
   a.remove()
 }
 
-/** Save a Blob; the object URL is revoked a frame later so Safari finishes reading it. */
+/**
+ * Save a Blob. The object URL is revoked a second later: revoking sooner races
+ * the click's navigation in some engines and saves an empty file.
+ */
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   downloadDataUrl(url, filename)
-  requestAnimationFrame(() => URL.revokeObjectURL(url))
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
