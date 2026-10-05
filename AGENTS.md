@@ -57,6 +57,12 @@ JSON, with the `Site` type declared in `src/config/site.ts`.
   sitemap, `/llms.txt`, the command palette and the 404.
 - `src/lib/theme.ts`, `src/lib/site-ui.ts`, `src/lib/kit.ts`,
   `src/lib/fuzzy.ts` — see *UI refresh*.
+- Client helpers shared by every tool and game (see *Key Conventions*):
+  `escape.ts`, `storage.ts`, `flash.ts` (`copyText`), `download.ts`,
+  `format.ts`, `math.ts`, `motion.ts`, `date.ts`.
+- `src/lib/breadcrumbs.ts`, `src/components/JsonLd.astro`,
+  `src/components/Card.astro` — the page-level building blocks (see
+  *Key Conventions*).
 - `src/styles/theme.css` — design tokens, the single source of truth.
 - `astro.config.mjs` — the adapter and the Vite middleware that persists
   `/admin` saves.
@@ -545,6 +551,21 @@ fixture is the worked example.
   count comes from a measured frame, held end frames reuse the last ImageData,
   and a second click stops the render. Every bar joins one registry served by
   one guarded pair of swap listeners (`trackBar`).
+- **One copy of each client helper.** A tool or game imports these rather than
+  writing its own, because private copies drift (seven escapers had lost `'`,
+  two copy buttons said "Copied" on failure): `escapeHtml` (`escape.ts`);
+  `lsGet`/`lsSet`/`lsRemove`/`lsGetNumber` (`storage.ts`, never throws, keys
+  unprefixed); `copyText` (`flash.ts`: Clipboard API, textarea fallback, one
+  "Copied" / "Copy failed" flash); `downloadBlob`/`downloadDataUrl`
+  (`download.ts`, no encoder pulled in); `formatBytes` (`format.ts`);
+  `clamp`/`cappedDpr` (`math.ts`); `prefersReducedMotion` (`motion.ts`);
+  `MS_PER_DAY` (`date.ts`). None touches the DOM at module scope. A private
+  wrapper survives only where `security:smoke` asserts its literal text.
+- **Pages share their building blocks.** A detail page builds its visible
+  trail and BreadcrumbList JSON-LD from one list (`buildBreadcrumbs`), every
+  JSON-LD block goes through `<JsonLd json={…} />` (it reads the nonce; feed it
+  only `src/lib/jsonld.ts` output), and the hubs render `Card.astro`, the one
+  card anatomy. `tools/[slug].astro` renders one `<slug>-tool` host.
 - **The "server" badge on `/tools` is derived.** `SERVER_TOOLS` lives in
   `src/lib/tools.ts`, not `src/config/tools.ts`, which `/admin` regenerates
   wholesale. Asserted: each slug is `live` and calls an `/api/` route, and the
