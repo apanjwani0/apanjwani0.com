@@ -1115,5 +1115,17 @@ leaderboard, a replay permalink) over adding another. Type Trial is the worked
 example: one shared passage per UTC day and a server-validated board joined by
 name, with no accounts, cookies or per-visitor identity.
 
+- **Mobile ergonomics and screen real estate**: On mobile viewports
+  (`<= 768px`), sticky nav must stay hidden while scrolled down during gameplay
+  and only return when scrolled back to the top, preventing accidental swipe
+  reveals. Game elements must preserve clearances down to 375px viewports (iPhone
+  SE) with zero overlapping pills, clipped boards, or hidden tags. Interactive tap
+  targets must be >= 44px on coarse pointers.
+- **Material authenticity**: Reject generic flat software grids. Games evoke
+  physical materials: real felt and bevelled ceramic chips (Poker Trainer),
+  mechanical keycaps with tactile press depths (Bytele), and weighted ceramic
+  tiles with specular edge highlights and recessed board tracks (2048).
+  See `docs/plans/game-design-principles.md`.
+
 Ship fewer, larger things. One tool a stranger would bookmark is worth more than
 the whole current list.

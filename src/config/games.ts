@@ -10,6 +10,7 @@ export interface Game {
   keywords?: string
   /** true = ships a playable in-browser component; false/undefined = "coming soon" placeholder */
   interactive?: boolean
+  features?: string[]
 }
 
 export const games: Game[] = [
@@ -27,33 +28,60 @@ export const games: Game[] = [
   {
     "slug": "poker-trainer",
     "title": "Poker Trainer",
-    "description": "Set any Hold'em spot and get the real numbers: exact equity by full enumeration, the actual outs, and the pot-odds arithmetic laid out so you can check it yourself. Nothing is sampled and nothing is estimated \u2014 every runout is counted.",
+    "description": "A free online Texas Hold'em poker trainer and exact equity calculator for Hold'em strategy and quantitative trading interview prep (Jane Street, Susquehanna SIG, Citadel). Computes exact runout enumeration, pot odds arithmetic, and real expected value (+EV) calculations with zero sign-up or paywalls.\n\nSet any Hold'em spot across pre-flop, flop, turn, or river and get the real numbers: exact equity by full enumeration, the actual outs, and the pot-odds arithmetic laid out so you can check it yourself. Nothing is sampled and nothing is estimated — every single runout combination is counted.",
     "enabled": true,
     "interactive": true,
-    "seoTitle": "Poker Equity Calculator & Odds Trainer \u2014 Exact, Not Sampled",
-    "metaDescription": "Exact Texas Hold'em equity by full enumeration, your real outs rather than the rule-of-2-and-4 guess, and whether a call is +EV. Runs in your browser.",
-    "keywords": "poker equity calculator, poker odds calculator, texas holdem odds, poker outs calculator, pot odds calculator, poker ev calculator, poker trainer, holdem equity",
-    "intro": "Pick two hands and a board, and every number is computed by enumerating every possible runout \u2014 no Monte Carlo, no margin of error. See your exact equity, the real list of outs, and whether calling is profitable at the price you're being offered.",
+    "seoTitle": "Free Online Poker Trainer & Hold'em Odds Calculator — Exact & Unsampled",
+    "metaDescription": "100% free online Texas Hold'em poker trainer and exact odds calculator. Practice pot odds, expected value (+EV), and full runout enumeration for poker and quant trading interviews. Runs in your browser with zero sign-up.",
+    "keywords": "free poker trainer, free online poker trainer, poker trainer online, texas holdem poker trainer, gto poker trainer free, poker odds calculator free, quant interview poker prep, jane street poker interview, sig poker interview, pot odds calculator, poker equity calculator, poker expected value drill, exact holdem odds, holdem equity, poker math trainer",
+    "intro": "Pick two hands and a board, and every number is computed by enumerating every possible runout — no Monte Carlo, no margin of error. See your exact equity, the real list of outs, and whether calling is profitable at the price you're being offered.",
+    "features": [
+      "Exact runout enumeration (up to 1,712,304 combinations)",
+      "Interactive GTO drill with instant decision feedback",
+      "Pot odds & break-even % arithmetic breakdown",
+      "Expected value (+EV) call vs fold calculation",
+      "Hand range heatmaps and out analysis",
+      "100% free client-side execution with zero ads or tracking"
+    ],
+    "seoContent": "## Free Online Texas Hold'em Poker Trainer & Exact Odds Calculator\n\nMaster Texas Hold'em probability, pot odds, and expected value (+EV) decision-making with mathematically exact calculations. Built for competitive poker players and candidates preparing for quantitative trading and finance interviews.\n\n### Why Quantitative Trading Firms Use Poker in Interviews\n\nProprietary trading firms and market makers — including Jane Street, Susquehanna International Group (SIG), Citadel Securities, Akuna Capital, and Five Rings — famously test candidates with poker scenarios during quantitative interviews.\n\nInterviewers use Hold'em because it models real trading under incomplete information:\n- **Bayesian Updating**: Recalculating your hand equity as new information (the flop, turn, and river) is revealed.\n- **Pot Odds & Risk-Reward Ratio**: Comparing the cost of a call against the pot size to determine the mathematical break-even threshold.\n- **Expected Value (+EV) Calculation**: Making positive expectation decisions regardless of short-term variance.\n- **Range-vs-Range Thinking**: Modeling your opponent as a distribution of possible holdings rather than guessing a single hand.\n\n### Full Runout Enumeration vs. Monte Carlo Sampling\n\nMost free online poker tools use Monte Carlo approximation, simulating 10,000 to 50,000 random hands. While fast, Monte Carlo produces sampling noise that fluctuates by 1% to 2% between runs.\n\nThis Poker Trainer calculates **exact equity by exhaustive enumeration**:\n- On the flop, it evaluates all 990 possible turn and river card combinations.\n- On the turn, it calculates all 44 remaining river cards.\n- On pre-flop match-ups, it computes up to 1,712,304 five-card board runouts.\n\nEvery percentage, out count, and pot odds calculation is deterministic, transparent, and provably exact.\n\n### Frequently Asked Questions\n\n### Is this poker trainer completely free to use?\nYes. This online poker trainer is 100% free with no subscriptions, no accounts, no software installation, and zero ads. It runs entirely in your browser using high-performance client-side TypeScript.\n\n### Can I use this poker trainer for quant trading interview prep?\nYes. The Solve Any Spot and GTO Drill modes are specifically designed for quant interview practice at firms like Jane Street and SIG, helping you drill rapid probability, pot odds, and expected value calculations under time pressure.\n\n### How does the solver compute exact equity?\nUnlike commercial simulators that sample random runs, our engine evaluates every remaining card combination in the deck to derive mathematically exact equity percentages down to the hundredth of a percent.\n\n### What game variants and betting rounds are supported?\nThe trainer supports No-Limit Texas Hold'em across all four betting streets: Pre-Flop, Flop, Turn, and River."
   },
   {
     "slug": "2048",
     "title": "2048",
-    "description": "The classic sliding-tile puzzle, in your browser. Slide the whole board with the arrow keys, WASD or a swipe \u2014 every tile shoves as far as it can, and two equal numbers that collide fuse into one worth double.\n\nEach move drops a new tile, so it's a race to keep merging before the board clogs. Reach a 2048 tile to win, then keep going for a higher score. Play it three ways \u2014 a gentle 3\u00d73, the classic 4\u00d74 or a roomy 5\u00d75 \u2014 each with its own saved game and its own best score. Take back a move with Undo, and everything is saved right in your browser, so a refresh picks up exactly where you left off.",
-    "seoTitle": "2048 Game Online \u2014 Free Sliding Tile Puzzle",
-    "metaDescription": "Play 2048 online in your browser. Slide and merge numbered tiles, undo a move, choose 3x3, 4x4 or 5x5 boards, and save your best score locally.",
+    "description": "Play 2048 online in your browser with weighted ceramic tiles, multi-step undo, and 3x3, 4x4, and 5x5 boards. 100% free, zero ads, zero trackers, and saves high scores locally.\n\nSlide the whole board with the arrow keys, WASD or a swipe — every tile shoves as far as it can, and two equal numbers that collide fuse into one worth double. Each move drops a new tile, so it's a race to keep merging before the board clogs. Reach a 2048 tile to win, then keep going for a higher score.",
+    "seoTitle": "2048 Online Game — Free Tactile Sliding Tile Puzzle (3x3, 4x4, 5x5)",
+    "metaDescription": "Play 2048 online in your browser with tactile ceramic tiles, multi-step undo, and 3x3, 4x4 or 5x5 boards. 100% free, zero ads, zero tracking, and saves high scores locally.",
     "enabled": true,
     "interactive": true,
-    "keywords": "2048 game,2048 puzzle,sliding tile game,number puzzle,2048 online,play 2048,merge tiles game,2048 clone,browser puzzle game",
+    "keywords": "2048 online, free 2048 game, play 2048, 2048 sliding puzzle, 2048 with undo, 2048 5x5, 2048 3x3, tactile 2048, clean 2048 game, ad free 2048, sliding tile puzzle",
+    "features": [
+      "Tactile weighted ceramic tile rendering with specular highlights",
+      "Multi-step Undo (up to 16 moves)",
+      "3 board sizes: 3x3 compact, 4x4 classic, 5x5 expansive",
+      "Independent best-score persistence per board size",
+      "Touch swipe and keyboard (WASD / Arrow keys) support",
+      "100% free client-side execution with zero ads or tracking"
+    ],
+    "seoContent": "## Play 2048 Online: Free Tactile Sliding Tile Puzzle\n\nExperience the classic 2048 sliding-tile puzzle re-engineered for smooth performance, tactile physical materials, and zero distractions.\n\n### How 2048 Works\n\nSlide tiles across the grid using your arrow keys, WASD, or swipe gestures on touchscreens.\n- All tiles slide as far as possible in the chosen direction.\n- Two tiles with identical numbers collide and merge into a single tile of double the value (e.g. 2 + 2 = 4, 1024 + 1024 = 2048).\n- After each valid move, a new tile (a 2 nine times out of ten, or a 4) spawns in an empty cell.\n- The goal is to create a tile with the value **2048** before the board fills up, with the option to continue playing for higher scores.\n\n### Essential Strategy: The Corner Pinning Technique\n\nTo achieve high scores and reach 2048, follow these mathematical principles:\n1. **Anchor Your Highest Tile in One Corner**: Choose a corner (such as bottom-right) and never move your highest tile out of that position.\n2. **Maintain a Value Gradient**: Organize tiles in decreasing monotonic order leading away from your anchor corner (e.g., 2048 → 1024 → 512 → 256).\n3. **Restrict Your Movement Directions**: Limit your moves to two primary directions (e.g., Down and Right). Only swipe Up or Left when absolutely forced by board geometry.\n\n### Frequently Asked Questions\n\n### How do I play 2048 online?\nUse your keyboard's arrow keys or WASD (or swipe on your mobile device) to slide tiles. When matching numbers touch, they merge. Keep merging to build a 2048 tile!\n\n### Does this version of 2048 have an undo feature?\nYes! This version includes a 16-move undo history buffer. Click the Undo button or press 'U' on your keyboard to take back accidental mis-swipes.\n\n### Are there advertisements or in-app purchases?\nNo. This version is completely free, open, and ad-free. It runs client-side in your browser with zero trackers and zero popups."
   },
   {
     "slug": "quintle",
-    "title": "Quintle",
-    "description": "A daily five-letter word guessing game. You get six tries to find the hidden word; after each guess the tiles light up \u2014 right letter in the right place, right letter in the wrong place, or not in the word at all \u2014 and you close in from there.\n\nA fresh puzzle drops every day, the same word for everyone, and it picks up right where you left off if you close the tab. Not enough? Switch to Practice for an endless run of random words, or flip on Hard mode, where every clue you uncover has to be reused. Type on your keyboard or tap the on-screen one, watch your win streak and guess distribution build up, and share your result as a spoiler-free emoji grid. Everything is saved in your browser \u2014 no sign-up, nothing uploaded.",
-    "seoTitle": "Daily Five-Letter Word Game \u2014 Quintle",
-    "metaDescription": "Play a daily five-letter word game with six guesses, hard mode, practice mode, streaks and shareable emoji results. No signup, no upload.",
+    "title": "Bytele",
+    "description": "The free daily engineering word puzzle — Wordle built for software engineers, systems programmers, and tech interview prep. Guess the hidden 5-letter computer science or infrastructure keyword in six tries (MUTEX, SHARD, CACHE, ARENA, INODE), then review the post-game architecture gotcha card.\n\nAfter each game, unlock an instant Interview Gotcha card breaking down the architecture concept, time complexity, or common production gotchas. Play the daily global challenge or unlimited practice.",
+    "seoTitle": "Bytele — Daily Engineering & Tech Interview Wordle for Developers",
+    "metaDescription": "The free daily engineering Wordle for developers and tech interview prep. Guess 5-letter CS, systems, and architecture keywords (MUTEX, SHARD, ARENA) in six tries, and review the post-game interview gotcha card.",
     "enabled": true,
     "interactive": true,
-    "keywords": "word game,word guessing game,five letter word game,daily word puzzle,wordle style game,guess the word,vocabulary game,browser word game,unlimited word game,hard mode word game,quintle",
+    "keywords": "bytele, wordle for engineers, developer wordle, tech interview wordle, cs wordle, coding wordle, system design wordle, computer science word game, engineering daily puzzle, software engineer interview prep, free dev games, dev wordle, systems engineering puzzle",
+    "features": [
+      "Curated dictionary of 5-letter CS and systems keywords",
+      "End-of-game Interview Gotcha & Architecture Takeaway card",
+      "Daily global puzzle and unlimited practice modes",
+      "Tactile mechanical keycap interface with zero ads",
+      "Hard mode for hint-retention discipline",
+      "100% client-side privacy with local streak saving"
+    ],
+    "seoContent": "## Bytele: The Daily Engineering Wordle for Software Engineers\n\nBytele is the daily 5-letter word puzzle created specifically for software engineers, systems architects, and programmers preparing for technical interviews.\n\n### Wordle Built for Technical & System Design Interview Prep\n\nStandard word games rely on general dictionary vocabulary. Bytele transforms the daily puzzle habit into active technical interview revision by centering every puzzle on core computer science, distributed systems, and low-level engineering concepts:\n- **Memory Models & Allocators**: Concepts like `ARENA` bump allocation, stack vs heap layout, and slab allocators.\n- **Concurrency & Synchronization**: Critical primitives like `MUTEX`, race conditions, deadlocks, and async execution.\n- **Distributed Systems & Storage**: Core patterns like `SHARD` partitioning, `CACHE` invalidation, `PROXY` routing, and `INODE` filesystems.\n- **Networking & Transport**: Low-level framing, byte `OCTET` alignment, and cryptographic `TOKEN` verification.\n\n### Post-Game Interview Gotcha & Concept Breakdown\n\nEvery completed game — whether won or lost — unlocks a comprehensive **Interview Gotcha & Architecture Takeaway** card.\n\nThese cards explain:\n1. **The System Design Tradeoff**: Why and when the pattern is used in production infrastructure.\n2. **The Interview Gotcha**: Common architectural traps, edge cases, or complexity questions asked in senior engineering interviews at top tech companies.\n3. **Real-World Examples**: How systems like Linux, Redis, PostgreSQL, and modern browser engines implement the concept.\n\n### Frequently Asked Questions\n\n### What is Bytele?\nBytele is a free, daily word puzzle for software engineers. Players have six guesses to identify a hidden 5-letter computer science, infrastructure, or software architecture keyword.\n\n### How does Bytele help prepare for tech interviews?\nBytele reinforces fundamental systems engineering and computer science vocabulary tested in coding and system design interviews. Each solved word provides an architecture breakdown and common production gotchas.\n\n### Is Bytele free and does it require an account?\nBytele is completely free, requires no account or registration, and collects no personal data. Game state, win streaks, and guess statistics are saved securely in your browser's local storage.\n\n### Can I play more than one puzzle per day?\nYes. Bytele features a shared global Daily mode (one deterministic puzzle per UTC day) and an unlimited Practice mode for continuous engineering interview prep."
   },
   {
     "slug": "maze-weaver",

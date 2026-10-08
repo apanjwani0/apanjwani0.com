@@ -23,7 +23,7 @@
  * where you were. All module-level names are q-/Q_-prefixed to avoid any collision.
  */
 
-import { ANSWER_STR, VALID_STR } from './words'
+import { ANSWER_STR, VALID_STR, getWordInsight } from './words'
 import { quintleDayNumber } from '../../../lib/quintle-daily'
 import { recordDailyPlay } from '../../../lib/daily-streak'
 import { prefersReducedMotion } from '../../../lib/motion'
@@ -290,11 +290,11 @@ class QuintleGame extends HTMLElement {
     const header = q_el('div', { 'data-type': 'q-header' })
     const titlebar = q_el('div', { 'data-type': 'q-titlebar' })
     const h1 = q_el('h1')
-    h1.textContent = 'Quintle'
+    h1.textContent = 'Bytele'
     const badge = q_el('span', { 'data-type': 'q-badge' })
     titlebar.append(h1, badge)
     const sub = q_el('p')
-    sub.textContent = 'Guess the hidden five-letter word in six tries — a fresh puzzle every day, or play unlimited practice rounds.'
+    sub.textContent = 'The daily engineering word puzzle — guess the 5-letter CS or systems keyword in six tries, and review the architecture gotcha when you finish.'
     header.append(titlebar, sub)
 
     // controls
@@ -380,18 +380,18 @@ class QuintleGame extends HTMLElement {
   private buildExplainer(): HTMLElement {
     const d = q_el('details', { 'data-type': 'q-explainer' })
     const sum = q_el('summary')
-    sum.textContent = 'How to play'
+    sum.textContent = 'How to play Bytele'
     d.appendChild(sum)
 
     const p1 = q_el('p')
-    p1.innerHTML = 'Type a five-letter word and press <kbd>Enter</kbd>. Each of the six rows is a guess; after each one the tiles change colour to tell you how close you were:'
+    p1.innerHTML = 'Type a five-letter word and press <kbd>Enter</kbd>. Each of the six rows is a guess; after each one the tiles change colour to indicate letter placement:'
     d.appendChild(p1)
 
     const legend = q_el('div', { 'data-type': 'q-legend' })
     const items: [Q_State, string][] = [
-      ['correct', 'right letter, right spot'],
-      ['present', 'in the word, wrong spot'],
-      ['absent', 'not in the word'],
+      ['correct', 'right letter, right spot (emerald)'],
+      ['present', 'in the word, wrong spot (amber)'],
+      ['absent', 'not in the word (slate)'],
     ]
     for (const [state, text] of items) {
       const item = q_el('div', { 'data-type': 'q-legend-item' })
@@ -402,7 +402,7 @@ class QuintleGame extends HTMLElement {
 
     const p2 = q_el('p')
     p2.innerHTML =
-      '<strong>Daily</strong> is one puzzle a day — the same word for everyone, and it resumes if you close the tab. <strong>Practice</strong> serves endless random words; hit <strong>New word</strong> for another. Turn on <strong>Hard</strong> mode to force every hint you uncover to be reused in later guesses. Keyboard shortcuts: <kbd>Enter</kbd> submits, <kbd>Backspace</kbd> deletes. Your stats and both games are saved in your browser — nothing is uploaded.'
+      '<strong>Daily</strong> is one puzzle a day — the same word for engineers worldwide. When you finish (win or lose), unlock the <strong>Interview Gotcha & Architecture Takeaway</strong> card for the solution! <strong>Practice</strong> serves endless words. Turn on <strong>Hard</strong> mode to force every revealed clue to be reused. Everything is saved locally in your browser.'
     d.appendChild(p2)
     return d
   }
@@ -720,25 +720,43 @@ class QuintleGame extends HTMLElement {
       return
     }
     box.hidden = false
+
+    const topBar = q_el('div', { 'data-type': 'q-result-actions' })
     const p = q_el('p')
     if (g.status === 'won') {
       p.innerHTML = `Solved in <strong>${g.guesses.length}/${Q_ROWS}</strong>`
     } else {
-      p.innerHTML = `Out of tries — the word was <strong>${g.answer.toUpperCase()}</strong>`
+      p.innerHTML = `Out of tries — word was <strong>${g.answer.toUpperCase()}</strong>`
     }
-    box.appendChild(p)
+    topBar.appendChild(p)
 
+    const btnGroup = q_el('div', { 'data-type': 'q-result-buttons' })
     const share = q_el('button', { type: 'button', 'data-type': 'q-share' })
-    share.textContent = 'Share'
+    share.textContent = 'Share Result'
     share.addEventListener('click', () => this.share())
-    box.appendChild(share)
+    btnGroup.appendChild(share)
 
     if (this.prefs.mode === 'practice') {
       const again = q_el('button', { type: 'button', 'data-type': 'q-replay' })
-      again.textContent = 'New word'
+      again.textContent = 'Next Word'
       again.addEventListener('click', () => this.newPractice())
-      box.appendChild(again)
+      btnGroup.appendChild(again)
     }
+    topBar.appendChild(btnGroup)
+    box.appendChild(topBar)
+
+    // Interview Gotcha & Architecture Insight card
+    const insight = getWordInsight(g.answer)
+    const card = q_el('div', { 'data-type': 'q-insight-card' })
+    card.innerHTML = `
+      <div data-type="q-insight-header">
+        <span data-type="q-insight-tag">${insight.domain.toUpperCase()}</span>
+        <span data-type="q-insight-badge">INTERVIEW GOTCHA</span>
+      </div>
+      <h3 data-type="q-insight-title">${g.answer.toUpperCase()}: ${insight.gotcha}</h3>
+      <p data-type="q-insight-body">${insight.insight}</p>
+    `
+    box.appendChild(card)
   }
 
   private renderStats() {
@@ -804,14 +822,14 @@ class QuintleGame extends HTMLElement {
     const g = this.game
     const head =
       this.prefs.mode === 'daily'
-        ? `Quintle #${this.daily!.day} ${g.status === 'won' ? g.guesses.length : 'X'}/${Q_ROWS}`
-        : `Quintle (practice) ${g.status === 'won' ? g.guesses.length : 'X'}/${Q_ROWS}`
+        ? `Bytele #${this.daily!.day} ${g.status === 'won' ? g.guesses.length : 'X'}/${Q_ROWS}`
+        : `Bytele (practice) ${g.status === 'won' ? g.guesses.length : 'X'}/${Q_ROWS}`
     const hard = this.prefs.hard ? '*' : ''
     const emoji: Record<Q_State, string> = { correct: '🟩', present: '🟨', absent: '⬛' }
     const grid = g.guesses
       .map(guess => q_evaluate(guess, g.answer).map(s => emoji[s]).join(''))
       .join('\n')
-    return `${head}${hard}\n\n${grid}`
+    return `${head}${hard}\n\n${grid}\n\nhttps://apanjwani0.com/games/quintle`
   }
 
   private async share() {

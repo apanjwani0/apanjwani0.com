@@ -635,11 +635,19 @@ class Twenty48Game extends HTMLElement {
     ctx.fillStyle = this.rgb(this.bgRGB)
     ctx.fillRect(0, 0, board, board)
 
-    // empty-cell slots
-    ctx.fillStyle = this.rgb(this.emptyRGB)
-    for (let r = 0; r < N; r++)
-      for (let c = 0; c < N; c++)
-        this.roundRect(gap + c * (cell + gap), gap + r * (cell + gap), cell, cell, radius, this.rgb(this.emptyRGB))
+    // empty-cell slots with recessed depth
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const sx = gap + c * (cell + gap)
+        const sy = gap + r * (cell + gap)
+        this.roundRect(sx, sy, cell, cell, radius, this.rgb(this.emptyRGB))
+        // subtle recessed inner bevel
+        ctx.save()
+        ctx.lineWidth = Math.max(1, cell * 0.02)
+        this.strokeRoundRect(sx + 0.5, sy + 0.5, cell - 1, cell - 1, radius, 'rgba(0, 0, 0, 0.4)')
+        ctx.restore()
+      }
+    }
 
     const cellX = (c: number) => gap + c * (cell + gap)
     const cellY = (r: number) => gap + r * (cell + gap)
@@ -681,20 +689,60 @@ class Twenty48Game extends HTMLElement {
     const s = cell * scale
     const ox = cx - s / 2
     const oy = cy - s / 2
-    this.roundRect(ox, oy, s, s, radius * scale, this.rgb(fill))
+    const r = radius * scale
 
-    // number, sized to fit the digit count, contrast-aware colour
+    // 1. Tactile drop shadow giving physical elevation
+    ctx.save()
+    ctx.shadowColor = value >= 128
+      ? `rgba(${fill[0]}, ${fill[1]}, ${fill[2]}, 0.45)`
+      : 'rgba(0, 0, 0, 0.45)'
+    ctx.shadowBlur = Math.max(3, s * (value >= 128 ? 0.12 : 0.06))
+    ctx.shadowOffsetY = Math.max(1.5, s * 0.035)
+    this.roundRect(ox, oy, s, s, r, this.rgb(fill))
+    ctx.restore()
+
+    // 2. Tactile ceramic gradient: specular highlight at top, depth at bottom
+    const grad = ctx.createLinearGradient(ox, oy, ox, oy + s)
+    const highlight = twMix(fill, [255, 255, 255], 0.22)
+    const shadow = twMix(fill, [0, 0, 0], 0.22)
+    grad.addColorStop(0, this.rgb(highlight))
+    grad.addColorStop(0.18, this.rgb(fill))
+    grad.addColorStop(0.85, this.rgb(fill))
+    grad.addColorStop(1, this.rgb(shadow))
+    this.roundRect(ox, oy, s, s, r, grad)
+
+    // 3. Subtle specular highlight rim on top/left bevel
+    ctx.save()
+    ctx.lineWidth = Math.max(1, s * 0.02)
+    this.strokeRoundRect(ox + 0.5, oy + 0.5, s - 1, s - 1, r, 'rgba(255, 255, 255, 0.18)')
+    ctx.restore()
+
+    // 4. Number, sized to fit the digit count, contrast-aware colour with crisp text shadow
     const str = String(value)
     let f = cell * (str.length <= 2 ? 0.44 : str.length === 3 ? 0.36 : str.length === 4 ? 0.28 : 0.22)
     f *= scale
     ctx.font = `700 ${f}px ${this.fontFamily}`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = twLuminance(fill) > 0.6 ? '#0b0f18' : '#ffffff'
+    const isLight = twLuminance(fill) > 0.6
+
+    ctx.save()
+    if (isLight) {
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.6)'
+      ctx.shadowOffsetY = 1
+      ctx.shadowBlur = 0
+      ctx.fillStyle = '#0b0f18'
+    } else {
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'
+      ctx.shadowOffsetY = Math.max(1, f * 0.04)
+      ctx.shadowBlur = Math.max(1, f * 0.05)
+      ctx.fillStyle = '#ffffff'
+    }
     ctx.fillText(str, cx, cy + f * 0.04)
+    ctx.restore()
   }
 
-  private roundRect(x: number, y: number, w: number, h: number, r: number, fill: string) {
+  private roundRect(x: number, y: number, w: number, h: number, r: number, fill: string | CanvasGradient) {
     const { ctx } = this
     const rr = Math.min(r, w / 2, h / 2)
     ctx.beginPath()
@@ -706,6 +754,20 @@ class Twenty48Game extends HTMLElement {
     ctx.closePath()
     ctx.fillStyle = fill
     ctx.fill()
+  }
+
+  private strokeRoundRect(x: number, y: number, w: number, h: number, r: number, stroke: string) {
+    const { ctx } = this
+    const rr = Math.min(r, w / 2, h / 2)
+    ctx.beginPath()
+    ctx.moveTo(x + rr, y)
+    ctx.arcTo(x + w, y, x + w, y + h, rr)
+    ctx.arcTo(x + w, y + h, x, y + h, rr)
+    ctx.arcTo(x, y + h, x, y, rr)
+    ctx.arcTo(x, y, x + w, y, rr)
+    ctx.closePath()
+    ctx.strokeStyle = stroke
+    ctx.stroke()
   }
 
   private rgb([r, g, b]: [number, number, number]) {

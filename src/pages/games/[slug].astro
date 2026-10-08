@@ -8,7 +8,7 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import JsonLd from '../../components/JsonLd.astro'
 import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import RelatedLinks from '../../components/RelatedLinks.astro'
-import { webAppJsonLd } from '../../lib/jsonld'
+import { webAppJsonLd, faqPageJsonLd, extractFaqs } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
 import { MOVED_GAMES } from '../../lib/driftfield'
@@ -51,6 +51,9 @@ const gameIntro = game.intro || game.description
 const gameIntroHtml = render(gameIntro)
 const gameSeoContentHtml = game.seoContent ? render(game.seoContent) : ''
 
+const faqs = game.seoContent ? extractFaqs(game.seoContent) : []
+const faqLd = faqs.length > 0 ? faqPageJsonLd(faqs) : null
+
 const ldJson = webAppJsonLd({
   name: game.title,
   description: pageDescription,
@@ -60,6 +63,7 @@ const ldJson = webAppJsonLd({
   applicationCategory: 'Game',
   alsoType: 'VideoGame',
   keywords: game.keywords,
+  featureList: game.features,
 })
 
 // Visible trail + matching BreadcrumbList, emitted together on every game page.
@@ -105,6 +109,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
       breadcrumb stays: it pairs with the visible trail below. */}
   {GameTag && <JsonLd json={ldJson} />}
   <JsonLd json={breadcrumbLd} />
+  {faqLd && <JsonLd json={faqLd} />}
   <Breadcrumbs items={crumbs} />
   {GameTag && (
     <GameTag data-game={game.slug}>
