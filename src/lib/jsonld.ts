@@ -154,6 +154,8 @@ export interface WebApplicationSchema {
   authorName: string
   authorUrl: string
   keywords?: string
+  featureList?: string[]
+  applicationSubCategory?: string
   /** schema.org applicationCategory — e.g. 'Game' (default) or 'DeveloperApplication'. */
   applicationCategory?: string
   /**
@@ -197,5 +199,53 @@ export function webAppJsonLd(a: WebApplicationSchema): string {
       playMode: 'SinglePlayer',
     }),
     ...(a.keywords && { keywords: a.keywords }),
+    ...(a.featureList?.length && { featureList: a.featureList }),
+    ...(a.applicationSubCategory && { applicationSubCategory: a.applicationSubCategory }),
   })
 }
+
+export interface FaqEntry {
+  question: string
+  answer: string
+}
+
+/**
+ * FAQPage structured data. Emitted when a page has an FAQ section so search
+ * engines and AI agents can digest explicit question-answer pairs for rich snippets.
+ */
+export function faqPageJsonLd(faqs: FaqEntry[]): string {
+  return serialize({
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map(f => ({
+      '@type': 'Question',
+      name: f.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: f.answer,
+      },
+    })),
+  })
+}
+
+/**
+ * Extracts Q&A pairs from markdown text with '### Question?' followed by an answer paragraph.
+ */
+export function extractFaqs(markdown: string): FaqEntry[] {
+  const faqs: FaqEntry[] = []
+  const regex = /###\s+([^\n\r]+?\?)\s*\n+([\s\S]+?)(?=\n+###|\n+##|$)/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(markdown)) !== null) {
+    const question = match[1].trim()
+    const answer = match[2]
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/[*_`#>~]|==/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (question && answer) {
+      faqs.push({ question, answer })
+    }
+  }
+  return faqs
+}
+

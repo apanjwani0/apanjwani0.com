@@ -111,6 +111,7 @@ function validGames(value: unknown): boolean {
     && optionalString(game.seoContent)
     && optionalString(game.keywords)
     && (game.interactive === undefined || typeof game.interactive === 'boolean')
+    && (game.features === undefined || isStringArray(game.features))
   )
 }
 
