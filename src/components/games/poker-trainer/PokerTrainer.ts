@@ -52,7 +52,8 @@ import {
   type ParsedCombos,
 } from './engine/equity-cache'
 import { PRESET_RANGES, parseRange, rangeCombos } from './engine/ranges'
-import { cardSvg } from './ui/cards-svg'
+import { cardBackSvg, cardSvg } from './ui/cards-svg'
+import { chipSvg, chipStackSvg, type ChipValue } from './ui/assets-svg'
 import { RANK_LABEL, SUITS, SUIT_SYMBOL, type Card, type Suit } from './engine/types'
 
 /**
@@ -140,6 +141,31 @@ function ptTerm(term: string, definition: string): string {
   return `<details data-type="pt-term"><summary>${term}</summary><p>${definition}</p></details>`
 }
 
+/** Realistic casino pot chip stacks cluster and prominent value badge. */
+function ptPotCluster(pot: number, bet: number, isFinal = false, betChipVal: ChipValue = 25): string {
+  const total = isFinal ? pot : pot + bet
+  const sideChip: ChipValue = betChipVal === 100 ? 25 : betChipVal
+  return `
+    <div data-type="pt-pot-cluster">
+      <div data-type="pt-pot-stacks" aria-hidden="true">
+        <span data-type="pt-pot-stack" data-chip="25">${chipStackSvg(sideChip, 3)}</span>
+        <span data-type="pt-pot-stack" data-chip="100">${chipStackSvg(100, 5)}</span>
+        <span data-type="pt-pot-stack" data-chip="${betChipVal}">${chipStackSvg(betChipVal, 4)}</span>
+      </div>
+      <div data-type="pt-pot-banner">
+        <div data-type="pt-pot-meta">
+          <span data-type="pt-pot-dot"></span>
+          <span data-type="pt-pot-title">${isFinal ? 'FINAL POT' : 'MAIN POT'}</span>
+        </div>
+        <div data-type="pt-pot-val">
+          <strong>${total}</strong> <span data-type="pt-pot-unit">chips</span>
+        </div>
+        ${!isFinal && bet ? `<span data-type="pt-pot-sub">Current: ${pot} + Bet: ${bet}</span>` : ''}
+      </div>
+    </div>
+  `
+}
+
 interface PtDrill {
   hero: Card[]
   board: Card[]
@@ -208,6 +234,7 @@ class PokerTrainerGame extends HTMLElement {
     this.buildSolve()
     this.deal()
     this.render()
+    window.addEventListener('keydown', this.onKeyDown)
   }
 
   /* ─────────────────────────────  chrome  ───────────────────────────── */
@@ -271,49 +298,97 @@ class PokerTrainerGame extends HTMLElement {
     this.choice = null
   }
 
+  private onKeyDown = (e: KeyboardEvent) => {
+    if (this.mode !== 'drill') return
+    // Don't intercept if user is typing in an input
+    const tag = (e.target as HTMLElement)?.tagName
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+
+    const key = e.key.toLowerCase()
+    if (!this.choice) {
+      if (key === 'f') {
+        this.choice = 'fold'
+        this.renderDrill()
+      } else if (key === 'c') {
+        this.choice = 'call'
+        this.renderDrill()
+      } else if (key === 'r') {
+        this.choice = 'raise'
+        this.renderDrill()
+      }
+    } else {
+      if (key === ' ' || key === 'enter' || key === 'n') {
+        e.preventDefault()
+        this.deal()
+        this.renderDrill()
+      }
+    }
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener('keydown', this.onKeyDown)
+  }
+
   private renderDrill() {
     const host = this.querySelector('[data-panel="drill"]') as HTMLElement
     const d = this.drill
     if (!d) return
 
+    // Pick a chip token matching bet
+    const betChipVal: ChipValue = d.bet >= 100 ? 100 : d.bet >= 25 ? 25 : 5
+    const preMade = rankHand(d.hero, d.board, 'holdem')
+    const preMadeName = d.board.length >= 3 ? rankHand(d.hero, [...d.board], 'holdem').name : preMade.name
+
     if (!this.choice) {
       host.innerHTML = `
         <div data-type="pt-spotcard">
-          <p data-type="pt-street">On the ${d.street}. You are facing a bet.</p>
+          <div data-type="pt-felt">
+            <div data-type="pt-felt-header">
+              <div data-type="pt-street-group">
+                <span data-type="pt-beacon"></span>
+                <span data-type="pt-street">Street: ${d.street.toUpperCase()} (${d.board.length} Cards)</span>
+              </div>
+              <div data-type="pt-header-right">
+                <div data-type="pt-chip-badge">
+                  <span data-type="pt-chip-icon">${chipSvg(betChipVal)}</span>
+                  <span>Facing: <strong>${d.bet} chips</strong> into <strong>${d.pot}</strong></span>
+                </div>
+                <div data-type="pt-streak-pill">
+                  <span>Streak: <strong>${this.streak}</strong> 🔥</span>
+                </div>
+              </div>
+            </div>
 
-          <div data-type="pt-row">
-            <span data-type="pt-label">Your hand</span>
-            <div data-type="pt-cards">${ptCards(d.hero)}</div>
-          </div>
+            ${this.renderDrillTable(d, false, preMadeName, betChipVal)}
 
-          <div data-type="pt-row">
-            <span data-type="pt-label">Board</span>
-            <div data-type="pt-cards">${ptCards(d.board)}</div>
-          </div>
+            <p data-type="pt-note">${d.rangeNote} That is ${d.combos.length} possible hands — you will never know which one. ==Every real poker decision is made against a range, not a hand.==</p>
 
-          <div data-type="pt-row">
-            <span data-type="pt-label">They have</span>
-            <div data-type="pt-hidden">
-              <span data-type="pt-facedown">?</span><span data-type="pt-facedown">?</span>
-              <span data-type="pt-rangetag">${d.rangeLabel}</span>
+            <div data-type="pt-action-strip">
+              <div data-type="pt-action-price">
+                <span>Price to call: </span><strong>${pct(requiredEquity(d.pot + d.bet, d.bet))}</strong> pot odds required
+              </div>
+
+              <div data-type="pt-choices">
+                <button data-choice="fold" type="button">
+                  <span>Fold</span>
+                  <kbd>F</kbd>
+                </button>
+                <button data-choice="call" data-variant="primary" type="button">
+                  <span>Call ${d.bet}</span>
+                  <kbd>C</kbd>
+                </button>
+                <button data-choice="raise" type="button">
+                  <span>Raise</span>
+                  <kbd>R</kbd>
+                </button>
+              </div>
+            </div>
+
+            <div data-type="pt-status-bar">
+              <span data-type="pt-score">Streak <strong>${this.streak}</strong> · Best <strong>${this.best}</strong></span>
+              <span data-type="pt-shortcut-hint">Tip: Use keys <kbd>F</kbd>, <kbd>C</kbd>, <kbd>R</kbd></span>
             </div>
           </div>
-          <p data-type="pt-note">${d.rangeNote} That is ${d.combos.length} possible hands — you will never know which one. ==Every real poker decision is made against a range, not a hand.==</p>
-
-          <div data-type="pt-row">
-            <span data-type="pt-label">Pot</span>
-            <strong>${d.pot}</strong>
-            <span data-type="pt-label">They bet</span>
-            <strong>${d.bet}</strong>
-          </div>
-
-          <p data-type="pt-ask">What do you do?</p>
-          <div data-type="pt-choices">
-            <button data-choice="fold" type="button">Fold</button>
-            <button data-choice="call" type="button">Call ${d.bet}</button>
-            <button data-choice="raise" type="button">Raise</button>
-          </div>
-          <p data-type="pt-score">Streak ${this.streak} · Best ${this.best}</p>
         </div>
       `
       // The ==mark== above is written by hand rather than parsed — this is a
@@ -337,22 +412,12 @@ class PokerTrainerGame extends HTMLElement {
     // every tab switch, and re-counting half a million boards to redraw text
     // that cannot have changed is the same bug the Solve tab had.
     const result = cachedEquityVsRange(d.hero, d.combos, d.board)
-    // d.pot is the pot BEFORE they bet; both helpers take the pot before the
-    // CALL, which already contains that bet. Passing d.pot alone computed
-    // bet/(pot+bet) — the frequency a bluff must work, not the price of a call —
-    // and graded every spot between the two numbers as a fold when it was a call.
     const required = requiredEquity(d.pot + d.bet, d.bet)
     const ev = callEv(d.pot + d.bet, d.bet, result.equity)
-    // Graded on pot odds, deliberately: whether this call makes money right now.
-    // A true GTO answer also weighs later streets and bluff frequency, which
-    // needs a solver — see the caveat rendered below. Claiming this IS the GTO
-    // answer would be the exact overclaim the tool exists to avoid.
     const correct: PtChoice = result.equity >= 0.68 ? 'raise'
       : result.equity > required ? 'call'
       : 'fold'
     const right = this.choice === correct
-      // Calling when raising is right is not a blunder — it is the same side of
-      // the fold/continue line, so it keeps the streak but is not scored as best.
       || (correct === 'raise' && this.choice === 'call')
 
     if (right) {
@@ -370,50 +435,178 @@ class PokerTrainerGame extends HTMLElement {
       ? rankHand(d.hero, [...d.board], 'holdem').name
       : made.name
 
+    const equityPct = (result.equity * 100).toFixed(1)
+    const requiredPct = (required * 100).toFixed(1)
+
+    const finalPot = d.pot + 2 * d.bet
+    const cardsToCome = 5 - d.board.length
+    const unseenCards = 52 - 4 - d.board.length
+    const boardsPerCombo = Math.max(1, Math.round(result.runouts / result.combos))
+    const streetName = d.board.length === 3 ? 'turn & river' : 'river'
+
     host.innerHTML = `
       <div data-type="pt-spotcard" data-answered>
-        <p data-type="pt-verdict" data-right="${right}">
-          ${right ? 'Right call.' : 'Not the best line.'}
-          You ${this.choice === 'fold' ? 'folded' : this.choice === 'call' ? 'called' : 'raised'};
-          the pot odds say <strong>${correct}</strong>.
-        </p>
-
-        <div data-type="pt-row">
-          <span data-type="pt-label">You had</span>
-          <div data-type="pt-cards">${ptCards(d.hero)}</div>
-          <span data-type="pt-label">on</span>
-          <div data-type="pt-cards">${ptCards(d.board)}</div>
-        </div>
-        <p data-type="pt-note">That is ${madeName}.</p>
-
-        <table data-type="pt-lines">
-          <tr><th>Your equity against their whole range</th><td><strong>${pct(result.equity)}</strong></td></tr>
-          <tr><th>Equity you needed to call ${d.bet} into ${d.pot}</th><td>${pct(required)}</td></tr>
-          <tr><th>How much of their range you beat</th><td>${pct(result.aheadOf)} of ${result.combos} hands</td></tr>
-          <tr><th>Value of calling</th><td>${ev >= 0 ? '+' : ''}${ev.toFixed(1)} chips</td></tr>
-          <tr><th>Runouts counted</th><td>${result.runouts.toLocaleString()} — every one, none sampled</td></tr>
-        </table>
-
-        <div data-type="pt-splits">
-          <div>
-            <h3>Hands you are behind</h3>
-            ${result.worst.map(w => `<div data-type="pt-comborow">${ptCards(w.hand)}<span>${pct(w.equity)}</span></div>`).join('')}
+        <div data-type="pt-felt" data-felt-verdict="${right ? 'right' : 'wrong'}">
+          <div data-type="pt-verdict-header">
+            <p data-type="pt-verdict" data-right="${right}">
+              <span data-type="pt-verdict-tag">${right ? '✓ Right call' : '✗ Not the best line'}</span>
+              <span>You ${this.choice === 'fold' ? 'folded' : this.choice === 'call' ? 'called' : 'raised'};
+              the pot odds say <strong>${correct}</strong>.</span>
+            </p>
+            <button data-action="next" data-variant="primary" type="button">
+              <span>Next spot</span>
+              <kbd>Space</kbd>
+            </button>
           </div>
-          <div>
-            <h3>Hands you are ahead of</h3>
-            ${result.best.map(w => `<div data-type="pt-comborow">${ptCards(w.hand)}<span>${pct(w.equity)}</span></div>`).join('')}
+
+          ${this.renderDrillTable(d, true, madeName, betChipVal)}
+
+          <!-- Visual Equity vs Pot Odds Threshold Gauge -->
+          <div data-type="pt-gauge">
+            <div data-type="pt-gauge-labels">
+              <span>Your Equity vs Range: <strong>${equityPct}%</strong></span>
+              <span>Break-even Price: <strong>${requiredPct}%</strong></span>
+            </div>
+            <div data-type="pt-gauge-meter" role="meter" aria-valuenow="${equityPct}" aria-valuemin="0" aria-valuemax="100">
+              <div data-type="pt-gauge-fill" style="width: ${equityPct}%" data-positive="${result.equity >= required}"></div>
+              <div data-type="pt-gauge-target" style="left: ${requiredPct}%" title="Break-even target (${requiredPct}%)"></div>
+            </div>
+            <div data-type="pt-gauge-ticks">
+              <span>0%</span>
+              <span data-type="pt-target-tag" style="left: ${requiredPct}%">▲ Break-even threshold (${requiredPct}%)</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          <!-- Educational Calculation Ledger Cards -->
+          <div data-type="pt-math-cards">
+            <!-- Card 1: Your Equity -->
+            <div data-type="pt-math-card" data-card-kind="equity">
+              <div data-type="pt-math-head">
+                <span data-type="pt-math-title">Your Equity</span>
+                <span data-type="pt-math-val">${pct(result.equity)}</span>
+              </div>
+              <p data-type="pt-math-desc">Your expected share of the pot at showdown. You beat <strong>${pct(result.aheadOf)}</strong> of their ${result.combos} starting hands.</p>
+
+              <div data-type="pt-math-ledger">
+                <div data-type="pt-ledger-row">
+                  <span data-type="pt-ledger-label">1. Scenarios evaluated</span>
+                  <div data-type="pt-ledger-content">
+                    ${cardsToCome === 0
+                      ? `Board is complete: <code>1 showdown × ${result.combos} opponent hands = ${result.runouts.toLocaleString()} total showdowns</code>.`
+                      : `<strong>${boardsPerCombo}</strong> ${streetName} card${boardsPerCombo === 1 ? '' : 's'} (${unseenCards} unseen cards in deck) × <strong>${result.combos}</strong> opponent hands = <code>${result.runouts.toLocaleString()} exact showdowns</code>.`
+                    }
+                  </div>
+                </div>
+
+                <div data-type="pt-ledger-row">
+                  <span data-type="pt-ledger-label">2. How equity is calculated</span>
+                  <div data-type="pt-ledger-content">
+                    In every one of those ${result.runouts.toLocaleString()} showdowns, both hands are scored (1 pt for a win, 0.5 for split pot):<br>
+                    <code>Equity = Total Points ÷ ${result.runouts.toLocaleString()} = ${pct(result.equity)}</code>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Pot Odds -->
+            <div data-type="pt-math-card" data-card-kind="potodds">
+              <div data-type="pt-math-head">
+                <span data-type="pt-math-title">Equity you needed to call</span>
+                <span data-type="pt-math-val">${pct(required)}</span>
+              </div>
+              <p data-type="pt-math-desc">The break-even price. Calling costs <strong>${d.bet} chips</strong> to contest a final pot of <strong>${finalPot} chips</strong>.</p>
+
+              <div data-type="pt-math-ledger">
+                <div data-type="pt-ledger-row">
+                  <span data-type="pt-ledger-label">1. Break-even formula</span>
+                  <div data-type="pt-ledger-content">
+                    <code>Price = Call ÷ (Current Pot + Call)</code><br>
+                    <code>${d.bet} ÷ (${d.pot + d.bet} + ${d.bet}) = ${d.bet} ÷ ${finalPot} = ${pct(required)}</code>
+                  </div>
+                </div>
+
+                <div data-type="pt-ledger-row">
+                  <span data-type="pt-ledger-label">2. Decision rule</span>
+                  <div data-type="pt-ledger-content">
+                    ${result.equity >= required
+                      ? `Your equity (<strong>${pct(result.equity)}</strong>) &gt; price (<strong>${pct(required)}</strong>). Calling wins chips.`
+                      : `Your equity (<strong>${pct(result.equity)}</strong>) &lt; price (<strong>${pct(required)}</strong>). Calling loses chips.`
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: Expected Value -->
+            <div data-type="pt-math-card" data-card-kind="ev">
+              <div data-type="pt-math-head">
+                <span data-type="pt-math-title">Expected Value (EV)</span>
+                <span data-type="pt-math-val" data-ev="${ev >= 0 ? 'pos' : 'neg'}">${ev >= 0 ? '+' : ''}${ev.toFixed(1)} chips</span>
+              </div>
+              <p data-type="pt-math-desc">${ev >= 0 ? 'Positive expectation (+EV). Over time, taking this call earns chips.' : 'Negative expectation (-EV). Below break-even price, losing chips long term.'}</p>
+
+              <div data-type="pt-math-ledger">
+                <div data-type="pt-ledger-row">
+                  <span data-type="pt-ledger-label">1. Net chip calculation</span>
+                  <div data-type="pt-ledger-content">
+                    <code>EV = (Equity × Final Pot) - Call</code><br>
+                    <code>(${pct(result.equity)} × ${finalPot}) - ${d.bet} = ${(result.equity * finalPot).toFixed(1)} - ${d.bet} = ${ev >= 0 ? '+' : ''}${ev.toFixed(1)} chips</code>
+                  </div>
+                </div>
+
+                <div data-type="pt-ledger-row">
+                  <span data-type="pt-ledger-label">2. Long-term return</span>
+                  <div data-type="pt-ledger-content">
+                    ${ev >= 0
+                      ? `Over 100 similar calls, you gain <strong>+${(ev * 100).toFixed(0)} chips</strong> compared to folding.`
+                      : `Over 100 similar calls, you lose <strong>${(ev * 100).toFixed(0)} chips</strong> compared to folding.`
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detailed Combos Breakdown -->
+          <div data-type="pt-splits">
+            <div data-type="pt-split-col">
+              <h3>Hands You Are Behind</h3>
+              <div data-type="pt-combos-list">
+                ${result.worst.map(w => `
+                  <div data-type="pt-comborow">
+                    <div data-type="pt-comborow-cards">${ptCards(w.hand)}</div>
+                    <span data-type="pt-comborow-eq" data-crushed="true">${pct(w.equity)} equity</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <div data-type="pt-split-col">
+              <h3>Hands You Are Ahead Of</h3>
+              <div data-type="pt-combos-list">
+                ${result.best.map(w => `
+                  <div data-type="pt-comborow">
+                    <div data-type="pt-comborow-cards">${ptCards(w.hand)}</div>
+                    <span data-type="pt-comborow-eq" data-crushed="false">${pct(w.equity)} equity</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <p data-type="pt-note">The average hides this spread: <strong>${pct(result.equity)}</strong> equity against the range is composed of being behind the top and dominating the bottom. In real poker, you are playing against the entire distribution, not an isolated hand.</p>
+
+          <details data-type="pt-caveat">
+            <summary>Why this says "pot odds" and not "GTO"</summary>
+            <p>This grades one question: does calling make money right now, given the price you are being offered and how your hand does against everything they can hold. That is a complete and checkable answer, and every number above is enumerated exactly.</p>
+            <p>A genuine game-theory-optimal answer solves something larger — how often you should call, raise and fold with your <em>entire</em> range, across every remaining street, so that no opponent can exploit you. That is a solver's job, it takes minutes to hours per spot, and it does not run in a browser tab. Anything that claims otherwise is showing you a lookup table and calling it a solve.</p>
+          </details>
+
+          <div data-type="pt-status-bar">
+            <p data-type="pt-score">Streak <strong>${this.streak}</strong> · Best <strong>${this.best}</strong></p>
           </div>
         </div>
-        <p data-type="pt-note">The average hides this. ${pct(result.equity)} against the range is made of being crushed by the top of it and far ahead of the bottom — which is what "what am I actually beating" means.</p>
-
-        <details data-type="pt-caveat">
-          <summary>Why this says "pot odds" and not "GTO"</summary>
-          <p>This grades one question: does calling make money right now, given the price you are being offered and how your hand does against everything they can hold. That is a complete and checkable answer, and every number above is enumerated exactly.</p>
-          <p>A genuine game-theory-optimal answer solves something larger — how often you should call, raise and fold with your <em>entire</em> range, across every remaining street, so that no opponent can exploit you. That is a solver's job, it takes minutes to hours per spot, and it does not run in a browser tab. Anything that claims otherwise is showing you a lookup table and calling it a solve.</p>
-        </details>
-
-        <p data-type="pt-score">Streak ${this.streak} · Best ${this.best}</p>
-        <button data-action="next" type="button">Next spot</button>
       </div>
     `
 
@@ -423,45 +616,258 @@ class PokerTrainerGame extends HTMLElement {
     })
   }
 
+  private renderDrillTable(d: PtDrill, isAnswered: boolean, madeName: string, betChipVal: ChipValue): string {
+    const ghostCards = !isAnswered && d.board.length === 3
+      ? '<span data-type="pt-ghost-card">Turn</span><span data-type="pt-ghost-card">River</span>'
+      : !isAnswered && d.board.length === 4
+      ? '<span data-type="pt-ghost-card">River</span>'
+      : ''
+
+    const villainBetHtml = !isAnswered
+      ? `<div data-type="pt-villain-bet">
+          <span data-type="pt-chip-stack-mini">${chipStackSvg(betChipVal, 3)}</span>
+          <span>Bet: <strong>${d.bet} chips</strong></span>
+        </div>`
+      : ''
+
+    const potClusterHtml = isAnswered
+      ? ptPotCluster(d.pot + 2 * d.bet, 0, true, betChipVal)
+      : ptPotCluster(d.pot, d.bet, false, betChipVal)
+
+    return `
+      <div data-type="pt-table"${isAnswered ? ' data-table-answered' : ''}>
+        <div data-type="pt-table-watermark">POKER TRAINER</div>
+
+        <!-- Top: Opponent Range -->
+        <div data-type="pt-seat-villain">
+          <div data-type="pt-player-pill">
+            <span data-type="pt-player-name">Opponent</span>
+            <span data-type="pt-rangetag">${d.rangeLabel}</span>
+            <span data-type="pt-combocount">${d.combos.length} combinations</span>
+          </div>
+          <div data-type="pt-cards" data-cards-villain>
+            <span data-type="pt-card-back">${cardBackSvg('slate')}</span>
+            <span data-type="pt-card-back">${cardBackSvg('slate')}</span>
+          </div>
+          ${villainBetHtml}
+        </div>
+
+        <!-- Center: Community Board & Pot -->
+        <div data-type="pt-table-center">
+          ${potClusterHtml}
+          <div data-type="pt-cards" data-cards-board>
+            ${ptCards(d.board)}
+            ${ghostCards}
+          </div>
+        </div>
+
+        <!-- Bottom: Hero Seat -->
+        <div data-type="pt-seat-hero">
+          <div data-type="pt-cards" data-cards-hero>
+            ${ptCards(d.hero)}
+          </div>
+          <div data-type="pt-hero-badge-group">
+            <div data-type="pt-player-pill">
+              <span data-type="pt-player-name">Hero</span>
+              <span data-type="pt-variant-tag">Hold'em</span>
+            </div>
+            <span data-type="pt-made-pill">${madeName}</span>
+          </div>
+        </div>
+      </div>
+    `
+  }
+
   /* ─────────────────────────────  learn  ───────────────────────────── */
 
   private renderLearn() {
     const host = this.querySelector('[data-panel="learn"]') as HTMLElement
     host.innerHTML = `
       <div data-type="pt-learn">
-        <h2>The words, in plain English</h2>
+        <header data-type="pt-learn-hero">
+          <h2>The Rules, Arithmetic &amp; Mental Models</h2>
+          <p>Poker mathematics demystified in plain English — without dense jargon, misleading shortcuts, or black-box solver claims.</p>
+          <nav data-type="pt-learn-nav" aria-label="Concept navigation">
+            <a href="#learn-equity">📈 Equity</a>
+            <a href="#learn-odds">💰 Pot Odds</a>
+            <a href="#learn-outs">🎯 Rule of 2 &amp; 4</a>
+            <a href="#learn-ranges">🃏 Ranges</a>
+            <a href="#learn-blockers">🛡️ Blockers</a>
+            <a href="#learn-gto">🤖 GTO Reality</a>
+            <a href="#learn-omaha">♠️ Omaha Rules</a>
+            <a href="#learn-exact">⚖️ Exact Math</a>
+          </nav>
+        </header>
 
-        <h3>Equity</h3>
-        <p><strong>Equity is your share of the pot if nobody folded and you just dealt the rest of the cards out.</strong> If you have 60% equity in a 100-chip pot, your hand is worth 60 chips right now. It is not a prediction about this hand — you either win it or you do not. It is what the hand is worth on average over every way the cards could fall.</p>
-        <p>The reason it matters is that it turns "am I probably ahead?" into a number you can compare against a price. Poker is almost entirely that comparison.</p>
+        <div data-type="pt-learn-grid">
+          <!-- 1. Equity -->
+          <article data-type="pt-concept-card" id="learn-equity">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">01 · FOUNDATION</span>
+              <h3>Equity: Your True Share of the Pot</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> Equity is your share of the pot if nobody folded and you dealt the remaining cards out right now.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>If you have 60% equity in a 100-chip pot, your hand is worth <strong>60 chips</strong> right now. It is not a prediction about this individual hand — you either win it or you do not. It is what the hand is worth on average over every possible way the remaining deck could fall.</p>
+              <p>The reason equity matters is that it turns the vague question <em>"am I probably ahead?"</em> into an exact number you can compare directly against a price. Poker decisions are almost entirely that comparison.</p>
+            </div>
+            <div data-type="pt-concept-box">
+              <span data-type="pt-box-title">Visual Concept</span>
+              <code>100 Chip Pot × 60% Equity = 60 Chips Value Today</code>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Table Takeaway:</strong> You never gamble on hope — you price your equity against the pot odds.
+            </div>
+          </article>
 
-        <h3>Pot odds, and the only decision they answer</h3>
-        <p>If the pot has 100 and someone bets 50, calling costs you 50 to win the 150 already out there — and your 50 joins it, so a pot of 200 is what you are winning a share of. You need to be right <strong>50 / 200 = 25%</strong> of the time to break even. That percentage is the price. The trap is dividing by the 150 you can see instead of the 200 the pot becomes.</p>
-        <p>Then: <strong>if your equity is bigger than the price, calling makes money.</strong> That is the whole of pot odds, and it is the single most useful thing to learn first, because it applies on every street of every hand.</p>
+          <!-- 2. Pot Odds -->
+          <article data-type="pt-concept-card" id="learn-odds">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">02 · DECISION ENGINE</span>
+              <h3>Pot Odds: The Only Decision They Answer</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> If your equity is higher than the break-even price of your call, calling makes money.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>If the pot has 100 chips and someone bets 50, calling costs you 50 to contest the 150 already out there — and your 50 joins it, so a final pot of <strong>200 chips</strong> is what you are winning a share of.</p>
+              <p>You need to win at least <strong>50 ÷ 200 = 25%</strong> of the time to break even. That percentage is the price. The classic trap is dividing by the 150 you can currently see instead of the 200 the pot becomes with your call.</p>
+            </div>
+            <div data-type="pt-concept-box">
+              <span data-type="pt-box-title">The Break-Even Formula</span>
+              <code>Price = Call ÷ (Current Pot + Call) = 50 ÷ (150 + 50) = 25.0%</code>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Table Takeaway:</strong> Never divide by just what is in the pot — always include your own call in the denominator.
+            </div>
+          </article>
 
-        <h3>Outs, and why the shortcut lies</h3>
-        <p>An "out" is a card that would give you the better hand. Everyone is taught to count them and multiply by 2 (one card to come) or 4 (two cards to come) to get a rough equity.</p>
-        <p>It is a good shortcut and it is <strong>systematically too optimistic</strong>, because some of your outs also improve your opponent. A card that gives you a flush can give them a full house. This tool shows the shortcut's answer next to the exact one so you can see the size of the gap — that gap is the part nobody shows you.</p>
+          <!-- 3. Outs & Rule of 2/4 -->
+          <article data-type="pt-concept-card" id="learn-outs">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">03 · SHORTCUT TRAP</span>
+              <h3>Outs: Why the Rule of 2 &amp; 4 Lies</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> The rule of 2 &amp; 4 is a useful mental shortcut, but it is systematically too optimistic.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>An "out" is an unseen card that would give you the winning hand. Players are taught to multiply their outs by 4 on the flop (two cards to come) or 2 on the turn (one card to come) to estimate equity.</p>
+              <p>The shortcut lies because <strong>some of your outs also improve your opponent</strong> (called "dirty outs" or redraws). A card that gives you a flush might give your opponent a full house. This tool shows the shortcut next to the exact mathematical equity so you can see the true gap.</p>
+            </div>
+            <div data-type="pt-concept-box">
+              <span data-type="pt-box-title">Shortcut vs Reality</span>
+              <code>9 Flush Outs × 4 = 36% (Shortcut) vs ~32% (Exact Reality due to redraws)</code>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Table Takeaway:</strong> Discount your outs when the board is paired or heavily coordinated.
+            </div>
+          </article>
 
-        <h3>Range</h3>
-        <p>You never know your opponent's two cards. What you can know is the <strong>set</strong> of hands they would play this way — that set is their range. Someone who raised from the first seat has a narrow range of strong hands; someone who raised on the button has a wide one.</p>
-        <p><strong>Every serious poker idea is defined over ranges, not hands.</strong> That is why the drill hides their cards: a decision made against known cards is a lookup, and no such decision exists at a table.</p>
-        <p>Counting matters here and people get it wrong. A specific pair is 6 combinations, a suited hand 4, an offsuit hand 12 — so there are 16 ways to be dealt ace-king and only 6 to be dealt aces. "But he could have aces" is usually the wrong thing to worry about.</p>
+          <!-- 4. Ranges -->
+          <article data-type="pt-concept-card" id="learn-ranges">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">04 · STRATEGIC CORE</span>
+              <h3>Ranges: Playing Against Distributions</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> Every real poker decision is made against an opponent's entire range, never an isolated hand.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>You never know your opponent's exact two cards. What you can know is the <strong>set of hands</strong> they would play this way — that set is their range. Someone opening from early position has a tight, strong range; someone raising from the button has a wide, opportunistic range.</p>
+              <p>Combinatorics matter: a specific pocket pair has 6 combinations, a suited hand has 4, and an offsuit hand has 12. There are 16 ways to be dealt Ace-King, but only 6 ways to be dealt pocket Aces. Worrying about Aces when King-Queen is twice as likely is how players give away chips.</p>
+            </div>
+            <div data-type="pt-concept-box">
+              <span data-type="pt-box-title">Hand Combinations</span>
+              <code>Pocket Pair: 6 combos · Suited: 4 combos · Offsuit: 12 combos</code>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Table Takeaway:</strong> Offsuit combos outnumber pocket pairs 2-to-1. Count combinations, not fear.
+            </div>
+          </article>
 
-        <h3>Blockers</h3>
-        <p>If you are holding an ace, there are three aces left rather than four, so the chance your opponent has a pair of aces drops from 6 combinations to 3. Your own cards <strong>halve</strong> it. Holding a card that removes hands from their range is called blocking, and it is why two hands that look equally strong can be worth playing very differently.</p>
+          <!-- 5. Blockers -->
+          <article data-type="pt-concept-card" id="learn-blockers">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">05 · REMOVAL EFFECT</span>
+              <h3>Blockers: How Your Cards Reshape Theirs</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> Holding a card removes it from the deck and can cut your opponent's combinations in half.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>If you hold an Ace (say A♠), there are only three Aces left in the deck. The number of ways your opponent can hold Pocket Aces drops from 6 combinations down to 3 — <strong>your single card halves their chance</strong>.</p>
+              <p>Card removal ("blocking") is why two hands that seem similar on paper play completely differently in practice. Holding the Ace of trump removes bluffs or nuts from their distribution.</p>
+            </div>
+            <div data-type="pt-concept-box">
+              <span data-type="pt-box-title">Card Removal Math</span>
+              <code>Opponent Pocket Aces: 6 combos → You hold A♠: 3 combos remaining (-50%)</code>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Table Takeaway:</strong> When bluffing, holding blockers to your opponent's calling hands is crucial.
+            </div>
+          </article>
 
-        <h3>GTO</h3>
-        <p>Game-theory optimal means a strategy that <strong>cannot be beaten in the long run, no matter how your opponent adjusts.</strong> It is not a strategy that wins the most against a bad player — that is called exploitative play, and it wins more, at the cost of being exploitable itself.</p>
-        <p>The practical form is a set of frequencies: with this hand in this spot, raise 62% of the time, call 31%, fold 7%. That mixture is what makes you unreadable. It comes out of a solver — software that plays the game against itself millions of times until neither side can improve — and it takes real computing time per spot.</p>
-        <p><strong>So be suspicious of anything that offers you an instant GTO answer in a browser.</strong> It is showing you precomputed output, and whether that output is right depends entirely on assumptions it usually does not state: stack depth, rake, how many players, what everyone did earlier. This tool does not pretend to solve; it computes the things that <em>can</em> be computed exactly, and says so.</p>
+          <!-- 6. GTO -->
+          <article data-type="pt-concept-card" id="learn-gto">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">06 · THEORY CHECK</span>
+              <h3>GTO: Game-Theory Optimal Reality</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> GTO is an unexploitable equilibrium, not an instant browser lookup trick.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>Game-theory optimal (GTO) describes a strategy that cannot be beaten in the long run, no matter how your opponent adjusts. It is not the strategy that wins the most against bad players (that is exploitative play).</p>
+              <p>Be suspicious of anything offering "instant GTO solves" in a browser tab. Real solvers simulate whole trees of play across millions of iterations. What you see in web apps is pre-calculated lookup tables based on rigid assumptions. This tool computes what can be calculated exactly — pot odds and exact runout equity — and states the distinction honestly.</p>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Table Takeaway:</strong> Pot odds grade today's price. GTO balances your entire strategy across every hand you could have.
+            </div>
+          </article>
 
-        <h3>Pot-Limit Omaha</h3>
-        <p>You get four cards instead of two, and you must use <strong>exactly two of them</strong> — plus exactly three from the board. Not "at most two". Exactly.</p>
-        <p>This is where Hold'em players lose money in their first Omaha session. Four hearts on the board and one in your hand is <em>not</em> a flush, because you can only play one heart. Four of a kind on the board is not four of a kind for anyone, because three board cards is the limit. Switch the variant in the other tabs and the maths follows the right rule.</p>
+          <!-- 7. Pot-Limit Omaha -->
+          <article data-type="pt-concept-card" id="learn-omaha">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">07 · VARIANT RULE</span>
+              <h3>Pot-Limit Omaha: The Mandatory "2 and 3" Rule</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> You must use EXACTLY two cards from your hand and EXACTLY three from the board.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>Hold'em players lose money on Omaha because they assume "up to two cards" is allowed. In PLO, you <strong>must use exactly two</strong> cards from your hand and <strong>exactly three</strong> from the board.</p>
+              <p>Four hearts on the board and one heart in your hand is NOT a flush. You only have one heart, but you must use two cards from your hand. Four of a kind on the board is not four of a kind for anyone. Switch variants in the tool to see the math follow Omaha rules.</p>
+            </div>
+            <div data-type="pt-concept-box">
+              <span data-type="pt-box-title">The Invariant Rule</span>
+              <code>Always (2 Hole Cards) + (3 Board Cards) = 5-Card Poker Hand</code>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Table Takeaway:</strong> Never count one-card flushes or board quads in Pot-Limit Omaha.
+            </div>
+          </article>
 
-        <h3>What this tool will not do</h3>
-        <p>It will not estimate. Every percentage here comes from counting every possible way the remaining cards can fall — not from dealing a few hundred thousand random ones and averaging, which is what most equity tools do. When a question is too large to count that way, it says so and refuses, rather than switching to sampling while looking exactly the same.</p>
+          <!-- 8. Exact Math -->
+          <article data-type="pt-concept-card" id="learn-exact">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">08 · ENGINE GUARANTEE</span>
+              <h3>Exact Enumeration: Zero Monte Carlo Sampling</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> Every percentage here counts every possible deck permutation — never a random sample.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>Most poker calculators run a Monte Carlo simulation: they generate 50,000 random boards and take the average. It is fast, but it is approximate.</p>
+              <p>This engine counts <strong>every single runout</strong> that the deck can produce (up to hundreds of thousands of exact outcomes). When a query is too vast to enumerate in a browser without freezing (like pre-flop PLO), it refuses honestly rather than quietly switching to noisy approximations.</p>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Table Takeaway:</strong> Precision matters: exact odds let you study subtle edge cases with 100% confidence.
+            </div>
+          </article>
+        </div>
       </div>
     `
   }
@@ -487,36 +893,60 @@ class PokerTrainerGame extends HTMLElement {
           </label>
         </div>
 
-        <div data-type="pt-spot">
-          ${(['hero', 'villain', 'board'] as PtSlot[]).map(slot => `
-            <div data-type="pt-slot" data-slot="${slot}">
-              <button data-select="${slot}" type="button">
-                ${slot === 'hero' ? 'Your hand' : slot === 'villain' ? 'Their hand' : 'Board'}
-              </button>
-              <div data-type="pt-cards" data-for="${slot}"></div>
-            </div>
-          `).join('')}
-        </div>
+        <div data-type="pt-solve-table">
+          <div data-type="pt-table-watermark">EQUITY LAB</div>
 
-        <div data-type="pt-rangebox" hidden>
-          <label>Their range
-            <select data-field="preset">
-              ${PRESET_RANGES.map(r => `<option value="${r.id}">${r.label}</option>`).join('')}
-              <option value="custom">Custom…</option>
-            </select>
-          </label>
-          <input data-field="rangeText" type="text" spellcheck="false" value="${PRESET_RANGES[0].text}" />
-          <p data-type="pt-note">Shorthand: <code>77+</code> that pair and up, <code>ATs+</code> suited ace-ten through ace-king, <code>AKo</code> offsuit, <code>A5s-A2s</code> a span. These are conventional ranges, not solver output — see the Learn tab.</p>
-          <p data-type="pt-rangeinfo"></p>
+          <!-- Top: Villain Slot -->
+          <div data-type="pt-slot" data-slot="villain">
+            <button data-select="villain" type="button">
+              <span data-type="pt-slot-name">Their Hand (Villain)</span>
+              <span data-type="pt-slot-status">Click to pick</span>
+            </button>
+            <div data-type="pt-cards" data-for="villain"></div>
+          </div>
+
+          <div data-type="pt-rangebox" hidden>
+            <div data-type="pt-rangebox-top">
+              <label>Opponent Range
+                <select data-field="preset">
+                  ${PRESET_RANGES.map(r => `<option value="${r.id}">${r.label}</option>`).join('')}
+                  <option value="custom">Custom…</option>
+                </select>
+              </label>
+              <input data-field="rangeText" type="text" spellcheck="false" value="${PRESET_RANGES[0].text}" />
+            </div>
+            <p data-type="pt-note">Shorthand: <code>77+</code> pair and up, <code>ATs+</code> suited A10-AK, <code>AKo</code> offsuit, <code>A5s-A2s</code> span.</p>
+            <p data-type="pt-rangeinfo"></p>
+          </div>
+
+          <!-- Center: Community Board -->
+          <div data-type="pt-slot" data-slot="board">
+            <button data-select="board" type="button">
+              <span data-type="pt-slot-name">Community Board</span>
+              <span data-type="pt-slot-status">0, 3, 4, or 5 cards</span>
+            </button>
+            <div data-type="pt-cards" data-for="board"></div>
+          </div>
+
+          <!-- Bottom: Hero Slot -->
+          <div data-type="pt-slot" data-slot="hero">
+            <button data-select="hero" type="button">
+              <span data-type="pt-slot-name">Your Hand (Hero)</span>
+              <span data-type="pt-slot-status">Click to pick</span>
+            </button>
+            <div data-type="pt-cards" data-for="hero"></div>
+          </div>
         </div>
 
         <div data-type="pt-picker">
-          <p data-type="pt-picker-hint"></p>
-          <div data-type="pt-grid"></div>
-          <div data-type="pt-picker-actions">
-            <button data-action="clear" type="button">Clear all</button>
-            <button data-action="deal" type="button">Deal a random spot</button>
+          <div data-type="pt-picker-top">
+            <p data-type="pt-picker-hint"></p>
+            <div data-type="pt-picker-actions">
+              <button data-action="deal" type="button">Deal random spot</button>
+              <button data-action="clear" type="button">Clear all</button>
+            </div>
           </div>
+          <div data-type="pt-grid"></div>
         </div>
 
         <output data-type="pt-result" role="status" aria-live="polite"></output>
@@ -776,6 +1206,22 @@ class PokerTrainerGame extends HTMLElement {
       )
     }
 
+    const heroPct = (result.equity[0] * 100).toFixed(1)
+    const villainPct = (result.equity[1] * 100).toFixed(1)
+    const tiePct = (result.tie[0] * 100).toFixed(1)
+    const heroMade = this.board.length >= 3 ? rankHand(this.hero, this.board, this.variant).name : handClass(this.hero)
+    const villainMade = this.board.length >= 3 ? rankHand(this.villain, this.board, this.variant).name : handClass(this.villain)
+
+    const duel = this.duelMeter(
+      `Hero (${heroMade})`,
+      heroPct,
+      `Villain (${villainMade})`,
+      villainPct,
+      `${result.runouts.toLocaleString()} exact runouts counted`,
+      this.variant === 'plo' ? 'Pot-Limit Omaha' : "Texas Hold'em",
+      tiePct,
+    )
+    out.append(duel)
     out.append(this.table(lines))
 
     // Outs are a Hold'em teaching device and the rule of 2 and 4 is calibrated
@@ -815,6 +1261,19 @@ class PokerTrainerGame extends HTMLElement {
 
     const result = cachedEquityVsRange(this.hero, combos, this.board)
     out.dataset.state = 'ok'
+    const heroPct = (result.equity * 100).toFixed(1)
+    const rangePct = ((1 - result.equity) * 100).toFixed(1)
+    const heroMade = this.board.length >= 3 ? rankHand(this.hero, this.board, this.variant).name : handClass(this.hero)
+
+    const duel = this.duelMeter(
+      `Hero (${heroMade})`,
+      heroPct,
+      'Opponent Range',
+      rangePct,
+      `Ahead of <strong>${pct(result.aheadOf)}</strong> of ${result.combos} hands`,
+      `${result.runouts.toLocaleString()} exact runouts counted`,
+    )
+    out.append(duel)
     out.append(this.table([
       ['Your equity against the whole range', pct2(result.equity)],
       ['Hands in their range', String(result.combos)],
@@ -844,6 +1303,44 @@ class PokerTrainerGame extends HTMLElement {
       table.append(tr)
     }
     return table
+  }
+
+  private duelMeter(
+    heroLabel: string,
+    heroPct: string,
+    villainLabel: string,
+    villainPct: string,
+    metaLeft: string,
+    metaRight: string,
+    tiePct?: string,
+  ): HTMLElement {
+    const duel = document.createElement('div')
+    duel.dataset.type = 'pt-duel-meter'
+    const splitHtml = tiePct && Number(tiePct) > 0
+      ? `<div data-type="pt-duel-split">Split: ${tiePct}%</div>`
+      : ''
+    duel.innerHTML = `
+      <div data-type="pt-duel-labels">
+        <div data-type="pt-duel-player" data-player="hero">
+          <span data-type="pt-duel-name">${heroLabel}</span>
+          <span data-type="pt-duel-pct">${heroPct}%</span>
+        </div>
+        ${splitHtml}
+        <div data-type="pt-duel-player" data-player="villain">
+          <span data-type="pt-duel-pct">${villainPct}%</span>
+          <span data-type="pt-duel-name">${villainLabel}</span>
+        </div>
+      </div>
+      <div data-type="pt-duel-track">
+        <div data-type="pt-duel-fill" data-player="hero" style="width: ${heroPct}%"></div>
+        <div data-type="pt-duel-fill" data-player="villain" style="width: ${villainPct}%"></div>
+      </div>
+      <div data-type="pt-duel-meta">
+        <span>${metaLeft}</span>
+        <span>${metaRight}</span>
+      </div>
+    `
+    return duel
   }
 
   /** Hero equity for the odds panel, or null when the spot is not computable. */
@@ -876,14 +1373,38 @@ class PokerTrainerGame extends HTMLElement {
       return
     }
 
+    const equity = this.heroEquity()
+    let ev: number | null = null
+    if (equity !== null) {
+      ev = callEv(this.pot, this.bet, equity)
+      const evCard = document.createElement('div')
+      evCard.dataset.type = 'pt-odds-ev-card'
+      const isPositive = ev > 0
+      const isBreakEven = Math.abs(ev) < 0.01
+      evCard.dataset.verdict = isPositive ? 'win' : isBreakEven ? 'even' : 'lose'
+      evCard.innerHTML = `
+        <div data-type="pt-ev-headline">
+          <span data-type="pt-ev-pill">${isPositive ? '+EV CALL' : isBreakEven ? 'BREAK-EVEN' : '-EV FOLD'}</span>
+          <span data-type="pt-ev-chips">${ev >= 0 ? '+' : ''}${ev.toFixed(1)} chips</span>
+        </div>
+        <p data-type="pt-ev-detail">
+          ${isPositive
+            ? `Calling makes money (+${ev.toFixed(1)} chips on average). Your equity (${pct2(equity)}) exceeds the break-even price of ${pct2(required)}.`
+            : isBreakEven
+            ? `Break-even decision. Your equity (${pct2(equity)}) exactly equals the required price (${pct2(required)}).`
+            : `Calling loses money (${ev.toFixed(1)} chips on average). Your equity (${pct2(equity)}) is below the break-even price of ${pct2(required)}.`
+          }
+        </p>
+      `
+      target.append(evCard)
+    }
+
     const rows: Array<[string, string]> = [
       ['You must win at least this often', pct2(required)],
       ['Pot odds', `${(this.pot / this.bet).toFixed(2)} : 1`],
     ]
 
-    const equity = this.heroEquity()
-    if (equity !== null) {
-      const ev = callEv(this.pot, this.bet, equity)
+    if (equity !== null && ev !== null) {
       rows.push(['You actually win this often', pct2(equity)])
       rows.push(['Value of calling', `${ev >= 0 ? '+' : ''}${ev.toFixed(2)} chips`])
       rows.push([
