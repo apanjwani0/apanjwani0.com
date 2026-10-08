@@ -47,13 +47,13 @@ export const games: Game[] = [
   },
   {
     "slug": "quintle",
-    "title": "Quintle",
-    "description": "A daily five-letter word guessing game. You get six tries to find the hidden word; after each guess the tiles light up \u2014 right letter in the right place, right letter in the wrong place, or not in the word at all \u2014 and you close in from there.\n\nA fresh puzzle drops every day, the same word for everyone, and it picks up right where you left off if you close the tab. Not enough? Switch to Practice for an endless run of random words, or flip on Hard mode, where every clue you uncover has to be reused. Type on your keyboard or tap the on-screen one, watch your win streak and guess distribution build up, and share your result as a spoiler-free emoji grid. Everything is saved in your browser \u2014 no sign-up, nothing uploaded.",
-    "seoTitle": "Daily Five-Letter Word Game \u2014 Quintle",
-    "metaDescription": "Play a daily five-letter word game with six guesses, hard mode, practice mode, streaks and shareable emoji results. No signup, no upload.",
+    "title": "Bytele",
+    "description": "The daily engineering word puzzle — Wordle built for developers, systems engineers, and tech interview prep. Guess the hidden 5-letter computer science or infrastructure keyword in six tries (MUTEX, SHARD, CACHE, STACK, PROXY). After each game, unlock an instant Interview Gotcha card breaking down the architecture concept, time complexity, or common production gotchas. Play the daily global challenge or unlimited practice.",
+    "seoTitle": "Bytele — Daily Engineering & Tech Interview Word Puzzle",
+    "metaDescription": "Wordle for software engineers. Guess the daily 5-letter CS and systems term in six tries, review tech interview insights, and test your systems vocabulary.",
     "enabled": true,
     "interactive": true,
-    "keywords": "word game,word guessing game,five letter word game,daily word puzzle,wordle style game,guess the word,vocabulary game,browser word game,unlimited word game,hard mode word game,quintle",
+    "keywords": "bytele,wordle for engineers,developer wordle,tech interview word game,cs word game,computer science wordle,daily engineering puzzle,dev word game,quintle,coding word game",
   },
   {
     "slug": "maze-weaver",

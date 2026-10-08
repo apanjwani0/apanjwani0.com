@@ -65,10 +65,24 @@ function onScroll() {
   if (!nav) return
   syncNavScrolled(nav)
   const current = window.scrollY
-  if (current > lastScroll && current > navH + 20) {
-    nav.setAttribute('data-nav-hidden', '')
-  } else if (current < lastScroll) {
-    nav.removeAttribute('data-nav-hidden')
+  const isMobile = window.innerWidth <= 768
+
+  if (isMobile) {
+    // On mobile touch screens, accidental upward swipes or touch jitter during
+    // gameplay should not drop the nav bar down to occlude 10-15% of the board.
+    // Keep it hidden once scrolled down past the header; only reveal when
+    // returning to the top of the page.
+    if (current > navH + 20) {
+      nav.setAttribute('data-nav-hidden', '')
+    } else if (current <= navH + 10) {
+      nav.removeAttribute('data-nav-hidden')
+    }
+  } else {
+    if (current > lastScroll && current > navH + 20) {
+      nav.setAttribute('data-nav-hidden', '')
+    } else if (current < lastScroll) {
+      nav.removeAttribute('data-nav-hidden')
+    }
   }
   lastScroll = current
 }

@@ -6,33 +6,40 @@ twenty48-game[data-game="2048"] {
 div[data-type="tw-scores"] {
   display: flex;
   gap: var(--space-md);
-  margin: 0.25rem 0 var(--space-lg);
+  margin: 0.5rem 0 var(--space-lg);
 }
 
 div[data-type="tw-score"] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 5.5rem;
-  padding: 0.35rem 0.9rem;
-  border: 1px solid var(--color-border);
+  min-width: 6rem;
+  padding: 0.45rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: linear-gradient(180deg, rgba(22, 30, 44, 0.75), rgba(12, 17, 26, 0.85));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 div[data-type="tw-score"] span {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-muted);
+  margin-bottom: 0.15rem;
 }
 
 div[data-type="tw-score"] output {
   font-family: var(--font-mono);
   font-size: var(--text-lg);
+  font-weight: 700;
   color: var(--color-text);
   line-height: 1.2;
+}
+
+div[data-type="tw-score"]:last-child output {
+  color: var(--color-accent);
 }
 
 /* ── board stage ── */
@@ -41,11 +48,12 @@ div[data-type="tw-stage"] {
   width: 100%;
   max-width: 480px;
   margin: 0 auto var(--space-card);
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-lg);
   overflow: hidden;
   line-height: 0;
-  background: var(--color-surface);
+  background: linear-gradient(180deg, rgba(13, 17, 25, 0.95), rgba(8, 11, 17, 0.98));
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6), 0 12px 36px rgba(0, 0, 0, 0.35);
 }
 
 canvas[data-type="tw-canvas"] {
@@ -69,6 +77,7 @@ div[data-type="tw-overlay"] {
   text-align: center;
   line-height: 1.4;
   background: var(--color-bg-blur);
+  backdrop-filter: blur(8px);
 }
 
 div[data-type="tw-overlay"][hidden] {
@@ -102,45 +111,52 @@ div[data-type="tw-controls"] {
 }
 
 div[data-type="tw-game"] button {
-  padding: 0.32rem 0.7rem;
-  border: 1px solid var(--color-border);
+  white-space: nowrap;
+  padding: 0.38rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.45);
   border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-muted);
-  font-family: var(--font-serif);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
-}
-
-div[data-type="tw-game"] button:hover {
+  background: linear-gradient(180deg, rgba(30, 40, 58, 0.7), rgba(18, 24, 36, 0.85));
   color: var(--color-text);
-  border-color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  transition: transform 0.1s, color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 
-/* Undo is disabled with an empty history, and this rule out-specifies the lane
-   floor in games-common.css — (0,2,2) against its (0,2,1) — so the floor's
-   colour reset never reached it and a dead Undo still lit up under the cursor.
-   Re-state the two properties the hover above sets, at the same specificity and
-   later in source, which is the form games-common.css documents; the guarded
-   `:hover:not(:disabled)` would out-specify the transport CTA rules below. */
+div[data-type="tw-game"] button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+div[data-type="tw-game"] button:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+  background: linear-gradient(180deg, rgba(38, 50, 72, 0.8), rgba(24, 32, 48, 0.95));
+}
+
 div[data-type="tw-game"] button:disabled {
   opacity: var(--opacity-disabled);
   cursor: not-allowed;
   color: var(--color-muted);
   border-color: var(--color-border);
+  box-shadow: none;
 }
 
 div[data-type="tw-controls"] [data-group="transport"] button[data-action="new"],
 div[data-type="tw-overlay-actions"] button[data-action="again"] {
   color: var(--color-bg);
-  background: var(--color-text);
-  border-color: var(--color-text);
+  background: linear-gradient(180deg, #f0f4fa, #d0d8e8);
+  border-color: #d0d8e8;
+  font-weight: 600;
 }
 
-div[data-type="tw-controls"] [data-group="transport"] button[data-action="new"]:hover,
-div[data-type="tw-overlay-actions"] button[data-action="again"]:hover {
-  background: var(--color-accent);
+div[data-type="tw-controls"] [data-group="transport"] button[data-action="new"]:hover:not(:disabled),
+div[data-type="tw-overlay-actions"] button[data-action="again"]:hover:not(:disabled) {
+  color: #fff;
+  background: linear-gradient(180deg, #aa9dff, #8572fa);
   border-color: var(--color-accent);
 }
 
@@ -151,12 +167,17 @@ div[data-type="tw-overlay-actions"] button[data-action="keepgoing"] {
 
 /* size buttons show as pressed when active */
 div[data-type="tw-controls"] [data-size][aria-pressed="true"] {
-  color: var(--color-text);
+  color: #fff;
   border-color: var(--color-accent);
+  background: linear-gradient(180deg, rgba(130, 110, 255, 0.35), rgba(90, 70, 220, 0.45));
+  box-shadow: 0 0 10px rgba(130, 110, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 span[data-type="tw-group-label"] {
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--color-muted);
 }
 
@@ -174,16 +195,27 @@ p[data-type="tw-hint"] {
   color: var(--color-muted);
 }
 
-@media (max-width: 420px) {
+@media (max-width: 480px) {
   twenty48-game[data-game="2048"] {
-    min-height: 52rem;
+    min-height: 48rem;
   }
 
   div[data-type="tw-scores"] {
     width: 100%;
   }
+
   div[data-type="tw-score"] {
     flex: 1;
     min-width: 0;
+  }
+
+  div[data-type="tw-controls"] {
+    gap: 0.75rem 1rem;
+  }
+
+  div[data-type="tw-game"] button {
+    min-height: 44px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.85rem;
   }
 }
