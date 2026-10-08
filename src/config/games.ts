@@ -34,7 +34,7 @@ export const games: Game[] = [
     "seoTitle": "Free Online Poker Trainer & Hold'em Odds Calculator — Exact & Unsampled",
     "metaDescription": "100% free online Texas Hold'em poker trainer and exact odds calculator. Practice pot odds, expected value (+EV), and full runout enumeration for poker and quant trading interviews. Runs in your browser with zero sign-up.",
     "keywords": "free poker trainer, free online poker trainer, poker trainer online, texas holdem poker trainer, gto poker trainer free, poker odds calculator free, quant interview poker prep, jane street poker interview, sig poker interview, pot odds calculator, poker equity calculator, poker expected value drill, exact holdem odds, holdem equity, poker math trainer",
-    "intro": "Pick two hands and a board, and every number is computed by enumerating every possible runout — no Monte Carlo, no margin of error. See your exact equity, the real list of outs, and whether calling is profitable at the price you're being offered.",
+    "intro": "Play a spot without seeing their cards, the way a real table works — then see every number behind the decision, computed by counting every possible runout.",
     "features": [
       "Exact runout enumeration (up to 1,712,304 combinations)",
       "Interactive GTO drill with instant decision feedback",

@@ -1,5 +1,10 @@
 /* Poker Trainer — tokens only, no hardcoded colours or sizes (see AGENTS.md). */
 
+poker-trainer-game {
+  display: block;
+  min-height: 620px;
+}
+
 [data-type='pt-game'] {
   display: flex;
   flex-direction: column;

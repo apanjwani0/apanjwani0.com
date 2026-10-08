@@ -11,6 +11,11 @@
    familiar yellow, so the palette stays on-brand; the how-to-play legend explains it,
    and the shareable emoji grid still uses the universal 🟩/🟨/⬛ so results read anywhere. */
 
+quintle-game[data-game="quintle"] {
+  display: block;
+  min-height: 38rem;
+}
+
 /* ── header ── */
 /* ── controls ── */
 div[data-type="q-controls"] {

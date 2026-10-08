@@ -230,14 +230,15 @@ class PokerTrainerGame extends HTMLElement {
       this.render()
     })
 
-    this.renderLearn()
-    this.buildSolve()
     this.deal()
     this.render()
     window.addEventListener('keydown', this.onKeyDown)
   }
 
   /* ─────────────────────────────  chrome  ───────────────────────────── */
+
+  private solveBuilt = false
+  private learnRendered = false
 
   private render() {
     for (const button of this.querySelectorAll<HTMLElement>('[data-mode]')) {
@@ -248,8 +249,20 @@ class PokerTrainerGame extends HTMLElement {
     for (const panel of this.querySelectorAll<HTMLElement>('[data-panel]')) {
       panel.hidden = panel.dataset.panel !== this.mode
     }
-    if (this.mode === 'drill') this.renderDrill()
-    if (this.mode === 'solve') this.renderSolve()
+    if (this.mode === 'drill') {
+      this.renderDrill()
+    } else if (this.mode === 'solve') {
+      if (!this.solveBuilt) {
+        this.buildSolve()
+        this.solveBuilt = true
+      }
+      this.renderSolve()
+    } else if (this.mode === 'learn') {
+      if (!this.learnRendered) {
+        this.renderLearn()
+        this.learnRendered = true
+      }
+    }
   }
 
   /* ─────────────────────────────  drill  ───────────────────────────── */
