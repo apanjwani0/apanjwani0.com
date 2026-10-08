@@ -111,7 +111,36 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
   <JsonLd json={breadcrumbLd} />
   {faqLd && <JsonLd json={faqLd} />}
   <Breadcrumbs items={crumbs} />
-  {GameTag && (
+  {GameTag && slug === 'poker-trainer' && (
+    <poker-trainer-game data-game="poker-trainer">
+      <div data-type="pt-game">
+        <div data-type="pt-header">
+          <div data-type="pt-titlebar">
+            <h1>{game.title}</h1>
+            <span data-type="pt-badge">exact, never sampled</span>
+          </div>
+          <div data-type="project-description" set:html={gameIntroHtml} />
+        </div>
+
+        <nav data-type="pt-tabs" role="tablist">
+          <button role="tab" data-mode="drill" type="button" data-active="true" aria-selected="true">Play a spot</button>
+          <button role="tab" data-mode="solve" type="button" aria-selected="false">Run the numbers</button>
+          <button role="tab" data-mode="learn" type="button" aria-selected="false">What do these words mean?</button>
+        </nav>
+
+        <section data-type="pt-panel" data-panel="drill">
+          <div data-type="pt-spotcard">
+            <div data-type="pt-felt" data-placeholder="true">
+              <div data-type="pt-table">
+                <div data-type="pt-table-watermark">POKER TRAINER</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </poker-trainer-game>
+  )}
+  {GameTag && slug !== 'poker-trainer' && (
     <GameTag data-game={game.slug}>
       <h1>{game.title}</h1>
       <div data-type="project-description" set:html={gameIntroHtml} />
@@ -153,7 +182,12 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
   {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
   <RelatedLinks heading="Read about it" items={stories} />
 
-  {GameTag && (
+  {GameTag && slug === 'poker-trainer' && (
+    <script>
+      import '../../components/games/poker-trainer/PokerTrainer.ts'
+    </script>
+  )}
+  {GameTag && slug !== 'poker-trainer' && (
     <script>
       // Mount on initial load AND after every View Transition navigation. Bundled
       // scripts run only once per session, so without astro:page-load a game
