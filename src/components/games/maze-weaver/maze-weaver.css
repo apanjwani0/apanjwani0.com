@@ -1,3 +1,8 @@
+maze-weaver-game[data-game="maze-weaver"] {
+  display: block;
+  min-height: 36rem;
+}
+
 canvas[data-type="mw-canvas"] {
   display: block;
   width: 100%;

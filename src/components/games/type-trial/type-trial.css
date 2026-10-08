@@ -1,3 +1,8 @@
+type-trial-game[data-game="type-trial"] {
+  display: block;
+  min-height: 32rem;
+}
+
 /* ── Category selector ───────────────────────────────────── */
 div[data-tool="type-trial"] [data-group="categories"] {
   display: flex;

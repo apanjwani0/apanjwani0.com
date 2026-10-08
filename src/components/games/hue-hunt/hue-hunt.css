@@ -2,6 +2,11 @@
    Chrome colours/fonts/sizes/radii come from theme.css tokens only; the swatches
    themselves are coloured inline from the game's own random data. */
 
+hue-hunt-game[data-game="hue-hunt"] {
+  display: block;
+  min-height: 34rem;
+}
+
 /* ── header ── */
 /* ── controls ── */
 div[data-type="hue-controls"] {

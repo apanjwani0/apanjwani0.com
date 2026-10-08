@@ -5,6 +5,11 @@
  * a tenth byte-identical copy of the same six declarations (see AGENTS.md —
  * Design System). Only the role-specific overrides below are per-game. */
 
+deep-shore-game[data-game="deep-shore"] {
+  display: block;
+  min-height: 38rem;
+}
+
 /* The stage is the positioning context for the Julia inset and the progress
    chip, both of which sit over the plane rather than reflowing it. */
 div[data-type="ds-stage"] {

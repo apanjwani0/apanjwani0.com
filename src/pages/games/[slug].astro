@@ -187,11 +187,39 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
       import '../../components/games/poker-trainer/PokerTrainer.ts'
     </script>
   )}
-  {GameTag && slug !== 'poker-trainer' && (
+  {GameTag && slug === '2048' && (
     <script>
-      // Mount on initial load AND after every View Transition navigation. Bundled
-      // scripts run only once per session, so without astro:page-load a game
-      // reached via in-site nav renders blank until a hard reload.
+      import '../../components/games/twenty48/Twenty48.ts'
+    </script>
+  )}
+  {GameTag && slug === 'quintle' && (
+    <script>
+      import '../../components/games/quintle/Quintle.ts'
+    </script>
+  )}
+  {GameTag && slug === 'maze-weaver' && (
+    <script>
+      import '../../components/games/maze-weaver/MazeWeaver.ts'
+    </script>
+  )}
+  {GameTag && slug === 'type-trial' && (
+    <script>
+      import '../../components/games/type-trial/TypeTrial.ts'
+    </script>
+  )}
+  {GameTag && slug === 'hue-hunt' && (
+    <script>
+      import '../../components/games/hue-hunt/HueHunt.ts'
+    </script>
+  )}
+  {GameTag && slug === 'deep-shore' && (
+    <script>
+      import '../../components/games/deep-shore/DeepShore.ts'
+    </script>
+  )}
+  {GameTag && !['poker-trainer', '2048', 'quintle', 'maze-weaver', 'type-trial', 'hue-hunt', 'deep-shore'].includes(slug as string) && (
+    <script>
+      // Fallback for unlisted/future games
       import { mountGame } from '../../lib/game-mount'
       document.addEventListener('astro:page-load', mountGame)
       mountGame()
