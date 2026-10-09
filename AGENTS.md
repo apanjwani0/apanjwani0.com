@@ -229,6 +229,9 @@ The tool-engine rules (an observation must not be taken through a lens that alte
   is a deliberate SEO trade-off. Anything added there must earn its place like
   an article.
 - **Client mounting with ClientRouter.** Bundled scripts run once per session, so anything that mounts does it inside `document.addEventListener('astro:page-load', …)`. Test by clicking an in-site link, not by reloading.
+- **No sample, mock or placeholder data**, not even labelled "(sample)". Leave out what can't be measured, or measure it for real; a dev-only real measurement sits behind `import.meta.env.DEV` and is loopback-only.
+- **UI copy is plain, simple, explanatory full sentences** a beginner can follow. Say what happens and why, and define a term the first time. No clipped or clever one-liners.
+- **Nothing blinks, breathes or pulses on a timer** (status LEDs, glows, halos): the owner reads it as the page flickering. Ease transitions, and give a hover effect a short rest delay.
 - **One copy of each client helper** (`escape.ts`, `storage.ts`, `flash.ts`, `download.ts`, `format.ts`, `math.ts`, `motion.ts`, `date.ts`): import them rather than writing a private copy.
 
 Everything else (the shared tool/game frame, the skeleton, fonts, canvas export, the "server" badge): [docs/conventions.md](docs/conventions.md).
@@ -276,6 +279,9 @@ The full hero spec: [docs/home-hero.md](docs/home-hero.md).
    `npm run security:smoke`, and add an assertion there for any new invariant.
 6. **No new secrets on the production host.** A value needed only in dev stays
    out of the container env.
+7. **Commit messages are one short line**, no body, no attribution (no `Co-Authored-By`, no "Generated with" footer).
+8. **While the owner tests on the dev server, every edit reloads their open tab.** Say so before edit-heavy work or mutation tests, or batch the edits.
+9. **A design the owner cuts is moved out runnable**, never just deleted: `../screensavers/<name>/` with its own `index.html` and a prebuilt bundle (monsoon and liquid-light are there).
 
 Long explanations go in the `docs/` file named in the Map below; add every new `docs/` file to [docs/README.md](docs/README.md).
 

@@ -84,3 +84,22 @@ Checked against the code on 9 Oct 2026.
 
 Parked. Run `node dist/server/entry.mjs` directly in Termux (Node 22.12 or newer, per `package.json`), with no Docker: Android kernels' namespace and cgroup support is unreliable. Carriers use CGNAT, so the phone has no public IP; a Cloudflare Tunnel (`pkg install cloudflared`, `cloudflared tunnel login`, `tunnel create`, `tunnel route dns`, `tunnel run --url http://localhost:4321`) dials out and handles TLS. Keep the process alive with `termux-wake-lock` and start it on boot with Termux:Boot (F-Droid, a script in `~/.termux/boot/`). Less reliable than the OCI VM (battery, doze), so a backup or experiment, not production.
 
+## A curated reading list ("reads")
+
+Undecided. "reads" means a curated list of topics and articles the owner is excited to read and learn from, possibly sourced from his knowledge base, not a section of original essays. On 20 Aug 2026 an original essay was written under that name and rejected ("you are not getting what exactly I want to put in reads"). `/learnings` has since shipped figure-led articles in his voice and stays an article section (30 Sep 2026), so ask whether a separate `reads` list is still wanted. Confirm the shape first (links only, links plus his notes, or essays): a link list needs a source, a URL and a one-line take, and may need no detail pages, so the `Learning` schema does not carry over.
+
+## A visual layout editor
+
+A real "organise my UI" editor: Framer or Webflow-style direct manipulation of the actual layout, not reorder lists or SEO forms. A reorder-based CMS (Keystatic plus a drag-and-drop "Arrange" mode over `content/*.json`) was built in July 2026 and rejected ("all is just text editors and page order arrangements. That's not at all what I wanted"). Do not rebuild it. It is parked on the local branch `feature/visual-cms-editor` (`941b2dc`), never pushed. The principle that survives: page content stays config-driven.
+
+## Online multiplayer poker (retired)
+
+Poker Together, a local-first play-money game, was replaced by the Poker Trainer on 28 Sep 2026, and its PocketBase backend was deleted (`08f29e6`). To revive online play, start from git history: `docs/poker-multiplayer.md` and `docs/poker-build-log.md` at `9537830`, and the product model and asset system in `docs/poker-design.md` at `be727f9`.
+
+- The engine is a pure deterministic reducer, so replicate the ordered action log, not state. With a server sequencer (PocketBase Realtime, one writer per turn, each client stamping `seq = lastSeen + 1`) host migration disappears. PocketBase treats a required number `0` as empty, so `seq` must not be `required`.
+- Wanted by the owner: money-persistent books that always tally (a leaver becomes a permanent cash-out), a provably fair shuffle, public rooms kept alive by visibly tagged bots, private rooms by invite code, and a private odds "pet" that sees only the board and its owner's hole cards.
+
+## Tools and games as standalone products
+
+A direction from 9 Jul 2026: opening a tool or game should feel like a separate product, with no site nav and no portfolio chrome during use and one quiet "built by" credit, so a person who bookmarks it may never open the portfolio again. It was never implemented: tool and game pages render the site nav and a breadcrumb in the shared frame ([conventions.md](conventions.md)). The owner to confirm whether it still stands.
+

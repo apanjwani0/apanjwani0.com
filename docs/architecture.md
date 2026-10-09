@@ -89,6 +89,8 @@ Every content section is manageable through `/admin` in dev. To add one:
 Current config keys: `site`, `projects`, `experience`, `blogs`, `learnings`,
 `games`, `tools`
 
+The site tab's submit handler in `src/pages/admin.astro` rebuilds the payload field by field from the form, so a new `site.*` field also needs an input in the site tab and a line in that object, or it vanishes on the next site save.
+
 ### Hiding a section: `sections.blogs`, `sections.projects`
 
 Blogs and Projects ship hidden (Projects since 2026-09-30, the owner's call).

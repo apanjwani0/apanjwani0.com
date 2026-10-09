@@ -261,3 +261,15 @@ Add an assertion for each new invariant: a code invariant in
 Then **break what the assertion guards and watch it fail.** A mutation that
 survives means the assertion is wrong, not the mutation. The poker split-pot
 fixture is the worked example.
+
+## Origin exposure: detail
+
+The notes behind *Origin exposure* above.
+
+- **Why no header can be trusted.** The origin answers on its own public IP over plain HTTP, so on the direct path `x-forwarded-for` and `cf-connecting-ip` are both caller-chosen; Cloudflare overwrites `cf-connecting-ip` only for traffic that passes through it. Every Cloudflare protection (WAF, rate limiting, bot management, caching, TLS) is optional for anyone who resolves the address. A direct request to the origin IP returned 200 on 15 Aug 2026.
+- **The app-level lock** (on since 17 Aug 2026): the Transform Rule is Rules → Overview → Request Header Transform Rule, "All incoming requests", setting `x-origin-auth` to `ORIGIN_SHARED_SECRET`. With the lock on, `https://<domain>/` answers 200 (`cf-cache-status: HIT`) and `http://<origin-ip>/` answers 404 with `cache-control: no-store`. The box still answers on its public IP.
+- **The firewall half is not done.** `scripts/lock-origin-to-cloudflare.sh` drives UFW only, and that does not close the site: the container is published with `docker run -p 80:4321`, Docker's own iptables rules handle published ports before UFW's, so UFW never filters port 80. The owner has not chosen between making the script write to the `DOCKER-USER` chain and deleting it. The OCI Security List is the control that works: console → VCN → Subnets → Security → Default Security List; delete the TCP 80 `0.0.0.0/0` ingress rule and add one per Cloudflare range (Cloudflare published 15 IPv4 and 7 IPv6 ranges in Aug 2026, so 22 rules; the list is at cloudflare.com/ips). If 22 hand-entered rules is too many, that is the argument for a Cloudflare Tunnel: `cloudflared` dials out, the ports close entirely, and there is no ingress list to maintain.
+- **Deploys survive either fix**, because the GitHub runner is self-hosted on the box: locking inbound 80 cannot break CI.
+- **Treat the origin IP as permanently public.** It was published in public DNS once (16 Aug 2026): a Bing verification CNAME was saved pointing at `www.<domain>` (DNS-only) instead of the verifier's host, so resolving it returned the real A record. Passive-DNS archives keep that for good, so the firewall lock is the only control left, not obscurity. A DNS-only CNAME that points at a proxied hostname resolves through to the hidden A record and leaks it: point every verification CNAME at the verifier's host, never at your own.
+- **Who hits the origin.** In Aug 2026, about 75,000 requests in 30 days against about 2,900 unique visitors, mostly scanners requesting paths that 404. That is why non-API 404s get `s-maxage=300` (*Caching & Performance* in operations.md).
+
