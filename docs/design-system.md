@@ -127,3 +127,14 @@ view-transition plan: `vt-title` is the page h1 and, during a navigation, the
 clicked card's title, with `html[data-vt-source]` clearing the source page's h1
 (two elements with one name abort the transition); `vt-nav` is the fixed nav;
 `vt-thumb` is optional. No stylesheet declares `view-transition-name` yet.
+
+## UI generation under the portfolio override
+
+The `frontent-design` skill (`.agents/skills/frontent-design/`) links here. Its general guidance gives way to the site's own rules:
+
+- **`/frontent-design`** — UI generation under the portfolio override: no custom
+  classes, fonts or Tailwind; semantic HTML plus the site's `data-type` idioms
+  and tokens. Motion only in the tasteful sense: short transitions from the
+  `--motion-*` and `--ease-*` tokens, never looping decoration. `shared.css` neutralises every
+  transition and animation under `prefers-reduced-motion: reduce`; motion driven
+  from script checks the query itself.

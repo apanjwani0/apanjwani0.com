@@ -308,6 +308,16 @@ name, with no accounts, cookies or per-visitor identity.
 Ship fewer, larger things. One tool a stranger would bookmark is worth more than
 the whole current list.
 
+## SCOPE CONSTRAINT — no new pages (owner decision, 2026-07-04)
+
+**NEVER build a new top-level page or route.** Build only individual TOOLS and GAMES (the lanes
+below), which surface through the EXISTING /tools and /games routes — plus tweak/polish days on
+existing pages. The old "daily dev-tools workspace" (`/workspace`) flagship is **RETIRED**: do NOT
+(re)create `src/pages/workspace.astro`, `src/styles/workspace.css`, or any nav/sitemap/CTA wiring
+for it.
+
+The lanes are the tool and game ideas in [docs/ideas.md](docs/ideas.md); a new tool or game is a component plus a config entry (see [docs/architecture.md](docs/architecture.md) → Adding a tool), never a new `src/pages/*.astro`.
+
 ## Map
 
 - [docs/README.md](docs/README.md): index of every doc.
@@ -315,5 +325,5 @@ the whole current list.
 - [docs/security.md](docs/security.md): the security rules in full.
 - [docs/conventions.md](docs/conventions.md), [docs/design-system.md](docs/design-system.md), [docs/home-hero.md](docs/home-hero.md): UI rules.
 - [docs/learnings.md](docs/learnings.md): articles and embeds; voice in [docs/plans/learnings-voice.md](docs/plans/learnings-voice.md).
-- [docs/operations.md](docs/operations.md): build notes, caching, analytics, share cards, crawlers.
+- [docs/operations.md](docs/operations.md): build notes, caching, analytics, share cards, crawlers, deploy, browser check, agent tools.
 - [docs/plans/](docs/plans/) and [docs/ideas.md](docs/ideas.md): plans and backlog.

@@ -171,3 +171,14 @@ An enabled-but-unplayable game shows a "want this sooner" counter
 route validates the slug against the coming-soon games in config, so a request
 body can't create a store key. Counts only; the one-vote-per-browser
 localStorage flag is UX, not a control.
+
+## Adding a tool
+
+A tool page is server-rendered with an empty custom element; the browser then imports the tool's module and the element comes alive. A new tool touches:
+
+1. `src/config/tools.ts`: an entry with `status: 'live'`, then the rest of *Admin Config Management* (run `npm run og`).
+2. `src/components/tools/<slug>/<Name>.ts`: a custom element named `<slug>-tool`, registered inside `if (!customElements.get(…))` and rendered in `connectedCallback`. Its stylesheet is `tools/<slug>/<slug>.css`, linked on that tool's page only (see *Key Conventions*).
+3. `src/pages/tools/[slug].astro`: the slug joins `TOOL_SLUGS` and a branch of `mountTool()` that `import()`s the module. `mountTool()` runs on `astro:page-load`, so the tool also mounts on in-site navigation.
+4. A tool that needs the origin server also gets `src/pages/api/tools/<slug>.ts`, an entry in `SERVER_TOOLS` (`src/lib/tools.ts`) and assertions in `scripts/security-smoke.mjs`.
+
+A static import (`marked` inside Draftboard) loads with the tool's module; a dynamic one (`html2canvas` inside Draftboard's export function) downloads only when that line runs. Heavy dependencies take the dynamic form. State lives in the DOM and in `localStorage` through `storage.ts`; closing the tab drops the rest. Exports are client-side: a Blob and an object URL (`download.ts`). The file never leaves the browser.

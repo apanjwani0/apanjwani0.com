@@ -5,13 +5,13 @@ One line per file. The rules are in [../AGENTS.md](../AGENTS.md); session pickup
 
 ## Reference
 
-- [architecture.md](architecture.md): stack, key modules, admin checklist, hiding a section, indexing predicates, coming-soon pages, code graph.
+- [architecture.md](architecture.md): stack, key modules, admin checklist, hiding a section, indexing predicates, coming-soon pages, code graph, adding a tool.
 - [security.md](security.md): the security rules in full, with their reasoning.
 - [conventions.md](conventions.md): the tool and game conventions (shared frame, skeleton, fonts, canvas export, client helpers).
-- [design-system.md](design-system.md): tokens, control kit, theming, contrast, and the paused UI refresh.
+- [design-system.md](design-system.md): tokens, control kit, theming, contrast, the paused UI refresh, and UI generation rules.
 - [home-hero.md](home-hero.md): the home hero's contract and the owner's rules for it.
 - [learnings.md](learnings.md): how learnings articles are written and how they mount a live component.
-- [operations.md](operations.md): build notes, caching, analytics, share cards, AI crawlers, agent tools.
+- [operations.md](operations.md): build notes, caching, analytics, share cards, AI crawlers, deploy and host bootstrap, the browser check, agent tools.
 
 ## Plans and backlog
 

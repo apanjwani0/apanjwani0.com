@@ -19,3 +19,8 @@ Session pickup. Rewritten each session, not appended. Last updated 9 Oct 2026.
 - **Awaiting the owner's review:** the control kit exists and Flowmap is rebuilt
   on it; no other tool moves to the kit until then.
 - The 2-hourly autonomous pass is disabled (last run 2026-08-20).
+
+## Owner decisions pending
+
+- Confirm or drop the rule "NEVER build a new top-level page or route" (AGENTS.md → SCOPE CONSTRAINT). It was carried over from the retired daily-run backlog (4 Jul 2026), not restated since.
+- If the 2-hourly pass is ever re-enabled, repoint its prompt at `docs/plans/autonomous-pass.md` (it still names `.claude/scheduled/`, now retired).

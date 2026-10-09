@@ -1,6 +1,6 @@
 # Operations
 
-Build and test notes, caching, analytics, share cards, AI crawlers.
+Build and test notes, caching, analytics, share cards, AI crawlers, deploy, the browser check and the agent tools.
 
 ## Build / test notes
 
@@ -18,10 +18,11 @@ Build and test notes, caching, analytics, share cards, AI crawlers.
   server that can't start fails the image build and the old container keeps
   serving. A local `node_modules` older than the lockfile fails it; run
   `npm ci`.
-- For UI/route changes, also run `/browser-debug` against the dev server.
+- For UI/route changes, also run `/browser-debug` against the dev server (the checklist is under *Browser check* below).
 - Deploys: a push to `main` builds the Docker image, restarts the container
   from the self-hosted runner, then fetches `/` inside it. That probe runs
   after the old container stops, which is why `boot:check` runs first.
+- `astro check` reports `adminNotFound` in `src/pages/admin.astro` as unused (ts6133). It is used: line 20 is `if (!isAdminRequestAllowed()) return adminNotFound()`, the guard that 404s `/admin` in production, and `astro check` cannot see frontmatter usage. Deleting it on the hint's word removes a security control.
 
 ## Caching & Performance
 
@@ -103,18 +104,51 @@ CCBot and Applebot-Extended.
   to list exactly the sitemap's pages. Crawlers barely read it, so it is a
   courtesy to agents, not an SEO lever.
 
+## Deploy
+
+A push to `main` runs `.github/workflows/deploy.yml`: the `build` job (GitHub-hosted) builds a `linux/amd64` image and pushes it to `ghcr.io/<owner>/portfolio`; the `deploy` job runs on a self-hosted runner on the production box, pulls the image, replaces the `portfolio` container and fetches `/` inside it. amd64 only: an arm64 build under QEMU took over 20 minutes. Both jobs declare `environment: Prod`; the secrets they read are `GHCR_TOKEN` and, optionally, `ORIGIN_SHARED_SECRET` (see AGENTS.md → Origin exposure). `ADMIN_SECRET` is deliberately not passed.
+
+The host is an OCI Always Free Ubuntu VM with 1 GB of RAM behind Cloudflare. The container is published as `-p 80:4321`, capped at `--memory=768m`, with `/opt/portfolio/data` mounted at `/app/data` (analytics counts and the daily leaderboards, which survive deploys) and `/opt/portfolio/avatar.webp` mounted over the client build, because `public/avatar.*` is gitignored and not in the image.
+
+- **Why a self-hosted runner:** OCI blocks inbound SSH from GitHub Actions' IPs. The runner connects outbound on 443, so no firewall change is needed. In Settings → Actions → General, require approval for outside collaborators so a fork PR cannot run on it.
+- **HTTPS** (as set up in Aug 2026): Cloudflare proxies both the apex and `www`, with SSL/TLS mode Flexible (visitor to Cloudflare over HTTPS, Cloudflare to origin over plain HTTP: the origin has no certificate and port 443 is closed). Full mode would fail for that reason. Cloudflare sends `x-forwarded-proto: https`, so `Secure` cookies work.
+- **Cloudflare dashboard state** (Cache Rule, Browser Cache TTL, Transform Rule, SSL mode) is not in git. `npm run origin:check` asserts what a stranger sees. The Cache Rule's edge TTL was first set to "Override origin" for 1 hour on 21 Jun 2026; switch it to "Respect origin TTL" to honour the headers in *Caching & Performance*. Check the dashboard for the current value.
+- **Other targets** (a plain Docker host, a VPS through a registry, a Raspberry Pi, Cloudflare Workers): README.md → Deploy.
+
+Bootstrapping a fresh VM, in order:
+
+1. Add a swap file (`fallocate -l 2G /swapfile`, `mkswap`, `swapon`, an `/etc/fstab` line): the free tier has 1 GB and thrashes without it.
+2. Install Docker with `curl -fsSL https://get.docker.com | sudo sh` (the manual apt repo setup is fragile on OCI Ubuntu) and add the user to the `docker` group.
+3. Open 22, 80 and 443 in UFW **and** in the OCI Security List (subnet → Security → Default Security List → ingress rules, TCP from `0.0.0.0/0`).
+4. Delete OCI's default iptables REJECT rule, which blocks everything except 22: `sudo iptables -L INPUT -n --line-numbers`, `sudo iptables -D INPUT <line>`, then `sudo apt-get install -y iptables-persistent` and `sudo netfilter-persistent save`.
+5. `mkdir -p /opt/portfolio/data`, own it, and copy `avatar.webp` to `/opt/portfolio/`.
+6. Install the Actions runner as a service (repo → Settings → Actions → Runners → New self-hosted runner; `./svc.sh install && ./svc.sh start`).
+
+Commands on the box: `docker ps`, `docker logs -f portfolio`, `docker restart portfolio`, `df -h && free -h`, and `sudo ./svc.sh status` in the runner's directory.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Port 80 unreachable, curl hangs | OCI's default iptables REJECT rule | delete it (step 4) |
+| Port 80 still unreachable after that | the OCI Security List lacks TCP 80/443 | add the ingress rules (step 3) |
+| Actions SSH timeout | OCI blocks inbound SSH from runner IPs | use the self-hosted runner |
+| Build takes 20+ minutes | cross-arch build under QEMU | build `linux/amd64` only |
+| Avatar not loading | `public/avatar.*` is gitignored, so it is not in the image | copy it to `/opt/portfolio/avatar.webp` |
+| Container exits at once | the app crashed on start | `docker logs portfolio` |
+| GHCR pull fails | not authenticated | re-check the `GHCR_TOKEN` secret |
+| Every request 404s after setting `ORIGIN_SHARED_SECRET` | no matching Transform Rule | fix the rule value, not the secret |
+
+## Browser check
+
+Run it against the dev server (`npm run dev`, http://localhost:4321) after any layout, component, page or `src/config/` change. Claude Code has `/browser-debug [url] [what to check]` for it; any agent can follow the same list.
+
+1. Every nav route answers 200 (`navLinks()` in `src/lib/config.ts` is the list). A hidden section (`/projects`, `/blogs`) still answers 200 and carries `noindex`.
+2. The HTML is semantic: one `h1`, `nav`, `main`; a tool page renders `div[data-type="tool-page"]`.
+3. Oat's base files (`/oat.min.css`, `/oat.min.js`) and the page's own stylesheets are linked; a tool's `tools/<slug>/<slug>.css` appears on that tool's page only.
+4. No console errors and no broken references (avatar, fonts, share card).
+5. Reach each changed route by clicking an in-site link, never a reload. Bundled scripts run once per session, so a mounting bug shows only on in-site navigation.
+
 ## Agent tools
 
-- **`/browser-debug [url] [what to check]`** — a subagent that fetches the dev
-  server, validates nav routes, HTML structure and asset linking (Oat's base
-  files, per-tool stylesheets). Use after any layout, component or page change.
-- **`/antigravity <task>`** — hands small, well-scoped edits to a faster
-  subagent. Keep architecture, multi-file changes, debugging and
-  `astro.config.mjs` here.
-- **`/frontent-design`** — UI generation under the portfolio override: no custom
-  classes, fonts or Tailwind; semantic HTML plus the site's `data-type` idioms
-  and tokens. Motion only in the tasteful sense: short transitions from the
-  `--motion-*` and `--ease-*` tokens, never looping decoration. `shared.css` neutralises every
-  transition and animation under `prefers-reduced-motion: reduce`; motion driven
-  from script checks the query itself.
-- **`/update-project-memory`** — saves non-obvious learnings to memory.
+- **`/browser-debug [url] [what to check]`** (Claude Code, `.claude/commands/`): a subagent that runs the *Browser check* above against the dev server. Use after any layout, component or page change.
+- **`/antigravity <task>`** (Claude Code, `.claude/commands/`): hands small, well-scoped edits to a faster subagent. Keep architecture, multi-file changes, debugging and `astro.config.mjs` with the main agent.
+- **`frontent-design`** (skill, `.agents/skills/frontent-design/`, linked from `.claude/skills/`): UI generation under the portfolio override, which is in [design-system.md](design-system.md).
