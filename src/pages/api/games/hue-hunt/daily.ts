@@ -13,7 +13,7 @@
  * exactly what they are worth.
  *
  * Note what that removes: Type Trial has to gate a *claimed* wpm against a
- * claimed elapsed time, and AGENTS.md documents how nearly that went wrong,
+ * claimed elapsed time, and docs/security.md documents how nearly that went wrong,
  * because two free numbers can be moved against each other. Here the payload
  * supplies no number at all, so there is no "other field" to set — the score is a
  * function of (day, guesses), and the day is the server's own.

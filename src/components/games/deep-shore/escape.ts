@@ -105,7 +105,7 @@ const DS_DENSITY_SCALE = 100
 
 /** The palette ids the decoder will accept. A fixed list and not an
  *  interpolation: the same reason the markdown callout `kind` is matched
- *  against one (see AGENTS.md — Learnings/editorial marks). */
+ *  against one (see docs/learnings.md — editorial marks). */
 export const DS_PALETTE_IDS = ['ember', 'theme', 'ultra', 'ice', 'orchid', 'mono', 'zebra'] as const
 
 export const DS_DEFAULT_VIEW: DsView = {

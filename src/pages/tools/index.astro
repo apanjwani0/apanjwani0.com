@@ -34,7 +34,7 @@ const cards = tools.filter(t => t.status !== 'disabled').map(tool => ({
 // version and called it too much text), so the long-tail terms live in
 // `keywords` and the cards themselves carry the per-tool relevance.
 // It lives here rather than inline because a JSX comment between two component
-// attributes is unparseable to `astro check` while building green (see AGENTS.md).
+// attributes is unparseable to `astro check` while building green (see docs/operations.md).
 const metaDescription =
   'Free developer tools, no sign-up: a live webhook tester, an SSL chain checker, ' +
   'a multi-resolver DNS checker, a JWT verifier, regex, JSON and cron tools.'

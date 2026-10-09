@@ -67,3 +67,21 @@ Portfolio games should inform, sharpen, and educate developers:
 - No React, Vue, Svelte, or third-party game engine bloat.
 - Animation loops (`requestAnimationFrame`) run only during active transitions and cleanly tear down on `disconnectedCallback` to prevent memory leaks across page transitions.
 - Respect `prefers-reduced-motion` at all times.
+
+---
+
+## 6. Standing rules
+
+Binding for every game; AGENTS.md → *The bar for a new tool or game* points here:
+
+- **Mobile ergonomics and screen real estate**: On mobile viewports
+  (`<= 768px`), sticky nav must stay hidden while scrolled down during gameplay
+  and only return when scrolled back to the top, preventing accidental swipe
+  reveals. Game elements must preserve clearances down to 375px viewports (iPhone
+  SE) with zero overlapping pills, clipped boards, or hidden tags. Interactive tap
+  targets must be >= 44px on coarse pointers.
+- **Material authenticity**: Reject generic flat software grids. Games evoke
+  physical materials: real felt and bevelled ceramic chips (Poker Trainer),
+  mechanical keycaps with tactile press depths (Bytele), and weighted ceramic
+  tiles with specular edge highlights and recessed board tracks (2048).
+  See `docs/plans/game-design-principles.md`.

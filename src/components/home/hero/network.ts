@@ -12,7 +12,7 @@
  *
  * It never names the host provider, the runtime or anything else about the
  * origin (owner, 2026-09-27): that is what helps someone reach it around
- * Cloudflare. AGENTS.md's Home hero section has the contract.
+ * Cloudflare. docs/home-hero.md has the contract.
  */
 import type { HeroCreate, HeroInstance } from './types'
 import { drawStars, driftStars, makeStars, starCount, type SkyColors, type Star } from '../../../lib/sky'

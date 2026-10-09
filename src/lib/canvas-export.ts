@@ -60,7 +60,7 @@ type SizeResult = { ok: true; w: number; h: number } | SizeError
  *
  * Bounded in both dimensions AND in total pixels. Checking only the edges would
  * pass 8000×8000, which is 256 million pixels and a tab crash — the same
- * one-sided-bound trap AGENTS.md describes for the Type Trial validator, in a
+ * one-sided-bound trap docs/security.md describes for the Type Trial validator, in a
  * different costume.
  */
 function parseCustomSize(rawW: unknown, rawH: unknown): SizeResult {

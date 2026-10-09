@@ -108,7 +108,7 @@ export type DriftfieldToolFlags = Pick<Tool, 'slug' | 'status'>
  * config said, above a breadcrumb pointing at a hub that was serving 404. Six
  * indexable pages advertising a product the rest of the site had withdrawn is
  * exactly the "signals that contradict each other" failure the Indexing rule in
- * AGENTS.md exists to prevent — a crawler resolves the conflict by trusting
+ * docs/architecture.md exists to prevent — a crawler resolves the conflict by trusting
  * none of them.
  *
  * Note this is deliberately stricter than `/tools/[slug]`, where `wip` renders
