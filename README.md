@@ -3,7 +3,8 @@
 The source of [apanjwani0.com](https://apanjwani0.com): a server-rendered
 [Astro](https://astro.build) site with its own lightweight design system
 (vendored [Oat](https://oat.ink) is the base layer), with browser tools and
-games. The rules for working in it are in [AGENTS.md](AGENTS.md).
+games. The rules for working in it are in [AGENTS.md](AGENTS.md); the longer docs
+are indexed in [docs/README.md](docs/README.md).
 
 ## Run locally
 

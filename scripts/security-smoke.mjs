@@ -2517,7 +2517,7 @@ console.log('poker fast path ok')
   // block, is ambiguous to TypeScript's parser — it reads the object literal as
   // the NEXT arrow's parameter list. esbuild parses it correctly, so `npm run
   // build` stays green while `npm run check` reports five phantom errors. Same
-  // trap AGENTS.md records for the JSX comment in a component tag.
+  // trap docs/operations.md records for the JSX comment in a component tag.
   function cwRun(ms, fires = true) {
     return { ms, wall: null, dst: '', fires }
   }
@@ -2761,7 +2761,7 @@ console.log('projects link only at pages this site serves')
 
 /* ══════════  role: seo-reach — ONE predicate decides a Driftfield page  ══════════
 
-   AGENTS.md, "Indexing: one predicate decides whether a page is real": a page
+   docs/architecture.md, "Indexing: one predicate decides whether a page is real": a page
    search engines are told to noindex must not be in the sitemap, must not be in
    a hub's ItemList, and must not carry a share card. Games, tools, learnings and
    the hidden blogs section each have exactly one predicate. Driftfield did not.
@@ -3128,7 +3128,7 @@ console.log('projects link only at pages this site serves')
 
 /* ══════  role: audit (PASS 3) — hiding a section must be a two-way door  ══════
 
-   AGENTS.md, "Indexing: one predicate decides whether a page is real": a
+   docs/architecture.md, "Indexing: one predicate decides whether a page is real": a
    consumer must READ the predicate, not delete its own signal. `isBlogsPublic`
    is that predicate for the blogs section, and its own docblock promises "flip
    the flag back to `true` to restore the section".
@@ -4154,7 +4154,7 @@ console.log('token bench proves every cause it reports, and reports none it cann
   // drops `spotKey` from the key survived it.
   //
   // The discriminating case is one FIXED combo list handed to different spots,
-  // which is also the call the rule in AGENTS.md describes: the key is derived
+  // which is also the call the rule in docs/conventions.md describes: the key is derived
   // from the combos it was handed, and must still carry the hero and board.
   // A wrong memo does not crash — it returns a confident percentage belonging to
   // a different spot.
@@ -6132,7 +6132,7 @@ console.log('chainsaw: port allowlist + reused SSRF guard + pinned address, DER 
   assert.ok(/plausible = s\.sec >= 1 && !this\.jumped/.test(ttSrc2), '…and disqualifies the ghost, the personal best and the daily board together')
   assert.equal((ttSrc2.match(/this\.jumped = false/g) || []).length, 2, 'the flag is cleared on reset AND on the instant-fill discard, which rewinds without reset()')
 
-  // ── The Node-only boundary AGENTS.md claims. Nothing enforced it before.
+  // ── The Node-only boundary docs/conventions.md claims. Nothing enforced it before.
   //    Any module the browser can reach must carry no `node:` import — a leak
   //    is a build failure at best and a server module shipped to visitors at
   //    worst. Derived from the tree, so a new tool/game is covered automatically.

@@ -43,7 +43,7 @@ a view that shows structure does not.
 8. `reassembly`: packets arriving out of order, a lost one sent again, and the
    page drawn.
 
-Wiring follows AGENTS.md (*Admin Config Management*, *Learnings: articles that
-mount a live component*); the figure's claims live in
+Wiring follows docs/architecture.md (*Admin Config Management*) and
+docs/learnings.md (*Articles that mount a live component*); the figure's claims live in
 `src/components/games/internet-atlas/atlas.ts`. Check facts before they go in;
 where the record is contested, say so.

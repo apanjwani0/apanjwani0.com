@@ -4,12 +4,12 @@
 
 ## Verdict
 
-Keep Astro. The problem is not the framework but **SSR everywhere**: every page sets `prerender = false`. The stated reasons are the KV/data overrides and the per-response CSP nonce (AGENTS.md, "SSR everywhere"), and neither holds up:
+Keep Astro. The problem is not the framework but **SSR everywhere**: every page sets `prerender = false`. The stated reasons are the KV/data overrides and the per-response CSP nonce (docs/conventions.md, "SSR everywhere"), and neither holds up:
 
 - **The override layer is vestigial.** `/admin` is dev-only and writes `src/config/*.ts` into git. Nothing in production writes `data/{key}.json`; `data/` holds only `visits.json` and `experience.yaml`. The whole site is SSR so `getConfig()` can read files that do not exist.
 - **The nonce can become hashes.** Static pages can carry a hash-based CSP, either Astro's own CSP support or hashes computed at build time. Headers like `frame-ancestors` move to the edge.
 
-What SSR costs: a 1 GB VM rendering HTML, a Cache Rule and Browser Cache TTL that live in a dashboard (hence `origin:check`), manual purges, an origin reachable around Cloudflare, and a large share of AGENTS.md (reroute-nonce rules, the one-inline-script rule, the order of the cache branches). Going static removes most of that.
+What SSR costs: a 1 GB VM rendering HTML, a Cache Rule and Browser Cache TTL that live in a dashboard (hence `origin:check`), manual purges, an origin reachable around Cloudflare, and a large share of AGENTS.md and docs/security.md (reroute-nonce rules, the one-inline-script rule, the order of the cache branches). Going static removes most of that.
 
 ## Ranked recommendations
 

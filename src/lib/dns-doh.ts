@@ -383,7 +383,7 @@ export async function sgPool<T>(jobs: Array<() => Promise<T>>, limit = SG_CONCUR
  * the analysis is truncated for no reason.
  *
  * Two properties it has to keep, both of them rules rather than facts about
- * this file (AGENTS.md, from the poker equity memo):
+ * this file (docs/conventions.md, from the poker equity memo):
  *
  *  - **The key is derived from the arguments, never supplied alongside them.**
  *    It is `type` and the normalised `name`, nothing else. A caller cannot hand

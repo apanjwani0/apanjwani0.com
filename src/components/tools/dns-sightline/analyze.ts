@@ -73,7 +73,7 @@ export interface SgFinding {
    * answer at all, which is not evidence of anything. Collapsing the last two
    * used to put "Based on the absence of a record rather than on one" under a
    * finding whose own sentence said "this is a missing answer, not a missing
-   * record" — see AGENTS.md, "A finding cites the record it rests on".
+   * record" — see docs/security.md, "A finding cites the record it rests on".
    */
   basis: 'record' | 'absence' | 'unanswered'
 }

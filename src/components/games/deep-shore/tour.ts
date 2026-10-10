@@ -36,7 +36,7 @@
  *      field parsers for the rest. There is deliberately no second copy of the
  *      coordinate, zoom or palette validation in this file.
  *
- * A third bound is a cost ceiling, and per AGENTS.md it is written in the unit
+ * A third bound is a cost ceiling, and per docs/conventions.md it is written in the unit
  * that actually costs. Frames are not the cost; **pixel-iterations** are, and how
  * many of those a machine gets through per millisecond is not knowable from here.
  * So `dsTourFrameCount` takes a MEASURED per-frame cost (the component times its

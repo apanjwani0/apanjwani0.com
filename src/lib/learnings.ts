@@ -1,7 +1,7 @@
 /**
  * The one predicate that decides whether a learning is a real page.
  *
- * Same rule the games and tools sections already follow (see AGENTS.md,
+ * Same rule the games and tools sections already follow (see docs/architecture.md,
  * "Indexing"): every consumer — the route's `noindex`, the sitemap, the hub's
  * ItemList, RelatedLinks, and share-card eligibility — reads THIS function and
  * not its own approximation. Three signals that disagree are worse than any one

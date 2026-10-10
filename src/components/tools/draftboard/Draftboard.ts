@@ -11,7 +11,7 @@ const MAP_MODE_KEY = 'draftboard-map-mode'
 type MdMapMode = 'headings' | 'outline'
 
 /** Cytoscape layout options. `nodeDimensionsIncludeLabels` is off by default and
- *  without it word-labelled nodes lay out on top of each other — see AGENTS.md. */
+ *  without it word-labelled nodes lay out on top of each other — see docs/conventions.md. */
 const MD_MAP_LAYOUT = {
   name: 'breadthfirst',
   directed: true,

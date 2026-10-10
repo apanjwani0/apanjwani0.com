@@ -3,7 +3,7 @@
  * lives.
  *
  * Two outputs from one pass over the config, and every page kind reads its
- * existing indexing predicate (AGENTS.md, "Indexing") rather than a local
+ * existing indexing predicate (docs/architecture.md, "Indexing") rather than a local
  * approximation of it:
  *
  *   - `indexablePaths` — the real pages, in sitemap order, with the authored

@@ -140,4 +140,9 @@ export function initAnalytics(): void {
     routeStartedAt = performance.now()
   })
   document.addEventListener('astro:page-load', recordPageView)
+  if (document.readyState === 'complete') {
+    recordPageView()
+  } else {
+    window.addEventListener('load', recordPageView, { once: true })
+  }
 }

@@ -72,7 +72,7 @@ Found while verifying. Ordered by how much each one matters.
      - `initAnalytics()` records a view only on `astro:page-load` (`analytics-client.ts:141`).
      - Only `<ClientRouter />` dispatches that event, and tool and game pages render without it (`ToolBase.astro:54`, `games/[slug].astro:112`).
      - The beacon's target filter (`parseToolGamePath`) accepts only tool and game detail pages, and on those pages the handler never runs.
-   - `9f5cfd8` added the beacon at 01:56 on 2026-08-11. `9e16e2d` took the router off both page kinds 54 minutes later. So the "real-user LCP, CLS and TTFB" in AGENTS.md has been dark since its first night.
+   - `9f5cfd8` added the beacon at 01:56 on 2026-08-11. `9e16e2d` took the router off both page kinds 54 minutes later. So the "real-user LCP, CLS and TTFB" in docs/operations.md (*Analytics*) has been dark since its first night.
    - Two more defects:
      - It sends at a fixed 1.5 s after load (`:95`), before late LCP, most layout shift and any interaction.
      - Its CLS is a running sum of every shift (`:124-131`). That is the pre-2021 definition; current CLS is the largest session window.
@@ -173,7 +173,7 @@ for the owner's go-ahead first (§9 step 3).
   - Every metric's edge list contains its good threshold (drop 2500).
   - The bucket count is fixed (add a bucket per request).
   - No user-agent or IP field appears in the stored shape (add `ua`).
-- **AGENTS.md:** *Analytics* covers the metrics, p75, the viewport bucket, and why the bucket is not identity.
+- **docs/operations.md:** *Analytics* covers the metrics, p75, the viewport bucket, and why the bucket is not identity.
 
 **PR-2. The tool and game copy pass.** (Sonnet with the table below; then `/code-review`. D4.)
 - **Owns:**
@@ -202,7 +202,7 @@ for the owner's go-ahead first (§9 step 3).
   - `security:smoke` checks some copy, for example the number word in the `/tools` intro and the pot-odds labels in `PokerTrainer.ts`. Run `npm run security:smoke` after each tool and the full gate before each commit.
   - Never change a claim a module proves without changing the module.
 - **Share cards:** a card prints the item's `title` and `description` (`scripts/generate-og.mjs`).
-  - Any item whose `description` changes needs its card regenerated (AGENTS.md *Share cards*).
+  - Any item whose `description` changes needs its card regenerated (docs/operations.md *Share cards*).
   - The script hard-codes macOS Chrome. Add a `CHROME_PATH` environment override; on the cloud container that is `/opt/pw-browsers/chromium`.
   - First regenerate one **unchanged** card and compare it with the committed PNG. If it differs visibly (fonts, layout), commit no cards and list the stale ones in the PR, for the owner to run `npm run og` on their Mac.
 - **Docs:** AGENTS.md is unchanged. `learnings-voice.md` gets a short "Tool copy" section (D4) that lists the banned phrases and the rule "say what it does, then where it stops".
@@ -252,7 +252,7 @@ for the owner's go-ahead first (§9 step 3).
      - When it lists none: "Major browsers no longer read the Common Name (Chrome stopped in 2017). Only older clients still fall back to it."
    - Drop "every modern TLS library" and "no client has read since 2017".
    - DNS Sightline: "the supported way" → "Many DNS providers offer ALIAS, ANAME or CNAME flattening for this; check whether yours does." Trim "correct about the things people get wrong" (`tools.ts`, `DnsSightline.ts`), and bring its meta description under 160 characters.
-- **AGENTS.md:** *A failed lookup is not an absent record* gains the apex rule.
+- **docs/security.md:** *A failed lookup is not an absent record* gains the apex rule.
 
 ### Phase 2: findability (structure)
 
@@ -273,7 +273,7 @@ for the owner's go-ahead first (§9 step 3).
   - the gap between raw and rendered text;
   - the layout jump at mount;
   - the `MutationObserver` that paused UI item E planned for placing the actions dock.
-- **The convention moves.** "Every tool renders `div[data-type="tool-page"]`" moves from the component to the route. Update its assertion and AGENTS.md *Key Conventions*.
+- **The convention moves.** "Every tool renders `div[data-type="tool-page"]`" moves from the component to the route. Update its assertion and docs/conventions.md.
 - **Assertions:**
   - No file under `src/components/tools/` writes `<h1` (add one back).
   - Each tool page has exactly one h1, and its text comes from config (hard-code one).
@@ -296,7 +296,7 @@ for the owner's go-ahead first (§9 step 3).
   - Every topic is in `TOPICS` (misspell one).
   - Every live tool and playable game has at least one related item (empty one's topics).
   - The order is deterministic: run it twice over a shuffled config and get the same list (drop the tie-break).
-- **AGENTS.md:** *Indexing* gets "Cross-links come from `relatedTo()`", and the admin checklist gains `topics`.
+- **docs/architecture.md:** *Indexing* gets "Cross-links come from `relatedTo()`", and the admin checklist gains `topics`.
 
 **PR-7. The `/tools` hub has a shape.** (Sonnet. D3.)
 - **A slug → group map in `src/lib/tools.ts`**, beside `SERVER_TOOLS` and for the same reason. One h2 per group, in this order, with flagships first. The owner may rename the groups in review.
@@ -399,7 +399,7 @@ disjoint files and can run together, and PR-7 and PR-8 can run beside PR-5.
 
 ## 9. How to work an item
 
-1. Read AGENTS.md in full, then this item, then every file the item names.
+1. Read AGENTS.md in full and the docs/ files its Map names for the area, then this item, then every file the item names.
 2. Start from the latest `origin/develop`, on a branch for this item only. One
    item per PR, and the PR goes into `develop`.
 3. **For items marked Opus,** or any item that adds a dependency, a field or a
@@ -416,7 +416,7 @@ disjoint files and can run together, and PR-7 and PR-8 can run beside PR-5.
    errors), `npm run security:smoke`, `npm run poker:check`,
    `npm run boot:check`. Run `npm ci` first in a fresh container. For UI
    changes, also run `/browser-debug`, clicking in from a hub.
-7. In the same PR, update AGENTS.md wherever a convention changed, and delete
+7. In the same PR, update AGENTS.md or the docs/ file a convention lives in, and delete
    the shipped item from this file and from `release-followups.md`.
 8. Run `/code-review` on the diff, fix what it finds, then open the PR into
    `develop` and stop. Never push to `develop` or `main` directly.
