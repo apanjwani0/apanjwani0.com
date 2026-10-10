@@ -55,6 +55,7 @@ import { PRESET_RANGES, parseRange, rangeCombos } from './engine/ranges'
 import { cardBackSvg, cardSvg } from './ui/cards-svg'
 import { chipSvg, chipStackSvg, type ChipValue } from './ui/assets-svg'
 import { RANK_LABEL, SUITS, SUIT_SYMBOL, type Card, type Suit } from './engine/types'
+import { copyText } from '../../../lib/flash'
 
 /**
  * Work a single hand-vs-hand query may cost, in five-card reads.
@@ -134,6 +135,66 @@ function ptShuffledDeck(): Card[] {
 
 function ptCards(cards: Card[]): string {
   return cards.map(c => `<span data-type="pt-card">${cardSvg(c)}</span>`).join('')
+}
+
+function ptParseCard(str: string): Card | null {
+  if (!str) return null
+  const s = str.trim().toLowerCase()
+  if (s.length < 2 || s.length > 3) return null
+  const rankStr = s.slice(0, s.length - 1)
+  const suitChar = s.slice(-1) as Suit
+  if (!SUITS.includes(suitChar)) return null
+  let rank: number
+  if (rankStr === 'a') rank = 14
+  else if (rankStr === 'k') rank = 13
+  else if (rankStr === 'q') rank = 12
+  else if (rankStr === 'j') rank = 11
+  else if (rankStr === 't' || rankStr === '10') rank = 10
+  else {
+    const n = Number(rankStr)
+    if (n >= 2 && n <= 9) rank = n
+    else return null
+  }
+  return { r: rank, s: suitChar }
+}
+
+function ptParseCards(str: string): Card[] {
+  if (!str) return []
+  const matches = str.match(/(?:10|[2-9tjqka])[cdhs]/gi)
+  if (!matches) return []
+  const cards: Card[] = []
+  for (const m of matches) {
+    const c = ptParseCard(m)
+    if (c) cards.push(c)
+  }
+  return cards
+}
+
+function ptFormatCard(c: Card): string {
+  const r = c.r === 10 ? 'T' : (RANK_LABEL[c.r] ?? String(c.r))
+  return `${r}${c.s}`
+}
+
+function ptFormatCardsDisplay(cards: Card[]): string {
+  return cards.map(c => `${RANK_LABEL[c.r] ?? c.r}${SUIT_SYMBOL[c.s] ?? c.s}`).join(' ')
+}
+
+function ptHasDuplicates(cards: Card[]): boolean {
+  const seen = new Set<string>()
+  for (const c of cards) {
+    const k = ptKey(c)
+    if (seen.has(k)) return true
+    seen.add(k)
+  }
+  return false
+}
+
+function ptSpotUrl(d: PtDrill): string {
+  const heroStr = d.hero.map(ptFormatCard).join('')
+  const boardStr = d.board.map(ptFormatCard).join('')
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://apanjwani0.com'
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/games/poker-trainer'
+  return `${origin}${pathname}?hero=${heroStr}&board=${boardStr}&pot=${d.pot}&bet=${d.bet}&range=${d.rangeId}`
 }
 
 /** A term the reader may not know, defined inline on click rather than in a glossary. */
@@ -230,9 +291,31 @@ class PokerTrainerGame extends HTMLElement {
       this.render()
     })
 
-    this.deal()
+    const hash = window.location.hash.toLowerCase()
+    if (hash === '#solve') {
+      this.mode = 'solve'
+    } else if (hash === '#learn' || hash === '#quant-prep' || hash.startsWith('#learn-')) {
+      this.mode = 'learn'
+    }
+
+    const customSpot = this.parseSpotFromUrl()
+    if (customSpot) {
+      this.drill = customSpot
+      this.mode = 'drill'
+    } else {
+      this.deal()
+    }
+
     this.render()
     window.addEventListener('keydown', this.onKeyDown)
+    window.addEventListener('hashchange', this.onHashChange)
+
+    if (hash && (hash === '#quant-prep' || hash.startsWith('#learn-'))) {
+      window.setTimeout(() => {
+        const target = this.querySelector(hash)
+        if (target) target.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
+    }
   }
 
   /* ─────────────────────────────  chrome  ───────────────────────────── */
@@ -338,8 +421,79 @@ class PokerTrainerGame extends HTMLElement {
     }
   }
 
+  private onHashChange = () => {
+    const hash = window.location.hash.toLowerCase()
+    if (hash === '#solve') {
+      this.mode = 'solve'
+      this.render()
+    } else if (hash === '#learn' || hash === '#quant-prep' || hash.startsWith('#learn-')) {
+      this.mode = 'learn'
+      this.render()
+      window.setTimeout(() => {
+        const target = this.querySelector(hash)
+        if (target) target.scrollIntoView({ behavior: 'smooth' })
+      }, 50)
+    } else if (hash === '#drill') {
+      this.mode = 'drill'
+      this.render()
+    }
+  }
+
+  private parseSpotFromUrl(): PtDrill | null {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      let heroRaw = params.get('hero') ?? ''
+      let boardRaw = params.get('board') ?? ''
+      let potRaw = params.get('pot')
+      let betRaw = params.get('bet')
+      let rangeId = params.get('range') ?? ''
+
+      const spotParam = params.get('spot')
+      if (spotParam) {
+        const parts = spotParam.includes(':') ? spotParam.split(':') : spotParam.split('-')
+        if (parts.length >= 2) {
+          heroRaw = parts[0]
+          boardRaw = parts[1]
+          if (parts[2]) potRaw = parts[2]
+          if (parts[3]) betRaw = parts[3]
+          if (parts[4]) rangeId = parts[4]
+        }
+      }
+
+      if (!heroRaw || !boardRaw) return null
+
+      const hero = ptParseCards(heroRaw)
+      const board = ptParseCards(boardRaw)
+      if (hero.length !== 2 || board.length < 3 || board.length > 5) return null
+      if (ptHasDuplicates([...hero, ...board])) return null
+
+      const preset = PRESET_RANGES.find(p => p.id === rangeId) ?? PRESET_RANGES[0]
+      const combos = rangeCombos(parseRange(preset.text).classes, [...hero, ...board])
+      if (combos.length === 0) return null
+
+      const pot = Math.max(10, Math.min(1000, Number(potRaw) || 100))
+      const bet = Math.max(5, Math.min(1000, Number(betRaw) || 50))
+      const street = board.length === 3 ? 'flop' : board.length === 4 ? 'turn' : 'river'
+
+      return {
+        hero,
+        board,
+        rangeId: preset.id,
+        rangeLabel: preset.label,
+        rangeNote: preset.note,
+        combos,
+        pot,
+        bet,
+        street,
+      }
+    } catch {
+      return null
+    }
+  }
+
   disconnectedCallback() {
     window.removeEventListener('keydown', this.onKeyDown)
+    window.removeEventListener('hashchange', this.onHashChange)
   }
 
   private renderDrill() {
@@ -399,6 +553,7 @@ class PokerTrainerGame extends HTMLElement {
 
             <div data-type="pt-status-bar">
               <span data-type="pt-score">Streak <strong>${this.streak}</strong> · Best <strong>${this.best}</strong></span>
+              <button data-action="share-spot" type="button" class="pt-share-btn"><span>🔗 Share spot</span></button>
               <span data-type="pt-shortcut-hint">Tip: Use keys <kbd>F</kbd>, <kbd>C</kbd>, <kbd>R</kbd></span>
             </div>
           </div>
@@ -411,6 +566,14 @@ class PokerTrainerGame extends HTMLElement {
         /==(.+?)==/g,
         '<strong data-type="pt-emph">$1</strong>',
       )
+
+      const shareSpotBtn = host.querySelector<HTMLElement>('[data-action="share-spot"]')
+      if (shareSpotBtn) {
+        shareSpotBtn.addEventListener('click', () => {
+          const url = ptSpotUrl(d)
+          copyText(url, shareSpotBtn, { copied: '✓ Link copied!' })
+        })
+      }
 
       for (const button of host.querySelectorAll<HTMLElement>('[data-choice]')) {
         button.addEventListener('click', () => {
@@ -466,10 +629,13 @@ class PokerTrainerGame extends HTMLElement {
               <span>You ${this.choice === 'fold' ? 'folded' : this.choice === 'call' ? 'called' : 'raised'};
               the pot odds say <strong>${correct}</strong>.</span>
             </p>
-            <button data-action="next" data-variant="primary" type="button">
-              <span>Next spot</span>
-              <kbd>Space</kbd>
-            </button>
+            <div data-type="pt-verdict-actions">
+              <button data-action="share-result" type="button" class="pt-share-btn"><span>🔗 Share spot</span></button>
+              <button data-action="next" data-variant="primary" type="button">
+                <span>Next spot</span>
+                <kbd>Space</kbd>
+              </button>
+            </div>
           </div>
 
           ${this.renderDrillTable(d, true, madeName, betChipVal)}
@@ -623,6 +789,22 @@ class PokerTrainerGame extends HTMLElement {
       </div>
     `
 
+    const shareResultBtn = host.querySelector<HTMLElement>('[data-action="share-result"]')
+    if (shareResultBtn) {
+      shareResultBtn.addEventListener('click', () => {
+        const url = ptSpotUrl(d)
+        const streetLabel = d.street.toUpperCase()
+        const summary = [
+          `Poker Trainer — ${streetLabel} Drill`,
+          `Hero: ${ptFormatCardsDisplay(d.hero)} | Board: ${ptFormatCardsDisplay(d.board)}`,
+          `Facing: ${d.bet} chips into ${d.pot} (${requiredPct}% pot odds needed)`,
+          `Exact Equity vs ${d.rangeLabel}: ${equityPct}% (${right ? '✓ +EV Line' : '✗ -EV Line'})`,
+          `Practice exact odds: ${url}`,
+        ].join('\n')
+        copyText(summary, shareResultBtn, { copied: '✓ Copied spot!' })
+      })
+    }
+
     host.querySelector('[data-action="next"]')!.addEventListener('click', () => {
       this.deal()
       this.renderDrill()
@@ -709,6 +891,7 @@ class PokerTrainerGame extends HTMLElement {
             <a href="#learn-gto">🤖 GTO Reality</a>
             <a href="#learn-omaha">♠️ Omaha Rules</a>
             <a href="#learn-exact">⚖️ Exact Math</a>
+            <a href="#quant-prep">📊 Quant Prep</a>
           </nav>
         </header>
 
@@ -878,6 +1061,34 @@ class PokerTrainerGame extends HTMLElement {
             </div>
             <div data-type="pt-concept-takeaway">
               💡 <strong>Table Takeaway:</strong> Precision matters: exact odds let you study subtle edge cases with 100% confidence.
+            </div>
+          </article>
+
+          <!-- 9. Quant Prep -->
+          <article data-type="pt-concept-card" id="quant-prep">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">09 · QUANT INTERVIEW PREP</span>
+              <h3>Why Quantitative Trading Firms Test Poker Probability</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The One-Sentence Rule:</strong> Poker scenarios test Bayesian updating, expected value (+EV), and disciplined decision-making under uncertainty.
+            </div>
+            <div data-type="pt-concept-body">
+              <p>Top quantitative trading firms and market makers — including Jane Street, Susquehanna International Group (SIG), Citadel Securities, and Akuna Capital — frequently drill candidates on poker math during quantitative interviews.</p>
+              <p>Firms do not care about card psychology or bluffing tells. They use poker because it provides a clean, rigorous mathematical laboratory for market making:</p>
+              <ul>
+                <li><strong>Bayesian Updating:</strong> Re-evaluating your probability distribution in real time as each new street (flop, turn, river) lands.</li>
+                <li><strong>Pot Odds &amp; Break-Even Arithmetic:</strong> Comparing risk to reward: <code>Price = Call ÷ (Pot + Call)</code>. Calling is profitable only when your equity exceeds this threshold.</li>
+                <li><strong>Expected Value (+EV) Discipline:</strong> Making statistically positive choices repeatedly, separating decision quality from short-term variance.</li>
+                <li><strong>Range-vs-Range Thinking:</strong> Pricing assets against a full distribution of possibilities rather than guessing a single scenario.</li>
+              </ul>
+            </div>
+            <div data-type="pt-concept-box">
+              <span data-type="pt-box-title">Quant Interview EV Formula</span>
+              <code>EV(Call) = (Win% × Final Pot) − Call Amount &gt; 0</code>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              💡 <strong>Interview Takeaway:</strong> In trading and poker, you cannot control the turn or river — you can only ensure you never pay more than the mathematical price.
             </div>
           </article>
         </div>

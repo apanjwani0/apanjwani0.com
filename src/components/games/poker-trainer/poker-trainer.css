@@ -1320,6 +1320,47 @@ table[data-type='pt-lines'] td {
   background: #34d399;
 }
 
+[data-type='pt-verdict-actions'] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+[data-type='pt-status-bar'] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding-top: var(--space-xs);
+  border-top: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+[data-type='pt-verdict-header'] button[data-action='share-result'],
+[data-type='pt-status-bar'] button[data-action='share-spot'] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  background: rgba(0, 0, 0, 0.4);
+  color: #a7f3d0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+
+[data-type='pt-verdict-header'] button[data-action='share-result']:hover,
+[data-type='pt-status-bar'] button[data-action='share-spot']:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #34d399;
+  color: #ffffff;
+}
+
 [data-type='pt-gauge'] {
   display: flex;
   flex-direction: column;
