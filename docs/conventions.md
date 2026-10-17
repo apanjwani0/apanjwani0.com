@@ -191,3 +191,14 @@ are asserted by `npm run security:smoke`.
   `src/lib/dns-lookup.ts`) and are reached only from the Link Peek and Chainsaw
   API routes; the build asserts no `node:` import reaches a client chunk. A
   Workers deploy would need another transport for them.
+- **The site's pages are fixed; a new tool or game is a component plus a data
+  entry, never a new page.** The public routes in `src/pages/` are `/`,
+  `/projects`, `/blogs` (+ `/blogs/<slug>`), `/games` (+ `/games/<slug>`),
+  `/tools` (+ `/tools/<slug>`; Cron Whisperer and Driftfield add
+  `/tools/cron-whisperer/<preset>` and `/tools/driftfield/<mode>`), and
+  `/learnings` (+ `/learnings/<slug>`). `/<slug>` only 301-redirects an old game
+  or blog slug. There is no `/experience` page: `experience` is a config key
+  edited in `/admin` (dev-only) and read by nothing public. A tool's component
+  lives in `src/components/tools/<slug>/` and a game's in `src/components/games/<slug>/`; the
+  listing is its entry in `src/config/` (read through `src/lib/config.ts`), and
+  the existing `[slug].astro` route renders it.
