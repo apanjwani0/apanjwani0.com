@@ -238,7 +238,8 @@ function ptCoachVerdict(
   finalPot: number,
   rangeLabel: string,
 ): { headline: string; detail: string } {
-  const payoutRatio = (finalPot / bet).toFixed(1)
+  const potBeforeCall = finalPot - bet
+  const potOddsRatio = (potBeforeCall / bet).toFixed(1)
   const evAbs = Math.abs(ev).toFixed(1)
   const evFormatted = `${ev >= 0 ? '+' : '-'}${evAbs}`
 
@@ -252,7 +253,7 @@ function ptCoachVerdict(
     if (choice === 'call') {
       return {
         headline: 'Profitable call, but raising was even stronger.',
-        detail: `Calling is profitable, but with <strong>${equityPct}% equity</strong> against ${rangeLabel}, raising charges draws and builds a massive pot while you are firmly ahead.`,
+        detail: `Calling is profitable (+EV), but with <strong>${equityPct}% equity</strong> against ${rangeLabel}, raising charges draws and builds a bigger pot while you are firmly ahead.`,
       }
     }
     return {
@@ -265,18 +266,18 @@ function ptCoachVerdict(
     if (choice === 'call') {
       return {
         headline: "Profitable call. You're getting the right price to continue.",
-        detail: `The pot offers a <strong>${payoutRatio}:1 reward</strong> (calling ${bet} to contest ${finalPot}). You only needed <strong>${requiredPct}%</strong> to break even, and your hand has <strong>${equityPct}%</strong> against ${rangeLabel} (${evFormatted} chips EV).`,
+        detail: `The pot offers <strong>${potOddsRatio}:1 pot odds</strong> (calling ${bet} to contest a ${finalPot} chip pot). You needed <strong>${requiredPct}%</strong> equity to break even, and your hand has <strong>${equityPct}%</strong> against ${rangeLabel} (${evFormatted} chips EV).`,
       }
     }
     if (choice === 'raise') {
       return {
         headline: 'Overplayed hand. Calling was the high-EV line.',
-        detail: `You have <strong>${equityPct}% equity</strong>—enough to comfortably call the ${payoutRatio}:1 price, but raising risks turning a profitable calling hand into an unnecessary bluff.`,
+        detail: `You have <strong>${equityPct}% equity</strong>—enough to comfortably call the ${potOddsRatio}:1 price, but raising risks turning a profitable calling hand into an unnecessary bluff.`,
       }
     }
     return {
       headline: 'Missed value. You were offered a big pot discount.',
-      detail: `The pot offered a <strong>${payoutRatio}:1 reward</strong>, requiring only <strong>${requiredPct}%</strong> equity to break even. With <strong>${equityPct}%</strong> against ${rangeLabel}, folding surrendered ${evAbs} chips in expected value.`,
+      detail: `The pot offered <strong>${potOddsRatio}:1 pot odds</strong>, requiring only <strong>${requiredPct}%</strong> equity to break even. With <strong>${equityPct}%</strong> against ${rangeLabel}, folding surrendered ${evAbs} chips in expected value.`,
     }
   }
 
@@ -602,7 +603,7 @@ class PokerTrainerGame extends HTMLElement {
 
             <div data-type="pt-action-strip">
               <div data-type="pt-action-price">
-                <span>Pot odds needed: </span><strong>${pct(requiredEquity(d.pot + d.bet, d.bet))}</strong> break-even
+                <span>Price to call: </span><strong>${pct(requiredEquity(d.pot + d.bet, d.bet))}</strong> break-even
               </div>
 
               <div data-type="pt-choices">
@@ -679,6 +680,11 @@ class PokerTrainerGame extends HTMLElement {
 
     const finalPot = d.pot + 2 * d.bet
     const coach = ptCoachVerdict(this.choice, correct, equityPct, requiredPct, ev, d.bet, finalPot, d.rangeLabel)
+    const verdictDetail = this.choice === correct
+      ? `You ${this.choice}ed (${equityPct}% equity vs ${requiredPct}% needed).`
+      : correct === 'raise' && this.choice === 'call'
+      ? `You called (+EV line); raising had higher value (${equityPct}% equity vs ${requiredPct}% needed).`
+      : `You ${this.choice}ed; math says <strong>${correct}</strong> (${equityPct}% equity vs ${requiredPct}% needed).`
 
     host.innerHTML = `
       <div data-type="pt-spotcard" data-answered>
@@ -705,7 +711,7 @@ class PokerTrainerGame extends HTMLElement {
           <div data-type="pt-action-strip" data-answered="true">
             <div data-type="pt-verdict-summary" data-right="${right}">
               <span data-type="pt-verdict-tag">${right ? '✓ Correct' : '✗ Mistake'}</span>
-              <span data-type="pt-verdict-detail">You ${this.choice}; math says <strong>${correct}</strong> (${equityPct}% equity vs ${requiredPct}% needed).</span>
+              <span data-type="pt-verdict-detail">${verdictDetail}</span>
             </div>
             <div data-type="pt-choices" data-answered="true">
               <button data-action="next" data-variant="primary" type="button">
@@ -772,7 +778,7 @@ class PokerTrainerGame extends HTMLElement {
                   <span data-type="pt-math-title">Equity you needed to call</span>
                   <span data-type="pt-math-val">${requiredPct}%</span>
                 </div>
-                <p data-type="pt-math-desc">Calling ${d.bet} to contest ${finalPot} (${(finalPot / d.bet).toFixed(1)}:1 reward).</p>
+                <p data-type="pt-math-desc">Calling ${d.bet} to contest ${finalPot} (${((finalPot - d.bet) / d.bet).toFixed(1)}:1 pot odds).</p>
                 <div data-type="pt-math-ledger">
                   <div data-type="pt-ledger-row">
                     <span data-type="pt-ledger-label">Equation</span>
@@ -1267,7 +1273,7 @@ class PokerTrainerGame extends HTMLElement {
 
         <section data-type="pt-odds">
           <h2>Should you call?</h2>
-          ${ptTerm('What are pot odds?', 'The price you are being offered. Call 50 into a pot that already holds 100 and you are risking 50 to win that 100, making a pot of 150 — so you break even at 50 / 150 = 33.3%. Note this box wants the pot BEFORE your call, with their bet already in it. Compare the answer against your equity: bigger equity than price means calling makes money.')}
+          ${ptTerm('What are pot odds?', 'The price the pot offers you to call. If the pot holds 100 chips and calling costs 50, you risk 50 to win 150 total. Your break-even price is 50 ÷ 150 = 33.3%. If your hand equity is higher than 33.3%, calling makes chips over time.')}
           <div data-type="pt-odds-inputs">
             <label>Pot before your call
               <input data-field="pot" type="number" min="0" step="1" value="100" />
@@ -1547,13 +1553,13 @@ class PokerTrainerGame extends HTMLElement {
         const streets = this.board.length === 3 ? 2 : 1
         const shortcut = (outs.length * (streets === 2 ? 4 : 2)) / 100
         const heading = document.createElement('h3')
-        heading.textContent = `${outs.length} outs — the cards that would put you ahead`
+        heading.textContent = `${outs.length} clean outs to pull ahead`
         const cardRow = document.createElement('div')
         cardRow.dataset.type = 'pt-outs'
         cardRow.innerHTML = ptCards(outs)
         const note = document.createElement('p')
         note.dataset.type = 'pt-note'
-        note.textContent = `The rule of ${streets === 2 ? '4' : '2'} estimates ${pct2(shortcut)}; you actually have ${pct2(result.equity[0])}. The shortcut is optimistic because some of these cards also improve their hand.`
+        note.textContent = `The 4-2 rule estimates ${pct2(shortcut)} (${outs.length} outs × ${streets === 2 ? 4 : 2}); exact equity is ${pct2(result.equity[0])}.`
         out.append(heading, cardRow, note)
       }
     }
@@ -1591,15 +1597,15 @@ class PokerTrainerGame extends HTMLElement {
     out.append(this.table([
       ['Your equity against the whole range', pct2(result.equity)],
       ['Hands in their range', String(result.combos)],
-      ['How many of them you beat', `${pct(result.aheadOf)}`],
+      ['Share of range you beat', `${pct(result.aheadOf)}`],
       ['Runouts counted', `${result.runouts.toLocaleString()} — every one, none sampled`],
     ]))
 
     const splits = document.createElement('div')
     splits.dataset.type = 'pt-splits'
     splits.innerHTML = `
-      <div><h3>Worst against</h3>${result.worst.map(w => `<div data-type="pt-comborow">${ptCards(w.hand)}<span>${pct(w.equity)}</span></div>`).join('')}</div>
-      <div><h3>Best against</h3>${result.best.map(w => `<div data-type="pt-comborow">${ptCards(w.hand)}<span>${pct(w.equity)}</span></div>`).join('')}</div>
+      <div><h3>Hands You Are Behind</h3>${result.worst.map(w => `<div data-type="pt-comborow">${ptCards(w.hand)}<span>${pct(w.equity)}</span></div>`).join('')}</div>
+      <div><h3>Hands You Are Ahead Of</h3>${result.best.map(w => `<div data-type="pt-comborow">${ptCards(w.hand)}<span>${pct(w.equity)}</span></div>`).join('')}</div>
     `
     out.append(splits)
   }
