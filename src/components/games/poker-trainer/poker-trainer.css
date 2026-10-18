@@ -1462,24 +1462,6 @@ table[data-type='pt-lines'] td {
   background: #34d399;
 }
 
-ol[data-type='pt-deconstruct-steps'] {
-  margin: var(--space-2xs) 0;
-  padding-left: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-}
-
-ol[data-type='pt-deconstruct-steps'] li {
-  line-height: 1.5;
-}
-
-ol[data-type='pt-deconstruct-steps'] strong {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  color: var(--color-accent);
-}
 
 [data-type='pt-gauge'] {
   display: flex;
