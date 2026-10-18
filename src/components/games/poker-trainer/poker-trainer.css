@@ -1324,6 +1324,42 @@ table[data-type='pt-lines'] td {
   color: #34d399;
 }
 
+[data-type='pt-coach-card'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: 0.85rem 1.15rem;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  backdrop-filter: blur(6px);
+}
+
+[data-type='pt-coach-card'][data-verdict='wrong'] {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+[data-type='pt-coach-headline'] {
+  font-family: var(--font-serif);
+  font-size: var(--text-md, 1.05rem);
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+[data-type='pt-coach-detail'] {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+[data-type='pt-coach-detail'] strong {
+  font-family: var(--font-mono);
+  color: #34d399;
+}
+
 [data-type='pt-choices'] button[data-action='next'],
 [data-type='pt-verdict-header'] button[data-action='next'] {
   display: inline-flex;
@@ -1539,6 +1575,57 @@ ol[data-type='pt-deconstruct-steps'] strong {
 }
 
 /* ── Educational Calculation Ledger Cards ── */
+
+details[data-type='pt-math-details'] {
+  margin-top: var(--space-sm);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+
+details[data-type='pt-math-details'] summary[data-type='pt-math-summary'] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: 0.75rem 1rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: #a7f3d0;
+  cursor: pointer;
+  background: rgba(16, 185, 129, 0.08);
+  user-select: none;
+  list-style: none;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+
+details[data-type='pt-math-details'] summary[data-type='pt-math-summary']::-webkit-details-marker {
+  display: none;
+}
+
+details[data-type='pt-math-details'] summary[data-type='pt-math-summary']:hover {
+  background: rgba(16, 185, 129, 0.15);
+  color: #ffffff;
+}
+
+details[data-type='pt-math-details'][open] summary[data-type='pt-math-summary'] {
+  border-bottom: 1px solid rgba(52, 211, 153, 0.25);
+}
+
+[data-type='pt-math-toggle-hint'] {
+  font-size: 0.7rem;
+  color: rgba(167, 243, 208, 0.75);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+details[data-type='pt-math-details'] [data-type='pt-math-cards'] {
+  padding: var(--space-md);
+  margin-top: 0;
+}
 
 [data-type='pt-math-cards'] {
   display: grid;
