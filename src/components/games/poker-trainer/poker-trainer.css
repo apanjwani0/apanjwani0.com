@@ -1341,7 +1341,7 @@ table[data-type='pt-lines'] td {
 
 [data-type='pt-coach-headline'] {
   font-family: var(--font-serif);
-  font-size: var(--text-md, 1.05rem);
+  font-size: var(--text-base);
   font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.01em;
@@ -1598,7 +1598,7 @@ details[data-type='pt-math-details'][open] summary[data-type='pt-math-summary'] 
 }
 
 [data-type='pt-math-toggle-hint'] {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   color: rgba(167, 243, 208, 0.75);
   text-transform: uppercase;
   letter-spacing: 0.05em;

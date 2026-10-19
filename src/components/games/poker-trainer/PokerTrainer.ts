@@ -246,19 +246,19 @@ function ptCoachVerdict(
   if (correct === 'raise') {
     if (choice === 'raise') {
       return {
-        headline: 'Dominant raise. Punish their range and build the pot.',
-        detail: `With <strong>${equityPct}% equity</strong>, your hand crushes ${rangeLabel}. Raising extracts maximum value and charges them to see any further cards.`,
+        headline: 'Good raise. You are well ahead of their range.',
+        detail: `With <strong>${equityPct}% equity</strong> against ${rangeLabel}, you win most runouts. Raising gets more chips in while you are ahead and makes them pay to see more cards.`,
       }
     }
     if (choice === 'call') {
       return {
         headline: 'Profitable call, but raising was even stronger.',
-        detail: `Calling is profitable (+EV), but with <strong>${equityPct}% equity</strong> against ${rangeLabel}, raising charges draws and builds a bigger pot while you are firmly ahead.`,
+        detail: `Calling is profitable (+EV), but with <strong>${equityPct}% equity</strong> against ${rangeLabel}, raising charges draws and builds a bigger pot while you are ahead.`,
       }
     }
     return {
-      headline: 'Costly mistake. You folded a powerhouse.',
-      detail: `You had <strong>${equityPct}% equity</strong> against ${rangeLabel}. Folding threw away a hand that had the board completely locked down.`,
+      headline: 'Costly mistake. You folded a strong hand.',
+      detail: `You had <strong>${equityPct}% equity</strong> against ${rangeLabel}, so you win most runouts. Folding gave up a pot you were favoured to win.`,
     }
   }
 
@@ -680,11 +680,12 @@ class PokerTrainerGame extends HTMLElement {
 
     const finalPot = d.pot + 2 * d.bet
     const coach = ptCoachVerdict(this.choice, correct, equityPct, requiredPct, ev, d.bet, finalPot, d.rangeLabel)
+    const past = { fold: 'folded', call: 'called', raise: 'raised' }[this.choice]
     const verdictDetail = this.choice === correct
-      ? `You ${this.choice}ed (${equityPct}% equity vs ${requiredPct}% needed).`
+      ? `You ${past} (${equityPct}% equity vs ${requiredPct}% needed).`
       : correct === 'raise' && this.choice === 'call'
       ? `You called (+EV line); raising had higher value (${equityPct}% equity vs ${requiredPct}% needed).`
-      : `You ${this.choice}ed; math says <strong>${correct}</strong> (${equityPct}% equity vs ${requiredPct}% needed).`
+      : `You ${past}; math says <strong>${correct}</strong> (${equityPct}% equity vs ${requiredPct}% needed).`
 
     host.innerHTML = `
       <div data-type="pt-spotcard" data-answered>
@@ -1007,7 +1008,7 @@ class PokerTrainerGame extends HTMLElement {
               An opponent bets into you, and you must decide whether calling is mathematically profitable or bleeding chips.
             </div>
             <div data-type="pt-concept-body">
-              <p><strong>Every call is buying a discount.</strong> If you pay 25 chips to contest a final pot of 100 chips, the pot pays you a 4-to-1 reward on your risk.</p>
+              <p><strong>Every call is buying a discount.</strong> If you pay 25 chips to contest a final pot of 100 chips, you risk 25 to win the 75 already in the pot: 3-to-1 pot odds.</p>
               <p><strong>The break-even test.</strong> Divide your call by the total final pot: 25 ÷ 100 = 25%. You only need to win 1 out of 4 times to break even. If your hand equity is 30%, calling prints chips long-term.</p>
             </div>
             <div data-type="pt-concept-box">
@@ -1104,7 +1105,7 @@ class PokerTrainerGame extends HTMLElement {
             </div>
             <div data-type="pt-concept-body">
               <p><strong>What GTO actually solves.</strong> Real Game Theory Optimal play balances your entire range across every street and bet size so opponents cannot exploit you. It takes minutes to hours of desktop solver compute per spot.</p>
-              <p><strong>What wins at real tables.</strong> Most human opponents do not play balanced GTO. Pot odds solve the immediate, practical table test: *"Does calling right now make chips against what they actually do?"* That is exact, instant, and directly profitable.</p>
+              <p><strong>What wins at real tables.</strong> Most human opponents do not play balanced GTO. Pot odds solve the immediate, practical table test: <em>"Does calling right now make chips against what they actually do?"</em> That is exact, instant, and directly profitable.</p>
             </div>
             <div data-type="pt-concept-box">
               <span data-type="pt-box-title">The Real Distinction</span>
@@ -1273,7 +1274,7 @@ class PokerTrainerGame extends HTMLElement {
 
         <section data-type="pt-odds">
           <h2>Should you call?</h2>
-          ${ptTerm('What are pot odds?', 'The price the pot offers you to call. If the pot holds 100 chips and calling costs 50, you risk 50 to win 150 total. Your break-even price is 50 ÷ 150 = 33.3%. If your hand equity is higher than 33.3%, calling makes chips over time.')}
+          ${ptTerm('What are pot odds?', 'The price the pot offers you to call. Call 50 into a pot of 100 (their bet included): you risk 50 to win 100, the final pot is 150, and you break even at 50 ÷ 150 = 33.3%. This box wants the pot before your call, with their bet already in it. If your hand equity is higher than the break-even price, calling makes chips over time.')}
           <div data-type="pt-odds-inputs">
             <label>Pot before your call
               <input data-field="pot" type="number" min="0" step="1" value="100" />
@@ -1553,13 +1554,13 @@ class PokerTrainerGame extends HTMLElement {
         const streets = this.board.length === 3 ? 2 : 1
         const shortcut = (outs.length * (streets === 2 ? 4 : 2)) / 100
         const heading = document.createElement('h3')
-        heading.textContent = `${outs.length} clean outs to pull ahead`
+        heading.textContent = `${outs.length} outs that put you ahead`
         const cardRow = document.createElement('div')
         cardRow.dataset.type = 'pt-outs'
         cardRow.innerHTML = ptCards(outs)
         const note = document.createElement('p')
         note.dataset.type = 'pt-note'
-        note.textContent = `The 4-2 rule estimates ${pct2(shortcut)} (${outs.length} outs × ${streets === 2 ? 4 : 2}); exact equity is ${pct2(result.equity[0])}.`
+        note.textContent = `The 4-2 rule estimates ${pct2(shortcut)} (${outs.length} outs × ${streets === 2 ? 4 : 2}); exact equity is ${pct2(result.equity[0])}. The shortcut runs high because some of these cards also improve their hand.`
         out.append(heading, cardRow, note)
       }
     }
