@@ -51,14 +51,6 @@ SECURITY_REVIEW.md
 # generated poker asset preview (regenerate with `npm run trainer:catalogue`)
 docs/poker-assets.html
 
-# graphify output — local-only generated code-graph (an AI navigation aid wired
-# via .claude/ hooks; regenerate locally with `graphify update .`, zero API cost).
-# NOTE: git does NOT support inline (end-of-line) comments — keep comments on
-# their own lines, or the pattern silently matches nothing.
-# Keep only the human-readable report in git; everything else stays local.
-graphify-out/*
-!graphify-out/GRAPH_REPORT.md
-
 # Scratch HTML that scripts/generate-og.mjs rasterises into public/og/.
 # Normally removed when the script finishes; survives an interrupted run.
 .og-tmp/

@@ -157,15 +157,6 @@ Whisperer's presets (no product-to-product rows); feed it
 indexable items only. It derives
 its heading `id` from the heading text, since a page can render it twice.
 
-## Code graph (graphify)
-
-`graphify-out/` is a generated code graph, used only as an AI navigation aid:
-the `.claude/` hooks nudge `graphify query` before grepping. It is not part of
-the build. Regenerate with `npm run graph` (incremental, local) when you want it
-current; it needs the `graphify` CLI. Only `graphify-out/GRAPH_REPORT.md` is
-committed; the rest is gitignored. Keep `.gitignore` comments on their own lines.
-`.graphifyignore` scopes the graph to `src/`.
-
 ## Coming-soon pages have a working ask
 
 An enabled-but-unplayable game shows a "want this sooner" counter
