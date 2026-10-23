@@ -12,7 +12,6 @@
     "preview": "astro preview",
     "astro": "astro",
     "generate-types": "wrangler types",
-    "graph": "graphify update .",
     "og": "tsx scripts/generate-og.mjs",
     "poker:check": "tsx scripts/poker-check.mjs",
     "trainer:catalogue": "npx tsx src/components/games/poker-trainer/ui/catalogue.gen.ts docs/poker-assets.html",
@@ -34,7 +33,7 @@
   "overrides": {
     "defu": "^6.1.7",
     "postcss": "^8.5.20",
-    "sharp": "0.35.3"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",

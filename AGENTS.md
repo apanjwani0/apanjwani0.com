@@ -52,7 +52,6 @@ npm run build          # astro build
 npm run check          # astro check: type/template errors the build does NOT catch
 npm run preview        # serve the production build locally
 npm run generate-types # wrangler types (Cloudflare/KV bindings)
-npm run graph          # graphify update . (local code graph)
 npm run og             # regenerate the share cards
 npm run security:smoke # assert the security invariants
 npm run poker:check    # poker engine checks
@@ -264,20 +263,17 @@ The full hero spec: [docs/home-hero.md](docs/home-hero.md).
 
 ## Standing Rules
 
-1. **Graph before commit.** A best-effort pre-commit hook runs
-   `graphify update .` and re-stages `GRAPH_REPORT.md`. If you bypass hooks, run
-   `npm run graph` yourself for structural changes.
-2. **Keep docs in sync.** A change to architecture, config keys, commands or
+1. **Keep docs in sync.** A change to architecture, config keys, commands or
    conventions updates this file in the same change (a new admin section updates
    the checklist and the config-keys line). Write the rule and a one-line reason;
    the story belongs in the commit.
-3. **Prune dead code.** No commented-out blocks, unused exports, orphaned config
+2. **Prune dead code.** No commented-out blocks, unused exports, orphaned config
    keys or superseded CSS overrides.
-4. **`npm run build` stays green.**
-5. **Security invariants hold.** Read *Security* before touching a route, a
+3. **`npm run build` stays green.**
+4. **Security invariants hold.** Read *Security* before touching a route, a
    header, config validation or anything that renders untrusted input. Run
    `npm run security:smoke`, and add an assertion there for any new invariant.
-6. **No new secrets on the production host.** A value needed only in dev stays
+5. **No new secrets on the production host.** A value needed only in dev stays
    out of the container env.
 7. **Commit messages are one short line**, no body, no attribution (no `Co-Authored-By`, no "Generated with" footer).
 8. **While the owner tests on the dev server, every edit reloads their open tab.** Say so before edit-heavy work or mutation tests, or batch the edits.
