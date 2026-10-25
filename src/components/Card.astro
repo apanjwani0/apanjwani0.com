@@ -19,15 +19,18 @@ interface Props {
   status?: string
   /** Element holding the description: a `p` for plain text, a `div` for rendered markdown. */
   descAs?: 'p' | 'div'
+  /** Heading level of the title: 3 when the grid sits under a section's h2. */
+  level?: 2 | 3
 }
 
-const { title, href, external = false, status, descAs = 'div' } = Astro.props
+const { title, href, external = false, status, descAs = 'div', level = 2 } = Astro.props
 const Desc = descAs
+const Title = level === 3 ? 'h3' : 'h2'
 ---
 
 <li data-status={status}>
   <div data-type="card-head">
-    <h2 data-type="card-title">
+    <Title data-type="card-title">
       {href
         ? <a
             href={href}
@@ -35,7 +38,7 @@ const Desc = descAs
             {...(external ? { target: '_blank', rel: 'noopener noreferrer', 'aria-label': `${title} (opens in a new tab)` } : {})}
           >{title}</a>
         : title}
-    </h2>
+    </Title>
     {Astro.slots.has('badges') && <span data-type="card-badges"><slot name="badges" /></span>}
   </div>
   <Desc data-type="card-desc"><slot name="desc" /></Desc>
