@@ -1,0 +1,140 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import { getSite } from '../lib/config'
+import { safeExternalUrl } from '../lib/security'
+import { WEBHOOK_BIN_TTL_MS } from '../lib/webhook-store'
+
+// One page for the whole site: the terms are the same for every tool and game,
+// and one text cannot drift from a second copy of itself. Every number below is
+// read from the module that enforces it, so the page cannot promise a shorter
+// retention than the code keeps. noindex: it is linked from every footer, and a
+// legal page in search results helps no one find a tool.
+const site = await getSite(Astro.locals)
+const github = safeExternalUrl(site.social.github)
+const binHours = Math.round(WEBHOOK_BIN_TTL_MS / 3_600_000)
+const LAST_UPDATED = '25 October 2026'
+const BOARD_DAYS = 7
+const ANALYTICS_DAYS = 90
+---
+
+<Base
+  title="terms & privacy"
+  description="The terms for using the tools and games on this site, and exactly what each one keeps."
+  noindex
+>
+  <article data-type="terms">
+    <h1>Terms &amp; privacy</h1>
+    <p data-type="terms-updated">Last updated {LAST_UPDATED}.</p>
+
+    <h2>Using the site</h2>
+    <p>
+      Everything here is free to use, for anything, with no account. The tools
+      and games are offered as-is, without any warranty: they may be wrong,
+      slow or unavailable, and they can change or go away at any time. Check
+      anything important before you rely on it. To the extent the law
+      allows, {site.name} is not liable for any loss that comes from using the site.
+    </p>
+    <p>
+      Please don't use the server tools to attack, flood or probe systems you
+      have no permission to test. They are rate-limited, and abusive traffic is
+      blocked.
+    </p>
+
+    <h2>What stays in your browser</h2>
+    <p>
+      Most tools run entirely on your device. Your inputs, settings and last
+      results may be saved in your browser's local storage so they are still
+      there next time; that storage never leaves your device, and clearing your
+      browser data removes it. The site itself sets no cookies.
+    </p>
+
+    <h2>What the server tools see</h2>
+    <ul>
+      <li>
+        <strong>Webhook Inspector</strong> stores the requests sent to your
+        capture URL (method, headers, body, and the sender's IP address) in
+        the server's memory, so you can read them. Anyone who has the URL can
+        see them. A capture URL and its requests are deleted after {binHours} hours
+        without activity, and on every server restart. Don't send real
+        passwords or production secrets to it.
+      </li>
+      <li>
+        <strong>Link Peek</strong> fetches the public URL you enter, and the
+        image it names, to show how it unfurls. Nothing about the page or your
+        request is kept.
+      </li>
+      <li>
+        <strong>Chainsaw</strong> opens a TLS connection to the host you enter
+        and reads its certificates. Nothing is kept. A shared result link
+        carries the host name in the URL.
+      </li>
+      <li>
+        <strong>DNS Sightline</strong> sends your domain's DNS questions to
+        three public resolvers (Cloudflare, Google and Quad9). Nothing is kept.
+      </li>
+    </ul>
+    <p>
+      To keep these tools available, the server counts recent requests per
+      address for rate limiting. Those counts live in memory for a short time
+      and are never written to disk.
+    </p>
+
+    <h2>Leaderboards</h2>
+    <p>
+      The Type Trial and Hue Hunt daily boards store the name you type and your
+      score for that day, and show them publicly. Boards are deleted
+      after {BOARD_DAYS} days. Use a nickname if you prefer.
+    </p>
+
+    <h2>Analytics</h2>
+    <p>
+      The site keeps aggregate counts only: how many times each page was served
+      per day, the visitor's country, the website that linked to it (the host
+      name, never the full address), and page-speed measurements. It keeps no IP
+      addresses, no user agents and no visitor or session identifiers, so none
+      of it can be traced back to you. Counts are kept
+      for {ANALYTICS_DAYS} days.
+    </p>
+
+    <h2>Changes and contact</h2>
+    <p>
+      These terms may change; the date at the top says when they last did.{' '}
+      {github
+        ? <>Questions or a problem to report? Reach {site.name} on <a href={github} rel="noopener noreferrer" target="_blank">GitHub</a>.</>
+        : <>Questions or a problem to report? Use the links in the footer.</>}
+    </p>
+  </article>
+</Base>
+
+<style>
+  article[data-type="terms"] {
+    max-width: 42rem;
+    padding-bottom: var(--space-section);
+  }
+
+  p[data-type="terms-updated"] {
+    margin-top: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+  }
+
+  article[data-type="terms"] h2 {
+    margin: var(--space-section) 0 var(--space-xs);
+    font-size: var(--text-lg);
+  }
+
+  article[data-type="terms"] p,
+  article[data-type="terms"] li {
+    line-height: 1.6;
+  }
+
+  article[data-type="terms"] ul {
+    padding-left: var(--space-card);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+</style>

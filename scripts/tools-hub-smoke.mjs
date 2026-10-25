@@ -203,6 +203,40 @@ console.log('share cards: every hub has a generated card on disk, and the genera
 }
 console.log('hub JSON-LD: a CollectionPage over a summary-shaped ItemList with one-line descriptions')
 
+/* ─────  The 404 suggests real pages, and nothing to scanners  ─────
+   (mutations: build the index before the scanner check → fails; echo the
+   asked path into the markup → fails) */
+{
+  const nf = stripComments(await read('src/pages/404.astro'))
+  const [front, template] = nf.split(/^---$/m).slice(1)
+  assert.match(front, /isScannerPath\(asked\)\s*\?\s*\[\]\s*:\s*suggestPaths\(asked, buildSiteIndex\(/, 'a scanner path is answered before the site index is built')
+  assert.doesNotMatch(template, /\{asked\}|Astro\.url/, 'the asked path is never echoed into the page')
+  assert.match(template, /suggestions\.map\(e => <li><a href=\{e\.u\} \{\.\.\.shellLinkAttrs\(e\.u\)\}>/, 'suggestion links come from the index and use the shell reload')
+}
+console.log('404: suggestions come from the site index, scanners get none, and the asked path is never echoed')
+
+/* ─────  /terms states what the code keeps  ─────
+   Every retention the page promises is read from, or held to, the module that
+   enforces it. (mutations: change BOARD_DAYS to 30 → fails; drop noindex →
+   fails; drop the footer link → fails) */
+{
+  const terms = await read('src/pages/terms.astro')
+  assert.match(terms, /import \{ WEBHOOK_BIN_TTL_MS \} from '\.\.\/lib\/webhook-store'/, 'the webhook retention is read from the store')
+  const days = name => Number(terms.match(new RegExp(`const ${name} = (\\d+)`))?.[1])
+  for (const [file, re] of [['src/lib/type-trial-leaderboard.ts', /DAILY_RETAINED_DAYS = (\d+)/], ['src/lib/hue-hunt-leaderboard.ts', /HUE_RETAINED_DAYS = (\d+)/]]) {
+    assert.equal(days('BOARD_DAYS'), Number((await read(file)).match(re)?.[1]), `/terms says boards last ${days('BOARD_DAYS')} days; ${file} disagrees`)
+  }
+  for (const [file, re] of [['src/lib/visits.ts', /RETENTION_DAYS = (\d+)/], ['src/lib/analytics.ts', /ANALYTICS_RETENTION_DAYS = (\d+)/]]) {
+    assert.equal(days('ANALYTICS_DAYS'), Number((await read(file)).match(re)?.[1]), `/terms says analytics last ${days('ANALYTICS_DAYS')} days; ${file} disagrees`)
+  }
+  assert.match(terms, /<Base[^>]*\bnoindex\b/, '/terms is noindex')
+  assert.match(terms, /as-is/, '/terms says the site is offered as-is')
+  const { indexablePaths, loadSiteConfigs } = await import('../src/lib/site-index.ts')
+  assert.ok(!indexablePaths(await loadSiteConfigs({})).some(p => p.path === '/terms'), '/terms is not in the sitemap')
+  assert.match(await read('src/components/Footer.astro'), /<a href="\/terms"/, 'every footer links /terms')
+}
+console.log('terms: retention numbers match the code, noindex, out of the sitemap, linked from every footer')
+
 /* ─────  Polish: the sky rests, and focus rings the whole card  ─────
    (mutations: drop `&& !idle` → fails; arm the timer through onInput() at
    mount → fails; move the title's outline:none out of the @supports block →

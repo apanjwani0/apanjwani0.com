@@ -6,7 +6,7 @@
  * deliberately skip it on the full-bleed home hero so that flagship stays a single
  * immersive screen. Two columns on a wide screen, one on a phone:
  *   - left, "About the developer": the name (a link home), a short bio
- *     (`site.footerBio`) and the identity links;
+ *     (`site.footerBio`), the identity links and the terms page;
  *   - right, the section links as a vertical list in `nav[aria-label="Footer"]`.
  * It gives every other route three things it lacked:
  *   1. a `contentinfo` landmark (a11y — screen readers can jump to it);
@@ -60,6 +60,8 @@ const social = Object.entries(site.social)
           ))}
         </div>
       )}
+      {/* The as-is terms and what each tool keeps: one page for the site. */}
+      <a href="/terms" data-type="footer-terms">terms &amp; privacy</a>
     </div>
     <nav data-type="footer-nav" aria-label="Footer">
       {links.map((link) => <a href={link.href}>{link.label}</a>)}
