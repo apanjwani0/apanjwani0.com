@@ -159,6 +159,22 @@ console.log('hub sections: every live tool in exactly one group, live diagnostic
 }
 console.log('try links: each opens a live tool through the reload, the Flowmap board decodes whole, and the cron demo really hits both daylight-saving cases')
 
+/* ─────  A board from a share link does not overwrite the visitor's own  ─────
+   Flowmap's first sync() persisted whatever it showed, so opening any #g=
+   link replaced the board saved in localStorage before a single edit.
+   (mutations: drop the !this.fromLink guard → fails; drop the reset in
+   pushSnapshot → fails) */
+{
+  const fm = stripComments(await read('src/components/tools/flowmap/Flowmap.ts'))
+  const body = name => fm.match(new RegExp(`\\n  private ${name}\\([^)]*\\)[^{]*\\{([\\s\\S]*?)\\n  \\}\\n`))?.[1] ?? ''
+  assert.match(body('restore'), /decodeGraph\(hash\)[\s\S]*this\.fromLink = Boolean\(localStorage\.getItem\(FM_STORE\)\)/, 'a board read from #g= is held back exactly when a saved board exists to protect')
+  assert.match(body('persist'), /if \(!this\.fromLink\) localStorage\.setItem\(FM_STORE/, 'a linked board is not written over the saved one')
+  assert.match(body('pushSnapshot'), /this\.fromLink = false/, 'the first edit makes a linked board the visitor\'s own')
+  const writes = [...fm.matchAll(/localStorage\.setItem\(FM_STORE\b/g)].length
+  assert.equal(writes, 1, 'persist() is the one place the board is saved')
+}
+console.log('flowmap: a shared board is not saved over the visitor\'s board until they edit it')
+
 /* ─────  Hub share cards  ─────
    (mutation: delete public/og/hub-tools.png → fails) */
 {
