@@ -257,3 +257,34 @@ console.log('terms: retention numbers match the code, noindex, out of the sitema
 }
 console.log('polish: the hub sky stops after 20 s idle, and a focused card is ringed whole (only where :has() exists)')
 
+/* ─────  Every tool page fits a search result  ─────
+   Google cuts a title at about 60 characters and a snippet at about 160; five
+   tools ran to 174–214 and two titles past 60, so the end of each, often the
+   part that said what the tool is for, never showed.
+   (mutation: lengthen Token Bench's metaDescription past 160 → fails) */
+{
+  const { tools } = await import('../src/config/tools.ts')
+  for (const t of tools.filter(x => x.status === 'live')) {
+    const title = t.seoTitle || t.title
+    assert.ok(title.length <= 60, `${t.slug}: seoTitle is ${title.length} characters ("${title}") — keep it within 60`)
+    const d = t.metaDescription || t.description
+    assert.ok(d.length <= 160, `${t.slug}: metaDescription is ${d.length} characters — keep it within 160`)
+  }
+}
+console.log('tool pages: every live tool\'s title fits 60 characters and its description 160')
+
+/* ─────  Two tools no longer shift on load  ─────
+   Measured in the tool sweep: Flowmap opened its source drawer after
+   Cytoscape loaded (0.115 CLS on a first visit), and Driftfield sized its
+   canvas a frame late (0.108 on about half of loads).
+   (mutations: move setSource back after the import → fails; drop the
+   synchronous resizeAndRender → fails) */
+{
+  const fm = await read('src/components/tools/flowmap/Flowmap.ts')
+  const cb = fm.slice(fm.indexOf('async connectedCallback()'), fm.indexOf('disconnectedCallback()'))
+  assert.ok(cb.indexOf('this.setSource(') > -1 && cb.indexOf('this.setSource(') < cb.indexOf("await import('cytoscape')"), 'Flowmap opens its source drawer before awaiting Cytoscape')
+  const wf = await read('src/components/tools/wallpaper-forge/WallpaperForge.ts')
+  const wcb = wf.slice(wf.indexOf('  connectedCallback() {'), wf.indexOf('  disconnectedCallback() {'))
+  assert.match(wcb, /this\.wire\(\)[\s\S]*?\n    this\.resizeAndRender\(\)\n[\s\S]*requestAnimationFrame/, 'Driftfield sizes its canvas synchronously at mount, with the frame as a fallback')
+}
+console.log('layout shift: Flowmap opens its drawer before Cytoscape loads, Driftfield sizes its canvas at mount')
