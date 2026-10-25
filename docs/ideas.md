@@ -38,8 +38,10 @@ markdown. Doing it correctly is a larger build than the maps themselves.
 ## Unexplained CSP error on tool pages
 
 A blob worker is blocked by the CSP (`script-src` has no `worker-src` fallback),
-visible in the console on `/tools/json-tidy`. Find what spawns it before adding
-`worker-src`.
+visible in the console on `/tools/json-tidy`. Checked 25 Oct 2026: nothing in
+`src/` or the vendored Oat creates a Worker, and a clean headless Chromium
+shows no such error on any tool page, so it is almost certainly a browser
+extension that injects into textareas. Do not add `worker-src` for it.
 
 ## Search demand, before building more
 
