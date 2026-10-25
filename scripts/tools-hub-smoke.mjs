@@ -187,3 +187,23 @@ console.log('share cards: every hub has a generated card on disk, and the genera
 }
 console.log('hub JSON-LD: a CollectionPage over a summary-shaped ItemList with one-line descriptions')
 
+/* ─────  Polish: the sky rests, and focus rings the whole card  ─────
+   (mutations: drop `&& !idle` → fails; arm the timer through onInput() at
+   mount → fails; move the title's outline:none out of the @supports block →
+   fails) */
+{
+  const sky = await read('src/lib/sky-ui.ts')
+  assert.match(sky, /const run = !reduced && !document\.hidden && !idle/, 'the sky loop also stops when the visitor is idle')
+  assert.match(sky, /window\.addEventListener\(type, onInput, \{ passive: true, signal: ac\.signal \}\)/, 'input listeners are passive and released with the sky')
+  assert.match(sky, /teardown = \(\) => \{[\s\S]*clearTimeout\(idleTimer\)/, 'the idle timer is cleared on teardown')
+  // Found in the browser check: arming it through the throttled input handler
+  // skipped it whenever the sky mounted in a page's first second.
+  assert.match(sky, /\n  sync\(\)\n(?:\s*\/\/.*\n)*\s*armIdle\(\)\n/, 'the idle timer is armed at mount, not through the throttled input handler')
+  const shared = (await read('src/styles/shared.css')).replace(/\/\*[\s\S]*?\*\//g, '')
+  const block = shared.match(/@supports selector\(:has\(\*\)\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
+  assert.match(block, /:has\(\[data-type="card-title"\] a:focus-visible\)\s*\{[^}]*outline:\s*2px solid var\(--color-accent\)/, 'a focused card title rings the card')
+  const outside = shared.replace(/@supports selector\(:has\(\*\)\) \{[\s\S]*?\n\}/, '')
+  assert.doesNotMatch(outside, /card-title"\] a:focus-visible\s*\{[^}]*outline:\s*none/, 'the title loses its own ring only where :has() can draw the card\'s')
+}
+console.log('polish: the hub sky stops after 20 s idle, and a focused card is ringed whole (only where :has() exists)')
+
