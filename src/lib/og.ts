@@ -6,7 +6,8 @@
  * Two shapes:
  *
  *  - Tool, game and article pages, and the three hubs that list them, get a
- *    generated 1200×630 landscape card (public/og/, written by `npm run og`). A link to one of these is a link to a product, so
+ *    generated 1200×630 landscape card (public/og/, written by `npm run og`).
+ *    A link to one of these is a link to a product, so
  *    it should unfurl showing which product — not a photo of a person. Landscape
  *    is also what earns the large Twitter card.
  *  - Everything else falls back to the portrait avatar. On the home page and the

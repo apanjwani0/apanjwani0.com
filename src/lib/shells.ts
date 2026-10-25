@@ -8,10 +8,11 @@
  * the link tells the router to skip its fetch and navigate straight away.
  *
  * Every ToolBase route lives under /tools/<x>: the tools, Driftfield and its
- * modes, and the cron presets. The /tools hub itself is a Base page, and so are
- * the learnings articles and the games, whose links need nothing. `scripts/tools-hub-smoke.mjs`
- * derives the shell of every page file and holds this predicate to it, so a new
- * ToolBase route outside these prefixes fails the gate instead of double-loading.
+ * modes, and the cron presets. The /tools hub itself is a Base page, and so
+ * are the learnings articles and the games, whose links need nothing.
+ * `scripts/tools-hub-smoke.mjs` derives the shell of every page file and holds
+ * this predicate to it, so a new ToolBase route outside /tools/ fails the gate
+ * instead of double-loading.
  */
 const TOOLBASE_PATH = /^\/tools\/[^/?#]/
 

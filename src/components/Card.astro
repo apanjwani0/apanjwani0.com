@@ -6,7 +6,7 @@
  *
  * Slots: `badges` (the group is rendered only when the slot is passed),
  * `desc` (the description's content), `meta` (the card-meta paragraph, rendered
- * only when passed). With no `href` the title is plain text (a coming-soon card).
+ * only when the slot produces content). With no `href` the title is plain text (a coming-soon card).
  */
 import { shellLinkAttrs } from '../lib/shells'
 
@@ -26,6 +26,10 @@ interface Props {
 const { title, href, external = false, status, descAs = 'div', level = 2 } = Astro.props
 const Desc = descAs
 const Title = level === 3 ? 'h3' : 'h2'
+// Rendered first and kept only when it has content: a slot passed through a
+// condition (`{x && <Fragment slot="meta">…}`) still counts for slots.has(),
+// and an empty card-meta keeps its top padding and pushes the card taller.
+const meta = Astro.slots.has('meta') ? (await Astro.slots.render('meta')).trim() : ''
 ---
 
 <li data-status={status}>
@@ -42,5 +46,5 @@ const Title = level === 3 ? 'h3' : 'h2'
     {Astro.slots.has('badges') && <span data-type="card-badges"><slot name="badges" /></span>}
   </div>
   <Desc data-type="card-desc"><slot name="desc" /></Desc>
-  {Astro.slots.has('meta') && <p data-type="card-meta"><slot name="meta" /></p>}
+  {meta && <p data-type="card-meta" set:html={meta} />}
 </li>

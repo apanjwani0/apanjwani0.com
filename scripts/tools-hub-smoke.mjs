@@ -288,3 +288,15 @@ console.log('tool pages: every live tool\'s title fits 60 characters and its des
   assert.match(wcb, /this\.wire\(\)[\s\S]*?\n    this\.resizeAndRender\(\)\n[\s\S]*requestAnimationFrame/, 'Driftfield sizes its canvas synchronously at mount, with the frame as a fallback')
 }
 console.log('layout shift: Flowmap opens its drawer before Cytoscape loads, Driftfield sizes its canvas at mount')
+
+/* ─────  A card renders no empty meta line  ─────
+   Found in review: a meta slot passed through a condition counts for
+   slots.has() even when it renders nothing, so twelve /tools cards carried an
+   empty, padded <p data-type="card-meta">. (mutation: go back to rendering
+   the paragraph on slots.has() → fails) */
+{
+  const card = stripComments(await read('src/components/Card.astro'))
+  assert.match(card, /const meta = Astro\.slots\.has\('meta'\) \? \(await Astro\.slots\.render\('meta'\)\)\.trim\(\) : ''/, 'Card renders the meta slot and checks it has content')
+  assert.match(card, /\{meta && <p data-type="card-meta" set:html=\{meta\} \/>\}/, 'the card-meta paragraph exists only when the slot produced content')
+}
+console.log('cards: no empty meta line when a conditional meta slot renders nothing')
