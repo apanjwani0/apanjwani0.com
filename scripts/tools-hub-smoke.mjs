@@ -92,3 +92,19 @@ console.log('llms.txt: one full stop between the role line and the bio, and ever
   assert.doesNotMatch(site.tagline, /[.!?]$/, 'the tagline is a role line (it is the Person jobTitle and the home title), not a sentence')
 }
 console.log('site copy: the footer says as-is, the tagline is a plain role line, and the retired lines stay retired')
+
+/* ─────  Hub share cards  ─────
+   (mutation: delete public/og/hub-tools.png → fails) */
+{
+  const { ogHubCardFile } = await import('../src/lib/og.ts')
+  const gen = await read('scripts/generate-og.mjs')
+  for (const kind of ['tools', 'games', 'learnings']) {
+    assert.match(gen, new RegExp(`ogHubCardFile\\('${kind}'\\)`), `generate-og.mjs renders the ${kind} hub card`)
+    await readFile(new URL(`public/og/${ogHubCardFile(kind)}`, root)).then(b => assert.ok(b.length > 10_000, `public/og/${ogHubCardFile(kind)} is a real image`))
+  }
+  for (const page of ['src/pages/games.astro', 'src/pages/learnings.astro']) assert.match(await read(page), /existingOgHubCardPath\('/, `${page} shares with its hub card`)
+  assert.match(gen, /process\.env\.CHROME_PATH/, 'the generator runs anywhere CHROME_PATH points, not only on macOS')
+  assert.doesNotMatch(gen, /fonts\.googleapis/, 'cards use the vendored fonts, so a slow font fetch cannot rasterise them in the fallback serif')
+}
+console.log('share cards: every hub has a generated card on disk, and the generator needs no macOS and no network')
+

@@ -5,8 +5,8 @@
  *
  * Two shapes:
  *
- *  - Tool and game pages get a generated 1200×630 landscape card (public/og/,
- *    written by `npm run og`). A link to one of these is a link to a product, so
+ *  - Tool, game and article pages, and the three hubs that list them, get a
+ *    generated 1200×630 landscape card (public/og/, written by `npm run og`). A link to one of these is a link to a product, so
  *    it should unfurl showing which product — not a photo of a person. Landscape
  *    is also what earns the large Twitter card.
  *  - Everything else falls back to the portrait avatar. On the home page and the
@@ -57,6 +57,13 @@ export function ogCardPath(kind: OgCardKind, slug: string): string {
   return `/og/${ogCardFile(kind, slug)}`
 }
 
+/** The card for a hub page (/tools, /games, /learnings). A separate `hub-`
+ *  prefix rather than a reserved slug, so no tool or game can ever collide
+ *  with it. */
+export function ogHubCardFile(kind: OgCardKind): string {
+  return `hub-${kind}.png`
+}
+
 /** Which items get a card — the generator renders exactly this set, so pages
  *  must not emit a card URL for anything outside it.
  *
@@ -98,7 +105,7 @@ async function readCardNames(): Promise<Set<string> | null> {
     }
     // An EMPTY directory is not evidence that no card exists — it is the state
     // `npm run og` leaves behind when it mkdir's public/og and then fails (the
-    // Chrome path it shells out to is macOS-only, so that is every Linux/CI run).
+    // Chrome binary it shells out to is missing, as on a Linux box without CHROME_PATH).
     // Trusting it would strip og:image from every product page for the process
     // lifetime, which is the exact degradation this whole function prevents.
     return readAny && names.size > 0 ? names : null
@@ -119,6 +126,13 @@ export async function existingOgCardPath(
 ): Promise<string | undefined> {
   const names = await (cardNames ??= readCardNames())
   if (names === null || names.has(ogCardFile(kind, slug))) return ogCardPath(kind, slug)
+  return undefined
+}
+
+/** The hub's card path when the PNG is on disk (same rules as above). */
+export async function existingOgHubCardPath(kind: OgCardKind): Promise<string | undefined> {
+  const names = await (cardNames ??= readCardNames())
+  if (names === null || names.has(ogHubCardFile(kind))) return `/og/${ogHubCardFile(kind)}`
   return undefined
 }
 

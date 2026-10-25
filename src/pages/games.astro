@@ -8,10 +8,12 @@ import { getSite, getGames } from '../lib/config'
 import { render } from '../lib/markdown'
 import { itemListJsonLd } from '../lib/jsonld'
 import { isPlayableGame } from '../lib/games'
+import { existingOgHubCardPath } from '../lib/og'
 
-const [site, games] = await Promise.all([
+const [site, games, ogCard] = await Promise.all([
   getSite(Astro.locals),
   getGames(Astro.locals).then(gs => gs.filter(g => g.enabled)),
+  existingOgHubCardPath('games'),
 ])
 
 // Only playable games have an indexable detail page; the "coming soon"
@@ -39,6 +41,7 @@ const metaDescription =
   starfield={false}
   sky
   title="games"
+  ogCard={ogCard}
   seoTitle="Free Browser Games — Daily Word Puzzle, Typing Race & More"
   description={metaDescription}
   keywords="browser games, word game, word guessing game, five letter word game, daily word puzzle, wordle style game, quintle, 2048, 2048 puzzle, sliding tile game, number puzzle, maze generator, maze solver, pathfinding visualizer, bfs, a star, typing game, typing speed test, typing race, daily typing challenge, typing leaderboard, hex color game, color guessing game, guess the hex, daily color game, poker trainer, poker equity calculator, pot odds trainer, poker practice, mandelbrot set explorer, julia set generator, fractal zoom, fractal explorer online, daily games, daily puzzle, no-download games, playable experiments"
