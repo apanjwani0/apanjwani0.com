@@ -8,6 +8,8 @@
  * `desc` (the description's content), `meta` (the card-meta paragraph, rendered
  * only when passed). With no `href` the title is plain text (a coming-soon card).
  */
+import { shellLinkAttrs } from '../lib/shells'
+
 interface Props {
   title: string
   href?: string | null
@@ -29,6 +31,7 @@ const Desc = descAs
       {href
         ? <a
             href={href}
+            {...shellLinkAttrs(href)}
             {...(external ? { target: '_blank', rel: 'noopener noreferrer', 'aria-label': `${title} (opens in a new tab)` } : {})}
           >{title}</a>
         : title}

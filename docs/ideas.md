@@ -82,7 +82,7 @@ Checked against the code on 9 Oct 2026.
 
 ## Host on an Android phone
 
-Parked. Run `node dist/server/entry.mjs` directly in Termux (Node 22.12 or newer, per `package.json`), with no Docker: Android kernels' namespace and cgroup support is unreliable. Carriers use CGNAT, so the phone has no public IP; a Cloudflare Tunnel (`pkg install cloudflared`, `cloudflared tunnel login`, `tunnel create`, `tunnel route dns`, `tunnel run --url http://localhost:4321`) dials out and handles TLS. Keep the process alive with `termux-wake-lock` and start it on boot with Termux:Boot (F-Droid, a script in `~/.termux/boot/`). Less reliable than the OCI VM (battery, doze), so a backup or experiment, not production.
+Parked. Run `node dist/server/entry.mjs` directly in Termux (Node 22.23.4 or newer, per `package.json`), with no Docker: Android kernels' namespace and cgroup support is unreliable. Carriers use CGNAT, so the phone has no public IP; a Cloudflare Tunnel (`pkg install cloudflared`, `cloudflared tunnel login`, `tunnel create`, `tunnel route dns`, `tunnel run --url http://localhost:4321`) dials out and handles TLS. Keep the process alive with `termux-wake-lock` and start it on boot with Termux:Boot (F-Droid, a script in `~/.termux/boot/`). Less reliable than the OCI VM (battery, doze), so a backup or experiment, not production.
 
 ## A curated reading list ("reads")
 
