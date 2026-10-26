@@ -1,28 +1,23 @@
 # Status
 
-Session pickup. Rewritten each session, not appended. Last updated 25 Oct 2026.
+Session pickup. Rewritten each session, not appended. Last updated 26 Oct 2026.
 
 ## Branches
 
-- `origin/main` is live at PR #43's merge (`6345c23`). `develop` carries the
-  /tools hub and tool-page work in [docs/plans/tools-week.md](docs/plans/tools-week.md),
-  open as PR #44 (develop → main), CI green. Not merged: it waits for the
-  owner's approval.
-- Agent pushes use the `GITHUB_PAT` credential over git; the GitHub MCP
-  integration is read-only, and Copilot code review is not enabled on the repo.
+- `origin/main` is PR #44's merge (`fcb17d2`), deploying 26 Oct 2026.
+  `develop` has merged it back.
+- Autonomous sessions follow [docs/plans/autonomous-runbook.md](docs/plans/autonomous-runbook.md):
+  item branches → PR into `develop` → develop → main PR for the owner. Pushes
+  use the `GITHUB_PAT` credential; the GitHub MCP integration is read-only.
 
 ## Owner's pending moves
 
-1. Review and approve PR #44, then merge it to `main`.
-2. Purge the Cloudflare cache after the deploy and run `npm run origin:check`
-   (`docs/plans/release-followups.md`).
-3. Close the origin lock (AGENTS.md → *Origin exposure*).
-4. Decide the deferred items in tools-week.md: the "recently used" row, the
-   Link Peek image cap.
+1. Purge the Cloudflare cache after the PR #44 deploy and run
+   `npm run origin:check`.
+2. Close the origin lock (AGENTS.md → *Origin exposure*).
+3. The decisions listed under *Owner* in the runbook.
 
 ## Next
 
-1. ⌘K palette (`/search.json` plus the UI), per tools-week.md.
-2. [plans/review-response.md](docs/plans/review-response.md), PR-1: the Core
-   Web Vitals beacon (re-check: 12f9a4c fixed the cold-load case on 10 Oct).
-3. Trim each tool's `keywords` as it is next touched.
+The runbook's queue, from item 1: the post-deploy check, then the search
+budgets the 26 Oct sweep found on games, Driftfield modes and cron presets.

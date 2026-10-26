@@ -336,4 +336,4 @@ the whole current list.
 - [docs/conventions.md](docs/conventions.md), [docs/design-system.md](docs/design-system.md), [docs/home-hero.md](docs/home-hero.md): UI rules.
 - [docs/learnings.md](docs/learnings.md): articles and embeds; voice in [docs/plans/learnings-voice.md](docs/plans/learnings-voice.md).
 - [docs/operations.md](docs/operations.md): build notes, caching, analytics, share cards, crawlers, deploy, browser check, agent tools.
-- [docs/plans/](docs/plans/) and [docs/ideas.md](docs/ideas.md): plans and backlog.
+- [docs/plans/](docs/plans/) and [docs/ideas.md](docs/ideas.md): plans and backlog. An unattended session starts at [docs/plans/autonomous-runbook.md](docs/plans/autonomous-runbook.md).

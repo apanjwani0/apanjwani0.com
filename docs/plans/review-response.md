@@ -298,7 +298,7 @@ for the owner's go-ahead first (§9 step 3).
   - The order is deterministic: run it twice over a shuffled config and get the same list (drop the tie-break).
 - **docs/architecture.md:** *Indexing* gets "Cross-links come from `relatedTo()`", and the admin checklist gains `topics`.
 
-**PR-7. The `/tools` hub has a shape.** (Sonnet. D3.)
+**PR-7. The `/tools` hub has a shape.** (Sonnet. D3.) **Done in PR #44** with the owner's group names (Live diagnostics, Verify & explain, Create, Everyday utilities; `TOOL_GROUPS`, asserted). Kept below for the record.
 - **A slug → group map in `src/lib/tools.ts`**, beside `SERVER_TOOLS` and for the same reason. One h2 per group, in this order, with flagships first. The owner may rename the groups in review.
   - **Debug a live system:** webhook-inspector, dns-sightline, chainsaw, token-bench, link-peek.
   - **Everyday data:** json-tidy, cron-whisperer, regex-lab, list-forge, epoch-wizard, codec-forge, hash-smith.
@@ -387,7 +387,7 @@ Only with Phase 3's numbers. See §6.
 | 2 | PR-2 tool and game copy | 1 | M | Sonnet, then `/code-review` | — |
 | 3 | PR-3 article hedges | 1 | S | Sonnet, owner voice read | — |
 | 4 | PR-8 head cleanup | 2 | S | Sonnet | — |
-| 5 | PR-7 tools hub | 2 | S | Sonnet | — |
+| 5 | ~~PR-7 tools hub~~ (done, PR #44) | 2 | S | Sonnet | — |
 | 6 | PR-4b DNS and Chainsaw correctness | 1 | M | Opus (or a design note approved first) | — |
 | 7 | PR-5 server-rendered header | 2 | L | Opus recipe, Sonnet conversions | PR-2 |
 | 8 | PR-6 topic graph | 2 | M | Opus design, Sonnet data | PR-5 |
@@ -419,4 +419,7 @@ disjoint files and can run together, and PR-7 and PR-8 can run beside PR-5.
 7. In the same PR, update AGENTS.md or the docs/ file a convention lives in, and delete
    the shipped item from this file and from `release-followups.md`.
 8. Run `/code-review` on the diff, fix what it finds, then open the PR into
-   `develop` and stop. Never push to `develop` or `main` directly.
+   `develop`. Never push to `main`. An autonomous run may merge its own item
+   PR into `develop` once CI passes and its review pass is posted, unless the
+   item needs the owner ([autonomous-runbook.md](autonomous-runbook.md),
+   owner, 26 Oct 2026); develop → main stays the owner's merge.

@@ -16,6 +16,7 @@ One line per file. The rules are in [../AGENTS.md](../AGENTS.md); session pickup
 ## Plans and backlog
 
 - [ideas.md](ideas.md): ideas not committed to, follow-ups on shipped tools, loose ends in the code.
+- [plans/autonomous-runbook.md](plans/autonomous-runbook.md): how an unattended session runs (pre-flight, gate, push, PRs, when to stop) and the ordered queue it works from.
 - [plans/tools-week.md](plans/tools-week.md): the /tools hub and tool-page plan (25 Oct 2026): what shipped, what is deferred and why.
 - [plans/review-response.md](plans/review-response.md): the active plan from two outside reviews (2 Oct 2026).
 - [plans/release-followups.md](plans/release-followups.md): what the PR #27 reviews left open.
@@ -24,4 +25,4 @@ One line per file. The rules are in [../AGENTS.md](../AGENTS.md); session pickup
 - [plans/internet-article.md](plans/internet-article.md): brief for the "how the internet works" learnings article.
 - [plans/learnings-voice.md](plans/learnings-voice.md): the binding house voice for every learnings article.
 - [plans/game-design-principles.md](plans/game-design-principles.md): mobile, material and performance principles for games.
-- [plans/autonomous-pass.md](plans/autonomous-pass.md): the 2-hourly autonomous pass (disabled).
+- [plans/autonomous-pass.md](plans/autonomous-pass.md): the 2-hourly scheduled pass (disabled; session runs use the runbook).

@@ -24,6 +24,10 @@ Build and test notes, caching, analytics, share cards, AI crawlers, deploy, the 
   assertions go in the second file.
 - CI (`.github/workflows/ci.yml`) runs the whole gate on every PR and every
   push to `develop`.
+- `scripts/page-sweep.mjs` loads every sitemap URL (or given paths) at laptop
+  and phone size and reports status, layout shift, overflow, console errors,
+  h1 count and title/description budgets. It needs a browser, so it is not in
+  the gate; install Playwright with `npm i --no-save playwright`.
 - For UI/route changes, also run `/browser-debug` against the dev server (the checklist is under *Browser check* below).
 - Deploys: a push to `main` builds the Docker image, restarts the container
   from the self-hosted runner, then fetches `/` inside it. That probe runs

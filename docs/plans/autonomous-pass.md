@@ -1,5 +1,8 @@
 # The 2-hourly autonomous pass
 
+> Session-driven runs follow [autonomous-runbook.md](autonomous-runbook.md)
+> (26 Oct 2026). This file describes the disabled scheduled pass only.
+
 `portfolio-2h-pass` (its prompt is at
 `~/.claude/scheduled-tasks/portfolio-2h-pass/SKILL.md`; **disabled**, last run
 2026-08-20) runs 3–4 roles in parallel every two hours, with every fourth run
