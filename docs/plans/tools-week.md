@@ -22,7 +22,7 @@ Owner decisions are recorded where they were made.
   "recently used" row instead of the kit page; no thumbnails derived from the
   text-only share cards.
 
-## Shipped
+## Done (PR #44, awaiting merge)
 
 - [x] **Double load fixed.** Every Base→ToolBase link (hub cards, Driftfield
       link on /games, related links, 404 suggestions, try links) carries
