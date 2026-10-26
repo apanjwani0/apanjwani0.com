@@ -3,6 +3,9 @@ export const prerender = false
 
 import Base from '../layouts/Base.astro'
 import { getSite, navLinks } from '../lib/config'
+import { isScannerPath, suggestPaths } from '../lib/fuzzy'
+import { buildSiteIndex, loadSiteConfigs } from '../lib/site-index'
+import { shellLinkAttrs } from '../lib/shells'
 
 // The suggested links are DERIVED from navLinks(), never hand-written: a
 // hand-written list is one more consumer of "which sections exist" that no
@@ -12,6 +15,17 @@ import { getSite, navLinks } from '../lib/config'
 // comes next), so this page can no longer disagree with the nav and footer.
 const site = await getSite(Astro.locals)
 const links = navLinks(site)
+
+// "Did you mean": the pages a mistyped or moved path most likely meant, from
+// the same site index the sitemap and llms.txt read, so a suggestion is always
+// a real, indexable page. Most 404s are scanners probing for /wp-login.php and
+// the like; isScannerPath answers those before the index is even built, and
+// suggestPaths returns nothing for a path that resembles no page. The path is
+// only compared, never echoed into the page.
+const asked = Astro.url.pathname
+const suggestions = isScannerPath(asked)
+  ? []
+  : suggestPaths(asked, buildSiteIndex(await loadSiteConfigs(Astro.locals)))
 ---
 
 <!-- noindex: an error page should never enter the index (it can be served for any
@@ -24,6 +38,14 @@ const links = navLinks(site)
       The link you followed is broken or the page has moved. No harm done —
       here are a few places worth landing instead.
     </p>
+    {suggestions.length > 0 && (
+      <nav data-type="nf-suggest" aria-labelledby="nf-suggest-title">
+        <p id="nf-suggest-title" data-type="nf-suggest-title">Did you mean</p>
+        <ul>
+          {suggestions.map(e => <li><a href={e.u} {...shellLinkAttrs(e.u)}>{e.t}</a></li>)}
+        </ul>
+      </nav>
+    )}
     <nav data-type="nf-links" aria-label="Suggested pages">
       <a href="/">home</a>
       {links.map(l => <a href={l.href}>{l.label}</a>)}
@@ -55,6 +77,35 @@ const links = navLinks(site)
     color: var(--color-muted);
     line-height: 1.6;
     margin: 0 0 1.75rem;
+  }
+
+  nav[data-type="nf-suggest"] {
+    margin: 0 0 var(--space-section);
+  }
+
+  p[data-type="nf-suggest-title"] {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    margin: 0 0 var(--space-xs);
+  }
+
+  nav[data-type="nf-suggest"] ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  nav[data-type="nf-suggest"] a {
+    font-size: var(--text-card);
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-underline-offset: 0.3em;
   }
 
   nav[data-type="nf-links"] {

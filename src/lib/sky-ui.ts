@@ -5,7 +5,8 @@
  * Kept light on purpose. Loaded on idle by nav-ui.ts, and only on pages that
  * render the host. The canvas is capped at 1.5× device pixels, the stars are
  * sparser than the hero's, the loop draws at most ~30 frames a second and
- * stops while the tab is hidden, and reduced motion gets one still frame.
+ * stops while the tab is hidden or after 20 s with no input (the next input
+ * starts it again), and reduced motion gets one still frame.
  * Colours come from the host's `--sky-star` and `--sky-line` tokens, re-read
  * when the theme changes.
  */
@@ -17,6 +18,12 @@ import { prefersReducedMotion } from './motion'
 // as a quiet backdrop and not a second hero.
 const SKY_AREA = 16000
 const FRAME_MS = 33
+// After this long with no scroll, pointer, touch or key input the loop stops
+// and the last frame stays on screen; the next input starts it again. A hub is
+// a list someone reads, and a backdrop drifting under an idle tab only spends
+// battery (about 6% of the main thread, measured on /tools at 1440x900).
+const IDLE_MS = 20000
+const INPUT_EVENTS = ['scroll', 'pointermove', 'pointerdown', 'wheel', 'keydown', 'touchstart'] as const
 
 let wired = false
 let teardown: (() => void) | null = null
@@ -44,6 +51,7 @@ export function mountSky(): void {
   const reduced = prefersReducedMotion()
   const lowPower = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4
   let w = 0, h = 0, dpr = 1, raf = 0, last = 0, time = 0
+  let idle = false, idleTimer = 0, lastInput = 0
   let stars: Star[] | null = null
   let colors: SkyColors = { star: '', line: '' }
 
@@ -78,14 +86,31 @@ export function mountSky(): void {
     draw()
   }
   const sync = () => {
-    const run = !reduced && !document.hidden
+    const run = !reduced && !document.hidden && !idle
     if (run && !raf) { last = 0; raf = requestAnimationFrame(loop) }
     if (!run && raf) { cancelAnimationFrame(raf); raf = 0 }
+  }
+  const armIdle = () => {
+    clearTimeout(idleTimer)
+    idleTimer = window.setTimeout(() => { idle = true; sync() }, IDLE_MS)
+  }
+  // Input wakes a resting sky at once; otherwise it re-arms the idle timer at
+  // most once a second, because pointermove fires on every frame.
+  const onInput = () => {
+    const now = performance.now()
+    if (idle) { idle = false; lastInput = now; armIdle(); sync(); return }
+    if (now - lastInput < 1000) return
+    lastInput = now
+    armIdle()
   }
 
   readColors()
   resize()
   sync()
+  // Armed unconditionally: the sky mounts within a page's first second, where
+  // the input throttle above would skip it and the loop would never rest.
+  armIdle()
+  for (const type of INPUT_EVENTS) window.addEventListener(type, onInput, { passive: true, signal: ac.signal })
   window.addEventListener('resize', resize, { signal: ac.signal })
   document.addEventListener('visibilitychange', sync, { signal: ac.signal })
   const offTheme = onThemeChange(() => { readColors(); draw() })
@@ -93,6 +118,7 @@ export function mountSky(): void {
   teardown = () => {
     ac.abort()
     offTheme()
+    clearTimeout(idleTimer)
     if (raf) cancelAnimationFrame(raf)
     raf = 0
     host.replaceChildren()

@@ -1,5 +1,6 @@
 /**
- * Generates the 1200×630 social share card for every tool and game.
+ * Generates the 1200×630 social share card for every tool, game and article,
+ * and one for each hub (/tools, /games, /learnings).
  *
  * WHY THIS EXISTS: every page used to share as the 320×468 portrait avatar, so a
  * link to any tool unfurled on Slack/X/LinkedIn as a photo of a person with no
@@ -14,7 +15,9 @@
  * Headless Chrome does the rasterising and is already on the machine; it is
  * never needed in CI or production.
  *
- *   npm run og            # regenerate all cards
+ *   npm run og                                   # regenerate all cards (macOS Chrome)
+ *   CHROME_PATH=/path/to/chromium npm run og     # anywhere else
+ *   npm run og -- hub- tools-chainsaw            # only cards whose file starts so
  *
  * Re-run after adding a tool/game or changing one's title/description. Cards are
  * committed, so forgetting means the new page falls back to the avatar rather
@@ -26,6 +29,7 @@
 import { execFile } from 'node:child_process'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { tools } from '../src/config/tools.ts'
 import { games } from '../src/config/games.ts'
@@ -38,18 +42,26 @@ import {
   gameHasOgCard,
   learningHasOgCard,
   ogCardFile,
+  ogHubCardFile,
   toolHasOgCard,
 } from '../src/lib/og.ts'
 
 const run = promisify(execFile)
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+// Any Chrome or Chromium that takes --headless --screenshot. The default is the
+// macOS install; on Linux point CHROME_PATH at a Chromium, e.g. the
+// chrome-headless-shell a Playwright install leaves in its browsers folder.
+const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 // Names, dimensions and eligibility all come from src/lib/og.ts — the pages
 // read the same module, so the two sides cannot drift.
 const WIDTH = OG_CARD_WIDTH
 const HEIGHT = OG_CARD_HEIGHT
 const OUT_DIR = join(process.cwd(), 'public', 'og')
 const TMP_DIR = join(process.cwd(), '.og-tmp')
+// The site's own vendored fonts (src/assets/fonts), read from disk: a card
+// that waited on Google Fonts rasterised in the fallback serif whenever the
+// fetch lost the race with --virtual-time-budget.
+const FONT_URL = pathToFileURL(join(process.cwd(), 'src', 'assets', 'fonts') + '/').href
 
 /** Escape for HTML text nodes — titles and descriptions are authored content and
  *  can legitimately contain &, <, quotes. */
@@ -89,10 +101,9 @@ function stars(seed) {
 function cardHtml({ label, title, description, slug }) {
   return `<!doctype html>
 <html><head><meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
 <style>
+  @font-face{font-family:'Source Serif 4';font-weight:200 900;src:url('${FONT_URL}source-serif-4.woff2') format('woff2')}
+  @font-face{font-family:'JetBrains Mono';font-weight:100 800;src:url('${FONT_URL}jetbrains-mono.woff2') format('woff2')}
   *{margin:0;padding:0;box-sizing:border-box}
   body{width:${WIDTH}px;height:${HEIGHT}px;background:#05070c;overflow:hidden;position:relative;
        font-family:'Source Serif 4',Georgia,serif;color:#e8ecf5}
@@ -176,20 +187,37 @@ async function main() {
     })),
   ]
 
+  // The three hubs. A hub link is the one most likely to be posted somewhere
+  // ("free dev tools"), and it used to unfurl as the portrait avatar.
+  const hubs = [
+    { file: ogHubCardFile('tools'), label: 'Tools', title: 'Free online tools', description: 'A webhook tester, a TLS chain checker, a DNS diff, a JWT verifier and more.' },
+    { file: ogHubCardFile('games'), label: 'Games', title: 'Browser games', description: 'A daily word puzzle, a typing race, a hex-colour daily, a fractal deep-zoom and a poker trainer.' },
+    { file: ogHubCardFile('learnings'), label: 'Learnings', title: 'Learnings', description: 'Short, visual explainers of how things work, with diagrams you can play with.' },
+  ]
+  for (const item of items) item.file = ogCardFile(item.kind, item.slug)
+  items.push(...hubs.map(h => ({ ...h, slug: h.file.replace(/\.png$/, '') })))
+  // `npm run og -- hub-` renders only the cards whose file starts with an
+  // argument, so adding one card does not re-rasterise (and re-commit) all.
+  const only = process.argv.slice(2)
+  if (only.length) items.splice(0, items.length, ...items.filter(i => only.some(p => i.file.startsWith(p))))
+
   await mkdir(OUT_DIR, { recursive: true })
   await mkdir(TMP_DIR, { recursive: true })
 
   console.log(`Rendering ${items.length} cards at ${WIDTH}×${HEIGHT}…`)
   for (const item of items) {
-    const file = ogCardFile(item.kind, item.slug)
+    const file = item.file
     const htmlPath = join(TMP_DIR, file.replace(/\.png$/, '.html'))
     const pngPath = join(OUT_DIR, file)
     await writeFile(htmlPath, cardHtml({ ...item, description: shorten(item.description) }), 'utf-8')
     await run(CHROME, [
       '--headless',
       '--disable-gpu',
+      // Chromium refuses to start as root with its sandbox on (containers, CI).
+      // It renders only the local card HTML written above.
+      ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []),
       '--hide-scrollbars',
-      // Give webfonts time to arrive; without it the card rasterises in the
+      // Give the fonts time to load; without it the card rasterises in the
       // fallback serif and every card looks subtly wrong.
       '--virtual-time-budget=3000',
       `--window-size=${WIDTH},${HEIGHT}`,

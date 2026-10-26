@@ -547,6 +547,21 @@ p[data-type="card-meta"] {
   border-radius: inherit;
 }
 
+/* Keyboard focus rings the whole card, because the whole card is the link:
+   the title's own ring outlined a few words of a 326px target. Only where
+   :has() exists — without it the title keeps its ring, so focus never goes
+   unmarked. A secondary link in the card keeps its own ring. */
+@supports selector(:has(*)) {
+  [data-type="card-grid"] > *:has([data-type="card-title"] a:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  [data-type="card-grid"] > * [data-type="card-title"] a:focus-visible {
+    outline: none;
+  }
+}
+
 /* A card may carry secondary links after its title — /projects cards have up
    to three (repo, live site, writeup). Those come later in the DOM than the
    title, so `position: relative` alone lifts them above the stretched ::after

@@ -161,14 +161,21 @@ export function projectAnchors(projects: readonly Pick<Project, 'title'>[]): str
 
 const SUMMARY_MAX = 160
 
-/** First paragraph, markdown marks dropped, capped at a word boundary — enough to tell two results apart. */
-function summarize(text: string | undefined): string | undefined {
+/** The first paragraph as one line of plain text: links reduced to their
+ *  text, markdown marks dropped. Uncapped; `summarize` clips it for the index. */
+export function plainParagraph(text: string | undefined): string | undefined {
   if (!text) return undefined
   const first = text.split(/\n\s*\n/)[0]
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/[*_`#>~]|==/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+  return first || undefined
+}
+
+/** First paragraph, markdown marks dropped, capped at a word boundary — enough to tell two results apart. */
+function summarize(text: string | undefined): string | undefined {
+  const first = plainParagraph(text)
   if (!first) return undefined
   if (first.length <= SUMMARY_MAX) return first
   const cut = first.slice(0, SUMMARY_MAX)

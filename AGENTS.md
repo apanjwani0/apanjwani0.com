@@ -63,7 +63,11 @@ node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc enc
 ```
 
 **The gate before any commit: `build`, `check` (0 errors), `security:smoke`,
-`poker:check`, `boot:check`.** There is no unit-test suite.
+`poker:check`, `boot:check`.** There is no unit-test suite. CI runs the same
+gate on every PR and every push to `develop` (`.github/workflows/ci.yml`).
+`security:smoke` runs `scripts/security-smoke.mjs`, then
+`scripts/tools-hub-smoke.mjs` (hub, shells, site copy, /terms, tool-page SEO
+budgets); put new assertions of that kind in the second file.
 
 Notes on `check`, `boot:check` and deploys: [docs/operations.md](docs/operations.md).
 
@@ -100,7 +104,9 @@ auto-injection off, and never weaken the CSP for its beacon.
 ### Share cards
 
 - **Run `npm run og` after adding a tool or game or changing a title or
-  description, and commit the PNGs.**
+  description, and commit the PNGs.** Off macOS, set `CHROME_PATH`;
+  `npm run og -- <file-prefix>` renders only matching cards. The three hubs
+  have their own cards (`hub-<kind>.png`).
 
 ### AI crawlers
 
@@ -231,6 +237,18 @@ The tool-engine rules (an observation must not be taken through a lens that alte
 - **No sample, mock or placeholder data**, not even labelled "(sample)". Leave out what can't be measured, or measure it for real; a dev-only real measurement sits behind `import.meta.env.DEV` and is loopback-only.
 - **UI copy is plain, simple, explanatory full sentences** a beginner can follow. Say what happens and why, and define a term the first time. No clipped or clever one-liners.
 - **Nothing blinks, breathes or pulses on a timer** (status LEDs, glows, halos): the owner reads it as the page flickering. Ease transitions, and give a hover effect a short rest delay.
+- **A link from a Base page into a ToolBase page carries `data-astro-reload`**:
+  spread `shellLinkAttrs(href)` from `src/lib/shells.ts` (`Card` and
+  `RelatedLinks` already do). ToolBase has no ClientRouter, so without it the
+  router fetches the page and then loads it again. Every ToolBase route is
+  under `/tools/<x>` (asserted from the page files).
+- **The /tools hub is grouped by `TOOL_GROUPS` in `src/lib/tools.ts`**: a new
+  live tool joins exactly one group (asserted), and a group's lede is one plain
+  sentence. "try:" links (`src/lib/tool-tries.ts`) open a tool with a real,
+  checked input and only prefill: a server tool still waits for its button.
+- **`/terms` states what the code keeps.** A change that makes a tool or route
+  store something new updates `src/pages/terms.astro` in the same commit; its
+  retention numbers are read from, or asserted against, the enforcing module.
 - **One copy of each client helper** (`escape.ts`, `storage.ts`, `flash.ts`, `download.ts`, `format.ts`, `math.ts`, `motion.ts`, `date.ts`): import them rather than writing a private copy.
 
 Everything else (the shared tool/game frame, the skeleton, fonts, canvas export, the "server" badge): [docs/conventions.md](docs/conventions.md).

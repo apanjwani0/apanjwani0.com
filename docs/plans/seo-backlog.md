@@ -32,8 +32,9 @@ AGENTS.md. This file keeps what still holds; pick items from here later.
 
 ## Cheap tweaks
 
-4. **Token Bench `metaDescription`**: say that verification runs in the
-   browser and the key never leaves it, to reassure security-minded searchers.
+4. ~~**Token Bench `metaDescription`**~~: done 25 Oct 2026 ("…in your browser;
+   the key never leaves it"). Every live tool's title and description now fit
+   60 and 160 characters (asserted in `scripts/tools-hub-smoke.mjs`).
 5. **Driftfield example gallery**: pre-rendered wallpapers with descriptive
    alt text, so it can be found through image search.
 

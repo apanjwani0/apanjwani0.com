@@ -38,8 +38,10 @@ markdown. Doing it correctly is a larger build than the maps themselves.
 ## Unexplained CSP error on tool pages
 
 A blob worker is blocked by the CSP (`script-src` has no `worker-src` fallback),
-visible in the console on `/tools/json-tidy`. Find what spawns it before adding
-`worker-src`.
+visible in the console on `/tools/json-tidy`. Checked 25 Oct 2026: nothing in
+`src/` or the vendored Oat creates a Worker, and a clean headless Chromium
+shows no such error on any tool page, so it is almost certainly a browser
+extension that injects into textareas. Do not add `worker-src` for it.
 
 ## Search demand, before building more
 
@@ -82,7 +84,7 @@ Checked against the code on 9 Oct 2026.
 
 ## Host on an Android phone
 
-Parked. Run `node dist/server/entry.mjs` directly in Termux (Node 22.12 or newer, per `package.json`), with no Docker: Android kernels' namespace and cgroup support is unreliable. Carriers use CGNAT, so the phone has no public IP; a Cloudflare Tunnel (`pkg install cloudflared`, `cloudflared tunnel login`, `tunnel create`, `tunnel route dns`, `tunnel run --url http://localhost:4321`) dials out and handles TLS. Keep the process alive with `termux-wake-lock` and start it on boot with Termux:Boot (F-Droid, a script in `~/.termux/boot/`). Less reliable than the OCI VM (battery, doze), so a backup or experiment, not production.
+Parked. Run `node dist/server/entry.mjs` directly in Termux (Node 22.23.4 or newer, per `package.json`), with no Docker: Android kernels' namespace and cgroup support is unreliable. Carriers use CGNAT, so the phone has no public IP; a Cloudflare Tunnel (`pkg install cloudflared`, `cloudflared tunnel login`, `tunnel create`, `tunnel route dns`, `tunnel run --url http://localhost:4321`) dials out and handles TLS. Keep the process alive with `termux-wake-lock` and start it on boot with Termux:Boot (F-Droid, a script in `~/.termux/boot/`). Less reliable than the OCI VM (battery, doze), so a backup or experiment, not production.
 
 ## A curated reading list ("reads")
 

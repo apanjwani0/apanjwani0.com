@@ -168,6 +168,11 @@ class FlowmapTool extends HTMLElement {
   /** Space held: drags pan even over a node. */
   private spacePan = false
   private messageTimer = 0
+  /** The board came from a share link, the visitor already had a saved board,
+   *  and they have not edited the linked one yet. Until they do, it is not
+   *  written over theirs: opening a colleague's link (or a "try" link on
+   *  /tools) used to replace the saved board at once. */
+  private fromLink = false
 
   async connectedCallback() {
     const mac = /Mac|iP(hone|ad|od)/.test(navigator.platform)
@@ -282,6 +287,10 @@ class FlowmapTool extends HTMLElement {
     `
 
     this.restore()
+    // Open the source drawer (an empty board) before the first paint, not after
+    // Cytoscape loads: opening it then shrank the board sideways, a 0.115 layout
+    // shift on every first visit. Cytoscape also measures the right width.
+    this.setSource(this.graph.nodes.length === 0)
     const abort = new AbortController()
     this.abort = abort
     // Cytoscape is the heavy part and only this page needs it.
@@ -290,8 +299,8 @@ class FlowmapTool extends HTMLElement {
     if (!this.isConnected || this.abort !== abort) return
     this.initCanvas(cytoscape)
     this.wire()
-    this.setSource(this.graph.nodes.length === 0)
     this.sync({ animate: false })
+    if (this.fromLink) this.say('This board came from a link. Your own saved board is kept until you edit this one.')
     try {
       if (!localStorage.getItem(FM_HINT_STORE)) (this.querySelector('[data-type="fm-nav-hint"]') as HTMLElement).hidden = false
     } catch { /* storage off: no hint, nothing lost */ }
@@ -346,6 +355,7 @@ class FlowmapTool extends HTMLElement {
       if (shared) {
         this.graph = shared
         this.seq = shared.nodes.length
+        try { this.fromLink = Boolean(localStorage.getItem(FM_STORE)) } catch { /* storage off: nothing to protect */ }
         return
       }
     }
@@ -367,7 +377,7 @@ class FlowmapTool extends HTMLElement {
 
   private persist() {
     try {
-      localStorage.setItem(FM_STORE, JSON.stringify(this.graph))
+      if (!this.fromLink) localStorage.setItem(FM_STORE, JSON.stringify(this.graph))
       localStorage.setItem(FM_VIEW_STORE, JSON.stringify({ layout: this.layout, direction: this.direction }))
     } catch {
       // Quota or private mode. Everything still works for this session.
@@ -398,6 +408,9 @@ class FlowmapTool extends HTMLElement {
   }
 
   private pushSnapshot(snap: TrSnapshot) {
+    // Every edit passes through here, so a linked board becomes the visitor's
+    // own (and is saved from now on) at the first change they make to it.
+    this.fromLink = false
     this.history.push(snap)
     if (this.history.length > FM_HISTORY_MAX) this.history.shift()
     // Any new edit abandons the redo branch; keeping it would let redo apply a

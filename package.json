@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.23.4"
   },
   "scripts": {
     "dev": "astro dev",
@@ -16,7 +16,7 @@
     "poker:check": "tsx scripts/poker-check.mjs",
     "trainer:catalogue": "npx tsx src/components/games/poker-trainer/ui/catalogue.gen.ts docs/poker-assets.html",
     "analytics:smoke": "tsx scripts/analytics-smoke.mjs",
-    "security:smoke": "tsx scripts/security-smoke.mjs",
+    "security:smoke": "tsx scripts/security-smoke.mjs && tsx scripts/tools-hub-smoke.mjs",
     "boot:check": "node scripts/boot-check.mjs",
     "origin:check": "bash scripts/origin-check.sh"
   },

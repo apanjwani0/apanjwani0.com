@@ -34,3 +34,48 @@ span[data-type="tool-server"] {
   white-space: nowrap;
 }
 
+
+/* ── Sections ─────────────────────────────────────────────────────────────
+   The hub is grouped by what the tools do (src/lib/tools.ts TOOL_GROUPS):
+   a heading a searcher would type, one plain sentence under it, then the
+   shared card grid. The grid's own top margin is for a grid straight under a
+   page intro; inside a section the lede is already the spacer. */
+section[data-type="tool-group"] {
+  margin-top: var(--space-section);
+}
+
+section[data-type="tool-group"] > h2[data-type="group-title"] {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+section[data-type="tool-group"] > p[data-type="group-lede"] {
+  margin: var(--space-xs) 0 0;
+  max-width: 42rem;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+section[data-type="tool-group"] > [data-type="card-grid"] {
+  margin-top: var(--space-card);
+}
+
+/* The "try:" line: a real input one click away. Muted like the rest of the
+   meta line until hovered or focused, so it reads as an option, not a CTA. */
+section[data-type="tool-group"] p[data-type="card-meta"] a {
+  color: var(--color-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 0.25em;
+  transition: color var(--motion-fast) var(--ease-out), text-decoration-color var(--motion-fast) var(--ease-out);
+}
+
+section[data-type="tool-group"] p[data-type="card-meta"] a:hover,
+section[data-type="tool-group"] p[data-type="card-meta"] a:focus-visible {
+  color: var(--color-text);
+  text-decoration-color: var(--color-accent);
+}

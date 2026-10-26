@@ -18,6 +18,12 @@ Build and test notes, caching, analytics, share cards, AI crawlers, deploy, the 
   server that can't start fails the image build and the old container keeps
   serving. A local `node_modules` older than the lockfile fails it; run
   `npm ci`.
+- `security:smoke` runs `scripts/security-smoke.mjs` and then
+  `scripts/tools-hub-smoke.mjs` (the /tools hub, shells, site copy, /terms,
+  the 404's suggestions, tool-page SEO budgets). New hub or tool-page
+  assertions go in the second file.
+- CI (`.github/workflows/ci.yml`) runs the whole gate on every PR and every
+  push to `develop`.
 - For UI/route changes, also run `/browser-debug` against the dev server (the checklist is under *Browser check* below).
 - Deploys: a push to `main` builds the Docker image, restarts the container
   from the self-hosted runner, then fetches `/` inside it. That probe runs
@@ -74,8 +80,9 @@ ssh <host> 'cat /opt/portfolio/data/visits.json' | python3 -m json.tool | head -
 
 ## Share cards (Open Graph)
 
-Every `live` tool and every playable game has a 1200×630 card at
-`public/og/<tools|games>-<slug>.png`. `src/lib/og.ts` derives the path from kind
+Every `live` tool, playable game and published article has a 1200×630 card at
+`public/og/<tools|games|learnings>-<slug>.png`, and each hub (/tools, /games,
+/learnings) has `public/og/hub-<kind>.png` (`ogHubCardFile`). `src/lib/og.ts` derives the path from kind
 and slug; there is no `image` config field, because a second source could only
 disagree. A card goes only on an indexable page (see *Indexing*). Pages without
 one fall back to the avatar and a `summary` Twitter card.
@@ -85,6 +92,13 @@ one fall back to the avatar and a `summary` Twitter card.
 - `scripts/generate-og.mjs` rasterises with local headless Chrome, never in CI
   or production. An on-demand render route would add native-binary
   dependencies and per-request CPU on a 1 GB box.
+  - Off macOS, point `CHROME_PATH` at any Chromium that takes `--screenshot`
+    (a Playwright install's `chrome-headless-shell` works). As root it adds
+    `--no-sandbox`.
+  - `npm run og -- hub- tools-chainsaw` renders only the cards whose file
+    starts with an argument, so one new card does not re-commit all of them.
+  - Cards use the vendored fonts in `src/assets/fonts`; the script needs no
+    network.
 - Product pages and the `/tools` and `/games` hubs use a keyword-first
   `seoTitle` with no owner name; section pages (`/projects`, `/blogs`) keep the
   name suffix. Authorship lives in the JSON-LD `author` and the footer.

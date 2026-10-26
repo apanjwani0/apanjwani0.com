@@ -1,0 +1,42 @@
+name: CI
+
+# The gate from AGENTS.md (build, check, security:smoke, poker:check,
+# boot:check) on every PR and every push to develop, so a change reaches main
+# only after it has passed on a clean checkout, not only on someone's laptop.
+on:
+  pull_request:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # Astro needs >= 22.23.4 (package.json "engines"). check-latest makes
+          # "22" the newest 22.x: without it the runner's cached 22.23.3 was
+          # used and `astro check` refused to start.
+          node-version: '22'
+          check-latest: true
+          cache: npm
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      - run: npm run security:smoke
+      - run: npm run poker:check
+      - run: npm run boot:check

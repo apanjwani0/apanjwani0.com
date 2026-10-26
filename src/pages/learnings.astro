@@ -6,11 +6,12 @@ import Card from '../components/Card.astro'
 import JsonLd from '../components/JsonLd.astro'
 import { getSite, getLearnings } from '../lib/config'
 import { itemListJsonLd } from '../lib/jsonld'
+import { existingOgHubCardPath } from '../lib/og'
 import { isPublishedLearning, readingTime } from '../lib/learnings'
 import { render } from '../lib/markdown'
 import { formatDisplayDate } from '../lib/date'
 
-const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
+const [site, learnings, ogCard] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals), existingOgHubCardPath('learnings')])
 
 // Published only, newest first. Sort a copy — the accessor's array is shared, and
 // mutating it would reorder every other consumer in the same request. String
@@ -31,6 +32,7 @@ const ldJson = itemListJsonLd(
   starfield={false}
   sky
   title="learnings"
+  ogCard={ogCard}
   description="Short, visual explainers of how things work, with interactive diagrams you can play with while you read."
   keywords="interactive explainers, how things work, visual explanations, how the internet works, system diagrams"
 >

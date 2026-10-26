@@ -11,6 +11,8 @@
  * pinned at the end. A wrapping list ran to five lines on a phone, at the very
  * bottom of the page, where the job is to be crawlable and unobtrusive.
  */
+import { shellLinkAttrs } from '../lib/shells'
+
 interface Props {
   /** Section heading, e.g. 'Read about it' — also the nav's accessible name. */
   heading: string
@@ -35,11 +37,11 @@ const headingId = `related-${heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').r
   <nav data-type="related-links" data-inset={inset ? '' : undefined} aria-labelledby={headingId}>
     <div data-type="related-head">
       <h2 id={headingId}>{heading}</h2>
-      {all && <a href={all.href} data-type="related-all">{all.label} →</a>}
+      {all && <a href={all.href} {...shellLinkAttrs(all.href)} data-type="related-all">{all.label} →</a>}
     </div>
     <ul>
       {items.map(item => (
-        <li><a href={item.href}>{item.title}</a></li>
+        <li><a href={item.href} {...shellLinkAttrs(item.href)}>{item.title}</a></li>
       ))}
     </ul>
   </nav>

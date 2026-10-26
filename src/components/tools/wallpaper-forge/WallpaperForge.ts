@@ -348,6 +348,12 @@ class WallpaperForgeTool extends HTMLElement {
     const seedInput = this.querySelector('#wf-seed') as HTMLInputElement
     seedInput.value = String(this.seed)
     this.wire()
+    // Size the canvas now, while the stage already has its width: left to the
+    // frame below alone, the canvas painted at its default 300x150 first and
+    // then grew to its real height, pushing the controls 400px down (a 0.108
+    // layout shift on about half of all loads). The frame stays as a fallback
+    // for a stage that has no width yet; resizeAndRender returns early then.
+    this.resizeAndRender()
 
     this.ro = new ResizeObserver(() => this.resizeAndRender())
     this.ro.observe(this.querySelector('[data-type="wf-stage"]') as Element)

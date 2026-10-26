@@ -93,6 +93,44 @@ export function itemListJsonLd(name: string, items: ItemListEntry[]): string {
   })
 }
 
+export interface CollectionEntry extends ItemListEntry {
+  /** One plain sentence about the item (schema.org Thing.description). */
+  description?: string
+}
+
+/**
+ * A hub page as a CollectionPage whose main entity is the ordered ItemList.
+ * The list keeps Google's summary-page shape (each ListItem carries a URL to
+ * its own page) and adds each item's one-line description, which answer
+ * engines quote. Items are deliberately not typed WebApplication: Google then
+ * validates them as software rich results and reports every missing rating.
+ */
+export function collectionPageJsonLd(opts: {
+  name: string
+  description: string
+  url: string
+  items: CollectionEntry[]
+}): string {
+  return serialize({
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: opts.name,
+    description: opts.description,
+    url: opts.url,
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: opts.items.length,
+      itemListElement: opts.items.map((it, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: it.name,
+        url: it.url,
+        ...(it.description ? { description: it.description } : {}),
+      })),
+    },
+  })
+}
+
 export interface BreadcrumbEntry {
   name: string
   /** Absolute URL. The final (current-page) crumb still carries its own URL. */
