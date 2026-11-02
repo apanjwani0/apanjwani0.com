@@ -10,7 +10,11 @@
  */
 
 import { embedTag } from './embeds'
+import { isPlayableGame } from './games'
+import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from './driftfield'
+import type { Game } from '../config/games'
 import type { Learning } from '../config/learnings'
+import type { Tool } from '../config/tools'
 
 /** The only fields the predicate reads, so callers can state this shape instead
  *  of hand-rolling a second, looser one. */
@@ -113,11 +117,42 @@ export function learningsAboutEmbed(embed: string, all: Learning[]): Learning[] 
  */
 export function readingTime(content: string): number {
   const figures = [...content.matchAll(/^[ \t]*\{\{embed(?::[a-z0-9-]+)?\}\}[ \t]*$/gm)].length
-  const words = content
+  return Math.max(1, Math.ceil(proseWords(content).length / 200 + (figures * 8) / 60))
+}
+
+/** The words of an article's prose: the figure markers and callout fences are
+ *  not words, and the marks around real ones are dropped. */
+function proseWords(content: string): string[] {
+  return content
     .replace(/^[ \t]*\{\{embed(?::[a-z0-9-]+)?\}\}[ \t]*$/gm, ' ')
     .replace(/^:::.*$/gm, ' ')
     .replace(/[#>=*`|_-]/g, ' ')
     .split(/\s+/)
-    .filter(Boolean).length
-  return Math.max(1, Math.ceil(words / 200 + (figures * 8) / 60))
+    .filter(Boolean)
+}
+
+/**
+ * Plain words in an article, for the JSON-LD `wordCount`. Derived from the
+ * content like `readingTime`, for the same reason: a stored number goes stale on
+ * the next edit. A link counts as its text, not its address.
+ */
+export function wordCount(content: string): number {
+  return proseWords(content.replace(/\]\([^)\s]*\)/g, ']')).length
+}
+
+/**
+ * The on-site page of the tool or game a component powers, or undefined for an
+ * embed that has no page of its own (the two atlas figures, Game of Life).
+ *
+ * The forward direction of `learningsAboutEmbed`: an article that embeds
+ * `poker-trainer` is about the Poker Trainer at `/games/poker-trainer`, and one
+ * that embeds `flow-field` is about the Driftfield mode of that name. Both
+ * predicates are the ones the pages themselves use, so the article never claims
+ * to be about a page that is a 404 or noindex.
+ */
+export function embedPagePath(embed: string | undefined, games: Game[], tools: Tool[]): string | undefined {
+  if (!embed) return undefined
+  if (games.some(g => g.slug === embed && isPlayableGame(g))) return `/games/${embed}`
+  if (isDriftfieldPublic(tools) && DRIFTFIELD_MODES.some(m => m.slug === embed)) return `/tools/${DRIFTFIELD_SLUG}/${embed}`
+  return undefined
 }

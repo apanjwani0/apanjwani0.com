@@ -130,6 +130,40 @@ export async function existingOgCardPath(
   return undefined
 }
 
+/** The file names under public/og/ (null: this runtime cannot look). Read once
+ *  per process, shared with the lookups above. */
+export function loadOgCardNames(): Promise<Set<string> | null> {
+  return (cardNames ??= readCardNames())
+}
+
+/**
+ * The card for a tool or game page, found from the page's own URL, for code
+ * that is handed a URL and not a slug (the WebApplication JSON-LD).
+ *
+ * `/tools/json-tidy` is `tools-json-tidy.png`, `/games/2048` is `games-2048.png`
+ * and a Driftfield mode `/tools/driftfield/flow-field` is
+ * `tools-driftfield-flow-field.png`: the generator's own naming, so this finds
+ * a card exactly when `npm run og` wrote one. Anything else (a Cron Whisperer
+ * preset has no card, nor does a wip tool) gets none. `names` is what
+ * `loadOgCardNames()` returned; when it is null the disk could not be read, and
+ * only a plain `/tools/<slug>` or `/games/<slug>` is assumed to have its card,
+ * the same assumption `existingOgCardPath` makes.
+ */
+export function ogCardPathForPage(url: string, names: ReadonlySet<string> | null): string | undefined {
+  let pathname: string
+  try {
+    pathname = new URL(url).pathname
+  } catch {
+    return undefined
+  }
+  const m = /^\/(tools|games)\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?\/?$/.exec(pathname)
+  if (!m) return undefined
+  const [, kind, first, second] = m
+  const file = ogCardFile(kind as OgCardKind, second ? `${first}-${second}` : first)
+  if (names === null ? second === undefined : names.has(file)) return `/og/${file}`
+  return undefined
+}
+
 /** The hub's card path when the PNG is on disk (same rules as above). */
 export async function existingOgHubCardPath(kind: OgCardKind): Promise<string | undefined> {
   const names = await (cardNames ??= readCardNames())

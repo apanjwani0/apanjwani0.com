@@ -3,6 +3,12 @@
  * Used by pages to inject <script type="application/ld+json"> into <head>.
  */
 
+import { loadOgCardNames, ogCardPathForPage } from './og'
+
+// Read once at module load so webAppJsonLd can stay synchronous: the pages call
+// it without awaiting. Null when the runtime cannot list the cards.
+const ogCardNames = await loadOgCardNames()
+
 /**
  * JSON.stringify for a `set:html` <script> body.
  *
@@ -16,25 +22,77 @@ function serialize(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c')
 }
 
+/**
+ * One entity, everywhere. The Person and the WebSite are DEFINED once each (the
+ * home page: a ProfilePage whose main entity is the Person, and the WebSite),
+ * under the stable ids below. Every other page's `author` and `publisher` is a
+ * reference to those ids and nothing more, so a crawler can merge the 48 pages'
+ * authorship back into the one Person instead of reading 48 unrelated names.
+ *
+ * The id is the site origin plus a fragment, so it is derived from the site URL
+ * the pages already pass as `authorUrl` and never typed twice.
+ */
+export function personId(siteUrl: string): string {
+  return `${siteUrl.replace(/\/+$/, '')}/#person`
+}
+
+export function webSiteId(siteUrl: string): string {
+  return `${siteUrl.replace(/\/+$/, '')}/#website`
+}
+
+/** A reference to the Person, by id. `name` rides along for readers that do not follow ids. */
+function personRef(siteUrl: string, name: string) {
+  return { '@id': personId(siteUrl), name }
+}
+
+/**
+ * What the Person is known for, as a literal list on purpose: a fact about the
+ * owner, not about any one page. It follows the owner's day job (payments) and
+ * the subjects of the tools and articles the site ships (webhooks, TLS, DNS,
+ * cron, poker). It is not derived from `tools.ts`: a tool added or retired must
+ * not silently rewrite who the owner says they know.
+ */
+const KNOWS_ABOUT = ['payment systems', 'webhooks', 'TLS', 'DNS', 'cron scheduling', 'poker math']
+
 export interface PersonSchema {
   name: string
   url: string
+  /** The handle, as the Person's alternate name (what people type to find the site). */
+  alternateName?: string
   jobTitle?: string
   description?: string
   sameAs?: string[]
   image?: string
 }
 
-export function personJsonLd(p: PersonSchema): string {
-  return serialize({
-    '@context': 'https://schema.org',
+function personNode(p: PersonSchema) {
+  return {
     '@type': 'Person',
+    '@id': personId(p.url),
     name: p.name,
     url: p.url,
+    ...(p.alternateName && { alternateName: p.alternateName }),
     ...(p.jobTitle && { jobTitle: p.jobTitle }),
     ...(p.description && { description: p.description }),
     ...(p.sameAs?.length && { sameAs: p.sameAs }),
     ...(p.image && { image: p.image }),
+    knowsAbout: KNOWS_ABOUT,
+  }
+}
+
+/**
+ * The home page's Person, wrapped in a ProfilePage (Google's markup for a page
+ * whose subject is a person). The Person inside is the one definition of
+ * `#person`.
+ */
+export function profilePageJsonLd(p: PersonSchema): string {
+  return serialize({
+    '@context': 'https://schema.org',
+    '@type': 'ProfilePage',
+    url: p.url,
+    name: p.name,
+    isPartOf: { '@id': webSiteId(p.url) },
+    mainEntity: personNode(p),
   })
 }
 
@@ -43,11 +101,17 @@ export interface BlogPostingSchema {
   description: string
   url: string
   datePublished: string
+  /** Only when the article was really revised; omit rather than repeat `datePublished`. */
+  dateModified?: string
   authorName: string
+  /** The site origin: names the Person (`<origin>/#person`) the article is by. */
   authorUrl: string
-  keywords?: string
   /** Absolute URL of the share card. Google wants an image for Article results. */
   image?: string
+  /** Plain words in the body. */
+  wordCount?: number
+  /** Absolute URLs of the tools or games the article embeds, as WebApplications it is about. */
+  aboutApps?: string[]
 }
 
 export function blogPostingJsonLd(b: BlogPostingSchema): string {
@@ -57,13 +121,15 @@ export function blogPostingJsonLd(b: BlogPostingSchema): string {
     headline: b.headline,
     description: b.description,
     url: b.url,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': b.url },
+    inLanguage: 'en',
     datePublished: b.datePublished,
-    author: {
-      '@type': 'Person',
-      name: b.authorName,
-      url: b.authorUrl,
-    },
-    ...(b.keywords && { keywords: b.keywords }),
+    ...(b.dateModified && { dateModified: b.dateModified }),
+    author: personRef(b.authorUrl, b.authorName),
+    publisher: personRef(b.authorUrl, b.authorName),
+    isPartOf: { '@id': webSiteId(b.authorUrl) },
+    ...(b.wordCount && { wordCount: b.wordCount }),
+    ...(b.aboutApps?.length && { about: b.aboutApps.map(url => ({ '@type': 'WebApplication', url })) }),
     ...(b.image && { image: b.image }),
   })
 }
@@ -160,28 +226,23 @@ export interface WebSiteSchema {
   url: string
   description?: string
   authorName?: string
-  authorUrl?: string
 }
 
 /**
- * WebSite structured data for the home page. Declares the site as a single named
- * entity so search engines connect every page under one site, and links it to
- * its author via `publisher` — complements the page-level Person schema.
+ * WebSite structured data for the home page: the one definition of `#website`.
+ * Every other page points at it by id (`isPartOf`), and its `publisher` is the
+ * Person by id.
  */
 export function webSiteJsonLd(w: WebSiteSchema): string {
   return serialize({
     '@context': 'https://schema.org',
     '@type': 'WebSite',
+    '@id': webSiteId(w.url),
     name: w.name,
     url: w.url,
+    inLanguage: 'en',
     ...(w.description && { description: w.description }),
-    ...(w.authorName && {
-      publisher: {
-        '@type': 'Person',
-        name: w.authorName,
-        ...(w.authorUrl && { url: w.authorUrl }),
-      },
-    }),
+    ...(w.authorName && { publisher: personRef(w.url, w.authorName) }),
   })
 }
 
@@ -190,7 +251,12 @@ export interface WebApplicationSchema {
   description: string
   url: string
   authorName: string
+  /** The site origin: names the Person (`<origin>/#person`) and the WebSite the tool belongs to. */
   authorUrl: string
+  /**
+   * Ignored. JSON-LD `keywords` is gone (decision D7); the field stays only so
+   * the pages that still pass it type-check until they stop.
+   */
   keywords?: string
   featureList?: string[]
   applicationSubCategory?: string
@@ -209,6 +275,9 @@ export interface WebApplicationSchema {
 }
 
 export function webAppJsonLd(a: WebApplicationSchema): string {
+  // The share card, found from the page's own URL so the tool and game pages
+  // need no argument: present exactly when `npm run og` wrote one.
+  const cardPath = ogCardPathForPage(a.url, ogCardNames)
   return serialize({
     '@context': 'https://schema.org',
     '@type': a.alsoType ? [a.alsoType, 'WebApplication'] : 'WebApplication',
@@ -227,16 +296,13 @@ export function webAppJsonLd(a: WebApplicationSchema): string {
       price: '0',
       priceCurrency: 'USD',
     },
-    author: {
-      '@type': 'Person',
-      name: a.authorName,
-      url: a.authorUrl,
-    },
+    author: personRef(a.authorUrl, a.authorName),
+    isPartOf: { '@id': webSiteId(a.authorUrl) },
+    ...(cardPath && { image: new URL(cardPath, a.url).href }),
     ...(a.alsoType === 'VideoGame' && {
       gamePlatform: 'Web browser',
       playMode: 'SinglePlayer',
     }),
-    ...(a.keywords && { keywords: a.keywords }),
     ...(a.featureList?.length && { featureList: a.featureList }),
     ...(a.applicationSubCategory && { applicationSubCategory: a.applicationSubCategory }),
   })

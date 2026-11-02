@@ -119,6 +119,8 @@ export interface Learning {
   /** Shown on the hub and as the meta description when \`metaDescription\` is unset. */
   summary: string
   date: string
+  /** The last day the content changed (YYYY-MM-DD); drives dateModified and the sitemap. */
+  updated?: string
   /** Markdown. Rendered through src/lib/markdown.ts — never handed to set:html raw. */
   content: string
   /**

@@ -32,7 +32,6 @@ const ldJson = blogPostingJsonLd({
   datePublished: post.date,
   authorName: site.name,
   authorUrl: site.url,
-  keywords: post.keywords,
 })
 
 // Visible trail + matching BreadcrumbList (see src/components/Breadcrumbs.astro).
@@ -43,7 +42,7 @@ const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
 ], site.url)
 ---
 
-<Base title={post.title} description={post.summary} keywords={post.keywords} ogType="article" publishedTime={post.date} noindex={noindex}>
+<Base title={post.title} description={post.summary} ogType="article" publishedTime={post.date} tags={post.keywords} noindex={noindex}>
   {!noindex && <JsonLd json={ldJson} />}
   {!noindex && <JsonLd json={breadcrumbLd} />}
   <Breadcrumbs items={crumbs} />
