@@ -251,7 +251,7 @@ console.log('terms: retention numbers match the code, noindex, out of the sitema
   assert.match(sky, /\n  sync\(\)\n(?:\s*\/\/.*\n)*\s*armIdle\(\)\n/, 'the idle timer is armed at mount, not through the throttled input handler')
   const shared = (await read('src/styles/shared.css')).replace(/\/\*[\s\S]*?\*\//g, '')
   const block = shared.match(/@supports selector\(:has\(\*\)\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
-  assert.match(block, /:has\(\[data-type="card-title"\] a:focus-visible\)\s*\{[^}]*outline:\s*2px solid var\(--color-accent\)/, 'a focused card title rings the card')
+  assert.match(block, /:has\(\[data-type="card-title"\] a:focus-visible\)\s*\{[^}]*outline:\s*var\(--focus-ring\)/, 'a focused card title rings the card')
   const outside = shared.replace(/@supports selector\(:has\(\*\)\) \{[\s\S]*?\n\}/, '')
   assert.doesNotMatch(outside, /card-title"\] a:focus-visible\s*\{[^}]*outline:\s*none/, 'the title loses its own ring only where :has() can draw the card\'s')
 }
