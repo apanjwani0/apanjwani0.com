@@ -112,13 +112,13 @@ string.
 
 ### Paused items
 
-B (theme toggle everywhere), C (command palette, `?` sheet, smart 404), D
+B (theme toggle everywhere), C (command palette and `?` sheet; the smart 404 is built, `src/pages/404.astro` calls `fuzzy.ts`), D
 (toolkit: stars, shelf, `/tools/kit`, bookmarks export), E (shells, nav, motion,
 the home hero seam) and F (hub thumbnails and share cards) are designed, not
 built. The plan (`ui-refresh/ui-plan.md`, the worker brief and
 item A's report) is only on the remote branch `origin/wip/ui-refresh-notes`:
 read it before building any of them, and keep that branch. Until they are built, `kit.ts`
-and `fuzzy.ts` have no UI caller; `security:smoke` covers them so they don't rot, and each
+has no UI caller and `fuzzy.ts` serves only the 404; `security:smoke` covers them so they don't rot, and each
 item's assertions go in its labelled region at the end of that script. Planned
 names nothing renders yet: `button[data-type="kit-star"]`,
 `section[data-type="kit-shelf"]`, `div[data-type="detail-actions"]`. Item G's
@@ -128,13 +128,6 @@ clicked card's title, with `html[data-vt-source]` clearing the source page's h1
 (two elements with one name abort the transition); `vt-nav` is the fixed nav;
 `vt-thumb` is optional. No stylesheet declares `view-transition-name` yet.
 
-## UI generation under the portfolio override
+## UI generation
 
-The `frontent-design` skill (`.agents/skills/frontent-design/`) links here. Its general guidance gives way to the site's own rules:
-
-- **`/frontent-design`** — UI generation under the portfolio override: no custom
-  classes, fonts or Tailwind; semantic HTML plus the site's `data-type` idioms
-  and tokens. Motion only in the tasteful sense: short transitions from the
-  `--motion-*` and `--ease-*` tokens, never looping decoration. `shared.css` neutralises every
-  transition and animation under `prefers-reduced-motion: reduce`; motion driven
-  from script checks the query itself.
+Generated UI follows the site's own rules, whatever general design guidance says: no custom classes, fonts or Tailwind; semantic HTML plus the site's `data-type` idioms and tokens. Motion is short transitions from the `--motion-*` and `--ease-*` tokens, never looping decoration. `shared.css` neutralises every transition and animation under `prefers-reduced-motion: reduce`; motion driven from script checks the query itself.

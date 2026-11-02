@@ -15,7 +15,7 @@ Session pickup. Rewritten each session, not appended. Last updated 2 Nov 2026.
 ## Owner's pending moves
 
 1. Purge the Cloudflare cache for the PR #44 deploy and run
-   `npm run origin:check` (`docs/plans/release-followups.md`).
+   `npm run origin:check`.
 2. Close the origin lock (AGENTS.md → *Origin exposure*).
 3. Answer the ten decisions in polish-2026-11.md §8 (contact, purge token,
    FAQ copy, beacon, palette, service worker, boards, MCP, `.claude/`,

@@ -1,18 +1,9 @@
 # SEO backlog (from an outside review, 2026-10-04)
 
 An outside SEO review (Gemini) of every tool and game, triaged against
-AGENTS.md. This file keeps what still holds; pick items from here later.
-
-## Already done or declined
-
-- **Done:** keyword-first `seoTitle` on every tool and game, `WebApplication`
-  JSON-LD, shareable results (Quintle, Hue Hunt), Deep Shore permalinks, and
-  Cron Whisperer preset pages (`/tools/cron-whisperer/<slug>`, `src/lib/cron-presets.ts`).
-- **Declined:**
-  - Per-tool FAQ / how-to blocks: SEO support copy is off by design.
-  - A site-wide "about apanjwani0" FAQ.
-  - A live timestamp in Epoch Wizard's title: it breaks edge caching.
-  - Translations with `hreflang`: too much work for a portfolio.
+AGENTS.md. This file keeps what still holds. Declined, and not to reopen: per-tool
+FAQ blocks (SEO support copy is off), a site-wide "about" FAQ, a live timestamp in
+Epoch Wizard's title (it breaks edge caching), and `hreflang` translations.
 
 ## Worth building (best first)
 
@@ -30,35 +21,32 @@ AGENTS.md. This file keeps what still holds; pick items from here later.
 3. **Hue Hunt's share card shows its colour distance (ΔE)** for each guess,
    which makes it more worth posting.
 
-## Cheap tweaks
+## Cheap tweak
 
-4. ~~**Token Bench `metaDescription`**~~: done 25 Oct 2026 ("…in your browser;
-   the key never leaves it"). Every live tool's title and description now fit
-   60 and 160 characters (asserted in `scripts/tools-hub-smoke.mjs`).
-5. **Driftfield example gallery**: pre-rendered wallpapers with descriptive
+4. **Driftfield example gallery**: pre-rendered wallpapers with descriptive
    alt text, so it can be found through image search.
 
 ## Valid, but not now
 
-6. **Embeddable widgets** (`/embed/<tool>` iframes) earn backlinks. Each needs
+5. **Embeddable widgets** (`/embed/<tool>` iframes) earn backlinks. Each needs
    its own route that relaxes the CSP's `frame-ancestors`, so it is a security
    change. Wait until a tool has an audience.
-7. **More preset pages** (e.g. `/tools/json-tidy/json-to-yaml`). Only where
+6. **More preset pages** (e.g. `/tools/json-tidy/json-to-yaml`). Only where
    the page's text can be derived from the engine, as with cron. A
    converter's page would be thin text around a mode switch.
-8. **Flash Cricket, timed to the IPL or a World Cup**, once the game is
+7. **Flash Cricket, timed to the IPL or a World Cup**, once the game is
    playable.
 
 ## Owner actions, not code
 
-9. **Community posts**: Show HN or r/devops (Webhook Inspector, Chainsaw),
+8. **Community posts**: Show HN or r/devops (Webhook Inspector, Chainsaw),
    r/poker (Poker Trainer), r/wordle (Quintle, Hue Hunt). Backlinks are the
    real ceiling on reach. Cheaper first links: the GitHub profile README,
    LinkedIn Featured, an existing dev.to account.
-10. **After each deploy**: purge the Cloudflare cache and run
+9. **After each deploy**: purge the Cloudflare cache and run
     `npm run origin:check`. In Search Console, resubmit `/sitemap.xml` and
     watch Pages → "Crawled – currently not indexed".
-11. **Automate the purge**: add a step to `.github/workflows/deploy.yml` that
+10. **Automate the purge**: add a step to `.github/workflows/deploy.yml` that
     calls Cloudflare's `purge_cache` API. Use a GitHub Actions secret holding
     a token limited to Zone → Cache Purge, never the container's env.
 
@@ -74,7 +62,7 @@ A snapshot from Search Console on 16 Aug 2026; re-check before relying on it. Th
 | Discovered, currently not indexed | 14 | authority: no inbound links, young domain (registered 28 Mar 2026) |
 | Crawled, currently not indexed | 4 | quality |
 
-The sitemap, canonicals, redirects, `robots.txt`, JSON-LD and `index, follow` were all correct. The bottleneck is domain authority and content, not markup, so more meta, sitemap or schema work will not move the number; backlinks will (item 9). Indexing on a young domain moves over weeks.
+The sitemap, canonicals, redirects, `robots.txt`, JSON-LD and `index, follow` were all correct. The bottleneck is domain authority and content, not markup, so more meta, sitemap or schema work will not move the number; backlinks will (item 8). Indexing on a young domain moves over weeks.
 
 - **No SEO tool or dashboard** (decided 17 Aug 2026, do not reopen). `open-seo` needs a paid DataForSEO key plus PostgreSQL; unlighthouse, seonaut and openserp are auditors and crawlers. All of them report on the problem and none creates a backlink, for 30 URLs, when Search Console already renders the numbers for free.
 - **Worth building once a trend exists:** the Search Console URL Inspection API (2,000 queries a day against 30 URLs) to turn "7 of 29" into a time series, and a sitemap-against-index diff that flags "in the sitemap but not indexed" and "indexed but noindex".

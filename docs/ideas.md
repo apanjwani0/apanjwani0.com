@@ -37,11 +37,10 @@ markdown. Doing it correctly is a larger build than the maps themselves.
 
 ## Unexplained CSP error on tool pages
 
-A blob worker is blocked by the CSP (`script-src` has no `worker-src` fallback),
-visible in the console on `/tools/json-tidy`. Checked 25 Oct 2026: nothing in
-`src/` or the vendored Oat creates a Worker, and a clean headless Chromium
-shows no such error on any tool page, so it is almost certainly a browser
-extension that injects into textareas. Do not add `worker-src` for it.
+A blocked blob worker shows in the console on `/tools/json-tidy`. Nothing in
+`src/` or the vendored Oat creates a Worker and a clean headless Chromium shows
+no error on any tool page (checked 25 Oct 2026), so it is almost certainly a
+browser extension. Do not add `worker-src` for it.
 
 ## Search demand, before building more
 
@@ -72,27 +71,38 @@ Deferred when each shipped. Check the code before starting one.
 
 ## Loose ends in the code
 
-Checked against the code on 9 Oct 2026.
+Each checked against the code on 2 Nov 2026.
 
 - `cwSplitPercent` (`cron-whisperer/crontab.ts`) handles `\%` but not `\\`. Settle which escapes Vixie cron collapses against real cronie source, record the versions, then fix and assert. The same standing applies to the `restricted` reading and the bare `TZ=` line.
 - `site.sections.experience` is `false` and nothing reads it: only `blogs` and `projects` have predicates, and there is no `/experience` route. Wire it like `isBlogsPublic`, or delete it.
-- `src/pages/tools/[slug].astro` calls `learningsAboutEmbed(tool.slug, …)`, but no tool slug is an `EMBED_TAGS` key, so it returns nothing today. Whether tools get articles that mount them as the figure (the SEO backlog proposes some) is a product call; if yes, the tool joins `EMBED_TAGS`, if no, delete the call.
-- `Head.astro` emits `noindex, nofollow` for every noindexed page. `noindex, follow` would keep the coming-soon pages' "More games" links crawled. Nothing shows the current form costing anything.
+- Hidden sections are listed twice: `GATED_SECTIONS` (`config.ts`) and `SECTIONS[].gated` (`site-index.ts`). Merge them into one `isSectionPublic(site, path)`.
+- `src/pages/tools/[slug].astro` calls `learningsAboutEmbed(tool.slug, …)`, but no tool slug is an `EMBED_TAGS` key, so it returns nothing. If tools get articles that mount them as the figure (the SEO backlog proposes some), the tool joins `EMBED_TAGS`; if not, delete the call.
+- `Head.astro` emits `noindex, nofollow` for every noindexed page. `noindex, follow` would keep the coming-soon pages' "More games" links crawled; nothing shows the current form costing anything.
 - `shared.css` (`:focus-visible` comment) says "navy accent token", but `--color-accent` is violet.
 - `sanitizeName` lives in `type-trial-leaderboard.ts` and `hue-hunt-leaderboard.ts` re-exports it. The right home is a shared `src/lib/leaderboard-name.ts`.
-- There is no `--color-warning` or `--color-danger` token, yet `poker-trainer.css` reads `var(--color-warning, var(--color-accent))`, which always renders the fallback. A `var(--x, fallback)` on a token that does not exist fails silently and looks deliberate; sweep for them. If a warning colour is wanted, it is a `theme.css` change.
+- There is no `--color-warning` or `--color-danger` token, yet `poker-trainer.css` reads `var(--color-warning, var(--color-accent))`, which always renders the fallback. Sweep for `var(--x, fallback)` on tokens that do not exist; if a warning colour is wanted, it is a `theme.css` change.
+- DNS Sightline: loop detection matches the substring "loop" in problem text, so an unanswered `include:_spf.loopia.se` reads as a loop error. Keep loops in their own field.
+- DNS Sightline: CAA in RFC 3597 `\#` hex form reads as no CAA, because `parseCaa` refuses it.
+- DNS Sightline: the Records table says "No records of any queried type" when the lookups got no answer.
+- DNS Sightline dead code: `sgCanonicalRecord`'s `default` branch is unreachable, the `SG_TYPES.includes(t)` test in `inspect.ts` is always true, and `sgIsDangling` and `sgCnameTargetUnchecked` can be one function.
+- Chainsaw: `aia-available` quotes the raw CA Issuers URL; name it only when `csLinkableUrl` accepts it.
+- The paused UI-refresh foundation (design-system.md, *UI refresh*) has no UI caller: `kit.ts` (and `fuzzy.ts` beyond the 404), four empty `init*UI` stubs, unused theme helpers and unused tokens (a little CSS on every page), `Base`'s `canonicalPath`, and `ROOT_BOOT_JS` living in a shared module. Decide: build it, or park it on `wip/ui-refresh-notes` and delete it here.
+- `/oat.min.*` is not hashed, so it revalidates on every page view; a Cloudflare Cache Rule with a long edge and browser TTL fixes it (serving it through Vite does not, see AGENTS.md *Stack*).
+- Game and article pages load every game's CSS (about 91 KB) because `games-embed.css` is the one list of component stylesheets; splitting it means changing that rule.
+- The home share image is the WebP portrait (the avatar fallback), which some apps (LinkedIn) handle poorly. A 1200x630 PNG card would fix it.
+- Learnings copy: both article `seoTitle`s run over 65 characters, both meta descriptions over 160, and the hub's title is the bare `learnings`.
 
 ## Host on an Android phone
 
-Parked. Run `node dist/server/entry.mjs` directly in Termux (Node 22.23.4 or newer, per `package.json`), with no Docker: Android kernels' namespace and cgroup support is unreliable. Carriers use CGNAT, so the phone has no public IP; a Cloudflare Tunnel (`pkg install cloudflared`, `cloudflared tunnel login`, `tunnel create`, `tunnel route dns`, `tunnel run --url http://localhost:4321`) dials out and handles TLS. Keep the process alive with `termux-wake-lock` and start it on boot with Termux:Boot (F-Droid, a script in `~/.termux/boot/`). Less reliable than the OCI VM (battery, doze), so a backup or experiment, not production.
+Parked, a backup rather than production. Run `node dist/server/entry.mjs` in Termux (no Docker; Android's namespace and cgroup support is unreliable) and reach it through a Cloudflare Tunnel, because carriers use CGNAT and the phone has no public IP. Keep it alive with `termux-wake-lock` and Termux:Boot. Less reliable than the OCI VM (battery, doze).
 
 ## A curated reading list ("reads")
 
-Undecided. "reads" means a curated list of topics and articles the owner is excited to read and learn from, possibly sourced from his knowledge base, not a section of original essays. On 20 Aug 2026 an original essay was written under that name and rejected ("you are not getting what exactly I want to put in reads"). `/learnings` has since shipped figure-led articles in his voice and stays an article section (30 Sep 2026), so ask whether a separate `reads` list is still wanted. Confirm the shape first (links only, links plus his notes, or essays): a link list needs a source, a URL and a one-line take, and may need no detail pages, so the `Learning` schema does not carry over.
+Undecided. "reads" means a curated list of topics and articles the owner wants to read, not original essays (an essay written under that name on 20 Aug 2026 was rejected). `/learnings` stays the article section (30 Sep 2026), so ask whether a separate list is still wanted, and its shape (links only, links plus notes, or essays). A link list needs a source, a URL and a one-line take, so the `Learning` schema does not carry over.
 
 ## A visual layout editor
 
-A real "organise my UI" editor: Framer or Webflow-style direct manipulation of the actual layout, not reorder lists or SEO forms. A reorder-based CMS (Keystatic plus a drag-and-drop "Arrange" mode over `content/*.json`) was built in July 2026 and rejected ("all is just text editors and page order arrangements. That's not at all what I wanted"). Do not rebuild it. It is parked on the local branch `feature/visual-cms-editor` (`941b2dc`), never pushed. The principle that survives: page content stays config-driven.
+Wanted: Framer or Webflow-style direct manipulation of the real layout. A reorder-based CMS (Keystatic plus a drag-and-drop "Arrange" mode) was built in July 2026 and rejected ("all is just text editors and page order arrangements. That's not at all what I wanted"); do not rebuild it. It is parked on the local branch `feature/visual-cms-editor` (`941b2dc`), never pushed. Page content stays config-driven.
 
 ## Online multiplayer poker (retired)
 
@@ -103,5 +113,8 @@ Poker Together, a local-first play-money game, was replaced by the Poker Trainer
 
 ## Tools and games as standalone products
 
-A direction from 9 Jul 2026: opening a tool or game should feel like a separate product, with no site nav and no portfolio chrome during use and one quiet "built by" credit, so a person who bookmarks it may never open the portfolio again. It was never implemented: tool and game pages render the site nav and a breadcrumb in the shared frame ([conventions.md](conventions.md)). The owner to confirm whether it still stands.
+A 9 Jul 2026 direction, never implemented: a tool or game would feel like a separate product, with no site nav or portfolio chrome and one quiet "built by" credit. Pages today render the site nav and a breadcrumb in the shared frame ([conventions.md](conventions.md)). The owner to confirm whether it still stands.
 
+## The autonomous pass (retired)
+
+A 2-hourly scheduled task, `portfolio-2h-pass`, rotated 3-4 roles per run and committed to `develop` behind the full gate. It is disabled (last run 2026-08-20) and its prompt lives outside the repo, at `~/.claude/scheduled-tasks/portfolio-2h-pass/SKILL.md`. Its roster, selection rule and ledger design were in `docs/plans/autonomous-pass.md` (git history); the prompt still points at old `.claude/scheduled/` paths, so update it before re-enabling.

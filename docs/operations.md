@@ -1,6 +1,6 @@
 # Operations
 
-Build and test notes, caching, analytics, share cards, AI crawlers, deploy, the browser check and the agent tools.
+Build and test notes, caching, analytics, share cards, AI crawlers, deploy and the browser check.
 
 ## Build / test notes
 
@@ -24,7 +24,7 @@ Build and test notes, caching, analytics, share cards, AI crawlers, deploy, the 
   assertions go in the second file.
 - CI (`.github/workflows/ci.yml`) runs the whole gate on every PR and every
   push to `develop`.
-- For UI/route changes, also run `/browser-debug` against the dev server (the checklist is under *Browser check* below).
+- For UI/route changes, also run the *Browser check* below against the dev server.
 - Deploys: a push to `main` builds the Docker image, restarts the container
   from the self-hosted runner, then fetches `/` inside it. That probe runs
   after the old container stops, which is why `boot:check` runs first.
@@ -68,11 +68,8 @@ Two independent, aggregate-only layers:
    count, buffered in memory and flushed to `data/visits.json` every 30 s.
    Never write per request.
 
-Both keep 90 days. **Counts only: never IPs, user ids, user agents, session
-traces or full referrer URLs.** Aggregates need no consent banner; a feature
-that needs per-visitor identity needs a different design. Don't rebuild what
-Cloudflare's dashboard already shows. Keep Cloudflare Web Analytics
-auto-injection off, and never weaken the CSP for its beacon.
+Both keep 90 days. The rules (counts only, no consent banner, Cloudflare Web
+Analytics auto-injection off) are in AGENTS.md → *Analytics*.
 
 ```sh
 ssh <host> 'cat /opt/portfolio/data/visits.json' | python3 -m json.tool | head -50
@@ -153,16 +150,10 @@ Commands on the box: `docker ps`, `docker logs -f portfolio`, `docker restart po
 
 ## Browser check
 
-Run it against the dev server (`npm run dev`, http://localhost:4321) after any layout, component, page or `src/config/` change. Claude Code has `/browser-debug [url] [what to check]` for it; any agent can follow the same list.
+Run it against the dev server (`npm run dev`, http://localhost:4321) after any layout, component, page or `src/config/` change. It is manual: drive Chromium with Playwright (`require('playwright')`; off macOS, `executablePath` can point at any installed Chromium) and follow the list.
 
 1. Every nav route answers 200 (`navLinks()` in `src/lib/config.ts` is the list). A hidden section (`/projects`, `/blogs`) still answers 200 and carries `noindex`.
 2. The HTML is semantic: one `h1`, `nav`, `main`; a tool page renders `div[data-type="tool-page"]`.
 3. Oat's base files (`/oat.min.css`, `/oat.min.js`) and the page's own stylesheets are linked; a tool's `tools/<slug>/<slug>.css` appears on that tool's page only.
 4. No console errors and no broken references (avatar, fonts, share card).
 5. Reach each changed route by clicking an in-site link, never a reload. Bundled scripts run once per session, so a mounting bug shows only on in-site navigation.
-
-## Agent tools
-
-- **`/browser-debug [url] [what to check]`** (Claude Code, `.claude/commands/`): a subagent that runs the *Browser check* above against the dev server. Use after any layout, component or page change.
-- **`/antigravity <task>`** (Claude Code, `.claude/commands/`): hands small, well-scoped edits to a faster subagent. Keep architecture, multi-file changes, debugging and `astro.config.mjs` with the main agent.
-- **`frontent-design`** (skill, `.agents/skills/frontent-design/`, linked from `.claude/skills/`): UI generation under the portfolio override, which is in [design-system.md](design-system.md).

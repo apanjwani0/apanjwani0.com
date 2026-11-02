@@ -1,8 +1,8 @@
 /**
  * Internet Atlas — how a web page reaches you, one stop at a time.
  *
- * The figure for `/learnings/how-the-internet-works` (brief:
- * docs/plans/internet-article.md). Each view is one stop on the trip a page
+ * The figure for `/learnings/how-the-internet-works` (the brief is in git
+ * history as docs/plans/internet-article.md). Each view is one stop on the trip a page
  * makes, from being cut into packets to being drawn on the screen, and its
  * legend says in plain words what the stop is, what it does on this trip, and
  * what happens when it goes wrong.

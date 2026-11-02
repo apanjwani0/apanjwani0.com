@@ -137,8 +137,8 @@ kind has one predicate, and every consumer reads it:
   never saves it over one.
 
 The sitemap (`indexablePaths`) and `/llms.txt` (`buildSiteIndex`) derive from
-`src/lib/site-index.ts`, asserted to agree; the planned palette and smart 404
-will read it too. A project entry is the one hand-written on-site URL: any `apanjwani0.com` link in
+`src/lib/site-index.ts`, asserted to agree; the 404's suggestions read it too,
+and the planned palette will. A project entry is the one hand-written on-site URL: any `apanjwani0.com` link in
 `src/config/projects.ts` must match a shape in `projectPathShapes` and pass that
 kind's predicate.
 
