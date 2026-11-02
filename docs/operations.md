@@ -23,7 +23,10 @@ Build and test notes, caching, analytics, share cards, AI crawlers, deploy and t
   the 404's suggestions, tool-page SEO budgets). New hub or tool-page
   assertions go in the second file.
 - CI (`.github/workflows/ci.yml`) runs the whole gate on every PR and every
-  push to `develop`.
+  push to `develop`. `.github/pull_request_template.md` mirrors that gate as a
+  checklist, plus the docs, `/terms`, share-card and assertion rules.
+  Dependabot (`.github/dependabot.yml`) opens weekly PRs into `develop`: one
+  for all minor and patch npm bumps, one per major, and one for GitHub Actions.
 - For UI/route changes, also run the *Browser check* below against the dev server.
 - Deploys: a push to `main` builds the Docker image, restarts the container
   from the self-hosted runner, then fetches `/` inside it. That probe runs
@@ -41,7 +44,8 @@ without touching the build:
    `public, max-age=0, s-maxage=600, stale-while-revalidate=86400`; admin and
    logged-in responses get `no-store`; non-API 404s get
    `public, max-age=0, s-maxage=300`, because scanners make most origin
-   traffic; any 5xx gets `no-store`, so the edge never keeps a fault.
+   traffic; any 5xx gets `no-store`, so the edge never keeps a fault. The
+   sitemap, `/llms.txt`, `/llms-full.txt` and `/feed.xml` get `s-maxage=3600`.
 
 - `max-age=0` is deliberate: browser-cached HTML can't be purged. Keep
   Cloudflare's Browser Cache TTL on "Respect Existing Headers" or it overrides
@@ -59,9 +63,24 @@ without touching the build:
 Two independent, aggregate-only layers:
 
 1. **Client beacon** (`src/lib/analytics-client.ts` → `/api/analytics/event`),
-   on tool and game detail pages only: real-user LCP, CLS and TTFB,
-   rate-limited to 60/min per client. Stored in `SITE_ANALYTICS`, else
-   `analytics:*` keys in `SITE_CONFIG`, else `data/analytics.json`.
+   on every page: real-user LCP, CLS, INP, TTFB and FCP from the bundled
+   `web-vitals` package (never a CDN: the CSP allows `'self'`). One record per
+   page view, sent once through `sendBeacon` when the page is hidden or the
+   visitor navigates on, never on a timer. A hard load is `nav: 'hard'`; a
+   ClientRouter navigation is `nav: 'soft'` and carries `routeMs` and any INP
+   that happened while it was on screen. `vp` is `narrow` (at most 640 CSS px)
+   or `wide`, from `innerWidth`, never the user agent. Do Not Track or Global
+   Privacy Control sends nothing. The server (`src/lib/analytics.ts`) counts each
+   value into fixed histogram buckets (edges in `VITAL_EDGES`; LCP and FCP
+   1200/2500/4000 ms, CLS 0.1/0.25, INP 200/500 ms, TTFB 800/1800 ms, route
+   300/1000 ms) per day x path bucket x nav x vp, so a p75 is read from the
+   buckets (the dev-only admin tab shows it as a range). Path buckets: a tool or
+   game slug from the config, a fixed section list, `/blogs/*`, `/learnings/*`,
+   else `other`. A stored row has exactly the fields in
+   `ANALYTICS_STORED_FIELDS`; the local file is capped per day and in bytes.
+   Rate-limited to 60/min per client. Stored in `SITE_ANALYTICS`, else
+   `analytics:*` keys in `SITE_CONFIG`, else `data/analytics.json`. Rows from
+   before the histograms (averages, no `nav`) are ignored and age out.
 2. **Server counter** (`src/lib/visits.ts`, called from the middleware): every
    HTML render that reaches the origin. These are cache misses, not page views.
    It records date, path, country (`cf-ipcountry`), referrer **host** and a bot
@@ -74,6 +93,18 @@ Analytics auto-injection off) are in AGENTS.md → *Analytics*.
 ```sh
 ssh <host> 'cat /opt/portfolio/data/visits.json' | python3 -m json.tool | head -50
 ```
+
+## Offline
+
+`public/sw.js` (registered once after load by `src/lib/sw-register.ts`, never in
+dev) exists so the installed app (`display: standalone`) opens to a sentence
+instead of a browser error when offline. Two rules: it handles page navigations
+only, and it never caches HTML. At install it keeps `/offline.html` (inline
+CSS, so it needs nothing else) and serves it only when the network request for
+a page fails. Bump `CACHE` in `sw.js` when `offline.html` changes; activate
+deletes every other cache by name. The scope is `/` from the root, so no
+`Service-Worker-Allowed` header is needed. `scripts/smoke/vitals.mjs` asserts
+both rules.
 
 ## Share cards (Open Graph)
 
@@ -105,7 +136,8 @@ one fall back to the avatar and a `summary` Twitter card.
 The owner's choice (2026-09-28): search and AI answers yes, training no.
 `public/robots.txt` states it in a `Content-Signal` line, which is a request,
 and disallows the crawlers that only collect training data: GPTBot, ClaudeBot,
-CCBot and Applebot-Extended.
+CCBot, Applebot-Extended, Meta-ExternalAgent, Bytespider, anthropic-ai,
+cohere-ai and Diffbot.
 
 - **Never disallow a search or user-fetch agent** (OAI-SearchBot, ChatGPT-User,
   Claude-SearchBot, Claude-User): that takes the site out of AI answers.
@@ -113,7 +145,41 @@ CCBot and Applebot-Extended.
   answers to that one token.
 - `/llms.txt` (`src/pages/llms.txt.ts`) is the site index as Markdown, asserted
   to list exactly the sitemap's pages. Crawlers barely read it, so it is a
-  courtesy to agents, not an SEO lever.
+  courtesy to agents, not an SEO lever. The 16 tools stand alone; the
+  Driftfield modes and Cron Whisperer presets sit under `## Optional`, and an
+  `## API` section names the four server endpoints.
+- `/llms-full.txt` is the same headings with the text itself: each live tool's
+  `intro` and each published article's Markdown (figure markers become one
+  plain sentence). It is derived from config, so its size is fixed;
+  `security:smoke` holds it under 400 KB.
+- `/feed.xml` is an Atom feed of the published learnings only, from the same
+  `isPublishedLearning` predicate as the sitemap; `updated` falls back to `date`.
+- `/learnings/<slug>.md` is an article's Markdown source. The HTML address
+  answers with it when `Accept` ranks `text/markdown` above `text/html`
+  (`Vary: Accept`, and `no-store`, because the edge keys on the URL and not on
+  `Accept`). Article HTML carries `Link: </learnings/<slug>.md>; rel="alternate"`.
+- `Last-Modified` on the sitemap, `/llms.txt`, `/llms-full.txt` and `/feed.xml`
+  is the newest published article's `updated ?? date`, and is left off when no
+  article has a real date. A trailing-slash GET or HEAD 301s to the slashless
+  URL (not `/api/`, whose POSTs a redirect would turn into GETs).
+- These routes store nothing, so `/terms` is unchanged.
+
+### IndexNow
+
+Bing, Yandex, Seznam and Naver take pushed URLs through IndexNow (Google does
+not take part), and ChatGPT's web search leans on Bing's index. The key is the
+32-hex name of `public/<key>.txt`, whose content is the same string. It is
+public by design: it only proves the submitter controls the site, so it lives
+in git and no secret is involved. After each deploy, the `indexnow` job in
+`deploy.yml` fetches the live `/sitemap.xml`, compares it with the copy the
+last successful run kept as the `sitemap-last` artifact, and submits only URLs
+that are new or whose `<lastmod>` moved (the first run, or one after the 90-day
+artifact expiry, submits all of them). The new copy is uploaded only after the
+submission succeeds. `npm run indexnow -- <url>…` (or URLs on stdin; add
+`--dry-run` to print the request) submits by hand, at most 1000 per request.
+There is no cache purge step: a Cloudflare API token would be a new secret, and
+the owner declined one, so pages reach visitors when the edge TTL lapses.
+Owner action: verify the site in Bing Webmaster Tools.
 
 ## Deploy
 
@@ -147,6 +213,10 @@ Commands on the box: `docker ps`, `docker logs -f portfolio`, `docker restart po
 | Container exits at once | the app crashed on start | `docker logs portfolio` |
 | GHCR pull fails | not authenticated | re-check the `GHCR_TOKEN` secret |
 | Every request 404s after setting `ORIGIN_SHARED_SECRET` | no matching Transform Rule | fix the rule value, not the secret |
+
+## Scheduled checks
+
+`.github/workflows/origin-check.yml` runs `npm run origin:check` against production every day at 03:17 UTC, and on demand from the Actions tab (Run workflow). It needs no secrets: the script makes only requests a stranger could make. Look at the "Origin check" workflow under the repo's Actions tab; a failed run turns the job red and GitHub emails the owner, with no other notification. Each failing line names its cause: a non-200 home page means the site is down (after an origin lock, fix the Transform Rule value, not the secret); a `cache-control` without `max-age=0` or `s-maxage` means Cloudflare's Browser Cache TTL or Cache Rule drifted; a 200 from the origin IP means Cloudflare is bypassable; a Cloudflare beacon in the page means Web Analytics auto-injection is back on; a missing 301 from `www` means the Redirect Rule is gone. A run that fails only on a timeout or a challenge page is a runner-side hiccup: re-run it once before acting.
 
 ## Browser check
 

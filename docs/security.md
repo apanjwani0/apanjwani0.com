@@ -92,6 +92,42 @@ so budget for it.
   address with the name only as SNI, and its limits are half Link Peek's
   because each request makes two handshakes.
 
+### The connection goes to the address that was checked
+
+Link Peek and Chainsaw both resolve a name a stranger typed, classify every
+answer, and then connect. A second resolution between the check and the connect
+is a DNS-rebinding window, so neither takes one. Chainsaw dials the checked
+address with the name only as SNI. Link Peek (`lpCheckResolved`, `lpRequestPinned`
+in `src/lib/link-peek-fetch.ts`) hands the checked answers back as a pin and
+requests through `node:http(s)` with a `lookup` that returns only those answers
+and refuses any other name, so the name stays the Host header and the certificate
+name. The request is not `fetch`, which has no per-request lookup. Every redirect
+hop validates, classifies, resolves and pins again, because the next URL is the
+remote server's choice. `lpIsForbiddenIp` classifies `::ffff:a.b.c.d` (and its hex
+spelling) by the IPv4 rules. `scripts/smoke/mcp.mjs` connects through the pin to a
+loopback server for a name that resolves nowhere, and checks the IPv4 corpus in
+every mapped spelling.
+
+### The MCP endpoint is tighter than the pages
+
+`POST /api/mcp` (stateless Streamable HTTP; limits in `MCP_LIMITS`,
+`src/lib/openapi.ts`) is the one door agents use, and it may never do more than a
+page can. A `tools/call` is **validated first** (tool name, argument shapes, the
+tool's own syntax check: nothing is spent on a malformed call), then the caller's
+bucket (3 calls a minute across all tools), then the shared MCP bucket (12 a
+minute) **only if the caller's said yes**, then the tool, which calls the route's
+own handler in memory and so spends the route's own per-client and shared buckets,
+the very ones a page spends. Each refusal is counted once and answers 429 with
+`Retry-After: 60` and JSON-RPC error `-32000` with a fixed sentence. Every POST
+also passes a generic per-client bound (60 a minute) before its body is read, so
+a flood of invalid calls is bounded without costing anyone's call allowance. The
+body is capped at 16 KB and must be `application/json`; there is no CORS, no
+session, no event stream (GET is 405), no key and no allowlist, and a foreign
+`Origin` is refused. An exception's text never reaches the caller; a failed tool
+answers a fixed sentence. `/openapi.json` is generated from the same source and
+`security:smoke` fails if a route reads a query parameter it does not list or a
+documented limit differs from the route's `createRateLimiter`.
+
 ### Validate a client-submitted value against one the server derives
 
 Re-derive what is being scored and check the payload against that, never
@@ -249,6 +285,21 @@ exactly one inline script ships: the head bootstrap (`ROOT_BOOT_JS`,
 
 Where knowing an id is the only protection (webhook bins), ids are at least 24
 characters, enforced server-side.
+
+### Long-lived connections and outbound sends are bounded like everything else
+
+The Webhook Inspector's stream (`GET /api/hook/:bin/stream`, SSE) is one per
+client per bin, at most 64 per process, closed after 25 minutes, on bin expiry,
+and when a reader falls 256 KB behind; opening one spends a per-client bucket
+before the shared one. "Resend to URL" (`POST …/requests/:id/replay`) goes
+through Link Peek's address guard, resolves once and pins the connection to the
+checked address, follows no redirects, reads at most 64 KB, returns 2 KB, and
+never echoes the target. A bin's configured answer (`PUT …/response`) is
+bounded in status (200–599), headers (8, allowlisted names) and body (8 KB,
+counted in the global budget), serves no HTML or SVG, and a redirect's
+`Location` must pass the same guard. Bins persist to `data/webhook-bins.json`
+with every row re-validated on load; the 6 h idle TTL and the caps still
+apply. Asserted in `scripts/smoke/webhook.mjs`.
 
 ### Before merging anything that touches a trust boundary
 

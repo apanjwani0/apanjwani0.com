@@ -47,6 +47,17 @@ JSON, with the `Site` type declared in `src/config/site.ts`.
 - `src/middleware.ts` — security headers, the CSP nonce, `Cache-Control`, the
   visit counter and the origin lock.
 - `src/lib/caa.ts` — the CAA vocabulary shared by DNS Sightline and Chainsaw.
+- `src/lib/openapi.ts` — the public API described once: the parameters, the
+  rate-limit numbers and `buildOpenApi()`, served at `/openapi.json` (outside
+  `/api/`, which `robots.txt` disallows). `src/lib/mcp.ts` builds the MCP tool
+  schemas from the same parameters, and `src/pages/api/mcp.ts` is the stateless
+  `POST /api/mcp` transport that owns its limiters (limits and order in
+  *Security*). Each tool calls the called route's handler in memory.
+  `public/.well-known/security.txt` carries an `Expires` that
+  `security:smoke` requires to stay in the future.
+- `src/lib/permalink.ts` — `#h=<input>` fragments for Chainsaw, DNS Sightline
+  and Link Peek: bounded decode, then the tool's own validator. A permalink
+  fills the form and runs; `?host=`, `?name=` and the hub's "try" links only fill.
 - `src/lib/sky.ts` — the drifting stars the home hero and the hubs share;
   `src/lib/sky-ui.ts` mounts them behind the hubs.
 - `src/lib/cron-presets.ts` — Cron Whisperer's preset pages
@@ -54,8 +65,10 @@ JSON, with the `Site` type declared in `src/config/site.ts`.
   predicate and the engine-derived copy.
 - `src/lib/site-index.ts` — the site's real pages, derived once for the
   sitemap, `/llms.txt`, the command palette and the 404.
-- `src/lib/theme.ts`, `src/lib/site-ui.ts`, `src/lib/kit.ts`,
-  `src/lib/fuzzy.ts` — see *UI refresh*.
+- `src/lib/theme.ts`, `src/lib/site-ui.ts`, `src/lib/find-ui.ts` (the command
+  palette), `src/lib/fuzzy.ts` — see *UI refresh*. `src/pages/search.json.ts`
+  serves the palette's index: `buildSiteIndex` as `[{ t, u, k, d, w }]`, the
+  same pages as the sitemap, cached like a page.
 - Client helpers shared by every tool and game (see *Key Conventions*):
   `escape.ts`, `storage.ts`, `flash.ts` (`copyText`), `download.ts`,
   `format.ts`, `math.ts`, `motion.ts`, `date.ts`.
@@ -84,7 +97,8 @@ Every content section is manageable through `/admin` in dev. To add one:
 7. For a new **game**: its tag in `EMBED_TAGS` (`src/lib/embeds.ts`), its slug
    in `GAME_SLUGS` (`src/lib/games.ts`; `GAME_TAGS` is derived), its import in
    `mountGame()` (`src/lib/game-mount.ts`) and its stylesheets in
-   `EMBED_STYLES` (`src/lib/embeds.ts`).
+   `EMBED_STYLES` (`src/lib/embeds.ts`). Also its module path in `EMBED_MODULES` (same file), which must be the file
+   `mountGame()` imports: pages preload it.
 
 Current config keys: `site`, `projects`, `experience`, `blogs`, `learnings`,
 `games`, `tools`
@@ -137,8 +151,8 @@ kind has one predicate, and every consumer reads it:
   never saves it over one.
 
 The sitemap (`indexablePaths`) and `/llms.txt` (`buildSiteIndex`) derive from
-`src/lib/site-index.ts`, asserted to agree; the 404's suggestions read it too,
-and the planned palette will. A project entry is the one hand-written on-site URL: any `apanjwani0.com` link in
+`src/lib/site-index.ts`, asserted to agree; the 404's suggestions and the
+palette's `/search.json` read it too. A project entry is the one hand-written on-site URL: any `apanjwani0.com` link in
 `src/config/projects.ts` must match a shape in `projectPathShapes` and pass that
 kind's predicate.
 
@@ -152,6 +166,15 @@ and no stylesheet under `src/components/games/` sits unlisted. A page links only
 its own embed's sheets (`embedStyles()`, `src/lib/embed-styles.ts`, through
 `<link slot="head">`); a static CSS import would put every game's CSS in every
 game and article page.
+Each such page also emits `<link rel="modulepreload">` for the component's
+script (`embedPreloads()`, same file), so the browser fetches the game's code
+while it parses the page and not after the page script has run. The hashed URL
+does not exist while the server bundle is built, so `embed-styles.ts` holds a
+placeholder that `src/integrations/embed-preload.mjs` fills in after the client
+build (and fails the build if it fills nothing); `astro dev` has no chunk, so
+it emits none. `scripts/smoke/games.mjs` asserts `EMBED_MODULES` against
+`mountGame()` and the three pages. A game with no component stays out of the
+hub: `enabled: false` hides it (Flash Cricket) and its page answers 404.
 
 A cross-link is derived, never stored twice: `learningsAboutEmbed()` finds the
 article about an embed from the article's own `embed`. `RelatedLinks.astro`
@@ -159,6 +182,29 @@ links the article about a tool or game, Driftfield's sibling modes and Cron
 Whisperer's presets (no product-to-product rows); feed it
 indexable items only. It derives
 its heading `id` from the heading text, since a page can render it twice.
+
+### Structured data and head metadata
+
+- **One entity.** The home page defines the Person (`<site>/#person`, inside a
+  `ProfilePage`) and the WebSite (`#website`) once, in `src/lib/jsonld.ts`.
+  Every `author` and `publisher` elsewhere is `{ @id, name }` and nothing more,
+  so authorship merges into the one Person. The ids derive from `site.url`.
+- **No `keywords`**, neither JSON-LD nor `<meta name="keywords">` (Google ignores
+  it). The config `keywords` fields stay: the palette uses them as synonyms, and
+  an article's first five become `article:tag`.
+- **Dates are real or absent.** `Learning.updated` (ISO date) is set only when
+  the article's words changed after `date`. It alone feeds JSON-LD
+  `dateModified` and `article:modified_time`; the sitemap `<lastmod>` is
+  `updated`, else `date`, only through `realDate()` (`src/lib/site-index.ts`),
+  and games, tools, modes and presets have none. Never stamp one from "now".
+- **A `WebApplication` finds its own share card** from its URL
+  (`ogCardPathForPage`, `src/lib/og.ts`), so the tool and game pages pass no
+  image; an article that embeds a tool or game is `about` it
+  (`embedPagePath`, `src/lib/learnings.ts`).
+- **Robots and discovery.** A noindex page says `noindex, follow` so its links
+  stay crawled. `Head.astro` links `/feed.xml`, `/llms.txt` and, on an article
+  that passes `markdownAlternate`, its `.md` twin. Asserted in
+  `scripts/smoke/reach-markup.mjs`.
 
 ## Coming-soon pages have a working ask
 

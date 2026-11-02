@@ -2,6 +2,7 @@
 export const prerender = false
 
 import Base from '../layouts/Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
 import { getSite } from '../lib/config'
 import { safeExternalUrl } from '../lib/security'
 import { WEBHOOK_BIN_TTL_MS } from '../lib/webhook-store'
@@ -24,6 +25,7 @@ const ANALYTICS_DAYS = 90
   description="The terms for using the tools and games on this site, and exactly what each one keeps."
   noindex
 >
+  <Breadcrumbs items={[{ label: 'home', href: '/' }, { label: 'terms' }]} />
   <article data-type="terms">
     <h1>Terms &amp; privacy</h1>
     <p data-type="terms-updated">Last updated {LAST_UPDATED}.</p>
@@ -55,10 +57,13 @@ const ANALYTICS_DAYS = 90
       <li>
         <strong>Webhook Inspector</strong> stores the requests sent to your
         capture URL (method, headers, body, and the sender's IP address) in
-        the server's memory, so you can read them. Anyone who has the URL can
-        see them. A capture URL and its requests are deleted after {binHours} hours
-        without activity, and on every server restart. Don't send real
-        passwords or production secrets to it.
+        the server's memory, and also writes them to a file on the server, so
+        they survive a site update. Anyone who has the URL can see them. A
+        capture URL and its requests are deleted after {binHours} hours without
+        activity, from both the memory and the file. If you set a custom answer
+        for your URL, that answer is kept with it for the same time. When you
+        use "Resend to URL", the address you type is used for that one request
+        and is not kept. Don't send real passwords or production secrets to it.
       </li>
       <li>
         <strong>Link Peek</strong> fetches the public URL you enter, and the
@@ -92,10 +97,21 @@ const ANALYTICS_DAYS = 90
     <p>
       The site keeps aggregate counts only: how many times each page was served
       per day, the visitor's country, the website that linked to it (the host
-      name, never the full address), and page-speed measurements. It keeps no IP
-      addresses, no user agents and no visitor or session identifiers, so none
-      of it can be traced back to you. Counts are kept
+      name, never the full address), and page-speed measurements. Each
+      measurement is only counted into a fixed range, such as "loaded in 1.2 to
+      2.5 seconds", next to the page and whether the screen was narrow or wide,
+      so nothing about a single visit is kept. If your browser sends Do Not
+      Track or Global Privacy Control, no speed measurements are sent. The site
+      keeps no IP addresses, no user agents and no visitor or session
+      identifiers, so none of it can be traced back to you. Counts are kept
       for {ANALYTICS_DAYS} days.
+    </p>
+
+    <h2>Offline page</h2>
+    <p>
+      Your browser keeps one page for offline use, a short notice that you are
+      offline. It is the same file for everyone and holds nothing about you,
+      and the site stores nothing else on your device for working offline.
     </p>
 
     <h2>Changes and contact</h2>
@@ -110,7 +126,7 @@ const ANALYTICS_DAYS = 90
 
 <style>
   article[data-type="terms"] {
-    max-width: 42rem;
+    max-width: var(--measure-text);
     padding-bottom: var(--space-section);
   }
 

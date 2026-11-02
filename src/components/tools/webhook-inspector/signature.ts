@@ -14,8 +14,8 @@
  * is the one a later refactor quietly turns into a function that agrees with
  * everything.
  *
- * Two invariants from AGENTS.md are load-bearing here, and both are the same
- * shape as the JWT rules Token Bench enforces:
+ * Three invariants are load-bearing here; the first two are the same shape as
+ * the JWT rules Token Bench enforces (AGENTS.md):
  *
  * - **The algorithm never comes from the message.** A scheme fixes its hash from
  *   the header NAME the sender used (`x-hub-signature-256` → SHA-256), never from
@@ -28,6 +28,15 @@
  *   a five-minute window. A correctly signed request that arrived twenty minutes
  *   ago is a stale delivery, not a forgery; collapsing the two into one boolean is
  *   how people end up widening the replay window to make a red badge go green.
+ * - **The bytes are the bytes.** Every payload is built from the exact body
+ *   bytes (`bodyBase64` when the text view was lossy), never from a re-encoded
+ *   decode of them, because the sender hashed what it sent.
+ *
+ * Eleven schemes are recognised: Stripe, GitHub (both headers), Slack, Shopify,
+ * Standard Webhooks (Svix), Twilio, Paddle, Mailgun (found in the body), and
+ * the two that check a public key instead of a shared secret: Discord
+ * (ed25519) and SendGrid (ECDSA P-256). A public key is not a secret, but it goes in the same box for the same reason:
+ * it stays in the tab.
  *
  * Everything runs in the browser with Web Crypto — the signing secret is never
  * sent anywhere, which is the only reason it is safe to ask for one at all.
@@ -36,6 +45,17 @@
 export type WiHash = 'SHA-1' | 'SHA-256' | 'SHA-512'
 export type WiDigestEncoding = 'hex' | 'base64'
 export type WiSecretEncoding = 'utf-8' | 'hex' | 'base64'
+/** How the sender signs: a shared-secret HMAC, or a signature checked with a public key. */
+export type WiKind = 'hmac' | 'ed25519' | 'ecdsa-p256'
+
+/**
+ * What the caller knows that the headers do not say: the full URL the sender
+ * called (the capture URL plus the query string it arrived with). Twilio signs
+ * the URL, so it cannot be checked without one.
+ */
+export interface WiContext {
+  url?: string
+}
 
 export interface WiHeaderLike {
   name: string
@@ -43,16 +63,27 @@ export interface WiHeaderLike {
 }
 
 export interface WiScheme {
-  id: 'stripe' | 'github' | 'github-legacy' | 'slack' | 'shopify'
+  id:
+    | 'stripe' | 'github' | 'github-legacy' | 'slack' | 'shopify'
+    | 'standard-webhooks' | 'twilio' | 'discord' | 'paddle' | 'mailgun' | 'sendgrid'
   /** Sender name for the UI. */
   label: string
-  /** Header the signature arrived in, lowercased. */
+  /** Header the signature arrived in, lowercased (or where in the body it sat). */
   header: string
   /** Fixed by the scheme — see the algorithm-confusion note above. */
+  kind: WiKind
   hash: WiHash
   encoding: WiDigestEncoding
-  /** Exactly the bytes the sender signed, as text. */
+  /** Exactly the bytes the sender signed, as text (lossy if the body was not UTF-8). */
   payload: string
+  /** The same bytes, exactly. This is what gets signed or verified. */
+  payloadBytes: Uint8Array
+  /** What the pasted value is: a shared secret, or a public key (Discord, SendGrid). */
+  keyKind: 'secret' | 'public-key'
+  /** Set when the scheme fixes how its key is written, whatever the reader chose. */
+  keyEncoding?: WiSecretEncoding
+  /** A prefix the sender puts on the printable key that is not part of the key. */
+  keyPrefix?: string
   /** Every digest the header offers. Senders send more than one during a secret
       rotation and any of them matching is a pass, so this is a list. */
   provided: string[]
@@ -89,6 +120,34 @@ const WI_REPLAY_TOLERANCE_SEC = 300
 /** Enumerated by US, never taken from the message — see the header comment. */
 const WI_DISCOVERY_HASHES: WiHash[] = ['SHA-256', 'SHA-1', 'SHA-512']
 
+/**
+ * The captured body as the exact bytes plus a text view of them. The bytes are
+ * what a sender hashed; the text is only for display. A body that was not valid
+ * UTF-8 survives as bytes (`bodyBase64` in the captured request) and its text
+ * view is lossy, which is why every payload below is built from the bytes.
+ */
+interface WiBody {
+  text: string
+  bytes: Uint8Array
+}
+
+const WI_ENC = new TextEncoder()
+
+function wiBodyOf(body: string | Uint8Array): WiBody {
+  return typeof body === 'string'
+    ? { text: body, bytes: WI_ENC.encode(body) }
+    : { text: new TextDecoder('utf-8', { ignoreBOM: true }).decode(body), bytes: body }
+}
+
+/** `prefix` as UTF-8 followed by the body's bytes, with its text twin. */
+function wiPayload(prefix: string, body: WiBody): { payload: string; payloadBytes: Uint8Array } {
+  const head = WI_ENC.encode(prefix)
+  const out = new Uint8Array(head.length + body.bytes.length)
+  out.set(head, 0)
+  out.set(body.bytes, head.length)
+  return { payload: prefix + body.text, payloadBytes: out }
+}
+
 function wiHeaderMap(headers: WiHeaderLike[]): Map<string, string> {
   const map = new Map<string, string>()
   for (const h of headers) {
@@ -119,7 +178,7 @@ function wiSplitLabelled(raw: string): { label: string | null; digest: string } 
   return { label: null, digest: value }
 }
 
-function wiStripe(raw: string, body: string): WiScheme {
+function wiStripe(raw: string, body: WiBody): WiScheme {
   let timestamp: number | null = null
   const provided: string[] = []
   for (const part of raw.split(',')) {
@@ -136,11 +195,13 @@ function wiStripe(raw: string, body: string): WiScheme {
     id: 'stripe',
     label: 'Stripe',
     header: 'stripe-signature',
+    kind: 'hmac',
     hash: 'SHA-256',
     encoding: 'hex',
+    keyKind: 'secret',
     // The dot matters: Stripe signs `timestamp.rawBody`, so hashing the body
     // alone fails against a header that is perfectly valid.
-    payload: timestamp === null ? body : `${timestamp}.${body}`,
+    ...wiPayload(timestamp === null ? '' : `${timestamp}.`, body),
     provided,
     timestamp,
     toleranceSec: WI_REPLAY_TOLERANCE_SEC,
@@ -153,7 +214,7 @@ function wiStripe(raw: string, body: string): WiScheme {
   }
 }
 
-function wiGithub(raw: string, body: string, legacy: boolean): WiScheme {
+function wiGithub(raw: string, body: WiBody, legacy: boolean): WiScheme {
   const header = legacy ? 'x-hub-signature' : 'x-hub-signature-256'
   const hash: WiHash = legacy ? 'SHA-1' : 'SHA-256'
   const expectedLabel = legacy ? 'sha1' : 'sha256'
@@ -169,9 +230,11 @@ function wiGithub(raw: string, body: string, legacy: boolean): WiScheme {
     id: legacy ? 'github-legacy' : 'github',
     label: legacy ? 'GitHub (legacy SHA-1)' : 'GitHub',
     header,
+    kind: 'hmac',
     hash,
     encoding: 'hex',
-    payload: body,
+    keyKind: 'secret',
+    ...wiPayload('', body),
     provided: digest ? [digest.toLowerCase()] : [],
     timestamp: null,
     // GitHub signs no timestamp, so the delivery carries nothing to age against
@@ -182,7 +245,7 @@ function wiGithub(raw: string, body: string, legacy: boolean): WiScheme {
   }
 }
 
-function wiSlack(raw: string, rawTimestamp: string | null, body: string): WiScheme {
+function wiSlack(raw: string, rawTimestamp: string | null, body: WiBody): WiScheme {
   const { label, digest } = wiSplitLabelled(raw)
   const timestamp = rawTimestamp && /^\d+$/.test(rawTimestamp.trim()) ? Number(rawTimestamp.trim()) : null
   const warnings: string[] = []
@@ -196,9 +259,11 @@ function wiSlack(raw: string, rawTimestamp: string | null, body: string): WiSche
     id: 'slack',
     label: 'Slack',
     header: 'x-slack-signature',
+    kind: 'hmac',
     hash: 'SHA-256',
     encoding: 'hex',
-    payload: `v0:${timestamp ?? ''}:${body}`,
+    keyKind: 'secret',
+    ...wiPayload(`v0:${timestamp ?? ''}:`, body),
     provided: digest ? [digest.toLowerCase()] : [],
     timestamp,
     toleranceSec: WI_REPLAY_TOLERANCE_SEC,
@@ -207,16 +272,18 @@ function wiSlack(raw: string, rawTimestamp: string | null, body: string): WiSche
   }
 }
 
-function wiShopify(raw: string, body: string): WiScheme {
+function wiShopify(raw: string, body: WiBody): WiScheme {
   return {
     id: 'shopify',
     label: 'Shopify',
     header: 'x-shopify-hmac-sha256',
+    kind: 'hmac',
     hash: 'SHA-256',
     // base64, not hex — comparing a hex digest against this header is the usual
     // reason a correct Shopify secret looks wrong.
     encoding: 'base64',
-    payload: body,
+    keyKind: 'secret',
+    ...wiPayload('', body),
     provided: raw.trim() ? [raw.trim()] : [],
     timestamp: null,
     toleranceSec: 0,
@@ -224,14 +291,213 @@ function wiShopify(raw: string, body: string): WiScheme {
   }
 }
 
+/** Standard Webhooks (Svix and everyone who adopted it). `v1,` digests only. */
+function wiStandardWebhooks(h: Map<string, string>, prefix: 'webhook' | 'svix', body: WiBody): WiScheme {
+  const id = h.get(`${prefix}-id`) ?? ''
+  const rawTs = h.get(`${prefix}-timestamp`) ?? ''
+  const timestamp = /^\d+$/.test(rawTs.trim()) ? Number(rawTs.trim()) : null
+  const provided: string[] = []
+  for (const part of (h.get(`${prefix}-signature`) ?? '').split(/\s+/)) {
+    const comma = part.indexOf(',')
+    // `v1,` is the HMAC scheme. `v1a,` is the ed25519 one and is a different
+    // check; a sender offering both must not get either counted as the other.
+    if (comma > 0 && part.slice(0, comma) === 'v1' && part.length > comma + 1) provided.push(part.slice(comma + 1))
+  }
+  const missing = !id || timestamp === null
+  return {
+    id: 'standard-webhooks',
+    label: 'Standard Webhooks',
+    header: `${prefix}-signature`,
+    kind: 'hmac',
+    hash: 'SHA-256',
+    encoding: 'base64',
+    keyKind: 'secret',
+    // The key is the base64 text after `whsec_`, decoded; it is not the printable
+    // string. Using the printable form is the usual reason a correct secret fails.
+    keyEncoding: 'base64',
+    keyPrefix: 'whsec_',
+    ...wiPayload(`${id}.${timestamp ?? ''}.`, body),
+    provided,
+    timestamp,
+    toleranceSec: WI_REPLAY_TOLERANCE_SEC,
+    note: 'HMAC-SHA256 (base64) over `id.timestamp.rawBody`, keyed with the bytes you get by base64-decoding the secret after its `whsec_` prefix.',
+    warning: missing
+      ? `\`${prefix}-id\` or \`${prefix}-timestamp\` is missing or not an integer, so the signed string cannot be rebuilt.`
+      : provided.length === 0
+        ? `\`${prefix}-signature\` carries no \`v1,\` digest. Only the HMAC scheme is checked.`
+        : undefined,
+  }
+}
+
 /**
- * Identify the signing scheme from the headers alone.
+ * Twilio signs the URL it called with every form field appended as `name`+`value`
+ * in name order, HMAC-SHA1, base64. That includes the query string, so a URL the
+ * reader's proxy rewrote will not verify. JSON bodies are signed by URL only, with
+ * the body bound through a `bodySHA256` query parameter that this does not check.
+ */
+function wiTwilio(raw: string, headers: Map<string, string>, body: WiBody, ctx: WiContext): WiScheme {
+  const isForm = (headers.get('content-type') ?? '').toLowerCase().includes('application/x-www-form-urlencoded')
+  const lines = new Map<string, Set<string>>()
+  if (isForm && body.text) {
+    for (const [k, v] of new URLSearchParams(body.text)) {
+      const set = lines.get(k) ?? new Set<string>()
+      set.add(k + v)
+      lines.set(k, set)
+    }
+  }
+  // Sorted by name, and a repeated name contributes its distinct pairs in sorted order.
+  const params = [...lines.keys()].sort().map(k => [...lines.get(k)!].sort().join('')).join('')
+  const url = ctx.url ?? ''
+  const text = url + params
+  return {
+    id: 'twilio',
+    label: 'Twilio',
+    header: 'x-twilio-signature',
+    kind: 'hmac',
+    hash: 'SHA-1',
+    encoding: 'base64',
+    keyKind: 'secret',
+    payload: text,
+    payloadBytes: WI_ENC.encode(text),
+    provided: raw.trim() ? [raw.trim()] : [],
+    timestamp: null,
+    toleranceSec: 0,
+    note: 'HMAC-SHA1 (base64) over the URL Twilio called followed by each form field as `name` then `value`, in name order, keyed with your Auth Token.',
+    warning: ctx.url
+      ? undefined
+      : 'The URL Twilio called is not known here, and it is part of what Twilio signs.',
+  }
+}
+
+/** Discord: ed25519 over `timestamp` + body. The "secret" is the application's public key. */
+function wiDiscord(raw: string, rawTimestamp: string, body: WiBody): WiScheme {
+  return {
+    id: 'discord',
+    label: 'Discord',
+    header: 'x-signature-ed25519',
+    kind: 'ed25519',
+    hash: 'SHA-512',
+    encoding: 'hex',
+    keyKind: 'public-key',
+    keyEncoding: 'hex',
+    ...wiPayload(rawTimestamp, body),
+    provided: raw.trim() ? [raw.trim().toLowerCase()] : [],
+    timestamp: /^\d+$/.test(rawTimestamp.trim()) ? Number(rawTimestamp.trim()) : null,
+    toleranceSec: 0,
+    note: 'Ed25519 signature (hex) over `X-Signature-Timestamp` followed by the raw body, checked with your application’s public key (64 hex characters, from the Developer Portal). This is a public key, not a secret.',
+  }
+}
+
+/** Paddle Billing: `ts=…;h1=…`, HMAC-SHA256 hex over `ts:rawBody`. Several `h1=` appear during a key rotation. */
+function wiPaddle(raw: string, body: WiBody): WiScheme {
+  let timestamp: number | null = null
+  const provided: string[] = []
+  for (const part of raw.split(';')) {
+    const eq = part.indexOf('=')
+    if (eq < 0) continue
+    const key = part.slice(0, eq).trim()
+    const value = part.slice(eq + 1).trim()
+    if (key === 'ts' && /^\d+$/.test(value)) timestamp = Number(value)
+    else if (key === 'h1' && value) provided.push(value.toLowerCase())
+  }
+  return {
+    id: 'paddle',
+    label: 'Paddle',
+    header: 'paddle-signature',
+    kind: 'hmac',
+    hash: 'SHA-256',
+    encoding: 'hex',
+    keyKind: 'secret',
+    ...wiPayload(timestamp === null ? '' : `${timestamp}:`, body),
+    provided,
+    timestamp,
+    // Paddle's own SDKs enforce a replay window, but a short one measured at
+    // delivery time, which this page cannot reproduce after the fact.
+    toleranceSec: 0,
+    note: 'HMAC-SHA256 (hex) over `ts:rawBody`, keyed with the endpoint’s secret key.',
+    warning: timestamp === null
+      ? 'The header carries no `ts=` timestamp, so the signed payload cannot be rebuilt.'
+      : provided.length === 0
+        ? 'The header carries no `h1=` digest.'
+        : undefined,
+  }
+}
+
+/**
+ * Mailgun puts its signature in the BODY, not a header: `signature.timestamp`,
+ * `signature.token` and `signature.signature` in a JSON webhook, or the same
+ * three fields (`timestamp`, `token`, `signature`) in a legacy form post. It is
+ * the one scheme found from the body, so it is tried only after every header one.
+ */
+function wiMailgun(body: WiBody, headers: Map<string, string>): WiScheme | null {
+  let fields: Record<string, unknown> | null = null
+  const type = (headers.get('content-type') ?? '').toLowerCase()
+  if (type.includes('json') || body.text.trimStart().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(body.text)
+      const sig = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>).signature : null
+      if (sig && typeof sig === 'object') fields = sig as Record<string, unknown>
+    } catch { /* not JSON */ }
+  } else if (type.includes('application/x-www-form-urlencoded') || type.includes('multipart/form-data')) {
+    // Only the urlencoded form is read; a multipart body would need a parser, and
+    // Mailgun's legacy webhooks post urlencoded.
+    if (type.includes('application/x-www-form-urlencoded')) {
+      const p = new URLSearchParams(body.text)
+      fields = { timestamp: p.get('timestamp'), token: p.get('token'), signature: p.get('signature') }
+    }
+  }
+  if (!fields) return null
+  const { timestamp, token, signature } = fields
+  if (typeof timestamp !== 'string' && typeof timestamp !== 'number') return null
+  if (typeof token !== 'string' || typeof signature !== 'string' || !token || !signature) return null
+  const text = `${timestamp}${token}`
+  return {
+    id: 'mailgun',
+    label: 'Mailgun',
+    header: 'signature.signature (in the body)',
+    kind: 'hmac',
+    hash: 'SHA-256',
+    encoding: 'hex',
+    keyKind: 'secret',
+    payload: text,
+    payloadBytes: WI_ENC.encode(text),
+    provided: [signature.trim().toLowerCase()],
+    timestamp: /^\d+$/.test(String(timestamp)) ? Number(timestamp) : null,
+    toleranceSec: 0,
+    note: 'HMAC-SHA256 (hex) over the `timestamp` and `token` fields joined together, keyed with your HTTP webhook signing key. The body itself is not part of what is signed.',
+  }
+}
+
+/** SendGrid Signed Event Webhook: ECDSA P-256 over `timestamp` + the raw body, public key from the SendGrid settings. */
+function wiSendgrid(raw: string, rawTimestamp: string, body: WiBody): WiScheme {
+  return {
+    id: 'sendgrid',
+    label: 'SendGrid',
+    header: 'x-twilio-email-event-webhook-signature',
+    kind: 'ecdsa-p256',
+    hash: 'SHA-256',
+    encoding: 'base64',
+    keyKind: 'public-key',
+    keyEncoding: 'base64',
+    ...wiPayload(rawTimestamp, body),
+    provided: raw.trim() ? [raw.trim()] : [],
+    timestamp: /^\d+$/.test(rawTimestamp.trim()) ? Number(rawTimestamp.trim()) : null,
+    toleranceSec: 0,
+    note: 'ECDSA P-256 / SHA-256 signature (base64, DER) over `X-Twilio-Email-Event-Webhook-Timestamp` followed by the raw body, checked with the verification key SendGrid shows for the webhook. That is a public key, not a secret. The raw body includes its trailing line break.',
+  }
+}
+
+/**
+ * Identify the signing scheme from the headers alone (and, for Mailgun, the body).
  *
  * Order is deliberate: the modern header of each sender is checked before its
  * deprecated one, so a sender that offers both is verified with the stronger.
+ * `body` may be the decoded text or, better, the exact bytes: every payload is
+ * built from bytes, so a body that was not UTF-8 still verifies.
  */
-export function wiDetectScheme(headers: WiHeaderLike[], body: string): WiScheme | null {
+export function wiDetectScheme(headers: WiHeaderLike[], rawBody: string | Uint8Array, ctx: WiContext = {}): WiScheme | null {
   const h = wiHeaderMap(headers)
+  const body = wiBodyOf(rawBody)
 
   const stripe = h.get('stripe-signature')
   if (stripe) return wiStripe(stripe, body)
@@ -248,7 +514,24 @@ export function wiDetectScheme(headers: WiHeaderLike[], body: string): WiScheme 
   const shopify = h.get('x-shopify-hmac-sha256')
   if (shopify) return wiShopify(shopify, body)
 
-  return null
+  if (h.has('webhook-signature')) return wiStandardWebhooks(h, 'webhook', body)
+  if (h.has('svix-signature')) return wiStandardWebhooks(h, 'svix', body)
+
+  const twilio = h.get('x-twilio-signature')
+  if (twilio) return wiTwilio(twilio, h, body, ctx)
+
+  const paddle = h.get('paddle-signature')
+  if (paddle) return wiPaddle(paddle, body)
+
+  const discord = h.get('x-signature-ed25519')
+  if (discord && h.has('x-signature-timestamp')) return wiDiscord(discord, h.get('x-signature-timestamp')!, body)
+
+  const sendgrid = h.get('x-twilio-email-event-webhook-signature')
+  if (sendgrid && h.has('x-twilio-email-event-webhook-timestamp')) {
+    return wiSendgrid(sendgrid, h.get('x-twilio-email-event-webhook-timestamp')!, body)
+  }
+
+  return wiMailgun(body, h)
 }
 
 /**
@@ -286,6 +569,19 @@ export function wiDecodeSecret(secret: string, encoding: WiSecretEncoding): Uint
   return new TextEncoder().encode(secret)
 }
 
+/**
+ * The key bytes for one scheme. A scheme that fixes how its key is written
+ * (Standard Webhooks: base64 after `whsec_`; Discord: hex; SendGrid: base64)
+ * overrides the encoding the reader picked, because the sender defined it and
+ * the reader's dropdown cannot make a different reading correct.
+ */
+export function wiKeyFor(scheme: WiScheme, pasted: string, chosen: WiSecretEncoding): Uint8Array {
+  if (!scheme.keyEncoding) return wiDecodeSecret(pasted, chosen)
+  let text = pasted.trim()
+  if (scheme.keyPrefix && text.startsWith(scheme.keyPrefix)) text = text.slice(scheme.keyPrefix.length)
+  return wiDecodeSecret(text, scheme.keyEncoding)
+}
+
 function wiToHex(bytes: Uint8Array): string {
   let out = ''
   for (const b of bytes) out += b.toString(16).padStart(2, '0')
@@ -298,11 +594,38 @@ function wiToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+/** Standard or URL-safe base64 to bytes; null when it does not parse. */
+export function wiFromBase64(text: string): Uint8Array | null {
+  try {
+    const binary = atob(text.trim().replace(/-/g, '+').replace(/_/g, '/'))
+    const out = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+    return out
+  } catch {
+    return null
+  }
+}
+
+export { wiToBase64 }
+
+/**
+ * The exact bytes of a captured body: the stored raw bytes when the text view
+ * was lossy, otherwise the text re-encoded (UTF-8 round-trips exactly, and the
+ * server keeps a leading BOM in the text so that holds for BOM bodies too).
+ */
+export function wiBodyBytes(r: { bodyText: string; bodyBase64?: string | null }): Uint8Array {
+  if (r.bodyBase64) {
+    const bytes = wiFromBase64(r.bodyBase64)
+    if (bytes) return bytes
+  }
+  return WI_ENC.encode(r.bodyText)
+}
+
 /** HMAC the payload with both output encodings, since schemes differ on which. */
 export async function wiHmac(
   secretBytes: Uint8Array,
   hash: WiHash,
-  payload: string,
+  payload: string | Uint8Array,
 ): Promise<{ hex: string; base64: string }> {
   // Web Crypto rejects a zero-length HMAC key in some engines and silently
   // accepts it in others; refusing here keeps the verdict the same everywhere.
@@ -314,7 +637,8 @@ export async function wiHmac(
     false,
     ['sign'],
   )
-  const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)))
+  const data = typeof payload === 'string' ? WI_ENC.encode(payload) : payload
+  const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, data as unknown as BufferSource))
   return { hex: wiToHex(signature), base64: wiToBase64(signature) }
 }
 
@@ -328,16 +652,95 @@ function wiDigestEquals(provided: string, expected: string, encoding: WiDigestEn
   return provided === expected
 }
 
+/** A DER ECDSA-Sig-Value (SEQUENCE of two INTEGERs) to the fixed-width r‖s Web Crypto wants. */
+export function wiDerToRawEcdsa(der: Uint8Array, size = 32): Uint8Array | null {
+  let i = 0
+  const readLen = (): number => {
+    const first = der[i++]
+    if (first === undefined) return -1
+    if (first < 0x80) return first
+    const n = first & 0x7f
+    if (n < 1 || n > 2) return -1
+    let len = 0
+    for (let k = 0; k < n; k++) {
+      const b = der[i++]
+      if (b === undefined) return -1
+      len = (len << 8) | b
+    }
+    return len
+  }
+  if (der[i++] !== 0x30) return null
+  const total = readLen()
+  if (total < 0 || i + total !== der.length) return null
+  const out = new Uint8Array(size * 2)
+  for (let part = 0; part < 2; part++) {
+    if (der[i++] !== 0x02) return null
+    const len = readLen()
+    if (len < 1 || i + len > der.length) return null
+    let int = der.subarray(i, i + len)
+    i += len
+    while (int.length > 1 && int[0] === 0) int = int.subarray(1)
+    if (int.length > size) return null
+    out.set(int, part * size + (size - int.length))
+  }
+  return i === der.length ? out : null
+}
+
+function wiHexBytes(text: string): Uint8Array | null {
+  const clean = text.trim()
+  if (!/^(?:[0-9a-f]{2})+$/i.test(clean)) return null
+  const out = new Uint8Array(clean.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16)
+  return out
+}
+
+/** Verify a public-key signature. A key that cannot be used throws; a signature that does not verify is `false`. */
+async function wiVerifyAsymmetric(scheme: WiScheme, keyBytes: Uint8Array): Promise<boolean> {
+  const data = scheme.payloadBytes as unknown as BufferSource
+  if (scheme.kind === 'ed25519') {
+    if (keyBytes.length !== 32) throw new Error('The public key must be 32 bytes: 64 hex characters.')
+    let key: CryptoKey
+    try {
+      key = await crypto.subtle.importKey('raw', keyBytes as unknown as BufferSource, { name: 'Ed25519' }, false, ['verify'])
+    } catch {
+      throw new Error('This browser cannot check Ed25519 signatures, or the public key is not valid.')
+    }
+    for (const p of scheme.provided) {
+      const sig = wiHexBytes(p)
+      if (sig && sig.length === 64 && await crypto.subtle.verify({ name: 'Ed25519' }, key, sig as unknown as BufferSource, data)) return true
+    }
+    return false
+  }
+  let key: CryptoKey
+  try {
+    key = await crypto.subtle.importKey('spki', keyBytes as unknown as BufferSource, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
+  } catch {
+    throw new Error('The verification key is not a base64 P-256 public key (the one SendGrid shows for the webhook).')
+  }
+  for (const p of scheme.provided) {
+    const der = wiFromBase64(p)
+    const raw = der ? wiDerToRawEcdsa(der) : null
+    if (raw && await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, raw as unknown as BufferSource, data)) return true
+  }
+  return false
+}
+
 export async function wiVerifyScheme(
   scheme: WiScheme,
   secretBytes: Uint8Array,
   nowMs: number = Date.now(),
 ): Promise<WiVerification> {
-  const digests = await wiHmac(secretBytes, scheme.hash, scheme.payload)
-  const expected = scheme.encoding === 'hex' ? digests.hex : digests.base64
-  const signature = scheme.provided.some(p => wiDigestEquals(p, expected, scheme.encoding))
-    ? 'match'
-    : 'mismatch'
+  let expected = ''
+  let matched: boolean
+  if (scheme.kind === 'hmac') {
+    const digests = await wiHmac(secretBytes, scheme.hash, scheme.payloadBytes)
+    expected = scheme.encoding === 'hex' ? digests.hex : digests.base64
+    matched = scheme.provided.some(p => wiDigestEquals(p, expected, scheme.encoding))
+  } else {
+    // A public-key check has no "expected digest" to show next to the sent one.
+    matched = await wiVerifyAsymmetric(scheme, secretBytes)
+  }
+  const signature = matched ? 'match' : 'mismatch'
 
   let freshness: WiVerification['freshness'] = 'none'
   let ageSec: number | null = null
@@ -363,7 +766,7 @@ export async function wiVerifyScheme(
  */
 export async function wiDiscoverSignature(
   headers: WiHeaderLike[],
-  body: string,
+  body: string | Uint8Array,
   secretBytes: Uint8Array,
 ): Promise<WiDiscovery | null> {
   const entries = headers.map(h => ({ name: h.name.toLowerCase(), value: h.value, lower: h.value.toLowerCase() }))
