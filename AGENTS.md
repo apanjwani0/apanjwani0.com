@@ -62,7 +62,10 @@ node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc enc
 gate on every PR and every push to `develop` (`.github/workflows/ci.yml`).
 `security:smoke` runs `scripts/security-smoke.mjs`, then
 `scripts/tools-hub-smoke.mjs` (hub, shells, site copy, /terms, tool-page SEO
-budgets); put new assertions of that kind in the second file.
+budgets), then every file in `scripts/smoke/` in name order (one file per
+area: `reach.mjs`, `palette.mjs`, `webhook.mjs`, …). A new area gets its own
+file there; an assertion about an existing invariant joins the file that holds
+its siblings.
 
 Notes on `check`, `boot:check` and deploys: [docs/operations.md](docs/operations.md).
 
