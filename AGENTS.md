@@ -52,7 +52,7 @@ npm run security:smoke # assert the security invariants
 npm run poker:check    # poker engine checks
 npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
-npm run origin:check   # assert the DEPLOYED edge posture against production
+npm run origin:check   # assert the DEPLOYED edge posture against production (also daily: .github/workflows/origin-check.yml)
 npm run trainer:catalogue   # poker trainer asset sheet -> docs/poker-assets.html (gitignored)
 node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc encoder
 ```
@@ -173,7 +173,7 @@ exactly one inline script ships: the head bootstrap (`ROOT_BOOT_JS`,
 - ClientRouter re-inserts a changed inline script under a nonce the live page
   refuses, so the bootstrap is a constant with nothing interpolated. **Don't add
   a second inline script**: data goes in a JSON-LD block or a fetched file (the
-  palette's index is planned as `/search.json`), behaviour in a bundled module.
+  palette's index is `/search.json`), behaviour in a bundled module.
 
 ### Unguessable ids are a security control
 

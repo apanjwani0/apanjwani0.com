@@ -93,6 +93,8 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
       </label>
       <label>github<input name="github" value={siteConfig.social.github} /></label>
       <label>linkedin<input name="linkedin" value={siteConfig.social.linkedin} /></label>
+      <label>email (optional)<input name="email" type="email" value={siteConfig.social.email ?? ''} /></label>
+      <label>résumé url (optional)<input name="resumeUrl" value={siteConfig.resumeUrl ?? ''} /></label>
       <div class="form-actions">
         <button type="submit">save site</button>
       </div>
@@ -836,7 +838,9 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
       social: {
         github: fd.get('github'),
         linkedin: fd.get('linkedin'),
+        ...(fd.get('email') ? { email: fd.get('email') } : {}),
       },
+      ...(fd.get('resumeUrl') ? { resumeUrl: fd.get('resumeUrl') } : {}),
       sections: JSON.parse(fd.get('sections') as string),
     })
     // Apply theme to DOM immediately — no reload needed

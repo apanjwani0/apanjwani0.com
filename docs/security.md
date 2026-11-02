@@ -243,7 +243,7 @@ exactly one inline script ships: the head bootstrap (`ROOT_BOOT_JS`,
 - ClientRouter re-inserts a changed inline script under a nonce the live page
   refuses, so the bootstrap is a constant with nothing interpolated. **Don't add
   a second inline script**: data goes in a JSON-LD block or a fetched file (the
-  palette's index is planned as `/search.json`), behaviour in a bundled module.
+  palette's index is `/search.json`), behaviour in a bundled module.
 
 ### Unguessable ids are a security control
 

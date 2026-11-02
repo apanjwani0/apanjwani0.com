@@ -145,7 +145,9 @@ are asserted by `npm run security:smoke`.
   and draws a static `--skeleton-height` panel on `html[data-js]
   :is([data-tool], [data-game]):not(:defined)`; without JS the text stays. The
   panel also holds the space of a Driftfield stage and a learning's figure,
-  which render empty and would push the page down when they mount. No animation.
+  which render empty and would push the page down when they mount. The panel
+  carries one line of muted text ("Loading the tool…" or "Loading the game…")
+  so a slow script is not a silent grey box. No animation.
   A new tool, game or embed gets it free through its `data-tool` / `data-game`
   attribute.
   - **What follows a pending workbench is `visibility: hidden`, not removed**

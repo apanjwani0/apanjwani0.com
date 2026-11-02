@@ -86,7 +86,7 @@ Each checked against the code on 2 Nov 2026.
 - DNS Sightline: the Records table says "No records of any queried type" when the lookups got no answer.
 - DNS Sightline dead code: `sgCanonicalRecord`'s `default` branch is unreachable, the `SG_TYPES.includes(t)` test in `inspect.ts` is always true, and `sgIsDangling` and `sgCnameTargetUnchecked` can be one function.
 - Chainsaw: `aia-available` quotes the raw CA Issuers URL; name it only when `csLinkableUrl` accepts it.
-- The paused UI-refresh foundation (design-system.md, *UI refresh*) has no UI caller: `kit.ts` (and `fuzzy.ts` beyond the 404), four empty `init*UI` stubs, unused theme helpers and unused tokens (a little CSS on every page), `Base`'s `canonicalPath`, and `ROOT_BOOT_JS` living in a shared module. Decide: build it, or park it on `wip/ui-refresh-notes` and delete it here.
+- The paused UI-refresh foundation (design-system.md, *UI refresh*): the palette shipped (2 Nov 2026) and `kit.ts` is gone. What remains without a caller: the empty `initThemeUI` and `initMotion` stubs, unused theme helpers and tokens, and `Base`'s `canonicalPath`. Build item B (the theme toggle) or delete them.
 - `/oat.min.*` is not hashed, so it revalidates on every page view; a Cloudflare Cache Rule with a long edge and browser TTL fixes it (serving it through Vite does not, see AGENTS.md *Stack*).
 - The home share image is the WebP portrait (the avatar fallback), which some apps (LinkedIn) handle poorly. A 1200x630 PNG card would fix it.
 - Learnings copy: both article `seoTitle`s run over 65 characters, both meta descriptions over 160, and the hub's title is the bare `learnings`.
