@@ -1,28 +1,32 @@
 # Status
 
-Session pickup. Rewritten each session, not appended. Last updated 25 Oct 2026.
+Session pickup. Rewritten each session, not appended. Last updated 2 Nov 2026.
 
 ## Branches
 
-- `origin/main` is live at PR #43's merge (`6345c23`). `develop` carries the
-  /tools hub and tool-page work in [docs/plans/tools-week.md](docs/plans/tools-week.md),
-  open as PR #44 (develop → main), CI green. Not merged: it waits for the
-  owner's approval.
+- `origin/main` is live at PR #44's merge (`fcb17d2`): the /tools hub and
+  tool-page work in [docs/plans/tools-week.md](docs/plans/tools-week.md).
+  `develop` and `main` are level.
+- `claude/jolly-maxwell-kqmw95` carries only the new plan,
+  [docs/plans/polish-2026-11.md](docs/plans/polish-2026-11.md), and this file.
 - Agent pushes use the `GITHUB_PAT` credential over git; the GitHub MCP
   integration is read-only, and Copilot code review is not enabled on the repo.
 
 ## Owner's pending moves
 
-1. Review and approve PR #44, then merge it to `main`.
-2. Purge the Cloudflare cache after the deploy and run `npm run origin:check`
-   (`docs/plans/release-followups.md`).
-3. Close the origin lock (AGENTS.md → *Origin exposure*).
-4. Decide the deferred items in tools-week.md: the "recently used" row, the
-   Link Peek image cap.
+1. Purge the Cloudflare cache for the PR #44 deploy and run
+   `npm run origin:check` (`docs/plans/release-followups.md`).
+2. Close the origin lock (AGENTS.md → *Origin exposure*).
+3. Answer the ten decisions in polish-2026-11.md §8 (contact, purge token,
+   FAQ copy, beacon, palette, service worker, boards, MCP, `.claude/`,
+   Flash Cricket).
+4. Still open from tools-week.md: the "recently used" row, the Link Peek
+   image cap.
 
 ## Next
 
-1. ⌘K palette (`/search.json` plus the UI), per tools-week.md.
-2. [plans/review-response.md](docs/plans/review-response.md), PR-1: the Core
-   Web Vitals beacon (re-check: 12f9a4c fixed the cold-load case on 10 Oct).
-3. Trim each tool's `keywords` as it is next touched.
+The order is polish-2026-11.md §7. First three PRs, none needing a decision:
+
+1. Link Peek address pinning (§4B, a security gap Chainsaw already closed).
+2. Entity graph and the `updated` field (§2A, §2B).
+3. IndexNow key, script and deploy step (§2C), once the purge token exists.

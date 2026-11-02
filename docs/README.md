@@ -16,6 +16,7 @@ One line per file. The rules are in [../AGENTS.md](../AGENTS.md); session pickup
 ## Plans and backlog
 
 - [ideas.md](ideas.md): ideas not committed to, follow-ups on shipped tools, loose ends in the code.
+- [plans/polish-2026-11.md](plans/polish-2026-11.md): the full polish and reach pass (2 Nov 2026): design, UX, functionality, agents, SEO/GEO, ordered PRs and the owner's decisions.
 - [plans/tools-week.md](plans/tools-week.md): the /tools hub and tool-page plan (25 Oct 2026): what shipped, what is deferred and why.
 - [plans/review-response.md](plans/review-response.md): the active plan from two outside reviews (2 Oct 2026).
 - [plans/release-followups.md](plans/release-followups.md): what the PR #27 reviews left open.
