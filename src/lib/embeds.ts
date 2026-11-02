@@ -42,6 +42,35 @@ export const EMBED_TAGS: Record<string, string> = {
 }
 
 /**
+ * The module each embed's controller lives in, by slug, as a path under `src/`:
+ * the same file `mountGame()` (src/lib/game-mount.ts) imports for that slug.
+ *
+ * Pages name it in the head as `<link rel="modulepreload">` (`embedPreloads()`
+ * in `embed-styles.ts`), so the browser fetches the game's code while it parses
+ * the page instead of after the page script has run. `security:smoke` reads
+ * both files and fails if a slug's path here is not the one `mountGame()`
+ * imports, or if a slug in one has no entry in the other.
+ */
+export const EMBED_MODULES: Record<string, string> = {
+  'quintle': 'components/games/quintle/Quintle.ts',
+  '2048': 'components/games/twenty48/Twenty48.ts',
+  'game-of-life': 'components/games/game-of-life/GameOfLife.ts',
+  'flow-field': 'components/games/flow-field/FlowField.ts',
+  'maze-weaver': 'components/games/maze-weaver/MazeWeaver.ts',
+  'type-trial': 'components/games/type-trial/TypeTrial.ts',
+  'hue-hunt': 'components/games/hue-hunt/HueHunt.ts',
+  'starfield-toy': 'components/games/starfield-toy/Starfield.ts',
+  'murmuration': 'components/games/murmuration/Murmuration.ts',
+  'turing-bloom': 'components/games/turing-bloom/TuringBloom.ts',
+  'sand-loom': 'components/games/sand-loom/SandLoom.ts',
+  'lsystem-tree': 'components/games/lsystem/LSystem.ts',
+  'poker-trainer': 'components/games/poker-trainer/PokerTrainer.ts',
+  'deep-shore': 'components/games/deep-shore/DeepShore.ts',
+  'diagram-atlas': 'components/games/diagram-atlas/DiagramAtlas.ts',
+  'internet-atlas': 'components/games/internet-atlas/InternetAtlas.ts',
+}
+
+/**
  * Embeds that write NO title block of their own, so `stripEmbedChrome` has
  * nothing to wait for and starts no observer.
  *

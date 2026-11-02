@@ -5,13 +5,14 @@ import Base from '../../layouts/Base.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import JsonLd from '../../components/JsonLd.astro'
 import { buildBreadcrumbs } from '../../lib/breadcrumbs'
-import { getSite, getLearnings } from '../../lib/config'
+import { getSite, getLearnings, getGames, getTools } from '../../lib/config'
 import { blogPostingJsonLd } from '../../lib/jsonld'
-import { isPublishedLearning, learningEmbedTag, readingTime, retiredLearningTarget } from '../../lib/learnings'
+import { realDate } from '../../lib/site-index'
+import { embedPagePath, isPublishedLearning, learningEmbedTag, readingTime, retiredLearningTarget, wordCount } from '../../lib/learnings'
 import { existingOgCardPath, learningHasOgCard } from '../../lib/og'
 import { render, splitOnEmbeds } from '../../lib/markdown'
 import { formatDisplayDate } from '../../lib/date'
-import { embedStyles } from '../../lib/embed-styles'
+import { embedPreloads, embedStyles } from '../../lib/embed-styles'
 
 const { slug } = Astro.params
 
@@ -29,7 +30,9 @@ if (retiredTo) {
   })
 }
 
-const [site, learnings] = await Promise.all([getSite(Astro.locals), getLearnings(Astro.locals)])
+const [site, learnings, games, tools] = await Promise.all([
+  getSite(Astro.locals), getLearnings(Astro.locals), getGames(Astro.locals), getTools(Astro.locals),
+])
 
 const learning = learnings.find(l => l.slug === slug)
 
@@ -78,6 +81,13 @@ const ogCard = learningHasOgCard(learning)
   ? await existingOgCardPath('learnings', learning.slug)
   : undefined
 
+// Only a real revision date is claimed (see Learning.updated); never the publish date again.
+const modified = realDate(learning.updated)
+
+// The tool or game page this article's figure is, when it has one: the article
+// is about that WebApplication. The two atlas figures have no page of their own.
+const aboutPath = embedPagePath(learning.embed, games, tools)
+
 const ldJson = blogPostingJsonLd({
   headline: learning.title,
   description: pageDescription,
@@ -85,7 +95,9 @@ const ldJson = blogPostingJsonLd({
   datePublished: learning.date,
   authorName: site.name,
   authorUrl: site.url,
-  keywords: learning.keywords,
+  dateModified: modified,
+  wordCount: wordCount(learning.content),
+  aboutApps: aboutPath ? [`${site.url}${aboutPath}`] : undefined,
   image: ogCard ? new URL(ogCard, site.url).href : undefined,
 })
 
@@ -103,16 +115,19 @@ const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
   title={learning.title}
   seoTitle={learning.seoTitle}
   description={pageDescription}
-  keywords={learning.keywords}
   noindex={isDraft}
   ogType="article"
   publishedTime={learning.date}
+  modifiedTime={modified}
+  tags={learning.keywords}
+  markdownAlternate={isDraft ? undefined : `/learnings/${learning.slug}.md`}
   ogCard={ogCard}
   starfield={starfield}
 >
   <JsonLd json={ldJson} />
   <JsonLd json={breadcrumbLd} />
   {EmbedTag && embedStyles(learning.embed).map(href => <link slot="head" rel="stylesheet" href={href} />)}
+  {EmbedTag && embedPreloads(learning.embed).map(href => <link slot="head" rel="modulepreload" href={href} />)}
   <Breadcrumbs items={crumbs} />
   <article>
     <header>

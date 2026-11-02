@@ -14,7 +14,7 @@ import { existingOgCardPath } from '../../../lib/og'
 import { learningsAboutEmbed } from '../../../lib/learnings'
 import '../../../styles/seo-support.css'
 import '../../../components/tools/tools-common.css'
-import { embedStyles } from '../../../lib/embed-styles'
+import { embedPreloads, embedStyles } from '../../../lib/embed-styles'
 
 const { mode: modeSlug } = Astro.params
 const mode = driftfieldMode(modeSlug)
@@ -82,6 +82,7 @@ const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
   <JsonLd json={ldJson} />
   <JsonLd json={breadcrumbLd} />
   {EngineTag && embedStyles(mode.slug).map(href => <link slot="head" rel="stylesheet" href={href} />)}
+  {EngineTag && embedPreloads(mode.slug).map(href => <link slot="head" rel="modulepreload" href={href} />)}
   <Breadcrumbs items={crumbs} inset />
 
   {/* The tools' workbench root, so a mode takes the same width and gutter as

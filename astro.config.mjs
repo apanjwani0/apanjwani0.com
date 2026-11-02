@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import node from '@astrojs/node';
+import embedPreload from './src/integrations/embed-preload.mjs';
 // To deploy to Cloudflare Workers instead, swap the two lines below:
 // import cloudflare from '@astrojs/cloudflare';
 import { writeFile } from 'node:fs/promises';
@@ -346,6 +347,8 @@ const heroProbePlugin = {
 export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
+  // Gives pages the built URL of each embed's script so they can modulepreload it.
+  integrations: [embedPreload()],
   // Astro's default CSRF guard (security.checkOrigin) rejects cross-origin form
   // POSTs. That is incompatible with the Webhook Inspector's capture endpoint
   // (/api/hook/*), which exists precisely to receive requests from arbitrary

@@ -711,6 +711,13 @@ p[data-type="hue-daily-note"][data-error] {
   color: var(--color-error);
 }
 
+p[data-type="hue-daily-honour"] {
+  margin: var(--space-lg) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
 ol[data-type="hue-daily-board"] {
   margin: 0;
   padding: 0;

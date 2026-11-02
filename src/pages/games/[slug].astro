@@ -8,14 +8,14 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import JsonLd from '../../components/JsonLd.astro'
 import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import RelatedLinks from '../../components/RelatedLinks.astro'
-import { webAppJsonLd, faqPageJsonLd, extractFaqs } from '../../lib/jsonld'
+import { webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
 import { MOVED_GAMES } from '../../lib/driftfield'
 import { getInterest } from '../../lib/interest'
 import { learningsAboutEmbed } from '../../lib/learnings'
 import '../../styles/seo-support.css'
-import { embedStyles } from '../../lib/embed-styles'
+import { embedPreloads, embedStyles } from '../../lib/embed-styles'
 
 const { slug } = Astro.params
 if (slug === 'wallpaper-forge') return Astro.redirect('/tools/driftfield', 301)
@@ -50,9 +50,6 @@ const pageDescription = game.metaDescription || game.description
 const gameIntro = game.intro || game.description
 const gameIntroHtml = render(gameIntro)
 const gameSeoContentHtml = game.seoContent ? render(game.seoContent) : ''
-
-const faqs = game.seoContent ? extractFaqs(game.seoContent) : []
-const faqLd = faqs.length > 0 ? faqPageJsonLd(faqs) : null
 
 const ldJson = webAppJsonLd({
   name: game.title,
@@ -110,7 +107,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
   {GameTag && <JsonLd json={ldJson} />}
   <JsonLd json={breadcrumbLd} />
   {GameTag && embedStyles(slug).map(href => <link slot="head" rel="stylesheet" href={href} />)}
-  {faqLd && <JsonLd json={faqLd} />}
+  {GameTag && embedPreloads(slug).map(href => <link slot="head" rel="modulepreload" href={href} />)}
   <Breadcrumbs items={crumbs} />
   {GameTag && slug === 'poker-trainer' && (
     <poker-trainer-game data-game="poker-trainer">

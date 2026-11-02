@@ -27,11 +27,12 @@
  */
 
 import { shuffle } from './cards'
-import { continuingRange, fallbackSentence, toneForSize, type BetKind, type BetTone } from './continuing'
+import { continuingRange, draws, fallbackSentence, strength, toneForSize, type BetKind, type BetTone } from './continuing'
+import { scoreBest } from './evaluator'
 import { cachedRangeCombos } from './equity-cache'
 import { multiwayWork, rangeWork } from './equity'
 import { PRESET_RANGES, type NamedRange } from './ranges'
-import { SUITS, type Card } from './types'
+import { HAND_CATEGORY, SUITS, type Card } from './types'
 
 export type { BetTone } from './continuing'
 
@@ -321,6 +322,62 @@ function callerNote(tone: BetTone, river: boolean, fallback: boolean, count: num
   return fallback ? `${base} ${fallbackSentence(count)}` : base
 }
 
+/** How many of the spots are dealt so that hero's hand tries to connect with the board. */
+export const HERO_CONNECT_SHARE = 0.65
+/** How many times a biased spot may draw hero's hand again before it keeps what it has. */
+export const HERO_REDRAWS = 3
+
+/** The packed evaluator score keeps the hand category from this bit up (continuing.ts). */
+const CATEGORY_SHIFT = 20
+
+/**
+ * Does hero's hand do something with this board?
+ *
+ * True for a pair or better that a hole card helps make, a flush draw, or an
+ * open-ended straight draw. A pair that sits on the board alone, or a straight
+ * the board already shows to everyone, does not count: that is not hero
+ * connecting, it is the board.
+ */
+export function heroConnects(hero: Card[], board: Card[]): boolean {
+  const score = strength(hero, board)
+  const category = score >> CATEGORY_SHIFT
+  const ranks = board.map(card => card.r)
+  const helped = hero[0].r === hero[1].r || ranks.includes(hero[0].r) || ranks.includes(hero[1].r)
+  const beatsBoard = board.length < 5 || score > scoreBest(board)
+  if (category >= HAND_CATEGORY.PAIR && (helped || category >= HAND_CATEGORY.STRAIGHT) && beatsBoard) return true
+  const draw = draws(hero, board)
+  return draw.flush || draw.openEnded
+}
+
+/**
+ * Bias hero's hand toward spots that connect, so fewer drills are a plain fold.
+ *
+ * Hero's hand is drawn from a preflop range against a board dealt without
+ * looking at it, which is why about six drills in ten were folds. In 65% of the
+ * spots, a hand that misses is drawn again, up to three times, from the same
+ * preflop range, and the first one that connects is kept. The other 35% are
+ * left alone so folds still appear. The side random stream is seeded from the
+ * first hand and the board, never from the spot's own stream, so the rest of the
+ * spot (villain ranges, bet sizes, lines) is exactly what the unbiased deal made.
+ */
+function biasedDeal(
+  pool: readonly Card[][],
+  first: Card[],
+  firstBoard: Card[],
+  boardFor: (hero: Card[]) => Card[],
+): { hero: Card[]; board: Card[] } {
+  const key = [...first, ...firstBoard].reduce((h, card) => Math.imul(h ^ (card.r * 4 + SUITS.indexOf(card.s) + 1), 0x01000193), 0x811c9dc5)
+  const side = seededRng(key)
+  if (side() >= HERO_CONNECT_SHARE) return { hero: first, board: firstBoard }
+  let hero = first
+  let board = firstBoard
+  for (let tries = 0; tries < HERO_REDRAWS && !heroConnects(hero, board); tries++) {
+    hero = pick(side, pool).map(card => ({ ...card }))
+    board = boardFor(hero)
+  }
+  return { hero, board }
+}
+
 /**
  * Deal one spot from a plan, an actor and a street.
  *
@@ -332,10 +389,16 @@ function callerNote(tone: BetTone, river: boolean, fallback: boolean, count: num
  */
 function assemble(plan: Plan, act: Actor, rng: () => number, deck: Card[], street: Street): Spot {
   const heroPool = cachedRangeCombos(plan.heroRange.text).combos
-  const hero = pick(rng, heroPool).map(card => ({ ...card }))
-  const heroKeys = new Set(hero.map(card => `${card.r}${card.s}`))
   const boardSize = 3 + STREETS.indexOf(street)
-  const board = deck.filter(card => !heroKeys.has(`${card.r}${card.s}`)).slice(0, boardSize)
+  const boardFor = (cards: Card[]): Card[] => {
+    const keys = new Set(cards.map(card => `${card.r}${card.s}`))
+    return deck.filter(card => !keys.has(`${card.r}${card.s}`)).slice(0, boardSize)
+  }
+  let hero = pick(rng, heroPool).map(card => ({ ...card }))
+  let board = boardFor(hero)
+  const connected = biasedDeal(heroPool, hero, board, boardFor)
+  hero = connected.hero
+  board = connected.board
   const dead = [...hero, ...board]
 
   const preflop = plan.villains.map(villain => cachedRangeCombos(villain.range.text, dead).combos)

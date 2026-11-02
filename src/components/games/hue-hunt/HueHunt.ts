@@ -380,6 +380,7 @@ class HueHuntGame extends HTMLElement {
           </form>
           <p data-type="hue-daily-note" role="status" aria-live="polite" hidden></p>
           <ol data-type="hue-daily-board"></ol>
+          <p data-type="hue-daily-honour">Scores on this board are not verified. It is an honour-system board among people who play the same daily, not a competition.</p>
         </section>
 
         <details data-type="hue-explainer" open>

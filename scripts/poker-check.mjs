@@ -52,6 +52,7 @@ import {
   decodeSpot,
   derive,
   encodeSpot,
+  heroConnects,
   seededRng,
   spotWork,
 } from '../src/components/games/poker-trainer/engine/scenarios.ts'
@@ -60,6 +61,7 @@ import {
   fmtChips,
   fmtPercent,
   judge,
+  raiseModelled,
   raiseContinuingCombos,
   raiseTo,
 } from '../src/components/games/poker-trainer/engine/decide.ts'
@@ -786,6 +788,42 @@ assert.equal(raisedJudgement.callEv, 0.4 * raisedJudgement.derived.potAfterCall 
 // A raise that is modelled but not supplied is an error, not a silent call.
 assert.throws(() => judge(nuts, { equity: 1, aheadOf: 1 }), /equity against the hands that call it/)
 assert.doesNotThrow(() => judge(hopeless, { equity: 0, aheadOf: 0 }))
+
+/* ───────────────────  the deal connects with the board  ─────────────────── */
+
+// Hero's hand is drawn from a preflop range against a board dealt blind, so before the bias about
+// six drills in ten were plain folds. 65% of spots now redraw a missing hand up to three times, and
+// 35% are left alone so folds still appear. The verdict mix over 300 seeds must keep all three
+// answers common: folds between 30% and 55%, calls and raises each above 15%.
+{
+  const SEEDS = 300
+  const mix = { fold: 0, call: 0, raise: 0 }
+  let connecting = 0
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    const { spot } = dealSpot(seed)
+    if (heroConnects(spot.hero, spot.board)) connecting++
+    const result = spot.opponents.length === 1
+      ? equityVsRange(spot.hero, spot.opponents[0].combos, spot.board)
+      : cachedEquityVsRanges(spot.hero, [spot.opponents[0].combos, spot.opponents[1].combos], spot.board, PT_MAX_RANGE_WORK)
+    const raiseCombos = raiseModelled(spot) ? raiseContinuingCombos(spot) : []
+    mix[judge(spot, result, raiseCombos.length ? equityVsRange(spot.hero, raiseCombos, spot.board) : null).correct]++
+  }
+  const share = key => mix[key] / SEEDS
+  console.log(`verdict mix over ${SEEDS} seeds: fold ${(share('fold') * 100).toFixed(1)}%, call ${(share('call') * 100).toFixed(1)}%, raise ${(share('raise') * 100).toFixed(1)}%; hero connects in ${(connecting / SEEDS * 100).toFixed(1)}%`)
+  assert.ok(share('fold') >= 0.30 && share('fold') <= 0.55, `folds are ${(share('fold') * 100).toFixed(1)}% of spots, outside 30-55%`)
+  // Not all of them: 35% of spots are dealt blind on purpose, and an unbiased deal connects about 65% of the time.
+  assert.ok(connecting / SEEDS > 0.75 && connecting / SEEDS < 0.95, `hero connects in ${(connecting / SEEDS * 100).toFixed(1)}% of spots, so the bias is off or total`)
+  assert.ok(share('call') > 0.15, `calls are only ${(share('call') * 100).toFixed(1)}% of spots`)
+  assert.ok(share('raise') > 0.15, `raises are only ${(share('raise') * 100).toFixed(1)}% of spots`)
+}
+// What "connects" means: a pair a hole card helps make, a flush draw or an open-ended straight draw.
+assert.equal(heroConnects(hand('Ah 5c'), hand('Ad 7s 2c')), true, 'top pair connects')
+assert.equal(heroConnects(hand('Ah 5h'), hand('Kh 9h 2c')), true, 'a flush draw connects')
+assert.equal(heroConnects(hand('9c Tc'), hand('8d Jh 2s')), true, 'an open-ended straight draw connects')
+assert.equal(heroConnects(hand('Ah 5c'), hand('Kd 7s 2c')), false, 'ace high on a dry board does not')
+assert.equal(heroConnects(hand('Ah 5c'), hand('Kd Ks 2c')), false, 'a pair that sits on the board alone is not hero connecting')
+assert.equal(heroConnects(hand('Ah 5c'), hand('Td Jd Qd Kd 2c')), true, 'the broadway straight on the river, with a hole ace')
+assert.equal(heroConnects(hand('2h 3c'), hand('Td Jd Qd Kd Ac')), false, 'a straight the board already shows is the board, not hero')
 
 /* ───────────────────────  permalinks  ─────────────────────── */
 
