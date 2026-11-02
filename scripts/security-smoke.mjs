@@ -1270,6 +1270,7 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
 
 {
   const poker = await import('../src/components/games/poker-trainer/engine/equity.ts')
+  const scenarios = await import('../src/components/games/poker-trainer/engine/scenarios.ts')
 
   /* These assertions began life pinned to the pot-odds article, which quoted
      the four break-even prices in its prose. That article was retired on
@@ -1324,17 +1325,18 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   // possible — is the appended `Poker Trainer: the solve memo` block at the end
   // of this file.
 
-  // The four prices. `pot` and `sizes` are the drill's, pinned from source —
-  // every price below is a function of these two literals and nothing else.
-  const potMatch = ptSrc.match(/const pot = (\d+)\n/)
-  const sizesMatch = ptSrc.match(/const sizes = \[([\d, ]+)\]/)
-  assert.ok(potMatch, 'the drill no longer declares `const pot = …`')
-  assert.ok(sizesMatch, 'the drill no longer declares `const sizes = [...]`')
-  const drillPot = Number(potMatch[1])
-  const drillSizes = sizesMatch[1].split(',').map(n => Number(n.trim()))
-  assert.deepEqual(drillSizes, [33, 50, 66, 100], 'the drill offers one price per bet size')
-  assert.equal(drillPot, 100, 'the drill builds a pot of 100')
-
+  // The prices. The drill no longer builds a flat pot of 100 and four sizes: a
+  // scenario engine derives the pot from the chips that went in, and `derive()`
+  // in `engine/scenarios.ts` is the one place the call is priced. The four
+  // reference sizes are kept here as a fixture so the bisected prices below
+  // still have something to be compared with.
+  const drillPot = 100
+  const drillSizes = [33, 50, 66, 100]
+  const priceSpot = (bet, heroIn = 0, callersIn = 0) => ({
+    templateId: 'fixture', title: '', blinds: { sb: 5, bb: 10 }, effectiveStack: 1000,
+    heroPosition: 'BTN', hero: [], board: [], street: 'flop', opponents: [],
+    potBefore: drillPot, heroIn, bet, callersIn, betTone: 'medium', allIn: false, line: [], ledger: [],
+  })
   // Derived from EV = 0 by bisection — NOT from a written-down fraction.
   //
   // The previous version of this block recomputed `bet / (pot + bet)` "independently"
@@ -1359,20 +1361,33 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   assert.deepEqual(prices, ['19.9%', '25.0%', '28.4%', '33.3%'], 'the break-even call price at the four sizes')
 
   // requiredEquity()'s own contract: its first argument is the pot before the CALL.
+  // And the engine's `derive()`, which is what the drill now prices with, must
+  // agree with the bisection at every size: it adds the bet before the call.
   for (const bet of drillSizes) {
     assert.ok(
       Math.abs(poker.requiredEquity(drillPot + bet, bet) - breakeven(drillPot, bet)) < 1e-12,
       'requiredEquity(potBeforeCall, bet) must equal the EV-derived break-even',
     )
+    assert.ok(
+      Math.abs(scenarios.derive(priceSpot(bet)).breakEven - breakeven(drillPot, bet)) < 1e-12,
+      'derive() must price the call against the pot after the bet, not before it',
+    )
   }
-
-  // And the drill must hand it the pot before the call, not the pot before the bet.
-  // This is the line that was wrong; assert the line, not just the helper.
-  assert.ok(
-    ptSrc.includes('requiredEquity(d.pot + d.bet, d.bet)') &&
-      ptSrc.includes('callEv(d.pot + d.bet, d.bet, result.equity)'),
-    'the drill must add the villain bet before pricing the call — d.pot alone prices a bluff, not a call',
-  )
+  // The two lessons the new templates add, pinned the same way: chips hero
+  // already bet this street reduce what the call costs but stay in the pot, and
+  // a caller before hero enlarges the pot without changing the price per chip.
+  {
+    const raised = scenarios.derive(priceSpot(150, 50))
+    assert.equal(raised.toCall, 100, 'facing a raise to 150 after betting 50, the call costs 100')
+    assert.equal(raised.potNow, drillPot + 50 + 150, 'hero\'s 50 stays in the pot when they raise')
+    const multiway = scenarios.derive(priceSpot(50, 0, 50))
+    assert.equal(multiway.potNow, drillPot + 100, 'a caller before hero adds their call to the pot')
+    assert.ok(multiway.breakEven < breakeven(drillPot, 50), 'a caller in front makes the call cheaper in equity')
+  }
+  // The drill must take its verdict from the engine's judge, not from a local
+  // comparison, so the numbers on the page and the rule that graded them cannot drift.
+  assert.ok(ptSrc.includes('judge(spot, result, raiseResult)'), 'the drill grades through judge()')
+  assert.ok(!/result\.equity >= 0\.\d+ \? 'raise'/.test(ptSrc), 'no hidden raise threshold in the drill')
 
   // The two fractions must stay separate numbers. Collapsing them back into one
   // is the original bug, so the relation between them is pinned directly.
@@ -1410,7 +1425,9 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   // a reader can still reach the row that displays the number.
   for (const label of [
     'Play a spot',
-    'Equity you needed to call',
+    'Break-even equity',
+    'EV of calling',
+    'Equity you need if called',
   ]) {
     assert.ok(ptSrc.includes(label), `PokerTrainer.ts must still render "${label}"`)
   }

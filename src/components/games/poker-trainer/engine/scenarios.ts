@@ -419,7 +419,10 @@ function assemble(plan: Plan, act: Actor, rng: () => number, deck: Card[], stree
 
   // Only the all-in template changes the stack, and it does so after the earlier streets are paid for.
   const startStack = action.stackHere === undefined ? plan.startStack : committed + action.stackHere
-  const stackLine = `The small blind is ${SMALL_BLIND} chips and the big blind is ${BIG_BLIND} chips. Everyone started with ${startStack} chips, which is ${Number((startStack / BIG_BLIND).toFixed(1))} big blinds.`
+  // The blinds sentence opens every story, so the stacks ride on it rather than
+  // adding a sentence of their own: a reader sees the setup once, in one line.
+  const [blindsLine, ...playLines] = lines
+  const stackLine = `${blindsLine} Everyone started with ${startStack} chips, which is ${Number((startStack / BIG_BLIND).toFixed(1))} big blinds.`
   return {
     templateId: plan.id,
     title: plan.title,
@@ -436,7 +439,7 @@ function assemble(plan: Plan, act: Actor, rng: () => number, deck: Card[], stree
     callersIn: action.callersIn,
     betTone,
     allIn: action.allIn,
-    line: [stackLine, ...lines],
+    line: [stackLine, ...playLines],
     ledger,
   }
 }

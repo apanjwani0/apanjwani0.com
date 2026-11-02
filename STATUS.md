@@ -7,8 +7,10 @@ Session pickup. Rewritten each session, not appended. Last updated 2 Nov 2026.
 - `origin/main` is live at PR #44's merge (`fcb17d2`): the /tools hub and
   tool-page work in [docs/plans/tools-week.md](docs/plans/tools-week.md).
   `develop` and `main` are level.
-- `claude/jolly-maxwell-kqmw95` carries only the new plan,
-  [docs/plans/polish-2026-11.md](docs/plans/polish-2026-11.md), and this file.
+- `claude/jolly-maxwell-kqmw95` is the first PR of
+  [docs/plans/polish-2026-11.md](docs/plans/polish-2026-11.md): the plan
+  itself, the docs streamlining, the per-embed stylesheet split, and the Poker
+  Trainer's scenario engine with its explained decision. Gate green.
 - Agent pushes use the `GITHUB_PAT` credential over git; the GitHub MCP
   integration is read-only, and Copilot code review is not enabled on the repo.
 
@@ -25,8 +27,14 @@ Session pickup. Rewritten each session, not appended. Last updated 2 Nov 2026.
 
 ## Next
 
-The order is polish-2026-11.md §7. First three PRs, none needing a decision:
+The order is polish-2026-11.md §7. After this PR, none of these needs a
+decision:
 
 1. Link Peek address pinning (§4B, a security gap Chainsaw already closed).
 2. Entity graph and the `updated` field (§2A, §2B).
 3. IndexNow key, script and deploy step (§2C), once the purge token exists.
+
+Poker Trainer follow-ups the owner may want first (D-11): hero's hand drawn so
+more spots connect with the board (about 60% of spots grade as folds today),
+a flop multiway spot (needs a cheaper three-way enumeration), and the placeholder
+in `games/[slug].astro` sized like the felt (CLS 0.01–0.02 on first load).
