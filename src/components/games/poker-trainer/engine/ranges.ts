@@ -201,4 +201,10 @@ export const PRESET_RANGES: NamedRange[] = [
     note: 'About 3%. What a very tight player shows up with.',
     text: 'JJ+, AKs, AKo',
   },
+  {
+    id: 'call-3bet',
+    label: 'Calls a three-bet',
+    note: 'Pairs, suited broadways and big aces that call a raise rather than fold or re-raise.',
+    text: '22+, A9s+, KTs+, QTs+, JTs, T9s, AQo+',
+  },
 ]
