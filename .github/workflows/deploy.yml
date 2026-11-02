@@ -112,3 +112,60 @@ jobs:
 
           docker image prune -f
           echo "✓ Deployed $DOCKER_IMAGE"
+
+  # ── 3. Tell IndexNow engines (Bing, Yandex, Seznam, Naver) what changed ─────
+  # Runs after the container is healthy. It fetches the LIVE sitemap, compares it
+  # with the copy the last successful run kept, and submits only the URLs that
+  # are new or whose <lastmod> moved; the first run (no earlier copy) submits all
+  # of them. The new copy is uploaded only after a successful submission, so a
+  # failed run is retried by the next one. No secret is involved: the IndexNow
+  # key is public by design (public/<key>.txt). A failure here never touches the
+  # deploy, which is already done. There is no cache purge: the owner declined a
+  # Cloudflare API token.
+  indexnow:
+    name: Submit changed URLs to IndexNow
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read   # lets `gh run download` fetch the previous run's artifact
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Fetch the live sitemap
+        run: |
+          set -euo pipefail
+          # A unique query string misses Cloudflare's one-hour copy of the sitemap.
+          curl -fsS --retry 3 -m 30 "https://apanjwani0.com/sitemap.xml?deploy=${GITHUB_SHA}" -o sitemap.xml
+          grep -q '<urlset' sitemap.xml
+
+      - name: Download the previous sitemap
+        continue-on-error: true   # none yet, or expired: every URL is then new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh run list --workflow deploy.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          [ -n "$run_id" ]
+          gh run download "$run_id" --name sitemap-last --dir previous
+
+      - name: Submit what changed
+        run: |
+          set -euo pipefail
+          # One "<url> <lastmod>" line per page; a changed lastmod makes a new line.
+          extract() { sed -En 's#.*<loc>([^<]*)</loc>(<lastmod>([^<]*)</lastmod>)?.*#\1 \3#p' "$1" | sed 's/&amp;/\&/g' | sort -u; }
+          extract sitemap.xml > new.txt
+          [ -s new.txt ]
+          if [ -s previous/sitemap.xml ]; then extract previous/sitemap.xml > old.txt; else : > old.txt; fi
+          comm -13 old.txt new.txt | cut -d' ' -f1 > changed.txt
+          echo "$(wc -l < changed.txt) changed of $(wc -l < new.txt) URLs"
+          node scripts/indexnow.mjs < changed.txt
+
+      - name: Keep this sitemap for the next run
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sitemap-last
+          path: sitemap.xml
+          retention-days: 90

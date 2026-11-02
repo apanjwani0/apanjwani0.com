@@ -8,10 +8,12 @@
 # any stranger could make — that is the point. A control you can only confirm by
 # logging into a dashboard is a control you will stop confirming.
 #
-# Covers the four settings that live outside git and therefore have nothing else
+# Covers the settings that live outside git and therefore have nothing else
 # asserting them: the Cloudflare Transform Rule injecting x-origin-auth, the
 # Browser Cache TTL override, Web Analytics auto-injection, and whether the
-# origin still answers on its own IP.
+# origin still answers on its own IP, and the www -> apex Redirect Rule. It also
+# checks the files other software fetches: the feed, llms-full.txt, the avatar
+# and the IndexNow key.
 # security:smoke asserts the code half; this asserts the deployed half.
 #
 # Exit 0 = every invariant holds. Non-zero = at least one regressed.
@@ -137,6 +139,64 @@ elif [[ $page == *cloudflareinsights* ]]; then
   note "site → Manage site. AGENTS.md (Analytics) keeps it off."
 else
   ok "no cloudflareinsights script in a browser's copy of /"
+fi
+
+printf '\n\033[1mCanonical host: www redirects to the apex\033[0m\n'
+# Both hosts are proxied and both served 200, so the page relied on its canonical
+# tag alone to keep a second copy of the site out of the index. The fix lives in
+# Cloudflare, not in git: a Redirect Rule (Rules -> Redirect Rules) from
+# hostname equals www.<apex> to concat("https://<apex>", http.request.uri.path)
+# with the query string preserved, status 301.
+apex_host=${SITE#https://}
+www_head=$(curl -sSI -m 15 "https://www.$apex_host/" 2>/dev/null | tr -d '\r')
+www_code=$(printf '%s' "$www_head" | awk 'NR==1{print $2}')
+www_loc=$(printf '%s' "$www_head" | awk -F': ' 'tolower($1)=="location"{print $2}')
+if [[ $www_code == 301 && $www_loc == "$SITE"* ]]; then
+  ok "https://www.$apex_host/ answers 301 to $www_loc"
+else
+  bad "https://www.$apex_host/ answers '${www_code:-no response}', not a 301 to $SITE"
+  note "Missing Cloudflare Redirect Rule: add one in Rules -> Redirect Rules,"
+  note "when hostname equals www.$apex_host, redirect (dynamic) to"
+  note "concat(\"$SITE\", http.request.uri.path), status 301, preserve the query string."
+fi
+
+printf '\n\033[1mDiscovery files and canonical paths\033[0m\n'
+# A file the home page and the structured data point at must really be served.
+# /avatar.webp is gitignored and mounted into the container at deploy time, so
+# the image can ship without it; it backs the Person image and the home share
+# fallback.
+for path in /avatar.webp /llms-full.txt /llms.txt; do
+  code=$(curl -sS -m 15 -o /dev/null -w '%{http_code}' "$SITE$path" 2>/dev/null)
+  [[ $code == 200 ]] && ok "$path answers 200" || bad "$path answers '${code:-no response}', expected 200"
+done
+feed_type=$(curl -sSI -m 15 "$SITE/feed.xml" 2>/dev/null | tr -d '\r' \
+            | awk -F': ' 'tolower($1)=="content-type"{print $2}')
+[[ $feed_type == application/atom+xml* ]] \
+  && ok "/feed.xml is application/atom+xml" \
+  || bad "/feed.xml content-type is '${feed_type:-none}', expected application/atom+xml"
+
+# /tools/chainsaw/ used to answer 200 and canonicalise to itself with the slash,
+# which differs from the sitemap's URL. The middleware 301s it.
+slash_head=$(curl -sSI -m 15 "$SITE/tools/chainsaw/" 2>/dev/null | tr -d '\r')
+slash_code=$(printf '%s' "$slash_head" | awk 'NR==1{print $2}')
+slash_loc=$(printf '%s' "$slash_head" | awk -F': ' 'tolower($1)=="location"{print $2}')
+if [[ $slash_code == 301 && ( $slash_loc == "/tools/chainsaw" || $slash_loc == "$SITE/tools/chainsaw" ) ]]; then
+  ok "a trailing-slash URL answers 301 to the slashless one"
+else
+  bad "/tools/chainsaw/ answers '${slash_code:-no response}' (Location '${slash_loc:-none}'), expected a 301 to /tools/chainsaw"
+fi
+
+# IndexNow: the engines fetch /<key>.txt and expect the key as its content. The
+# key is public by design; it is the name of the one 32-hex file in public/.
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+key_file=$(ls "$repo_root"/public 2>/dev/null | grep -E '^[0-9a-f]{32}\.txt$' | head -1)
+if [[ -z $key_file ]]; then
+  bad "no public/<32 hex>.txt IndexNow key file in the repo"
+else
+  key_body=$(curl -sS -m 15 "$SITE/$key_file" 2>/dev/null | tr -d '\r\n')
+  [[ $key_body == "${key_file%.txt}" ]] \
+    && ok "the IndexNow key file answers 200 with the key" \
+    || bad "/$key_file does not answer with its own key (got '${key_body:0:40}')"
 fi
 
 if [[ $direct_code == 404 || $direct_code == 200 ]]; then
