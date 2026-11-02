@@ -4,8 +4,9 @@ export const prerender = false
 import Base from '../layouts/Base.astro'
 import JsonLd from '../components/JsonLd.astro'
 import { getSite } from '../lib/config'
-import { personJsonLd, webSiteJsonLd } from '../lib/jsonld'
-import { safeExternalUrl } from '../lib/security'
+import { profilePageJsonLd, webSiteJsonLd } from '../lib/jsonld'
+import { safeEmailAddress } from '../lib/config-schema'
+import { safeExternalUrl, safeInternalPath } from '../lib/security'
 import '../styles/home.css'
 import '../styles/hero-network.css'
 
@@ -26,28 +27,33 @@ const homeDescription =
 
 const githubUrl = safeExternalUrl(site.social.github)
 const linkedinUrl = safeExternalUrl(site.social.linkedin)
+// Contact links after the two profiles: a mailto from a validated address, and
+// a résumé only when the site config sets one (an https URL or a path here).
+const emailAddress = safeEmailAddress(site.social.email)
+const resumeHref = site.resumeUrl ? (safeExternalUrl(site.resumeUrl) ?? safeInternalPath(site.resumeUrl)) : null
 const sameAs = [githubUrl, linkedinUrl].filter((url): url is string => Boolean(url))
-const ldJson = personJsonLd({
+// The one definition of the Person (`#person`), as the main entity of a
+// ProfilePage; every author and publisher elsewhere on the site points at it.
+const ldJson = profilePageJsonLd({
   name: site.name,
   url: site.url,
+  alternateName: site.handle,
   jobTitle: site.tagline,
   description: site.bio,
   sameAs,
   image: `${site.url}/avatar.webp`,
 })
 
-// Site-level entity for the home page: pairs with the Person schema so search
-// engines understand this as one named site authored by Aman.
+// The one definition of the WebSite (`#website`), published by the Person.
 const siteLd = webSiteJsonLd({
   name: site.name,
   url: site.url,
   description: site.bio,
   authorName: site.name,
-  authorUrl: site.url,
 })
 ---
 
-<Base bare starfield={false} description={homeDescription} keywords={`${site.name}, ${site.handle}, portfolio, software engineer, developer tools, browser games`}>
+<Base bare starfield={false} description={homeDescription}>
   <JsonLd json={ldJson} />
   <JsonLd json={siteLd} />
 
@@ -59,9 +65,11 @@ const siteLd = webSiteJsonLd({
     <div data-type="hero-content">
       <h1>{site.name}</h1>
       <p data-type="tagline">{heroTagline}</p>
-      <nav data-type="hero-links" aria-label="Social profiles">
+      <nav data-type="hero-links" aria-label="Profiles and contact">
         {githubUrl && <a href={githubUrl} target="_blank" rel="me noopener noreferrer" aria-label={`${site.name} on GitHub (opens in a new tab)`}>github</a>}
         {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="me noopener noreferrer" aria-label={`${site.name} on LinkedIn (opens in a new tab)`}>linkedin</a>}
+        {emailAddress && <a href={`mailto:${emailAddress}`} aria-label={`Email ${site.name}`}>email</a>}
+        {resumeHref && <a href={resumeHref} target="_blank" rel="noopener noreferrer" aria-label={`${site.name}'s résumé (opens in a new tab)`}>résumé</a>}
       </nav>
     </div>
   </section>

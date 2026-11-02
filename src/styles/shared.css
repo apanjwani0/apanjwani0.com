@@ -59,16 +59,18 @@ code, kbd, pre, samp {
    bootstrap (ROOT_BOOT_JS, src/lib/theme.ts) marks the document `data-js` —
    which it does before first paint, so a scripted visit never sees them
    appear. Visibility, not display, so the row does not reflow when they do. */
-html:not([data-js]) button:is([data-action="palette"], [data-action="theme"], [data-action="shortcuts"]) {
+html:not([data-js]) button:is([data-action="palette"], [data-action="theme"]) {
   visibility: hidden;
 }
 
 /* Accessible keyboard focus ring — visible only for keyboard/AT users (not on
    mouse click), so it never disrupts the hover-driven visual language above.
-   Uses the navy accent token so it re-themes with everything else. */
+   Uses the accent token so it re-themes with everything else.
+   Both halves are tokens (--focus-ring, --focus-offset), so a component that
+   needs a different offset restates one value and never its own outline. */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
   border-radius: var(--radius-sm);
 }
 
@@ -76,10 +78,10 @@ html:not([data-js]) button:is([data-action="palette"], [data-action="theme"], [d
    then slides into the top-left as the first focusable element on the page. */
 a[data-type="skip-link"] {
   position: absolute;
-  left: 0.5rem;
-  top: -3rem;
-  z-index: 100;
-  padding: 0.5rem 0.85rem;
+  left: var(--space-sm);
+  top: calc(-2 * var(--target-min));
+  z-index: var(--z-skip);
+  padding: var(--space-sm) var(--space-xl);
   background: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border);
@@ -87,11 +89,11 @@ a[data-type="skip-link"] {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   text-decoration: none;
-  transition: top 0.15s ease;
+  transition: top var(--motion-fast) var(--ease-out);
 }
 
 a[data-type="skip-link"]:focus {
-  top: 0.5rem;
+  top: var(--space-sm);
 }
 
 /* main is a programmatic focus target for the skip link, so it must not draw a
@@ -137,12 +139,12 @@ nav[data-type="hero-nav"] {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 10;
+  z-index: var(--z-nav);
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   column-gap: var(--space-xl);
   align-items: center;
-  padding: clamp(1rem, 3.5vw, 1.4rem) clamp(1.25rem, 5vw, 2rem);
+  padding: var(--nav-pad);
   /* No background of its own at rest, and no bottom rule. A solid --color-bg
      matches the page *token* but not what is actually behind the nav on the home
      hero, where the starfield canvas is full-bleed — painting it opaque clipped
@@ -151,7 +153,7 @@ nav[data-type="hero-nav"] {
      sits over a full-bleed hero. See the scrolled state below for the readability
      half of this. */
   background-color: transparent;
-  transition: transform 0.3s ease, background-color 0.2s ease;
+  transition: transform var(--motion-page) var(--ease-in-out), background-color var(--motion-base) var(--ease-in-out);
   pointer-events: auto;
 }
 
@@ -195,14 +197,14 @@ span[data-type="hero-links"] {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: clamp(1rem, 4vw, 2rem);
+  gap: var(--gap-nav);
 }
 
 nav[data-type="hero-nav"] a {
   pointer-events: auto;
   font-family: var(--font-mono);
   font-size: var(--text-label);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-label);
   color: var(--color-muted);
   text-decoration: none;
 }
@@ -219,14 +221,14 @@ nav[data-type="hero-nav"] a:hover {
   color: var(--color-text);
   text-decoration: underline;
   text-decoration-color: var(--color-accent);
-  text-underline-offset: 0.3em;
+  text-underline-offset: var(--underline-offset);
 }
 
 nav[data-type="hero-nav"] a[data-active] {
   color: var(--color-text);
   text-decoration: underline;
   text-decoration-color: var(--color-accent);
-  text-underline-offset: 0.3em;
+  text-underline-offset: var(--underline-offset);
 }
 
 @media (max-width: 640px) {
@@ -251,7 +253,47 @@ nav[data-type="hero-nav"] a[data-active] {
 
   span[data-type="hero-links"] {
     grid-column: 1;
-    gap: var(--space-lg) 1.2rem;
+    gap: var(--space-lg) var(--space-card);
+  }
+}
+
+/* ── Touch targets outside the control kit ─────────────────────────────────
+   The kit holds its own controls to 44px on a coarse pointer (controls.css).
+   The text-only links around it (the nav, the footer, the breadcrumb and the
+   hero's social links) were label-sized, about 15 to 18px tall, which is hard
+   to hit with a thumb. Only a coarse pointer changes: a mouse sees the same
+   page as before. The links become inline-flex so min-height has a box to
+   grow, and padding-block keeps a wrapped link's lines apart. The footer and
+   breadcrumb tighten their own gaps in their components, because the target
+   now supplies the space between rows.
+
+   The nav is the one thing here whose height other rules depend on (`main`
+   pads by it until nav-ui.ts measures it), so its own padding gives back what
+   the taller links take, and the pre-JS height token follows. */
+@media (pointer: coarse) {
+  nav[data-type="hero-nav"] a,
+  nav[data-type="hero-links"] a,
+  nav[data-type="breadcrumb"] a,
+  footer[data-type="site-footer"] a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--target-min);
+    padding-block: var(--space-2xs);
+  }
+
+  nav[data-type="hero-nav"] {
+    padding-block: var(--space-md);
+  }
+}
+
+@media (pointer: coarse) and (max-width: 640px) {
+  :root {
+    --space-header-offset: 6.3rem;
+  }
+
+  nav[data-type="hero-nav"] {
+    row-gap: 0;
+    padding-block: var(--space-xs);
   }
 }
 
@@ -259,7 +301,7 @@ nav[data-type="hero-nav"] a[data-active] {
 [data-type="starfield"] {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: var(--z-sky);
   display: block;
   touch-action: none;
 }
@@ -278,7 +320,7 @@ nav[data-type="hero-nav"] a[data-active] {
    stacked against the top. Owned here so both layouts share one value. */
 main {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-content);
   flex: 1 0 auto;
   padding-top: calc(var(--nav-h, var(--space-header-offset)) + var(--space-section));
 }
@@ -302,7 +344,7 @@ main {
 
 [data-type="tool-page"],
 [data-tool]:not(:defined) {
-  padding: 2rem var(--space-page-x);
+  padding: var(--pad-tool-y) var(--space-page-x);
 }
 
 /* Before a tool or game's script upgrades its element, the server markup is a
@@ -324,6 +366,23 @@ html[data-js] :is([data-tool], [data-game]):not(:defined)::after {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+}
+
+/* The panel says what it is waiting for, in plain text a screen reader reads
+   too: a grey box with nothing in it looked broken. It sits on the panel's own
+   box (the line is shorter than the panel, so the panel's height is
+   unchanged) and nothing about it animates. A game says "game". */
+html[data-js] :is([data-tool], [data-game]):not(:defined)::after {
+  content: "Loading the tool…";
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 3;
+  text-indent: var(--space-card);
+  color: var(--color-muted);
+}
+
+html[data-js] [data-game]:not(:defined)::after {
+  content: "Loading the game…";
 }
 
 /* The panel is the same wherever a component mounts: under a tool or game's
@@ -412,8 +471,8 @@ h1 {
 /* One-line lede that sits under a page's h1 to give listing pages context
    (for readers) and descriptive copy (for search engines). */
 p[data-type="page-intro"] {
-  margin: -0.25rem 0 var(--space-section);
-  max-width: 42rem;
+  margin: calc(-1 * var(--space-2xs)) 0 var(--space-section);
+  max-width: var(--measure-text);
   color: var(--color-muted);
   font-size: var(--text-base);
   line-height: 1.5;
@@ -463,7 +522,7 @@ p[data-type="page-intro"] {
 [data-type="card-grid"] > *:focus-within {
   border-color: var(--color-muted);
   box-shadow: var(--shadow-2);
-  transform: translateY(-2px);
+  transform: translateY(var(--lift));
 }
 
 /* ── Card anatomy, the same on every hub ───────────────────────────────────
@@ -553,8 +612,8 @@ p[data-type="card-meta"] {
    unmarked. A secondary link in the card keeps its own ring. */
 @supports selector(:has(*)) {
   [data-type="card-grid"] > *:has([data-type="card-title"] a:focus-visible) {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
   }
 
   [data-type="card-grid"] > * [data-type="card-title"] a:focus-visible {
@@ -575,3 +634,58 @@ p[data-type="card-meta"] {
    card the tap target, so the 29px link is no longer the thing a thumb has to
    hit. Padding the link instead would inflate every card to satisfy a floor
    the card already clears. */
+
+/* ── Forced colours ─────────────────────────────────────────────────────────
+   Windows High Contrast and similar replace the palette with system colours and
+   drop box-shadows and background tints. What was drawn only by a shadow or a
+   tint disappears, so the ring, the card frame and every field and control get
+   a real line in the system's text colour. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid CanvasText;
+  }
+
+  [data-type="card-grid"] > *,
+  :is(input, select, textarea, button, summary, [role="button"]) {
+    border: 1px solid CanvasText;
+  }
+}
+
+/* ── Print ──────────────────────────────────────────────────────────────────
+   A printed page is its text: no nav, footer, sky, starfield, skip link or
+   loading panel, and black on white whatever theme the visitor chose. The
+   palette is pinned to the system's light colours, so the dark theme prints
+   as ink on paper, not a dark page. `main` is widened in global.css, which
+   owns its column. */
+@media print {
+  nav[data-type="hero-nav"],
+  footer[data-type="site-footer"],
+  [data-type="starfield"],
+  div[data-type="sky"],
+  a[data-type="skip-link"],
+  html[data-js] :is([data-tool], [data-game]):not(:defined)::after {
+    display: none;
+  }
+
+  :root,
+  [data-theme="dark"] {
+    color-scheme: light;
+    --color-bg: Canvas;
+    --color-surface: Canvas;
+    --color-surface-2: Canvas;
+    --color-text: CanvasText;
+    --color-muted: CanvasText;
+    --color-accent: CanvasText;
+    --color-border: CanvasText;
+  }
+
+  body {
+    min-height: 0;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  main {
+    padding-top: 0;
+  }
+}

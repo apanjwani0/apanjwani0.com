@@ -217,7 +217,7 @@ div[data-type="writing-summary"] {
 div[data-type="sky"] {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: var(--z-sky);
   pointer-events: none;
   --sky-star: var(--color-muted);
   --sky-line: var(--color-border);
@@ -284,5 +284,19 @@ div[data-type="sky"] canvas {
   div[data-type="writing-row"] {
     flex-direction: column;
     gap: 0.2rem;
+  }
+}
+
+/* Print: an article flows the full width of the page, not the screen's column.
+   Declared last so it beats the width rules above at equal specificity; the
+   rest of the print rules (what to hide, the black-on-white palette) are in
+   shared.css, which both shells load. */
+@media print {
+  /* !important: a page may set its own column on `main` from a scoped style
+     that loads after this sheet (the learnings page does). */
+  main,
+  main[data-width] {
+    max-width: none !important;
+    padding-inline: 0;
   }
 }
