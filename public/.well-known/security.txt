@@ -1,0 +1,4 @@
+Contact: mailto:apanjwani0@gmail.com
+Expires: 2027-11-02T00:00:00Z
+Preferred-Languages: en
+Canonical: https://apanjwani0.com/.well-known/security.txt

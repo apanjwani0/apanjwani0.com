@@ -53,6 +53,7 @@ npm run poker:check    # poker engine checks
 npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
 npm run origin:check   # assert the DEPLOYED edge posture against production (also daily: .github/workflows/origin-check.yml)
+npm run indexnow -- <url…>  # submit changed URLs to IndexNow (deploy.yml does this from the sitemap diff)
 npm run trainer:catalogue   # poker trainer asset sheet -> docs/poker-assets.html (gitignored)
 node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc encoder
 ```
@@ -89,7 +90,7 @@ that needs per-visitor identity needs a different design. Don't rebuild what
 Cloudflare's dashboard already shows. Keep Cloudflare Web Analytics
 auto-injection off, and never weaken the CSP for its beacon.
 
-Caching (`max-age=0` is deliberate; the middleware's branch order is asserted),
+Caching (`max-age=0` is deliberate; the middleware's branch order is asserted; the service worker caches only `offline.html` and never HTML),
 share cards (run `npm run og` and commit the PNGs after changing a tool, game,
 title or description) and AI crawlers (never disallow a search or user-fetch
 agent): [docs/operations.md](docs/operations.md).
