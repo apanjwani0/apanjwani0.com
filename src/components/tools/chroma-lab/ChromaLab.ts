@@ -281,7 +281,7 @@ class ChromaLabTool extends HTMLElement {
 
           <div data-type="cl-contrast-result">
             <div data-type="cl-ratio">
-              <output data-out="ratio" aria-live="polite">—</output>
+              <output data-out="ratio" role="status" aria-live="polite">—</output>
               <span data-type="cl-ratio-label">contrast ratio</span>
             </div>
             <div data-type="cl-badges" aria-label="WCAG conformance"></div>
@@ -295,7 +295,7 @@ class ChromaLabTool extends HTMLElement {
           <p>Contrast is defined for opaque colours, so this checker ignores alpha on the foreground and background. Your colours and settings are remembered in your browser, and nothing is uploaded.</p>
         </details>
 
-        <div data-type="cl-statusbar"><span data-type="cl-status" aria-live="polite"></span></div>
+        <div data-type="cl-statusbar"><span data-type="cl-status" role="status" aria-live="polite"></span></div>
       </div>
     `
 
@@ -363,7 +363,7 @@ class ChromaLabTool extends HTMLElement {
 
   private fromHexField(el: HTMLInputElement) {
     const parsed = clParseHex(el.value)
-    if (!parsed) { el.setAttribute('data-invalid', ''); el.setAttribute('aria-invalid', 'true'); this.setStatus('Not a valid hex colour.'); return }
+    if (!parsed) { el.setAttribute('data-invalid', ''); el.setAttribute('aria-invalid', 'true'); this.setStatus('Not a valid hex colour.', true); return }
     el.removeAttribute('data-invalid')
     el.removeAttribute('aria-invalid')
     this.rgb = parsed.rgb
@@ -572,8 +572,14 @@ class ChromaLabTool extends HTMLElement {
     else this.setStatus('Copy failed — clipboard access was blocked.')
   }
 
-  private setStatus(label: string) {
-    if (this.statusEl) this.statusEl.textContent = label
+  private setStatus(label: string, failed = false) {
+    if (!this.statusEl) return
+    // A failure interrupts a screen reader (alert); anything else waits its turn (status).
+    this.statusEl.setAttribute('role', failed ? 'alert' : 'status')
+    this.statusEl.setAttribute('aria-live', failed ? 'assertive' : 'polite')
+    if (failed) this.statusEl.setAttribute('data-error', '')
+    else this.statusEl.removeAttribute('data-error')
+    this.statusEl.textContent = label
   }
 
   // ── persistence ──────────────────────────────────────────────────────────────

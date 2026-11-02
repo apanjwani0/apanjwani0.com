@@ -872,12 +872,12 @@ class JsonTidyTool extends HTMLElement {
               aria-label="JSON input"
               placeholder="Paste or type JSON here…  (Ctrl/Cmd + Enter to format)"
             ></textarea>
-            <input data-control="file" type="file" accept=".json,.txt,application/json,text/plain" hidden aria-hidden="true" />
+            <input data-control="file" type="file" accept=".json,.txt,application/json,text/plain" aria-label="Choose a JSON file to open" hidden />
             <div data-type="jt-statusbar">
               <span data-type="jt-status" role="status" aria-live="polite"></span>
               <span data-type="jt-meta"></span>
             </div>
-            <pre data-type="jt-error" hidden></pre>
+            <pre data-type="jt-error" role="alert" hidden></pre>
             <div data-type="jt-repair" hidden>
               <span data-type="jt-repair-msg" role="status" aria-live="polite"></span>
               <button data-action="repair-apply" type="button" title="Replace the input on the left with the repaired JSON">Apply to input ↩</button>

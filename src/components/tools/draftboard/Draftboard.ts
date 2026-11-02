@@ -65,13 +65,13 @@ class DraftboardTool extends HTMLElement {
             <button data-view="map" title="Structure map">Map</button>
           </div>
           <div data-type="md-panes">
-            <textarea data-type="md-input" placeholder="Start writing markdown..."></textarea>
-            <div data-type="md-preview"></div>
+            <textarea data-type="md-input" aria-label="Markdown" placeholder="Start writing markdown..."></textarea>
+            <div data-type="md-preview" role="region" aria-label="Preview"></div>
             <div data-type="md-map">
               <div data-type="md-map-bar">
                 <button data-map-mode="headings">Headings</button>
                 <button data-map-mode="outline">Outline</button>
-                <span data-type="md-map-note"></span>
+                <span data-type="md-map-note" role="status" aria-live="polite"></span>
               </div>
               <div data-type="md-map-canvas"></div>
             </div>
@@ -92,6 +92,7 @@ class DraftboardTool extends HTMLElement {
               </div>
             </div>
           </div>
+          <p data-type="md-status" role="status" aria-live="polite"></p>
           <div data-type="md-help" hidden>
             <div data-type="help-header">
               <h3>Syntax Reference</h3>
@@ -293,14 +294,21 @@ class DraftboardTool extends HTMLElement {
         localStorage.removeItem(STORAGE_KEY)
         this.updatePreview()
         this.renderMap()
+        this.say('The editor is empty.')
         break
       case 'copy':
         void copyText(input.value, this.querySelector<HTMLButtonElement>('[data-action="copy"]'), { ms: 1500 })
+          .then(ok => this.say(ok ? 'Markdown copied to the clipboard.' : 'Copying failed because the browser blocked clipboard access.'))
         break
       case 'help':
         this.toggleHelp()
         break
     }
+  }
+
+  /** One line of feedback under the editor, read aloud as a polite status. */
+  private say(text: string) {
+    this.querySelector<HTMLElement>('[data-type="md-status"]')!.textContent = text
   }
 
   private toggleExportMenu(force?: boolean) {
@@ -347,6 +355,7 @@ class DraftboardTool extends HTMLElement {
 
   private downloadBlob(content: string, filename: string, mime: string) {
     downloadBlob(new Blob([content], { type: mime }), filename)
+    this.say(`Saved ${filename}.`)
   }
 
   private exportPdf(preview: HTMLElement) {
@@ -380,6 +389,7 @@ class DraftboardTool extends HTMLElement {
       canvas.toBlob(blob => {
         if (!blob) return
         downloadBlob(blob, 'document.png')
+        this.say('Saved document.png.')
       })
     } finally {
       btn.disabled = false

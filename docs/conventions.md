@@ -208,3 +208,16 @@ are asserted by `npm run security:smoke`.
   lives in `src/components/tools/<slug>/` and a game's in `src/components/games/<slug>/`; the
   listing is its entry in `src/config/` (read through `src/lib/config.ts`), and
   the existing `[slug].astro` route renders it.
+- **Accessibility in tools.** Asserted over every tool source by
+  `scripts/smoke/tool-a11y.mjs`.
+  - Every `<input>`, `<textarea>` and `<select>` has an `aria-label`, an
+    `aria-labelledby`, or a `<label>` (wrapping it, or `for=` its `id`). A
+    placeholder is not a name.
+  - A tool's result or status node is `role="status"`; an error is
+    `role="alert"`. Flip the role (and `aria-live`) with the state, as
+    `Flowmap.say(text, 'error')` and `setStatus` in Cron Whisperer and Regex Lab do.
+  - A tone is never colour alone. In the control kit, put `data-tone="error"`,
+    `"success"` or `"note"` on the message inside a `status-line` (or on a
+    badge) and `controls.css` leads it with "Error: ", "Done: " or "Note: ".
+    A tool that flags failure with a bare `data-error` gets the same word from
+    `tools-common.css`.
