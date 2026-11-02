@@ -86,6 +86,9 @@ const ogImage = ogImageMeta(site, ogCard, title)
       clientRouter={clientRouter}
       theme={site.theme}
     />
+    {/* Page-specific stylesheets (an embedded component's sheets), in the head
+        so nothing paints before they arrive. */}
+    <slot name="head" />
   </head>
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>

@@ -88,7 +88,6 @@ Each checked against the code on 2 Nov 2026.
 - Chainsaw: `aia-available` quotes the raw CA Issuers URL; name it only when `csLinkableUrl` accepts it.
 - The paused UI-refresh foundation (design-system.md, *UI refresh*) has no UI caller: `kit.ts` (and `fuzzy.ts` beyond the 404), four empty `init*UI` stubs, unused theme helpers and unused tokens (a little CSS on every page), `Base`'s `canonicalPath`, and `ROOT_BOOT_JS` living in a shared module. Decide: build it, or park it on `wip/ui-refresh-notes` and delete it here.
 - `/oat.min.*` is not hashed, so it revalidates on every page view; a Cloudflare Cache Rule with a long edge and browser TTL fixes it (serving it through Vite does not, see AGENTS.md *Stack*).
-- Game and article pages load every game's CSS (about 91 KB) because `games-embed.css` is the one list of component stylesheets; splitting it means changing that rule.
 - The home share image is the WebP portrait (the avatar fallback), which some apps (LinkedIn) handle poorly. A 1200x630 PNG card would fix it.
 - Learnings copy: both article `seoTitle`s run over 65 characters, both meta descriptions over 160, and the hub's title is the bare `learnings`.
 

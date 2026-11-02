@@ -41,7 +41,7 @@ import { dailyPassage, todayUtcDay } from '../src/lib/type-trial-daily.ts'
 import { isPublishedLearning, learningEmbedTag, learningsAboutEmbed } from '../src/lib/learnings.ts'
 import { learningHasOgCard } from '../src/lib/og.ts'
 import { learnings } from '../src/config/learnings.ts'
-import { EMBED_TAGS } from '../src/lib/embeds.ts'
+import { EMBED_TAGS, EMBED_STYLES } from '../src/lib/embeds.ts'
 import {
   HUE_DAILY_MAX,
   HUE_DAILY_ROUNDS,
@@ -4799,13 +4799,15 @@ console.log('type trial ghost tokens are bounded, fingerprint-pinned, and decode
   }
 
   /* ── 11. Every wired game reaches its module AND its stylesheet. ──
+     (The stylesheet half reads EMBED_STYLES, the one list of component
+     sheets a page links for its own embed; tools-hub-smoke.mjs asserts the
+     list from the other side, so no sheet under games/ can sit unlisted.)
      Derived from mountGame's own dispatch rather than from a list, so a game
      added later is covered without anybody remembering this exists. Both halves
      fail silently: no dispatch branch renders a blank element, and a missing
      stylesheet import renders an unstyled one — on the /games route AND on any
      learnings article that embeds it. */
   const mountSrc = await readFile(new URL('../src/lib/game-mount.ts', import.meta.url), 'utf-8')
-  const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
   // EMBED_TAGS and not GAME_TAGS, which is what this loop read until 2026-09-25.
   // The comment above always claimed "on any learnings article that embeds it",
   // but GAME_TAGS is the narrow list: it excludes the six Driftfield engines and
@@ -4822,7 +4824,10 @@ console.log('type trial ghost tokens are bounded, fingerprint-pinned, and decode
     // Derived from the import, not from the slug: '2048' lives in twenty48/.
     const dir = importPath.replace(/\/[^/]+$/, '').replace('../components/games/', '')
     assert.ok(dir && dir !== importPath, `${slug}'s dispatch must import from src/components/games/`)
-    assert.ok(embedCss.includes(`games/${dir}/`), `${slug}'s stylesheet is not imported by games-embed.css`)
+    assert.ok(
+      (EMBED_STYLES[slug] ?? []).some(sheet => sheet.startsWith(`components/games/${dir}/`)),
+      `${slug}'s stylesheet is not named by EMBED_STYLES (src/lib/embeds.ts)`,
+    )
   }
 }
 console.log('deep shore: the fast renderer equals its reference, zoom keeps its anchor, and the permalink carries enough digits to mean something')
@@ -7692,10 +7697,12 @@ const HOST_NAMES = /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy
     'autoplay silences the caption, or a screen reader hears it change every beat')
 
   // Its styles: its own sheet, plus the Diagram Atlas's shared vocabulary.
-  const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
-  assert.match(embedCss, /@import '\.\.\/components\/games\/internet-atlas\/internet-atlas\.css';/, 'the internet atlas stylesheet is loaded')
-  assert.match(embedCss, /@import '\.\.\/components\/games\/diagram-atlas\/diagram-atlas\.css';/,
-    'the internet atlas draws with the at-* vocabulary from diagram-atlas.css, so that import must stay')
+  const iaSheets = EMBED_STYLES['internet-atlas'] ?? []
+  assert.ok(iaSheets.includes('components/games/internet-atlas/internet-atlas.css'), 'the internet atlas stylesheet is loaded')
+  assert.ok(iaSheets.includes('components/games/diagram-atlas/diagram-atlas.css'),
+    'the internet atlas draws with the at-* vocabulary from diagram-atlas.css, so that sheet must stay in its EMBED_STYLES entry')
+  assert.ok(iaSheets.indexOf('components/games/diagram-atlas/diagram-atlas.css') < iaSheets.indexOf('components/games/internet-atlas/internet-atlas.css'),
+    'the atlas sheet that adds to the shared vocabulary comes after it in the cascade')
 }
 console.log('internet atlas: every stop has a full legend and its own pinned figure, every beat lights a real element, and no figure shows a real address or names the host')
 

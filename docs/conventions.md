@@ -22,6 +22,12 @@ are asserted by `npm run security:smoke`.
   static import of a per-tool sheet, in the route or in a tool module, puts it
   in every tool page's head: Astro hoists the CSS of every module a page's
   script can reach. Asserted.
+- **A game, article or Driftfield page links only its own embed's stylesheets**,
+  the `EMBED_STYLES` entry for its slug (`src/lib/embeds.ts`, the one list),
+  through `embedStyles()` and `<link slot="head">`, for the same reason. A new
+  component's sheet goes in that entry; a seed field, controls or any idiom two
+  games share goes in `games-common.css`, not in each game's sheet, because the
+  sheets no longer share a bundle to lean on. Asserted.
 - **No bundled script is inlined.** Vite inlines a small `<script>` chunk by
   default, with no nonce, and the CSP refuses it; `assetsInlineLimit` in
   `astro.config.mjs` keeps every script a file, and every `?url`-linked

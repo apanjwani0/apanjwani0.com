@@ -66,3 +66,45 @@ export function embedTag(slug: string | undefined): string | undefined {
   if (!slug || !Object.hasOwn(EMBED_TAGS, slug)) return undefined
   return EMBED_TAGS[slug]
 }
+
+const GAMES_COMMON = 'components/games/games-common.css'
+const EXPORT_BAR = 'styles/canvas-export.css'
+
+/**
+ * The stylesheets each embed needs, by slug, as paths under `src/`: the one
+ * list of component stylesheets.
+ *
+ * A page links the sheets of the one component it renders (`embedStyles()` in
+ * `embed-styles.ts`) instead of a bundle of all of them, which put every game's
+ * CSS (about 115 KB) on every game and article page. Order is cascade order:
+ * the shared floor first, then the component's own sheets, then the export bar
+ * for the engines that attach one (src/lib/canvas-export.ts).
+ *
+ * `security:smoke` asserts the list from the other side: every `EMBED_TAGS`
+ * slug has an entry, every sheet exists, every stylesheet under
+ * `src/components/games/` is named here, and a component that imports
+ * `canvas-export` lists its sheet. Internet Atlas draws its figure with Diagram
+ * Atlas's classes, so it lists both.
+ */
+export const EMBED_STYLES: Record<string, readonly string[]> = {
+  '2048': [GAMES_COMMON, 'components/games/twenty48/twenty48.css'],
+  'quintle': [GAMES_COMMON, 'components/games/quintle/quintle.css'],
+  'maze-weaver': [GAMES_COMMON, 'components/games/maze-weaver/maze-weaver.css'],
+  'type-trial': [GAMES_COMMON, 'components/games/type-trial/type-trial.css'],
+  'hue-hunt': [GAMES_COMMON, 'components/games/hue-hunt/hue-hunt.css'],
+  'poker-trainer': [GAMES_COMMON, 'components/games/poker-trainer/poker-trainer.css'],
+  'deep-shore': [GAMES_COMMON, 'components/games/deep-shore/deep-shore.css', EXPORT_BAR],
+  'game-of-life': [GAMES_COMMON, 'components/games/game-of-life/game-of-life.css'],
+  'flow-field': [GAMES_COMMON, 'components/games/flow-field/flow-field.css', EXPORT_BAR],
+  'starfield-toy': [GAMES_COMMON, 'components/games/starfield-toy/starfield.css', EXPORT_BAR],
+  'murmuration': [GAMES_COMMON, 'components/games/murmuration/murmuration.css', EXPORT_BAR],
+  'turing-bloom': [GAMES_COMMON, 'components/games/turing-bloom/turing-bloom.css', EXPORT_BAR],
+  'sand-loom': [GAMES_COMMON, 'components/games/sand-loom/sand-loom.css', EXPORT_BAR],
+  'lsystem-tree': [GAMES_COMMON, 'components/games/lsystem/lsystem.css', EXPORT_BAR],
+  'diagram-atlas': [GAMES_COMMON, 'components/games/diagram-atlas/diagram-atlas.css'],
+  'internet-atlas': [
+    GAMES_COMMON,
+    'components/games/diagram-atlas/diagram-atlas.css',
+    'components/games/internet-atlas/internet-atlas.css',
+  ],
+}

@@ -83,8 +83,8 @@ Every content section is manageable through `/admin` in dev. To add one:
 6. For a new tool or game, run `npm run og` and commit the card.
 7. For a new **game**: its tag in `EMBED_TAGS` (`src/lib/embeds.ts`), its slug
    in `GAME_SLUGS` (`src/lib/games.ts`; `GAME_TAGS` is derived), its import in
-   `mountGame()` (`src/lib/game-mount.ts`) and its stylesheet in
-   `src/styles/games-embed.css`.
+   `mountGame()` (`src/lib/game-mount.ts`) and its stylesheets in
+   `EMBED_STYLES` (`src/lib/embeds.ts`).
 
 Current config keys: `site`, `projects`, `experience`, `blogs`, `learnings`,
 `games`, `tools`
@@ -147,8 +147,11 @@ kind's predicate.
 `src/config/games.ts`, which `/admin` regenerates wholesale. They are not the
 same list: Driftfield engines and article-only figures are embeds, not games.
 Asserted: the subset relation, no Driftfield mode is a game, and every
-`EMBED_TAGS` entry reaches a `mountGame()` branch and a stylesheet in
-`games-embed.css`.
+`EMBED_TAGS` entry reaches a `mountGame()` branch and an `EMBED_STYLES` entry,
+and no stylesheet under `src/components/games/` sits unlisted. A page links only
+its own embed's sheets (`embedStyles()`, `src/lib/embed-styles.ts`, through
+`<link slot="head">`); a static CSS import would put every game's CSS in every
+game and article page.
 
 A cross-link is derived, never stored twice: `learningsAboutEmbed()` finds the
 article about an embed from the article's own `embed`. `RelatedLinks.astro`

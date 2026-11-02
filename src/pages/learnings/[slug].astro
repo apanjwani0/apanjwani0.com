@@ -11,7 +11,7 @@ import { isPublishedLearning, learningEmbedTag, readingTime, retiredLearningTarg
 import { existingOgCardPath, learningHasOgCard } from '../../lib/og'
 import { render, splitOnEmbeds } from '../../lib/markdown'
 import { formatDisplayDate } from '../../lib/date'
-import '../../styles/games-embed.css'
+import { embedStyles } from '../../lib/embed-styles'
 
 const { slug } = Astro.params
 
@@ -112,6 +112,7 @@ const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
 >
   <JsonLd json={ldJson} />
   <JsonLd json={breadcrumbLd} />
+  {EmbedTag && embedStyles(learning.embed).map(href => <link slot="head" rel="stylesheet" href={href} />)}
   <Breadcrumbs items={crumbs} />
   <article>
     <header>

@@ -15,7 +15,7 @@ import { MOVED_GAMES } from '../../lib/driftfield'
 import { getInterest } from '../../lib/interest'
 import { learningsAboutEmbed } from '../../lib/learnings'
 import '../../styles/seo-support.css'
-import '../../styles/games-embed.css'
+import { embedStyles } from '../../lib/embed-styles'
 
 const { slug } = Astro.params
 if (slug === 'wallpaper-forge') return Astro.redirect('/tools/driftfield', 301)
@@ -109,6 +109,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
       breadcrumb stays: it pairs with the visible trail below. */}
   {GameTag && <JsonLd json={ldJson} />}
   <JsonLd json={breadcrumbLd} />
+  {GameTag && embedStyles(slug).map(href => <link slot="head" rel="stylesheet" href={href} />)}
   {faqLd && <JsonLd json={faqLd} />}
   <Breadcrumbs items={crumbs} />
   {GameTag && slug === 'poker-trainer' && (
