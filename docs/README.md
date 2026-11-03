@@ -17,6 +17,7 @@ One line per file. The rules are in [../AGENTS.md](../AGENTS.md); session pickup
 
 - [ideas.md](ideas.md): ideas not committed to, follow-ups on shipped tools, loose ends in the code, the retired autonomous pass.
 - [plans/polish-2026-11.md](plans/polish-2026-11.md): the full polish and reach pass (2 Nov 2026): design, UX, functionality, agents, SEO/GEO, ordered PRs and the owner's decisions.
+- [plans/autonomous-runbook.md](plans/autonomous-runbook.md): how an unattended session runs (pre-flight, gate, push, PRs, when to stop) and the queue it works from.
 - [plans/tools-week.md](plans/tools-week.md): the owner's /tools hub decisions (25 Oct 2026) and what was deferred and why.
 - [plans/review-response.md](plans/review-response.md): the owner's decisions D1-D10 from two outside reviews (2 Oct 2026) and the PRs not yet shipped.
 - [plans/seo-backlog.md](plans/seo-backlog.md): SEO items worth building (outside review, 4 Oct 2026) and the Search Console indexing status.

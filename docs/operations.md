@@ -27,6 +27,10 @@ Build and test notes, caching, analytics, share cards, AI crawlers, deploy and t
   checklist, plus the docs, `/terms`, share-card and assertion rules.
   Dependabot (`.github/dependabot.yml`) opens weekly PRs into `develop`: one
   for all minor and patch npm bumps, one per major, and one for GitHub Actions.
+- `scripts/page-sweep.mjs` loads every sitemap URL (or given paths) at laptop
+  and phone size and reports status, layout shift, overflow, console errors,
+  h1 count and title/description budgets. It needs a browser, so it is not in
+  the gate; install Playwright with `npm i --no-save playwright`.
 - For UI/route changes, also run the *Browser check* below against the dev server.
 - Deploys: a push to `main` builds the Docker image, restarts the container
   from the self-hosted runner, then fetches `/` inside it. That probe runs
