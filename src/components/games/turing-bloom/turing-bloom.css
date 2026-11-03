@@ -16,20 +16,3 @@ div[data-type="tb-slider"] output {
   min-width: 4.5ch;
   text-align: right;
 }
-
-div[data-group="seed"] {
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-div[data-group="seed"] input[type="text"] {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 0.28rem 0.5rem;
-  width: 11ch;
-}
-

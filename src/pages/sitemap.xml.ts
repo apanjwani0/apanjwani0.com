@@ -1,7 +1,7 @@
 export const prerender = false
 
 import type { APIRoute } from 'astro'
-import { indexablePaths, loadSiteConfigs } from '../lib/site-index'
+import { indexablePaths, loadSiteConfigs, realDate } from '../lib/site-index'
 import { escapeHtml } from '../lib/escape'
 
 // The sitemap is `indexablePaths` serialised, and nothing else. Which pages are
@@ -22,7 +22,9 @@ ${indexablePaths(configs)
     // exactly XML's predefined entities, and a single `&` anywhere in a slug makes
     // the whole document unparseable — which fails closed on the entire site's
     // indexing, not just on the one bad URL.
-    const lastmod = u.lastmod ? `<lastmod>${escapeHtml(u.lastmod)}</lastmod>` : ''
+    // Only a real YYYY-MM-DD date (indexablePaths already supplies only those;
+    // vetting again here keeps a bad one from ever reaching the file).
+    const lastmod = realDate(u.lastmod) ? `<lastmod>${escapeHtml(u.lastmod!)}</lastmod>` : ''
     return `  <url><loc>${escapeHtml(`${base}${u.path}`)}</loc>${lastmod}</url>`
   })
   .join('\n')}

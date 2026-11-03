@@ -13,14 +13,25 @@
  *   ?echo=1      — echo the received body back with its Content-Type, instead of
  *                  the default JSON acknowledgement.
  *
+ * A bin can also carry a configured response (`PUT /api/hook/:bin/response`): a
+ * status, a few headers, a content type and a body. It replaces the default
+ * acknowledgement for every capture, and the three knobs above still override it
+ * per request. Both the configured and the echoed content type are held to an
+ * allowlist (safeResponseContentType): this origin must not serve a caller's
+ * HTML.
+ *
  * CORS is permissive so the endpoint is also usable from a browser fetch on any
  * origin (server-to-server webhooks ignore CORS entirely).
  */
 import type { APIRoute } from 'astro'
 import { createRateLimiter, rateLimitKey } from '../../../lib/security'
 import {
+  getBinResponse,
   isValidBinId,
+  rawBodyIfLossy,
   recordRequest,
+  responseIsRenderableXml,
+  safeResponseContentType,
   WEBHOOK_MAX_BODY_BYTES,
   type CapturedHeader,
 } from '../../../lib/webhook-store'
@@ -44,13 +55,13 @@ function baseHeaders(extra?: Record<string, string>): Record<string, string> {
   return { 'Cache-Control': 'no-store', ...CORS_HEADERS, ...extra }
 }
 
-/** Read up to maxBytes of the body as UTF-8 text; report if it was truncated. */
+/** Read up to maxBytes of the body, as bytes and as UTF-8 text; report if it was truncated. */
 async function readLimitedText(
   request: Request,
   maxBytes: number,
-): Promise<{ text: string; size: number; truncated: boolean }> {
+): Promise<{ text: string; bytes: Uint8Array; size: number; truncated: boolean }> {
   const reader = request.body?.getReader()
-  if (!reader) return { text: '', size: 0, truncated: false }
+  if (!reader) return { text: '', bytes: new Uint8Array(0), size: 0, truncated: false }
 
   const chunks: Uint8Array[] = []
   let size = 0
@@ -78,7 +89,9 @@ async function readLimitedText(
     bytes.set(c, offset)
     offset += c.byteLength
   }
-  return { text: new TextDecoder().decode(bytes), size, truncated }
+  // ignoreBOM keeps a leading byte-order mark in the text, so valid UTF-8
+  // re-encodes to exactly the bytes that arrived (rawBodyIfLossy relies on it).
+  return { text: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), bytes, size, truncated }
 }
 
 function clampInt(raw: string | null, min: number, max: number, fallback: number): number {
@@ -114,7 +127,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
     })
   }
 
-  let { text, size, truncated } = await readLimitedText(request, WEBHOOK_MAX_BODY_BYTES)
+  let { text, bytes, size, truncated } = await readLimitedText(request, WEBHOOK_MAX_BODY_BYTES)
   if (truncated) {
     // The limited read stops counting at cancel, so `size` is only bytes-seen.
     // Trust Content-Length for the real pre-truncation size when it says more.
@@ -131,6 +144,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
     headers.push({ name, value })
   })
 
+  const bodyBase64 = rawBodyIfLossy(bytes, text)
   recordRequest(binId, {
     id: crypto.randomUUID(),
     method: request.method,
@@ -139,12 +153,15 @@ export const ALL: APIRoute = async ({ params, request }) => {
     contentType: request.headers.get('content-type'),
     source: request.headers.get('cf-connecting-ip'),
     bodyText: text,
+    ...(bodyBase64 ? { bodyBase64 } : {}),
     bodyTruncated: truncated,
     size,
     receivedAt: Date.now(),
   })
 
-  const status = clampInt(url.searchParams.get('status'), 200, 599, 200)
+  // The bin's configured response, when it has one; the query knobs below win.
+  const configured = getBinResponse(binId)
+  const status = clampInt(url.searchParams.get('status'), 200, 599, configured?.status ?? 200)
   // Capped at 2s, not 8s. Every in-flight delay pins a socket and its captured
   // body in memory on a single 1 GB Node process, so an anonymous caller could
   // otherwise buy 8 seconds of resident connection per request and exhaust the
@@ -155,16 +172,37 @@ export const ALL: APIRoute = async ({ params, request }) => {
 
   // 204/205/304 forbid a body — the Response constructor throws on one (even
   // an empty string), which would turn the tool's own advertised input into a 500.
+  const configuredHeaders: Record<string, string> = {}
+  for (const h of configured?.headers ?? []) configuredHeaders[h.name] = h.value
+
   if (status === 204 || status === 205 || status === 304) {
-    return new Response(null, { status, headers: baseHeaders() })
+    return new Response(null, { status, headers: baseHeaders(configuredHeaders) })
   }
 
-  // Echo mode replays the body back to the caller for round-trip testing.
+  // Echo mode replays the body back to the caller for round-trip testing. The
+  // caller's own Content-Type used to be reflected verbatim, which let a request
+  // that said `text/html` have this origin answer with a page; only the safe
+  // set is echoed, and anything else comes back as plain text.
   if (url.searchParams.get('echo') === '1') {
-    return new Response(text, {
+    const echoType = safeResponseContentType(request.headers.get('content-type')) ?? 'text/plain; charset=utf-8'
+    return new Response(bytes as unknown as BodyInit, {
       status,
       headers: baseHeaders({
-        'Content-Type': request.headers.get('content-type') ?? 'text/plain; charset=utf-8',
+        ...configuredHeaders,
+        'Content-Type': echoType,
+        ...(responseIsRenderableXml(echoType) ? { 'Content-Disposition': 'attachment' } : {}),
+      }),
+    })
+  }
+
+  if (configured) {
+    return new Response(configured.body, {
+      status,
+      headers: baseHeaders({
+        ...configuredHeaders,
+        'Content-Type': configured.contentType,
+        // A browser renders XML as a page; as an attachment it is only data.
+        ...(responseIsRenderableXml(configured.contentType) ? { 'Content-Disposition': 'attachment' } : {}),
       }),
     })
   }

@@ -28,8 +28,6 @@
  * `nextThemePref`.
  */
 
-import { KIT_KEY, KIT_MAX, KIT_SLUG } from './kit'
-
 export type ThemePref = 'light' | 'dark' | 'system'
 export type Theme = 'light' | 'dark'
 
@@ -48,7 +46,7 @@ export interface ThemeEventDetail {
 export const THEME_COLOR: Readonly<Record<Theme, string>> = Object.freeze({ light: '#ffffff', dark: '#05070c' })
 
 /** The root attributes that are client state rather than server output, which a swap must carry across. */
-export const ROOT_STATE_ATTRS = ['data-theme', 'data-theme-pref', 'data-js', 'data-kit'] as const
+export const ROOT_STATE_ATTRS = ['data-theme', 'data-theme-pref', 'data-js'] as const
 
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 const THEME_CYCLE: readonly ThemePref[] = ['dark', 'light', 'system']
@@ -85,20 +83,14 @@ export function nextThemePref(pref: ThemePref): ThemePref {
  * own SSR theme.
  *
  * It also marks the document `data-js` (the nav's JS-only buttons stay hidden
- * without it) and `data-kit="<n>"` when the visitor has starred tools, so the
- * /tools shelf can reserve its height before the kit script runs. The count is
- * `sanitizeKit(stored).length` (src/lib/kit.ts) — security:smoke holds the two
- * to the same answer.
+ * without it).
  */
-export const ROOT_BOOT_JS = `(function(){var d=document.documentElement,p=null,n=0,m=false;`
+export const ROOT_BOOT_JS = `(function(){var d=document.documentElement,p=null,m=false;`
   + `try{var s=localStorage.getItem(${JSON.stringify(THEME_KEY)});if(s==="light"||s==="dark"||s==="system")p=s}catch(e){}`
   + `try{m=matchMedia(${JSON.stringify(DARK_QUERY)}).matches}catch(e){}`
   + `var t=p==="light"||p==="dark"?p:p==="system"?(m?"dark":"light"):(d.getAttribute("data-theme-default")||d.getAttribute("data-theme"))==="light"?"light":"dark";`
-  + `try{var k=JSON.parse(localStorage.getItem(${JSON.stringify(KIT_KEY)})||"null"),q=[];`
-  + `if(k&&k.v===1&&Array.isArray(k.slugs))for(var i=0;i<k.slugs.length&&q.length<${KIT_MAX};i++){var x=k.slugs[i];`
-  + `if(typeof x==="string"&&/${KIT_SLUG.source}/.test(x)&&q.indexOf(x)<0)q.push(x)}n=q.length}catch(e){}`
   + `d.setAttribute("data-theme",t);if(p)d.setAttribute("data-theme-pref",p);else d.removeAttribute("data-theme-pref");`
-  + `d.setAttribute("data-js","");if(n)d.setAttribute("data-kit",String(n));else d.removeAttribute("data-kit");`
+  + `d.setAttribute("data-js","");`
   + `var c=document.querySelector('meta[name="theme-color"]');if(c)c.setAttribute("content",t==="light"?${JSON.stringify(THEME_COLOR.light)}:${JSON.stringify(THEME_COLOR.dark)});`
   + `var cs=document.querySelector('meta[name="color-scheme"]');if(cs)cs.setAttribute("content",t)})();`
 
@@ -231,7 +223,7 @@ export function onThemeChange(callback: (detail: ThemeEventDetail) => void): () 
 
 /**
  * Carry the live document's client state onto the document ClientRouter is
- * about to swap in: `data-theme`, `data-theme-pref`, `data-js`, `data-kit`,
+ * about to swap in: `data-theme`, `data-theme-pref`, `data-js`,
  * and the theme-color / color-scheme metas the bootstrap maintains. Without
  * it, `swapRootAttributes` resets every one of them to the incoming page's SSR
  * value, and a light visitor's page flashes dark on every in-site click.

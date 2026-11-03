@@ -41,6 +41,18 @@ export const CRON_PRESETS: CronPreset[] = [
   { slug: 'first-of-the-month', expr: '0 0 1 * *', title: 'Cron on the first of the month' },
 ]
 
+/** The preset page's <title>. Google cuts a title at about 60 characters, so
+ *  the long suffix is kept only where it fits. */
+export function cronPresetSeoTitle(p: CronPreset): string {
+  const long = `${p.title} (${p.expr}) — Cron Expression Explained`
+  return long.length <= 60 ? long : `${p.title} (${p.expr}) Explained`
+}
+
+/** The preset page's meta description: the name, the expression, then what it reads as. */
+export function cronPresetDescription(p: CronPreset): string {
+  return `${p.title}: ${p.expr}. ${cronPresetCopy(p.expr).describe}`
+}
+
 export function cronPreset(slug: string | undefined): CronPreset | undefined {
   return CRON_PRESETS.find(p => p.slug === slug)
 }

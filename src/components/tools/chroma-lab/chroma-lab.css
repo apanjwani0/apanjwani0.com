@@ -376,6 +376,8 @@ span[data-type="cl-status"] {
   color: var(--color-muted);
 }
 
+span[data-type="cl-status"][data-error] { color: var(--color-error); }
+
 /* ── Narrow screens ──────────────────────────────────────── */
 @media (max-width: 640px) {
   div[data-type="cl-convert"] { grid-template-columns: 1fr; }

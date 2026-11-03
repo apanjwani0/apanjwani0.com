@@ -18,6 +18,13 @@ export interface Learning {
   /** Shown on the hub and as the meta description when `metaDescription` is unset. */
   summary: string
   date: string
+  /**
+   * ISO date (YYYY-MM-DD) of the last real revision of `content`. Set it only when
+   * the article's words changed after `date`; it becomes JSON-LD `dateModified`,
+   * `article:modified_time` and the sitemap `<lastmod>`. Absent, those use `date`
+   * (sitemap) or are left out (the other two). Never a typo fix, never "today".
+   */
+  updated?: string
   /** Markdown. Rendered through src/lib/markdown.ts — never handed to set:html raw. */
   content: string
   /**
@@ -40,6 +47,7 @@ export const learnings: Learning[] = [
     "title": "How the internet works, one stop at a time",
     "summary": "Press Enter, and a page appears. This is everything that happens in between, one stop at a time: packets, addresses, DNS, routing, Cloudflare, encryption and HTTP.",
     "date": "2026-09-30",
+    "updated": "2026-10-01",
     "content": "On 29 October 1969, at 10:30 at night, a student named Charley Kline sat at a computer at UCLA and started typing \"login\".\n\nEach letter went to a second computer, at SRI in northern California. Kline got as far as \"lo\", and that computer crashed.\n\nSo the first message sent over the network that became the internet was \"lo\". About an hour later, the whole word got through.\n\nToday you make that kind of trip every time you open a page, in well under a second. Here is what happens in between, one stop at a time.\n\n## The page is cut into packets\n\nA page is too big to send in one go. The server cuts it into small pieces called packets.\n\n{{embed:packets}}\n\nEach packet carries a label: where it is going, and which piece of the page it is.\n\n## Every device has an address\n\nThat label uses an IP address. It is a number that says where a device is, like a postal address.\n\n{{embed:addresses}}\n\nAt home, your router usually gives each device a private address. Outside, they all share one public address.\n\n## Finding the address\n\nYour browser has a name, apanjwani0.com, but it needs a number. So first it looks the number up. That is DNS.\n\n{{embed:dns}}\n\n:::note Why 13 root servers\nThere are 13 root server names, lettered a to m. Early DNS replies had to fit in 512 bytes, and a list of 13 was the most that fit. More than 2,000 machines around the world answer to them.\n:::\n\n## Crossing the internet\n\nThe internet is made of tens of thousands of separate networks that agree to carry each other's packets.\n\n{{embed:routes}}\n\nThey tell each other which addresses they can reach, using BGP. When a cable breaks, they find another way.\n\n## The nearest copy\n\nThis site sits behind Cloudflare, which keeps copies of it in data centres in hundreds of cities.\n\n{{embed:edge}}\n\n==Near on the network is not the same as near on a map.== From my home in India, my requests usually land in Marseille.\n\n## Opening a safe connection\n\nBefore asking for anything, your browser and Cloudflare usually shake hands twice. The first handshake opens a connection. The second agrees on a secret key.\n\n{{embed:handshakes}}\n\nThat second handshake is the S in https.\n\nOver HTTP/3, the newest version, the two happen together, in one handshake.\n\n## Asking for the page\n\nOnly now does your browser ask for the page itself, using HTTP.\n\n{{embed:http}}\n\n## Putting it back together\n\nThe packets come back, not always in order, and sometimes one goes missing.\n\n{{embed:reassembly}}\n\nYour device puts them in order and asks again for anything lost. Then your browser draws the page.\n\nThe whole trip usually takes less than a second. Here is every stop again, in one place:\n\n{{embed}}",
     "embed": "internet-atlas",
     "embedCaption": "Pick a question along the top and watch it play, or press Step to go one beat at a time. The last row of each panel says what happens when that stop goes wrong.",

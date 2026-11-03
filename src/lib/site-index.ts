@@ -95,7 +95,23 @@ const SECTIONS: readonly { path: string; title: string; gated?: (site: Site) => 
 /** A post is ours to list only when its href is on this site. */
 const isLocalPost = (post: Post) => !/^https?:\/\//i.test(post.href)
 const postSlug = (post: Post) => post.href.replace(/^\/?(blogs\/)?/, '')
-const newest = (dates: string[]) => dates.reduce((max, d) => (d > max ? d : max), '')
+
+/**
+ * The date, only when it is a real calendar day written YYYY-MM-DD; otherwise
+ * undefined. A `<lastmod>` is a claim about when a page changed, and Google
+ * discounts a sitemap whose dates it cannot trust, so one that is malformed,
+ * impossible (2026-02-31) or missing is left out rather than guessed.
+ */
+export function realDate(value: string | undefined): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
+  const time = Date.parse(`${value}T00:00:00Z`)
+  return Number.isNaN(time) || new Date(time).toISOString().slice(0, 10) !== value ? undefined : value
+}
+
+/** When an article last really changed: its `updated`, else the day it was published. */
+const learningModified = (l: Pick<Learning, 'date' | 'updated'>) => realDate(l.updated) ?? realDate(l.date)
+
+const newest = (dates: (string | undefined)[]) => dates.reduce<string>((max, d) => (d && d > max ? d : max), '')
 
 /** Each kind's real pages, filtered by that kind's own predicate. */
 function realPages(c: SiteConfigs) {
@@ -119,23 +135,25 @@ function realPages(c: SiteConfigs) {
  * Every indexable page, in sitemap order: the section hubs, then posts,
  * learnings, games, tools, Driftfield modes and Cron Whisperer presets.
  *
- * Only authored content carries a date. The /blogs and /learnings hubs are
- * stamped with their newest entry — /blogs from every post, local or not, since
- * a cross-posted piece still changes what the hub lists.
+ * Only authored content carries a date, and only a real one (`realDate`): a
+ * post's `date`, an article's `updated` else its `date`. Games, tools, modes and
+ * presets carry none, and nothing is stamped from "now". The /blogs and
+ * /learnings hubs are stamped with their newest entry — /blogs from every post,
+ * local or not, since a cross-posted piece still changes what the hub lists.
  */
 export function indexablePaths(c: SiteConfigs): IndexablePath[] {
   const pages = realPages(c)
   const hubDate: Record<string, string> = {
-    '/blogs': newest(c.posts.map(p => p.date)),
-    '/learnings': newest(pages.learnings.map(l => l.date)),
+    '/blogs': newest(c.posts.map(p => realDate(p.date))),
+    '/learnings': newest(pages.learnings.map(learningModified)),
   }
   const sections = SECTIONS
     .filter(s => !s.gated || s.gated(c.site))
     .map(s => (s.path in hubDate ? { path: s.path, lastmod: hubDate[s.path] || undefined } : { path: s.path }))
   return [
     ...sections,
-    ...pages.posts.map(p => ({ path: `/blogs/${postSlug(p)}`, lastmod: p.date })),
-    ...pages.learnings.map(l => ({ path: `/learnings/${l.slug}`, lastmod: l.date })),
+    ...pages.posts.map(p => ({ path: `/blogs/${postSlug(p)}`, lastmod: realDate(p.date) })),
+    ...pages.learnings.map(l => ({ path: `/learnings/${l.slug}`, lastmod: learningModified(l) })),
     ...pages.games.map(g => ({ path: `/games/${g.slug}` })),
     ...pages.tools.map(t => ({ path: `/tools/${t.slug}` })),
     ...pages.modes.map(m => ({ path: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` })),

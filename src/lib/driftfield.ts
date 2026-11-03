@@ -39,7 +39,7 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
     title: 'Flow Field',
     seoTitle: 'Flow Field Generator — Perlin Noise Wallpaper Maker',
     description:
-      'Particles released into a field of Perlin noise, tracing long curved paths. Tune the noise scale, particle count and fade, then export at your screen resolution.',
+      'Particles released into a field of Perlin noise, tracing long curved paths. Tune the noise scale, particle count and fade, then export at screen resolution.',
     keywords: 'flow field generator, perlin noise wallpaper, generative art wallpaper, particle flow field, noise field art',
   },
   {
@@ -55,7 +55,7 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
     title: 'Turing Bloom',
     seoTitle: 'Reaction-Diffusion Generator — Turing Pattern Maker',
     description:
-      'Two chemicals, different diffusion rates, and the patterns Alan Turing predicted in 1952. Change the feed and kill rates to move between spots, stripes and mazes.',
+      'Two chemicals, different diffusion rates, and the patterns Alan Turing predicted in 1952. Change the feed and kill rates to get spots, stripes or mazes.',
     keywords: 'reaction diffusion simulator, turing pattern generator, gray scott model online, morphogenesis simulation',
   },
   {

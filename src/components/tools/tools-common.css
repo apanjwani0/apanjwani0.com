@@ -330,3 +330,12 @@ div[data-group="pane-actions"] button:disabled {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
+
+/* A failed state marked by `data-error` is red and nothing else, so it leads
+   with a word too (the kit does the same for `data-tone` in controls.css).
+   Generated content is read aloud, which keeps the state out of colour alone. */
+:where([data-tool]) :is(span[data-type="cw-status"], span[data-type="rl-status"], span[data-type="cl-status"])[data-error]::before,
+:where([data-tool]) span[data-type="cw-entry-err"]::before,
+:where([data-tool]) div[data-type="ew-row"][data-error] span[data-type="ew-val"]::before {
+  content: "Error: ";
+}

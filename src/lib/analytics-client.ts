@@ -1,22 +1,38 @@
+/**
+ * The page-speed beacon. One record per page view, sent once, when the page is
+ * hidden (or the visitor navigates on inside the site), never on a timer: LCP, CLS
+ * and INP are only final then. The numbers come from the web-vitals package; the
+ * server (src/lib/analytics.ts) counts them into fixed histogram buckets and keeps
+ * no per-visitor field. A visitor who sends Do Not Track or Global Privacy Control
+ * sends nothing at all.
+ *
+ * web-vitals measures a hard load. A ClientRouter navigation has no load of its own,
+ * so a soft view carries only its route time and any INP that happened while it was
+ * on screen, and is labelled `nav: 'soft'`.
+ */
+import { onCLS, onFCP, onINP, onLCP, onTTFB } from 'web-vitals'
+
 const ENTRY_KEY = 'portfolio:entry-path'
 const SAW_HOME_KEY = 'portfolio:saw-home'
 const DIRECT_COUNTED_KEY = 'portfolio:direct-entry-counted'
+/** At most this wide (CSS px) is the 'narrow' viewport bucket. */
+const NARROW_MAX_PX = 640
+
+interface View {
+  path: string
+  nav: 'hard' | 'soft'
+  directEntry: boolean
+  metrics: Record<string, number>
+  sent: boolean
+}
 
 let wired = false
 let routeStartedAt: number | null = null
-let latestLcpMs: number | undefined
-let cls = 0
-let lastSentPath = ''
-let lastSentAt = 0
+let view: View | null = null
 
-function parseToolGamePath(pathname: string): { kind: 'tool' | 'game'; slug: string; path: string } | null {
-  const match = pathname.match(/^\/(tools|games)\/([a-z0-9][a-z0-9-]{0,80})\/?$/)
-  if (!match) return null
-  return {
-    kind: match[1] === 'tools' ? 'tool' : 'game',
-    slug: match[2],
-    path: `/${match[1]}/${match[2]}`,
-  }
+function privacySignalOn(): boolean {
+  const nav = navigator as Navigator & { globalPrivacyControl?: boolean }
+  return nav.doNotTrack === '1' || nav.doNotTrack === 'yes' || nav.globalPrivacyControl === true
 }
 
 function sessionGet(key: string): string | null {
@@ -49,15 +65,32 @@ function directEntryFor(path: string): boolean {
   return isDirect
 }
 
-function navigationMetrics(): Record<string, number> {
-  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-  if (!nav) return {}
-  return {
-    ttfbMs: nav.responseStart,
-    domContentLoadedMs: nav.domContentLoadedEventEnd,
-    loadMs: nav.loadEventEnd || nav.duration,
-    transferSize: nav.transferSize,
-  }
+function startView(nav: 'hard' | 'soft', metrics: Record<string, number> = {}): void {
+  markSessionEntry()
+  const path = window.location.pathname
+  view = { path, nav, directEntry: nav === 'hard' && directEntryFor(path), metrics, sent: false }
+}
+
+/** Keeps the latest value web-vitals reports for the view on screen. CLS, LCP, FCP
+ *  and TTFB belong to the hard load; INP is kept for whichever view it happens in. */
+function record(key: string, value: number, hardOnly: boolean): void {
+  if (!view || view.sent || !Number.isFinite(value)) return
+  if (hardOnly && view.nav !== 'hard') return
+  view.metrics[key] = key === 'cls' ? Math.round(value * 10000) / 10000 : Math.round(value)
+}
+
+/** Sends the view on screen, once. */
+function flush(): void {
+  const current = view
+  if (!current || current.sent) return
+  current.sent = true
+  send({
+    path: current.path,
+    nav: current.nav,
+    vp: window.innerWidth <= NARROW_MAX_PX ? 'narrow' : 'wide',
+    directEntry: current.directEntry,
+    metrics: current.metrics,
+  })
 }
 
 function send(payload: unknown): void {
@@ -72,77 +105,43 @@ function send(payload: unknown): void {
   }).catch(() => {})
 }
 
-function recordPageView(): void {
-  if (navigator.doNotTrack === '1') return
-
-  markSessionEntry()
-  const target = parseToolGamePath(window.location.pathname)
-  if (!target) return
-
-  const now = performance.now()
-  if (target.path === lastSentPath && now - lastSentAt < 1000) return
-  lastSentPath = target.path
-  lastSentAt = now
-
-  const startedAt = routeStartedAt
-  routeStartedAt = null
-  const isClientNavigation = startedAt !== null
-  const clientMetrics: Record<string, number> = isClientNavigation
-    ? { routeMs: now - startedAt }
-    : {}
-  const directEntry = directEntryFor(target.path)
-
-  const waitMs = isClientNavigation ? 100 : 1500
-  window.setTimeout(() => {
-    const metrics = isClientNavigation ? clientMetrics : navigationMetrics()
-    if (!isClientNavigation) {
-      if (latestLcpMs !== undefined) metrics.lcpMs = latestLcpMs
-      if (cls > 0) metrics.cls = Math.round(cls * 10000) / 10000
-    }
-
-    send({
-      ...target,
-      directEntry,
-      metrics,
-    })
-  }, waitMs)
-}
-
-function observeInitialPageVitals(): void {
-  if (!('PerformanceObserver' in window)) return
-
-  try {
-    new PerformanceObserver(list => {
-      const entries = list.getEntries()
-      const latest = entries[entries.length - 1]
-      if (latest) latestLcpMs = latest.startTime
-    }).observe({ type: 'largest-contentful-paint', buffered: true })
-  } catch {
-    // Browser does not support this metric.
-  }
-
-  try {
-    new PerformanceObserver(list => {
-      for (const entry of list.getEntries() as Array<PerformanceEntry & { hadRecentInput?: boolean; value?: number }>) {
-        if (!entry.hadRecentInput && typeof entry.value === 'number') cls += entry.value
-      }
-    }).observe({ type: 'layout-shift', buffered: true })
-  } catch {
-    // Browser does not support this metric.
-  }
-}
-
 export function initAnalytics(): void {
   if (wired) return
   wired = true
-  observeInitialPageVitals()
+  if (privacySignalOn()) return
+
+  startView('hard')
+
+  // A page restored from the back/forward cache is a fresh view of the same page.
+  // Registered before the web-vitals observers so it runs before they report again.
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) startView('hard')
+  })
+
+  // Reported when each value is known or changes, so the last one is on hand the
+  // moment the page is hidden; nothing is read from a timer.
+  const options = { reportAllChanges: true }
+  onLCP(metric => record('lcpMs', metric.value, true), options)
+  onCLS(metric => record('cls', metric.value, true), options)
+  onINP(metric => record('inpMs', metric.value, false), options)
+  onTTFB(metric => record('ttfbMs', metric.value, true), options)
+  onFCP(metric => record('fcpMs', metric.value, true), options)
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flush()
+  })
+  window.addEventListener('pagehide', flush)
+
+  // ClientRouter: leaving a page in-site sends it, then the next page is a soft view.
   document.addEventListener('astro:before-preparation', () => {
+    flush()
+    view = null
     routeStartedAt = performance.now()
   })
-  document.addEventListener('astro:page-load', recordPageView)
-  if (document.readyState === 'complete') {
-    recordPageView()
-  } else {
-    window.addEventListener('load', recordPageView, { once: true })
-  }
+  document.addEventListener('astro:page-load', () => {
+    // Also fires for the first load, which has no route time and is already a view.
+    if (routeStartedAt === null) return
+    startView('soft', { routeMs: performance.now() - routeStartedAt })
+    routeStartedAt = null
+  })
 }

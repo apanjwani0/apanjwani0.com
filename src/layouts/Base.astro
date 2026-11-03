@@ -5,6 +5,7 @@ import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import Head from '../components/Head.astro'
 import '../styles/global.css'
+import '../styles/palette.css'
 
 interface Props {
   title?: string
@@ -27,10 +28,14 @@ interface Props {
   clientRouter?: boolean
   ogType?: 'website' | 'article'
   publishedTime?: string
+  /** Passed straight to Head: article:modified_time, article:tag, the Markdown twin's link. */
+  modifiedTime?: string
+  tags?: string
+  markdownAlternate?: string
   /** Generated share card from ogCardPath(); falls back to the avatar if absent. */
   ogCard?: string
   /** The page's canonical path when it is not the requested one — a page that
-   *  renders any query string (the kit permalink) names the page it stands for. */
+   *  renders a query string names the page it stands for. */
   canonicalPath?: string
 }
 
@@ -49,6 +54,9 @@ const {
   clientRouter = true,
   ogType = 'website',
   publishedTime,
+  modifiedTime,
+  tags,
+  markdownAlternate,
   ogCard,
   canonicalPath,
 } = Astro.props
@@ -82,10 +90,16 @@ const ogImage = ogImageMeta(site, ogCard, title)
       twitterCard={ogImage.card}
       ogType={ogType}
       publishedTime={publishedTime}
+      modifiedTime={modifiedTime}
+      tags={tags}
+      markdownAlternate={markdownAlternate}
       handle={site.handle}
       clientRouter={clientRouter}
       theme={site.theme}
     />
+    {/* Page-specific stylesheets (an embedded component's sheets), in the head
+        so nothing paints before they arrive. */}
+    <slot name="head" />
   </head>
   <body>
     <a href="#main-content" data-type="skip-link">Skip to content</a>
@@ -109,9 +123,10 @@ const ogImage = ogImageMeta(site, ogCard, title)
       // with ToolBase.astro, so it lives in one module (src/lib/nav-ui.ts).
       // initSiteUI (src/lib/site-ui.ts) is the site chrome: the swap patch that
       // keeps the visitor's theme across ClientRouter navigations, plus the
-      // theme, find, kit and motion entry points.
+      // theme, command palette and motion entry points.
       import { initNav } from '../lib/nav-ui.ts'
       import { initAnalytics } from '../lib/analytics-client.ts'
+      import '../lib/sw-register.ts'
       import { initSiteUI } from '../lib/site-ui.ts'
       initNav()
       initAnalytics()

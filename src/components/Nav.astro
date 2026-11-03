@@ -48,6 +48,17 @@ const onHome = current === '/'
         aria-current={isActive('/admin') ? 'page' : undefined}
       >admin</a>
     )}
+    {/* Opens the command palette (src/lib/find-ui.ts). It does nothing without
+        scripts, so shared.css keeps it invisible until the head bootstrap marks
+        the document data-js. The key hint is filled in for this keyboard on load. */}
+    <button type="button" data-action="palette" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="7" cy="7" r="4.5"></circle>
+        <path d="M10.5 10.5 14 14"></path>
+      </svg>
+      <span>search</span>
+      <kbd data-type="palette-key" aria-hidden="true">Ctrl K</kbd>
+    </button>
   </span>
 </nav>
 {!bare && (

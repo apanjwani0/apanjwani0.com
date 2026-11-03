@@ -45,8 +45,10 @@
 
 import {
   equityVsRange,
+  equityVsRanges,
   exactEquity,
   type EquityResult,
+  type MultiwayEquityResult,
   type RangeEquityResult,
   type Variant,
 } from './equity'
@@ -135,6 +137,7 @@ function freezeRange(result: RangeEquityResult): RangeEquityResult {
 const handStore = new Map<string, EquityResult>()
 const rangeStore = new Map<string, RangeEquityResult>()
 const combosStore = new Map<string, ParsedCombos>()
+const multiwayStore = new Map<string, MultiwayEquityResult>()
 
 /** `exactEquity`, computed once per spot. Identical result, including identity. */
 export function cachedExactEquity(
@@ -167,6 +170,26 @@ export function cachedEquityVsRange(
     freezeRange(equityVsRange(hero, villainRange, board, variant)))
 }
 
+/**
+ * `equityVsRanges`, computed once per (hero, both ranges, board).
+ *
+ * Same discipline as `cachedEquityVsRange`: the key is built from the combos
+ * actually passed, and the two ranges stay in the order given because they are
+ * the two opponents and the caller may care which is which. `maxWork` is not
+ * part of the key. It decides whether the question may be asked, not what the
+ * answer is, so a refused call stores nothing (the throw happens inside the
+ * compute step) and a later call with a larger ceiling is computed afresh.
+ */
+export function cachedEquityVsRanges(
+  hero: Card[],
+  ranges: readonly [Card[][], Card[][]],
+  board: Card[] = [],
+  maxWork: number = Number.POSITIVE_INFINITY,
+): MultiwayEquityResult {
+  const key = `3w|${spotKey([hero], board, 'holdem')}|${ranges[0].map(cardsKey).join(';')}|${ranges[1].map(cardsKey).join(';')}`
+  return memo(multiwayStore, key, () => Object.freeze(equityVsRanges(hero, ranges, board, maxWork)))
+}
+
 export interface ParsedCombos {
   /** Every specific two-card combination in the range, minus the blocked ones. */
   combos: Card[][]
@@ -196,8 +219,13 @@ export function cachedRangeCombos(text: string, blocked: Card[] = []): ParsedCom
  * that it does — an unbounded cache looks exactly like a bounded one until the
  * tab has been open long enough for it not to.
  */
-export function equityCacheSizes(): { hands: number; ranges: number; combos: number } {
-  return { hands: handStore.size, ranges: rangeStore.size, combos: combosStore.size }
+export function equityCacheSizes(): { hands: number; ranges: number; combos: number; multiway: number } {
+  return {
+    hands: handStore.size,
+    ranges: rangeStore.size,
+    combos: combosStore.size,
+    multiway: multiwayStore.size,
+  }
 }
 
 /** Drop everything. Exists so the assertions can measure a cold start. */
@@ -205,4 +233,5 @@ export function clearEquityCache(): void {
   handStore.clear()
   rangeStore.clear()
   combosStore.clear()
+  multiwayStore.clear()
 }

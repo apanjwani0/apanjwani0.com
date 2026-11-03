@@ -8,11 +8,28 @@ import { buildSiteIndex, loadSiteConfigs, plainParagraph, type IndexKind } from 
 // can never name a page the sitemap doesn't have.
 const GROUPS: readonly [string, readonly IndexKind[]][] = [
   ['Pages', ['section']],
-  ['Tools', ['tool', 'mode', 'preset']],
+  ['Tools', ['tool']],
   ['Games', ['game']],
   ['Learnings', ['learning']],
   ['Blog', ['post']],
   ['Projects', ['project']],
+]
+
+// The llmstxt.org convention for pages an agent may skip when short of context:
+// the Driftfield modes and Cron Whisperer presets are variations of two tools,
+// and listed among them they buried the real tools under twenty near-copies.
+const OPTIONAL: readonly IndexKind[] = ['mode', 'preset']
+
+// The server endpoints, in the words an agent needs to call one. Each answers
+// JSON and is rate limited per client; the limits themselves are not repeated
+// here because they belong to the routes and would drift.
+const API: readonly [string, string][] = [
+  ['GET /api/tools/chainsaw?target=host[:port]', 'reads the TLS certificate chain a server really sends'],
+  ['GET /api/tools/dns-sightline?name=&scope=full|caa', 'asks three public resolvers the same questions and compares the answers'],
+  ['GET /api/tools/link-peek?url=', 'fetches a public page and returns the link-preview tags it carries'],
+  ['POST /api/hook/<bin>', 'records the request against a bin whose id you choose (at least 24 characters); read it back on the Webhook Inspector page'],
+  ['GET /openapi.json', 'the OpenAPI 3.1 description of the routes above, with their query parameters, the 429 shape and the rate limits'],
+  ['POST /api/mcp', 'an MCP server (stateless Streamable HTTP, JSON-RPC) with the tools inspect_tls, inspect_dns, peek_link, create_webhook_bin and list_webhook_requests; tighter limits than the pages'],
 ]
 
 // Every value stays on its own line, and a title can't close its link early.
@@ -44,8 +61,19 @@ export const GET: APIRoute = async ({ locals }) => {
       return `- [${linkText(e.t)}](${href(e.u)})${d ? `: ${oneLine(d)}` : ''}`
     }), '')
   }
+  out.push('## API', '', 'These endpoints are rate limited per client and answer JSON. They are the same ones the tool pages call.', '',
+    ...API.map(([call, what]) => `- \`${call}\`: ${what}`), '')
+  // Bare addresses, not links: security:smoke holds every `- [text](url)` line on
+  // this site to the site index, and these two are files, not pages.
+  out.push('## Machine-readable', '',
+    `- Full text of the articles and every tool's description, as one plain-text file: ${href('/llms-full.txt')}`,
+    `- The articles as an Atom feed: ${href('/feed.xml')}`,
+    '- Each article is also served as Markdown at its own address with `.md` added, for example `/learnings/<slug>.md`.', '')
   const elsewhere = [['GitHub', site.social.github], ['LinkedIn', site.social.linkedin]].filter(([, url]) => url)
   if (elsewhere.length) out.push('## Elsewhere', '', ...elsewhere.map(([label, url]) => `- [${label}](${url})`), '')
+
+  const optional = entries.filter(e => OPTIONAL.includes(e.k))
+  if (optional.length) out.push('## Optional', '', ...optional.map(e => `- [${linkText(e.t)}](${href(e.u)})${e.d ? `: ${oneLine(e.d)}` : ''}`), '')
 
   return new Response(out.join('\n'), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
 }

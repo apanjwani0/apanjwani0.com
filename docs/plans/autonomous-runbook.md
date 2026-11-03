@@ -5,9 +5,10 @@ ordered queue it works from. Written 26 Oct 2026, after PR #44. A session
 reads this file, STATUS.md and AGENTS.md, takes the first open item it may do
 alone, and stops at the first one that needs the owner.
 
-This replaces the role rotation in [autonomous-pass.md](autonomous-pass.md)
-for session-driven runs (that file still describes the disabled 2-hourly
-scheduled pass). Item specs live in [review-response.md](review-response.md);
+This replaces the retired 2-hourly role rotation (its summary is in
+[ideas.md](../ideas.md)). PR #45 shipped the whole of
+[polish-2026-11.md](polish-2026-11.md); its §7 is the status of that work, and
+the items it closed are struck through below. Item specs live in [review-response.md](review-response.md);
 this file orders them and adds what the review sweeps found.
 
 ## Every run, in order
@@ -84,7 +85,7 @@ Ordered. Sizes are rough (S/M/L). Items from review-response keep its numbers.
    - llms.txt starts "Software Engineer.".
 
    Then run `npm run origin:check`.
-2. [ ] **Search budgets across the site** (S, autonomous). The 26 Oct sweep
+2. [x] ~~**Search budgets across the site**~~ (done with the PR #45 merge; asserted in `tools-hub-smoke.mjs`) (S, autonomous). The 26 Oct sweep
    found:
    - `/games/poker-trainer`: title 71, description 220;
    - `/games/2048`: title 67, description 172;
@@ -95,7 +96,7 @@ Ordered. Sizes are rough (S/M/L). Items from review-response keep its numbers.
    This is the games half of review-response PR-2's meta-description item.
    Extend the tools-hub-smoke budget assertion to games, Driftfield modes and
    presets. Article titles and descriptions go to the owner (voice).
-3. [ ] **PR-8 head cleanup** (S, autonomous: owner decision D7). Drop
+3. [x] ~~**PR-8 head cleanup**~~ (shipped in PR #45) (S, autonomous: owner decision D7). Drop
    `<meta name="keywords">` and the JSON-LD `keywords`. The config field stays
    for palette search words. Its smoke check replaces the hub's ≤12-term cap.
 4. [ ] **PR-2 tool and game copy pass** (M, autonomous). Done already: the
@@ -110,12 +111,12 @@ Ordered. Sizes are rough (S/M/L). Items from review-response keep its numbers.
      Maze Weaver.
    - Carry the open owner notes from STATUS.md: Poker Trainer "too
      complicated", and one-off game button styles.
-6. [ ] **PR-1 Core Web Vitals beacon** (M). Adds the `web-vitals`
+6. [x] ~~**PR-1 Core Web Vitals beacon**~~ (shipped in PR #45) (M). Adds the `web-vitals`
    dependency, so write the design note and stop. Phase 3's two weeks of data
    start at its deploy.
 7. [ ] **PR-4b DNS Sightline and Chainsaw correctness** (M). Design note
    first (review-response marks it Opus).
-8. [ ] **⌘K palette** (M). Adds the `/search.json` route, so design note
+8. [x] ~~**⌘K palette**~~ (shipped in PR #45) (M). Adds the `/search.json` route, so design note
    first. The interfaces exist (`fuzzy.ts`, `buildSiteIndex`).
 9. [ ] **PR-3 article hedges** (S). Prepared autonomously; **Owner** reads
    for voice before merge.

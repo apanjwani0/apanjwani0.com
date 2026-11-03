@@ -14,8 +14,9 @@ export const prerender = false
 // Unauthenticated and side-effecting: every accepted event read-modify-writes the
 // whole rollup file (or a KV key), so without a cap any anonymous caller could
 // loop this and saturate the origin's disk while filling the dashboard with junk.
-// 60/min is far above what a real visitor produces — the beacon fires roughly
-// once per page view — and far below what abuse needs.
+// 60/min is far above what a real visitor produces — the beacon fires once per
+// page view, when the page is hidden or the visitor navigates on — and far below
+// what abuse needs.
 const allowEvent = createRateLimiter(60_000, 60)
 
 export const POST: APIRoute = async ({ request, locals }) => {
@@ -31,8 +32,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   if (!event) return new Response(null, { status: 400 })
 
-  const knownItems = event.kind === 'tool' ? await getTools(locals) : await getGames(locals)
-  if (!knownItems.some(item => item.slug === event.slug)) return new Response(null, { status: 400 })
+  // A tool or game page is counted under its own slug, so the slug must exist; every
+  // other page was already folded into a fixed section bucket by the parser.
+  if (event.kind !== 'page') {
+    const knownItems = event.kind === 'tool' ? await getTools(locals) : await getGames(locals)
+    if (!knownItems.some(item => item.slug === event.slug)) return new Response(null, { status: 400 })
+  }
 
   await recordAnalyticsEvent(locals, event)
   return new Response(null, { status: 204 })

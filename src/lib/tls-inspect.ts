@@ -11,11 +11,11 @@
  *
  * Three things are different here, and two of them are stricter:
  *
- *  - **The address is PINNED.** Link Peek resolves, checks, then hands the URL
- *    to `fetch`, which resolves again — the DNS-rebinding TOCTOU that module
- *    documents as its honest ceiling. Here the connection is made to the exact
- *    address that was checked, with the hostname carried separately as the SNI
- *    `servername`, so there is no second resolution to disagree with the first.
+ *  - **The address is PINNED.** The connection is made to the exact address
+ *    that was checked, with the hostname carried separately as the SNI
+ *    `servername`, so there is no second resolution to disagree with the first
+ *    (Link Peek closed the same DNS-rebinding window on 2 Nov 2026 with a
+ *    pinned `lookup` in link-peek-fetch.ts).
  *  - **The port is an allowlist, not "default only".** A cert inspector that
  *    can only reach 443 is useless for the 8443/993/465 cases people actually
  *    debug, and an *arbitrary* port would make this a port scanner. A fixed

@@ -25,6 +25,26 @@ function optionalSafeExternalUrl(value: unknown): boolean {
   return value === undefined || value === '' || safeExternalUrl(value) !== null
 }
 
+/**
+ * A plain address (`name@host.tld`) or null. Strict on purpose: it is placed in
+ * a `mailto:` href, so whitespace, quotes, angle brackets, `?` and `&` (which
+ * would add headers such as cc or body) are all refused, not escaped.
+ */
+export function safeEmailAddress(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const raw = value.trim()
+  if (raw.length > 254 || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(raw)) return null
+  return raw
+}
+
+function optionalEmail(value: unknown): boolean {
+  return value === undefined || value === '' || safeEmailAddress(value) !== null
+}
+
+function optionalResumeUrl(value: unknown): boolean {
+  return value === undefined || value === '' || safeExternalUrl(value) !== null || safeInternalPath(value) !== null
+}
+
 function safeSlug(value: unknown): boolean {
   return typeof value === 'string' && /^[a-z0-9-]+$/.test(value)
 }
@@ -55,6 +75,8 @@ function validSite(value: unknown): boolean {
     && safeExternalUrl(value.url) !== null
     && optionalSafeExternalUrl(value.social.github)
     && optionalSafeExternalUrl(value.social.linkedin)
+    && optionalEmail(value.social.email)
+    && optionalResumeUrl(value.resumeUrl)
     && Array.isArray(value.nav)
     && value.nav.every(validNavItem)
     && isRecord(value.sections)

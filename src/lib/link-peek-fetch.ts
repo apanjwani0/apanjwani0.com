@@ -19,24 +19,33 @@
  *    User-Agent comes from a fixed allowlist — never from request input, which
  *    would be header injection by another name.
  *
- * Honest ceiling, stated rather than implied away (the Hue Hunt precedent): the
- * DNS check and the connection are two separate resolutions, so a resolver that
- * answers differently the second time (DNS rebinding) can slip an address past
- * the check. Closing that fully needs connection-level address pinning through
- * a custom dispatcher; until then the guard stops every static private-address
- * URL and every redirect into one, which is the attack a tool like this
- * actually receives. The origin also sits in Docker with no privileged
- * link-local metadata service behind it, which bounds the blast radius of the
- * remaining window.
+ * The connection is PINNED to the addresses that were checked (Chainsaw's rule,
+ * `tls-inspect.ts`): the name is resolved once, every answer is classified, and
+ * the socket is then opened through a `lookup` that can only return those
+ * answers, so there is no second resolution a rebinding resolver could answer
+ * differently. The name still travels as the Host header and the TLS SNI, so
+ * virtual hosting and certificate checks behave as they would for any client.
+ * Redirects re-run the whole sequence (validate, classify, resolve, pin) per hop.
+ * The request is made with `node:http(s)` rather than `fetch` because `fetch`
+ * offers no per-request lookup without a separately installed undici.
  *
  * Node-only (`node:net`, and `node:dns` through `dns-lookup.ts`) — imported by
  * the API route, never by the browser bundle.
  */
 
-import { isIP } from 'node:net'
-import { DnsLookupTimeout, lookupAllBounded, type DnsLookupOptions } from './dns-lookup'
+import http from 'node:http'
+import https from 'node:https'
+import { isIP, type LookupFunction } from 'node:net'
+import { pipeline, Readable } from 'node:stream'
+import zlib from 'node:zlib'
+import { DnsLookupTimeout, lookupAllBounded, type DnsAddress, type DnsLookupOptions } from './dns-lookup'
+import { LP_MAX_URL_CHARS, lpValidateUrl, type LpUrlCheck } from '../components/tools/link-peek/validate'
 
-export const LP_MAX_URL_CHARS = 2048
+// The syntactic gate is shared with the page (see validate.ts); everything that
+// imported it from here still does.
+export { LP_MAX_URL_CHARS, lpValidateUrl }
+export type { LpUrlCheck }
+
 export const LP_MAX_REDIRECTS = 4
 export const LP_TIMEOUT_MS = 6000
 /** og tags live in <head>, which arrives first — 512 KB is generous. */
@@ -55,34 +64,6 @@ export const LP_USER_AGENTS: Record<string, string> = {
   x: 'Twitterbot/1.0',
   facebook: 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
   browser: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-}
-
-export type LpUrlCheck = { ok: true; url: URL } | { ok: false; reason: string }
-
-/** Syntactic gate: scheme, credentials, port, length. No network here. */
-export function lpValidateUrl(raw: string): LpUrlCheck {
-  const trimmed = raw.trim()
-  if (!trimmed) return { ok: false, reason: 'Enter a URL to preview.' }
-  if (trimmed.length > LP_MAX_URL_CHARS) return { ok: false, reason: 'That URL is too long.' }
-  let url: URL
-  try {
-    url = new URL(trimmed)
-  } catch {
-    return { ok: false, reason: 'That does not parse as a URL — include the scheme, like https://example.com/page.' }
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    return { ok: false, reason: 'Only http and https URLs can be previewed.' }
-  }
-  if (url.username || url.password) {
-    return { ok: false, reason: 'URLs with embedded credentials are not fetched.' }
-  }
-  // URL leaves .port empty for the scheme default, so any non-empty port is
-  // non-default — and a chooseable port makes this a port scanner.
-  if (url.port !== '') {
-    return { ok: false, reason: 'Only the default ports (80/443) are fetched.' }
-  }
-  if (!url.hostname) return { ok: false, reason: 'That URL has no host.' }
-  return { ok: true, url }
 }
 
 /* ------------------------------------------------------------------ */
@@ -205,14 +186,27 @@ export function lpIsForbiddenHostname(hostname: string): boolean {
 }
 
 /**
- * Resolve and check every address the name answers with.
+ * The addresses a name was checked against, which the connection is then pinned
+ * to. `host` is the name they were resolved for: the pinned lookup answers for
+ * that name and no other.
+ */
+export interface LpPin {
+  host: string
+  addresses: DnsAddress[]
+}
+
+/**
+ * Resolve and check every address the name answers with, and hand back exactly
+ * those addresses as the pin the connection must use. An IP literal needs no
+ * pin (nothing is resolved, so nothing can answer differently), which is why
+ * its result carries none.
  *
  * The lookup is bounded by `lookupAllBounded` (`dns-lookup.ts`), which is the
  * one copy of that bound Chainsaw shares — see its docblock for why an
  * unbounded `dns.lookup` is a container-wide stall and not a slow request.
  * `dns` is its test seam; `lpFetchBounded` never passes it.
  */
-export async function lpCheckResolved(hostname: string, dns: DnsLookupOptions = {}): Promise<{ ok: true } | { ok: false; reason: string }> {
+export async function lpCheckResolved(hostname: string, dns: DnsLookupOptions = {}): Promise<{ ok: true; pin?: LpPin } | { ok: false; reason: string }> {
   // A v6 literal arrives bracketed from `URL.hostname` ([2606:4700::1111]).
   // `isIP` says 0 for that, so without unwrapping — exactly as the hostname
   // gate above already does — every IPv6-literal URL fell through to a DNS
@@ -223,7 +217,7 @@ export async function lpCheckResolved(hostname: string, dns: DnsLookupOptions = 
       ? { ok: false, reason: 'That address is private or reserved — this tool only previews public URLs.' }
       : { ok: true }
   }
-  let addresses: { address: string }[]
+  let addresses: DnsAddress[]
   try {
     addresses = await lookupAllBounded(bare, dns)
   } catch (err) {
@@ -243,7 +237,100 @@ export async function lpCheckResolved(hostname: string, dns: DnsLookupOptions = 
       return { ok: false, reason: 'That name resolves to a private or reserved address — this tool only previews public URLs.' }
     }
   }
-  return { ok: true }
+  return { ok: true, pin: { host: bare, addresses: addresses.map(a => ({ address: a.address, family: a.family })) } }
+}
+
+/* ------------------------------------------------------------------ */
+/* the pinned request                                                  */
+/* ------------------------------------------------------------------ */
+
+const lpBareHost = (h: string) => h.toLowerCase().replace(/\.$/, '')
+
+/**
+ * A `lookup` for `net.connect` that answers with the pinned addresses and
+ * nothing else. The socket layer calls it once, for the URL's own host; it is
+ * never asked to resolve anything, so a resolver that would answer differently
+ * the second time is never consulted. A call for any other name is refused, so
+ * the pin cannot be reused for a destination it was not checked for.
+ */
+export function lpPinnedLookup(pin: LpPin): LookupFunction {
+  return (hostname, options, callback) => {
+    if (lpBareHost(hostname) !== lpBareHost(pin.host) || pin.addresses.length === 0) {
+      callback(Object.assign(new Error('not the pinned host'), { code: 'ENOTFOUND' }) as NodeJS.ErrnoException, '', 4)
+      return
+    }
+    // Node's happy-eyeballs dialer asks for every address (`all: true`) and
+    // tries them in turn; all of them were classified, so all may be offered.
+    if (options && typeof options === 'object' && options.all) {
+      callback(null, pin.addresses.map(a => ({ address: a.address, family: a.family })))
+      return
+    }
+    const first = pin.addresses[0]
+    callback(null, first.address, first.family)
+  }
+}
+
+/**
+ * One GET to `url`, connected to the pinned addresses, never following a
+ * redirect (the caller re-checks the next hop). The name stays the Host header
+ * and the TLS SNI and certificate name, so only the address is fixed.
+ *
+ * Resolves with a standard `Response` so the bounded reader is unchanged. It
+ * does no address classification itself: `lpFetchBounded` is the gate, and
+ * `security:smoke` drives this function directly against a loopback server.
+ */
+export function lpRequestPinned(
+  url: URL,
+  pin: LpPin | null,
+  init: { headers: Record<string, string>; signal: AbortSignal },
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const transport = url.protocol === 'https:' ? https : http
+    const req = transport.request(url, {
+      method: 'GET',
+      headers: { ...init.headers, 'Accept-Encoding': 'gzip, deflate, br' },
+      // One connection per request: a kept-alive socket would outlive the
+      // address check that opened it.
+      agent: false,
+      ...(pin ? { lookup: lpPinnedLookup(pin) } : {}),
+      signal: init.signal,
+    }, res => {
+      try {
+        const status = res.statusCode ?? 0
+        const headers = new Headers()
+        for (const [name, value] of Object.entries(res.headers)) {
+          for (const one of Array.isArray(value) ? value : value === undefined ? [] : [value]) {
+            try { headers.append(name, one) } catch { /* a header fetch would not carry either */ }
+          }
+        }
+        if (status === 204 || status === 205 || status === 304) {
+          res.destroy()
+          resolve(new Response(null, { status, headers }))
+          return
+        }
+        const encoding = (headers.get('content-encoding') ?? '').trim().toLowerCase()
+        let source: Readable = res
+        if (encoding && encoding !== 'identity') {
+          const decoder = encoding === 'gzip' || encoding === 'x-gzip' ? zlib.createGunzip()
+            : encoding === 'deflate' ? zlib.createInflate()
+              : encoding === 'br' ? zlib.createBrotliDecompress()
+                : null
+          if (!decoder) {
+            res.destroy()
+            reject(new Error('unsupported content-encoding'))
+            return
+          }
+          source = pipeline(res, decoder, () => { /* a failure surfaces on the stream the reader holds */ })
+        }
+        resolve(new Response(Readable.toWeb(source) as ReadableStream<Uint8Array>, { status, headers }))
+      } catch (err) {
+        res.destroy()
+        reject(err)
+      }
+    })
+    req.on('error', reject)
+    req.end()
+  })
 }
 
 /* ------------------------------------------------------------------ */
@@ -328,10 +415,12 @@ export async function lpFetchBounded(rawUrl: string, opts: LpFetchOptions): Prom
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), remaining)
 
+    // Connected to the addresses `lpCheckResolved` just classified (`resolved.pin`),
+    // never to a fresh resolution of the name; a 3xx is read here and the next
+    // hop goes round the whole loop again.
     let res: Response
     try {
-      res = await fetch(checked.url.href, {
-        redirect: 'manual',
+      res = await lpRequestPinned(checked.url, resolved.pin ?? null, {
         signal: controller.signal,
         headers: { 'User-Agent': ua, Accept: opts.accept },
       })

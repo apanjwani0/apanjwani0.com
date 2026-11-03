@@ -22,6 +22,12 @@ are asserted by `npm run security:smoke`.
   static import of a per-tool sheet, in the route or in a tool module, puts it
   in every tool page's head: Astro hoists the CSS of every module a page's
   script can reach. Asserted.
+- **A game, article or Driftfield page links only its own embed's stylesheets**,
+  the `EMBED_STYLES` entry for its slug (`src/lib/embeds.ts`, the one list),
+  through `embedStyles()` and `<link slot="head">`, for the same reason. A new
+  component's sheet goes in that entry; a seed field, controls or any idiom two
+  games share goes in `games-common.css`, not in each game's sheet, because the
+  sheets no longer share a bundle to lean on. Asserted.
 - **No bundled script is inlined.** Vite inlines a small `<script>` chunk by
   default, with no nonce, and the CSP refuses it; `assetsInlineLimit` in
   `astro.config.mjs` keeps every script a file, and every `?url`-linked
@@ -139,7 +145,9 @@ are asserted by `npm run security:smoke`.
   and draws a static `--skeleton-height` panel on `html[data-js]
   :is([data-tool], [data-game]):not(:defined)`; without JS the text stays. The
   panel also holds the space of a Driftfield stage and a learning's figure,
-  which render empty and would push the page down when they mount. No animation.
+  which render empty and would push the page down when they mount. The panel
+  carries one line of muted text ("Loading the tool…" or "Loading the game…")
+  so a slow script is not a silent grey box. No animation.
   A new tool, game or embed gets it free through its `data-tool` / `data-game`
   attribute.
   - **What follows a pending workbench is `visibility: hidden`, not removed**
@@ -202,3 +210,16 @@ are asserted by `npm run security:smoke`.
   lives in `src/components/tools/<slug>/` and a game's in `src/components/games/<slug>/`; the
   listing is its entry in `src/config/` (read through `src/lib/config.ts`), and
   the existing `[slug].astro` route renders it.
+- **Accessibility in tools.** Asserted over every tool source by
+  `scripts/smoke/tool-a11y.mjs`.
+  - Every `<input>`, `<textarea>` and `<select>` has an `aria-label`, an
+    `aria-labelledby`, or a `<label>` (wrapping it, or `for=` its `id`). A
+    placeholder is not a name.
+  - A tool's result or status node is `role="status"`; an error is
+    `role="alert"`. Flip the role (and `aria-live`) with the state, as
+    `Flowmap.say(text, 'error')` and `setStatus` in Cron Whisperer and Regex Lab do.
+  - A tone is never colour alone. In the control kit, put `data-tone="error"`,
+    `"success"` or `"note"` on the message inside a `status-line` (or on a
+    badge) and `controls.css` leads it with "Error: ", "Done: " or "Note: ".
+    A tool that flags failure with a bare `data-error` gets the same word from
+    `tools-common.css`.

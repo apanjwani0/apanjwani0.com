@@ -41,7 +41,7 @@ import { dailyPassage, todayUtcDay } from '../src/lib/type-trial-daily.ts'
 import { isPublishedLearning, learningEmbedTag, learningsAboutEmbed } from '../src/lib/learnings.ts'
 import { learningHasOgCard } from '../src/lib/og.ts'
 import { learnings } from '../src/config/learnings.ts'
-import { EMBED_TAGS } from '../src/lib/embeds.ts'
+import { EMBED_TAGS, EMBED_STYLES } from '../src/lib/embeds.ts'
 import {
   HUE_DAILY_MAX,
   HUE_DAILY_ROUNDS,
@@ -1270,6 +1270,7 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
 
 {
   const poker = await import('../src/components/games/poker-trainer/engine/equity.ts')
+  const scenarios = await import('../src/components/games/poker-trainer/engine/scenarios.ts')
 
   /* These assertions began life pinned to the pot-odds article, which quoted
      the four break-even prices in its prose. That article was retired on
@@ -1324,17 +1325,18 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   // possible — is the appended `Poker Trainer: the solve memo` block at the end
   // of this file.
 
-  // The four prices. `pot` and `sizes` are the drill's, pinned from source —
-  // every price below is a function of these two literals and nothing else.
-  const potMatch = ptSrc.match(/const pot = (\d+)\n/)
-  const sizesMatch = ptSrc.match(/const sizes = \[([\d, ]+)\]/)
-  assert.ok(potMatch, 'the drill no longer declares `const pot = …`')
-  assert.ok(sizesMatch, 'the drill no longer declares `const sizes = [...]`')
-  const drillPot = Number(potMatch[1])
-  const drillSizes = sizesMatch[1].split(',').map(n => Number(n.trim()))
-  assert.deepEqual(drillSizes, [33, 50, 66, 100], 'the drill offers one price per bet size')
-  assert.equal(drillPot, 100, 'the drill builds a pot of 100')
-
+  // The prices. The drill no longer builds a flat pot of 100 and four sizes: a
+  // scenario engine derives the pot from the chips that went in, and `derive()`
+  // in `engine/scenarios.ts` is the one place the call is priced. The four
+  // reference sizes are kept here as a fixture so the bisected prices below
+  // still have something to be compared with.
+  const drillPot = 100
+  const drillSizes = [33, 50, 66, 100]
+  const priceSpot = (bet, heroIn = 0, callersIn = 0) => ({
+    templateId: 'fixture', title: '', blinds: { sb: 5, bb: 10 }, effectiveStack: 1000,
+    heroPosition: 'BTN', hero: [], board: [], street: 'flop', opponents: [],
+    potBefore: drillPot, heroIn, bet, callersIn, betTone: 'medium', allIn: false, line: [], ledger: [],
+  })
   // Derived from EV = 0 by bisection — NOT from a written-down fraction.
   //
   // The previous version of this block recomputed `bet / (pot + bet)` "independently"
@@ -1359,20 +1361,33 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   assert.deepEqual(prices, ['19.9%', '25.0%', '28.4%', '33.3%'], 'the break-even call price at the four sizes')
 
   // requiredEquity()'s own contract: its first argument is the pot before the CALL.
+  // And the engine's `derive()`, which is what the drill now prices with, must
+  // agree with the bisection at every size: it adds the bet before the call.
   for (const bet of drillSizes) {
     assert.ok(
       Math.abs(poker.requiredEquity(drillPot + bet, bet) - breakeven(drillPot, bet)) < 1e-12,
       'requiredEquity(potBeforeCall, bet) must equal the EV-derived break-even',
     )
+    assert.ok(
+      Math.abs(scenarios.derive(priceSpot(bet)).breakEven - breakeven(drillPot, bet)) < 1e-12,
+      'derive() must price the call against the pot after the bet, not before it',
+    )
   }
-
-  // And the drill must hand it the pot before the call, not the pot before the bet.
-  // This is the line that was wrong; assert the line, not just the helper.
-  assert.ok(
-    ptSrc.includes('requiredEquity(d.pot + d.bet, d.bet)') &&
-      ptSrc.includes('callEv(d.pot + d.bet, d.bet, result.equity)'),
-    'the drill must add the villain bet before pricing the call — d.pot alone prices a bluff, not a call',
-  )
+  // The two lessons the new templates add, pinned the same way: chips hero
+  // already bet this street reduce what the call costs but stay in the pot, and
+  // a caller before hero enlarges the pot without changing the price per chip.
+  {
+    const raised = scenarios.derive(priceSpot(150, 50))
+    assert.equal(raised.toCall, 100, 'facing a raise to 150 after betting 50, the call costs 100')
+    assert.equal(raised.potNow, drillPot + 50 + 150, 'hero\'s 50 stays in the pot when they raise')
+    const multiway = scenarios.derive(priceSpot(50, 0, 50))
+    assert.equal(multiway.potNow, drillPot + 100, 'a caller before hero adds their call to the pot')
+    assert.ok(multiway.breakEven < breakeven(drillPot, 50), 'a caller in front makes the call cheaper in equity')
+  }
+  // The drill must take its verdict from the engine's judge, not from a local
+  // comparison, so the numbers on the page and the rule that graded them cannot drift.
+  assert.ok(ptSrc.includes('judge(spot, result, raiseResult)'), 'the drill grades through judge()')
+  assert.ok(!/result\.equity >= 0\.\d+ \? 'raise'/.test(ptSrc), 'no hidden raise threshold in the drill')
 
   // The two fractions must stay separate numbers. Collapsing them back into one
   // is the original bug, so the relation between them is pinned directly.
@@ -1410,7 +1425,9 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   // a reader can still reach the row that displays the number.
   for (const label of [
     'Play a spot',
-    'Equity you needed to call',
+    'Break-even equity',
+    'EV of calling',
+    'Equity you need if called',
   ]) {
     assert.ok(ptSrc.includes(label), `PokerTrainer.ts must still render "${label}"`)
   }
@@ -2058,9 +2075,8 @@ for (const p of smokeProjects) {
     assert.ok(kitCode.includes(`var(${token})`), `theme.css declares ${token} but controls.css never reads it`)
   }
   const kitBody = kitCode
-  // The opt-in is its own attribute: html[data-kit] is the starred-tools count
-  // the head bootstrap sets, and a kit keyed on it would restyle every control
-  // on the site the moment a visitor stars a tool.
+  // The opt-in is its own attribute, never root state the head bootstrap sets: a
+  // kit keyed on <html> would restyle every control on the site at once.
   const { ROOT_STATE_ATTRS } = await import('../src/lib/theme.ts')
   for (const sel of kitBody.matchAll(/([^{}]+)\{/g)) {
     if (/^\s*@/.test(sel[1])) continue
@@ -4799,13 +4815,15 @@ console.log('type trial ghost tokens are bounded, fingerprint-pinned, and decode
   }
 
   /* ── 11. Every wired game reaches its module AND its stylesheet. ──
+     (The stylesheet half reads EMBED_STYLES, the one list of component
+     sheets a page links for its own embed; tools-hub-smoke.mjs asserts the
+     list from the other side, so no sheet under games/ can sit unlisted.)
      Derived from mountGame's own dispatch rather than from a list, so a game
      added later is covered without anybody remembering this exists. Both halves
      fail silently: no dispatch branch renders a blank element, and a missing
      stylesheet import renders an unstyled one — on the /games route AND on any
      learnings article that embeds it. */
   const mountSrc = await readFile(new URL('../src/lib/game-mount.ts', import.meta.url), 'utf-8')
-  const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
   // EMBED_TAGS and not GAME_TAGS, which is what this loop read until 2026-09-25.
   // The comment above always claimed "on any learnings article that embeds it",
   // but GAME_TAGS is the narrow list: it excludes the six Driftfield engines and
@@ -4822,7 +4840,10 @@ console.log('type trial ghost tokens are bounded, fingerprint-pinned, and decode
     // Derived from the import, not from the slug: '2048' lives in twenty48/.
     const dir = importPath.replace(/\/[^/]+$/, '').replace('../components/games/', '')
     assert.ok(dir && dir !== importPath, `${slug}'s dispatch must import from src/components/games/`)
-    assert.ok(embedCss.includes(`games/${dir}/`), `${slug}'s stylesheet is not imported by games-embed.css`)
+    assert.ok(
+      (EMBED_STYLES[slug] ?? []).some(sheet => sheet.startsWith(`components/games/${dir}/`)),
+      `${slug}'s stylesheet is not named by EMBED_STYLES (src/lib/embeds.ts)`,
+    )
   }
 }
 console.log('deep shore: the fast renderer equals its reference, zoom keeps its anchor, and the permalink carries enough digits to mean something')
@@ -5397,13 +5418,15 @@ console.log('404 suggested links derive from navLinks() — no hand-written sect
   // ── the redirect loop re-validates every hop, at source level ──
   const lpFetchSrc = await readFile(new URL('../src/lib/link-peek-fetch.ts', import.meta.url), 'utf8')
   const loopAt = lpFetchSrc.indexOf('for (let hop')
-  const fetchAt = lpFetchSrc.indexOf('await fetch(', loopAt)
+  // The request is `lpRequestPinned` (node:http(s) through a pinned lookup), no longer `fetch`:
+  // `fetch` has no per-request lookup. scripts/smoke/mcp.mjs holds the pinning itself.
+  const fetchAt = lpFetchSrc.indexOf('await lpRequestPinned(', loopAt)
   assert.ok(loopAt !== -1 && fetchAt !== -1, 'the hop loop and its fetch exist')
   for (const guard of ['lpValidateUrl(current)', 'lpIsForbiddenHostname(', 'lpCheckResolved(']) {
     const at = lpFetchSrc.indexOf(guard, loopAt)
     assert.ok(at !== -1 && at < fetchAt, `${guard} must run INSIDE the hop loop, before the fetch — a redirect is the server choosing the next URL`)
   }
-  assert.ok(lpFetchSrc.includes("redirect: 'manual'"), 'fetch must not auto-follow redirects past the guard')
+  assert.ok(/node:http/.test(lpFetchSrc) && !/followRedirects|maxRedirects/.test(lpFetchSrc) && !/\bfetch\(/.test(lpFetchSrc.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')), 'the request must not auto-follow redirects past the guard, and must not fall back to fetch')
 
   // ── the route: both limiters, allowlisted UA, no-store, image type check ──
   const lpRouteSrc = await readFile(new URL('../src/pages/api/tools/link-peek.ts', import.meta.url), 'utf8')
@@ -6240,6 +6263,9 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
     ['text', 'accent-soft'],
     // The label on an accent-filled button — the one place --color-bg is ink.
     ['bg', 'accent'],
+    // Amber ink for caution, on all three surfaces (the soft fill takes text only).
+    ['warning', 'bg'], ['warning', 'surface'], ['warning', 'surface-2'],
+    ['text', 'warning-soft'],
   ]
   const AA_NORMAL = 4.5
   for (const [name, palette] of [['light', light], ['dark', dark]]) {
@@ -6325,7 +6351,7 @@ console.log('review regressions: v6 literals resolve, DNS bounded, one escape ru
   //    `main:focus { outline: none }` silently undid the only rule that draws
   //    the ring, so keyboard users got no indication the skip had happened.
   const sharedSrc = await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')
-  assert.ok(/:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--color-accent\)/.test(sharedSrc),
+  assert.ok(/:focus-visible\s*\{[^}]*outline:\s*var\(--focus-ring\)/.test(sharedSrc),
     'the one rule that draws a focus ring is still there, and still token-driven')
   assert.equal(/(^|[\s,>])main:focus\s*\{/m.test(sharedSrc), false,
     'no blanket main:focus rule — it would suppress the ring for the keyboard user the skip link exists for')
@@ -7692,10 +7718,12 @@ const HOST_NAMES = /\b(oracle|oci|ampere|docker|podman|ubuntu|debian|nginx|caddy
     'autoplay silences the caption, or a screen reader hears it change every beat')
 
   // Its styles: its own sheet, plus the Diagram Atlas's shared vocabulary.
-  const embedCss = await readFile(new URL('../src/styles/games-embed.css', import.meta.url), 'utf-8')
-  assert.match(embedCss, /@import '\.\.\/components\/games\/internet-atlas\/internet-atlas\.css';/, 'the internet atlas stylesheet is loaded')
-  assert.match(embedCss, /@import '\.\.\/components\/games\/diagram-atlas\/diagram-atlas\.css';/,
-    'the internet atlas draws with the at-* vocabulary from diagram-atlas.css, so that import must stay')
+  const iaSheets = EMBED_STYLES['internet-atlas'] ?? []
+  assert.ok(iaSheets.includes('components/games/internet-atlas/internet-atlas.css'), 'the internet atlas stylesheet is loaded')
+  assert.ok(iaSheets.includes('components/games/diagram-atlas/diagram-atlas.css'),
+    'the internet atlas draws with the at-* vocabulary from diagram-atlas.css, so that sheet must stay in its EMBED_STYLES entry')
+  assert.ok(iaSheets.indexOf('components/games/diagram-atlas/diagram-atlas.css') < iaSheets.indexOf('components/games/internet-atlas/internet-atlas.css'),
+    'the atlas sheet that adds to the shared vocabulary comes after it in the cascade')
 }
 console.log('internet atlas: every stop has a full legend and its own pinned figure, every beat lights a real element, and no figure shows a real address or names the host')
 
@@ -8548,7 +8576,7 @@ console.log('pr 19 review: a refused client never spends the shared bucket (deri
     }
   }
   const sharedCssSrc = await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')
-  assert.ok(/(^|\n):focus-visible \{\s*outline: 2px solid var\(--color-accent\);/.test(sharedCssSrc),
+  assert.ok(/(^|\n):focus-visible \{\s*outline: var\(--focus-ring\);/.test(sharedCssSrc),
     'the site-wide ring that shows where keyboard focus went applies to any focusable element, a scroll region included')
 }
 console.log('pr 19 review: no document/window listener outlives what added it (derived over every client module), the chrome observer is bounded for every embed, and the scrolling tables take keyboard focus')
@@ -9335,7 +9363,6 @@ console.log('origin-check: the beacon check reads the page before it matches, an
 {
   const vm = await import('node:vm')
   const { ROOT_BOOT_JS, THEME_COLOR, resolveTheme, patchIncomingDocument } = await import('../src/lib/theme.ts')
-  const { sanitizeKit, KIT_MAX } = await import('../src/lib/kit.ts')
   assert.equal(resolveTheme(null, 'dark', false), 'dark', 'no stored preference is the site default, not a light OS')
   assert.equal(resolveTheme(null, 'light', true), 'light', '…and not a dark OS either')
   assert.equal(resolveTheme('system', 'dark', false), 'light', 'system follows the OS')
@@ -9380,24 +9407,11 @@ console.log('origin-check: the beacon check reads the page before it matches, an
   }
   assert.equal(rows, 42, 'the whole truth table ran')
 
-  // data-kit is the count sanitizeKit would keep, so the shelf can reserve its
-  // height before the kit script runs — and nothing when storage says nothing.
-  const thirty = Array.from({ length: 30 }, (_, i) => `tool-${i}`)
-  for (const [raw, slugs] of [
-    [undefined, null],
-    [JSON.stringify({ v: 1, slugs: ['json-tidy', 'regex-lab', 'json-tidy', 'BAD', 'constructor', 7, 'a'.repeat(49)] }), 'from-raw'],
-    [JSON.stringify({ v: 1, slugs: thirty }), 'from-raw'],
-    [JSON.stringify({ v: 2, slugs: ['json-tidy'] }), null],
-    [JSON.stringify({ v: 1, slugs: 'json-tidy' }), null],
-    ['not json', null],
-    [THROWS, null],
-  ]) {
-    const doc = boot({ store: raw === THROWS ? THROWS : raw === undefined ? {} : { 'kit:v1': raw } })
-    const count = slugs === 'from-raw' ? sanitizeKit(JSON.parse(raw).slugs).length : 0
-    assert.equal(doc.documentElement.getAttribute('data-kit'), count ? String(count) : null,
-      `data-kit agrees with sanitizeKit for ${show(raw).slice(0, 60)}`)
-  }
-  assert.equal(sanitizeKit(thirty).length, KIT_MAX, 'the 30-slug fixture really exercised the cap')
+  // The bootstrap is a constant: nothing in it varies per page, per request or per
+  // visitor but what it reads from storage at run time, so ClientRouter sees the
+  // identical inline script on every page. No stored-tools count rides in it.
+  assert.equal(/data-kit|kit:v1/.test(ROOT_BOOT_JS), false, 'the bootstrap carries no starred-tools state')
+  assert.ok(!ROOT_BOOT_JS.includes('${') && !ROOT_BOOT_JS.includes('undefined'), 'the bootstrap is a constant with nothing interpolated')
 
   // It is inert markup-wise and rendered exactly one way: through set:html, with
   // the page nonce, ahead of every stylesheet in Head.astro.
@@ -9444,24 +9458,23 @@ console.log('origin-check: the beacon check reads the page before it matches, an
 
   // ── A ClientRouter swap keeps the client state: patchIncomingDocument copies
   //    it onto the incoming document, presence AND absence.
-  //    (mutation: drop data-kit from ROOT_STATE_ATTRS → fails)
+  //    (mutation: drop data-js from ROOT_STATE_ATTRS → fails)
   const saved = globalThis.document
   try {
-    const live = fakeDoc('light', { 'data-theme-pref': 'light', 'data-js': '', 'data-kit': '3' })
+    const live = fakeDoc('light', { 'data-theme-pref': 'light', 'data-js': '' })
     globalThis.document = live
     const incoming = fakeDoc('dark')
     patchIncomingDocument(incoming)
-    for (const name of ['data-theme', 'data-theme-pref', 'data-js', 'data-kit']) {
+    for (const name of ['data-theme', 'data-theme-pref', 'data-js']) {
       assert.equal(incoming.documentElement.getAttribute(name), live.documentElement.getAttribute(name), `a swap carries ${name}`)
     }
     for (const meta of ['meta[name="theme-color"]', 'meta[name="color-scheme"]']) {
       assert.equal(incoming.metas[meta].getAttribute('content'), live.metas[meta].getAttribute('content'), `a swap carries ${meta}`)
     }
     globalThis.document = fakeDoc('dark', { 'data-js': '' })
-    const stale = fakeDoc('dark', { 'data-theme-pref': 'system', 'data-kit': '2' })
+    const stale = fakeDoc('dark', { 'data-theme-pref': 'system' })
     patchIncomingDocument(stale)
     assert.equal(stale.documentElement.getAttribute('data-theme-pref'), null, 'an absent preference stays absent across a swap')
-    assert.equal(stale.documentElement.getAttribute('data-kit'), null, 'an emptied kit stays empty across a swap')
   } finally {
     if (saved === undefined) delete globalThis.document
     else globalThis.document = saved
@@ -9482,16 +9495,16 @@ console.log('origin-check: the beacon check reads the page before it matches, an
     assert.ok(/<html[^>]*data-theme=\{site\.theme\}[^>]*data-theme-default=\{site\.theme\}/.test(src),
       `${layout} renders the site default twice: data-theme for first paint, data-theme-default for the bootstrap to fall back to`)
   }
-  // The four feature modules load on ToolBase pages too, and importing the
+  // The feature modules load on ToolBase pages too, and importing the
   // router client from any of them would put ClientRouter on those pages.
-  for (const mod of ['site-ui', 'theme-ui', 'find-ui', 'kit-ui', 'motion', 'theme', 'kit']) {
+  for (const mod of ['site-ui', 'theme-ui', 'find-ui', 'motion', 'theme']) {
     const src = await readFile(new URL(`../src/lib/${mod}.ts`, import.meta.url), 'utf-8')
     assert.equal(/from ['"]astro:transitions\/client['"]/.test(src), false, `src/lib/${mod}.ts must not import astro:transitions/client`)
   }
   // The nav's JS-only buttons stay hidden until the bootstrap marks data-js.
   const sharedSrc = (await readFile(new URL('../src/styles/shared.css', import.meta.url), 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '')
-  assert.ok(/html:not\(\[data-js\]\) button:is\(\[data-action="palette"\], \[data-action="theme"\], \[data-action="shortcuts"\]\)\s*\{\s*visibility:\s*hidden;/.test(sharedSrc),
-    'shared.css keeps the palette, theme and shortcut buttons invisible until data-js is set')
+  assert.ok(/html:not\(\[data-js\]\) button:is\(\[data-action="palette"\], \[data-action="theme"\](?:, \[data-action="shortcuts"\])?\)\s*\{\s*visibility:\s*hidden;/.test(sharedSrc),
+    'shared.css keeps the palette and theme buttons invisible until data-js is set')
 }
 
 /* ── The sitemap is the site index, and matches the route it replaced ──────
@@ -9518,14 +9531,14 @@ console.log('origin-check: the beacon check reads the page before it matches, an
     const base = s.url.replace(/\/$/, '')
     const normalize = href => (href.startsWith('http') ? href : href.startsWith('/') ? `${base}${href}` : `${base}/${href}`)
     const latestPost = ps.reduce((max, p) => (p.date > max ? p.date : max), '')
-    const latestLearning = published.reduce((max, l) => (l.date > max ? l.date : max), '')
+    const latestLearning = published.reduce((max, l) => ((l.updated ?? l.date) > max ? (l.updated ?? l.date) : max), '')
     const pages = [
       { loc: '/' }, ...(isProjectsPublic(s) ? [{ loc: '/projects' }] : []),
       ...(blogsPublic ? [{ loc: '/blogs', lastmod: latestPost || undefined }] : []),
       { loc: '/learnings', lastmod: latestLearning || undefined }, { loc: '/games' }, { loc: '/tools' },
       ...(blogsPublic ? ps : []).filter(p => !/^https?:\/\//i.test(p.href))
         .map(p => ({ loc: `/blogs/${p.href.replace(/^\/?(blogs\/)?/, '')}`, lastmod: p.date })),
-      ...published.map(l => ({ loc: `/learnings/${l.slug}`, lastmod: l.date })),
+      ...published.map(l => ({ loc: `/learnings/${l.slug}`, lastmod: l.updated ?? l.date })),
       ...gs.filter(isPlayableGame).map(g => ({ loc: `/games/${g.slug}` })),
       ...ts.filter(t => t.status === 'live').map(t => ({ loc: `/tools/${t.slug}` })),
       ...(isDriftfieldPublic(ts) ? DRIFTFIELD_MODES.map(m => ({ loc: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` })) : []),
@@ -9594,52 +9607,6 @@ console.log('origin-check: the beacon check reads the page before it matches, an
 }
 console.log('ui refresh: spacing rungs increase in order, the head bootstrap matches resolveTheme across the truth table and is the one inline script, a swap keeps the client state, and the sitemap equals both the route it replaced and the palette index, and llms.txt lists the same pages')
 
-/* ── The kit parse is bounded, and its export writes nothing hostile ───────
-   A ?t= value is whatever a link says, and a stored kit is whatever a page
-   once wrote, so both go through the one bounded parser: live slugs only,
-   unique, in order, at most KIT_MAX, and nothing read past KIT_RAW_MAX.
-   A bookmarks file is imported straight into a browser, so every value is
-   escaped and only https URLs are written.
-   (mutations: remove the KIT_MAX cap → fails; drop quote escaping from the
-   bookmark titles → fails) */
-{
-  const { KIT_MAX, KIT_PARAM, KIT_RAW_MAX, bookmarksFile, kitHref, parseKitParam, sanitizeKit } = await import('../src/lib/kit.ts')
-  const live = tools.filter(t => t.status === 'live').map(t => t.slug)
-  assert.equal(KIT_PARAM, 't')
-  const forty = Array.from({ length: 40 }, (_, i) => `tool-${i}`)
-  assert.equal(parseKitParam(forty.join(','), forty).length, KIT_MAX, 'a link can carry at most KIT_MAX tools')
-  assert.deepEqual(parseKitParam(forty.join(','), forty), forty.slice(0, KIT_MAX), '…the first ones, in the order given')
-  assert.deepEqual(parseKitParam('regex-lab,JSON-TIDY, nope ,json-tidy,,audio-transcriber', live), ['regex-lab', 'json-tidy'],
-    'live slugs only, lowercased, unique, in order — a disabled tool and junk are dropped')
-  assert.deepEqual(parseKitParam(`${'x'.repeat(KIT_RAW_MAX)},json-tidy`, live), [], 'nothing past KIT_RAW_MAX is read at all')
-  assert.deepEqual(parseKitParam(null, live), [])
-  assert.deepEqual(sanitizeKit('json-tidy'), [], 'a stored kit that is not an array is empty')
-  assert.deepEqual(sanitizeKit(['a b', 'A', '', 'x'.repeat(49), 7, 'ok', 'ok']), ['ok'], 'the slug grammar holds in storage too')
-  assert.equal(kitHref(['json-tidy', 'regex-lab', 'json-tidy']), '/tools/kit?t=json-tidy,regex-lab', 'the canonical permalink')
-  assert.equal(kitHref([]), '/tools/kit')
-  assert.deepEqual(parseKitParam(kitHref(['regex-lab', 'json-tidy']).split('=')[1], live), ['regex-lab', 'json-tidy'], 'the permalink round-trips')
-
-  const now = Date.UTC(2026, 8, 25)
-  const nasty = `& <b>"q"</b> 'x'`
-  const items = ['json-tidy', 'regex-lab'].map(slug => ({ title: `${slug} ${nasty}`, url: new URL(`/tools/${slug}`, site.url).href }))
-  const hostile = [
-    { title: 'js', url: 'javascript:alert(1)' },
-    { title: 'data', url: 'data:text/html,<script>alert(1)</script>' },
-    { title: 'plain http', url: 'http://apanjwani0.com/tools/json-tidy' },
-    { title: 'credentials', url: 'https://user:pw@apanjwani0.com/tools/json-tidy' },
-    { title: 'whitespace', url: 'https://apanjwani0.com/tools/json tidy' },
-  ]
-  const file = bookmarksFile([...items, ...hostile], { folder: `apanjwani0 tools ${nasty}`, now })
-  assert.ok(file.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>'), 'the Netscape format every browser imports')
-  const hrefs = [...file.matchAll(/HREF="([^"]*)"/g)].map(m => m[1])
-  assert.deepEqual(hrefs, items.map(i => i.url), 'only the https /tools/<live slug> URLs are written')
-  for (const href of hrefs) assert.match(href, /^https:\/\/apanjwani0\.com\/tools\/[a-z0-9-]+$/)
-  const escaped = '&amp; &lt;b&gt;&quot;q&quot;&lt;/b&gt; &#39;x&#39;'
-  assert.equal(file.split(escaped).length - 1, 3, 'the folder name and every title are escaped — & < > " \' all five')
-  assert.equal(/<b>|"q"|'x'/.test(file), false, 'no raw markup or quote from an item reaches the file')
-  assert.ok(file.includes(`ADD_DATE="${Math.floor(now / 1000)}"`), 'dates are in seconds, as importers expect')
-}
-
 /* ── Fuzzy matching: the 404 suggests the page a typo meant, and nothing to scanners ──
    (mutation: drop the scanner guard → fails — /tools/json-tidy.php is one
    letter-run from a real page, so without the guard it would be answered with
@@ -9662,7 +9629,7 @@ console.log('ui refresh: spacing rungs increase in order, the head bootstrap mat
   assert.equal(fuzzyScore('zz', 'JSON Tidy'), null)
   assert.equal(fuzzyScore('x'.repeat(65), 'x'.repeat(100)), null, 'an over-long query is refused before any quadratic work')
 }
-console.log('ui refresh: the kit parse is bounded and its bookmarks export writes only escaped https tool links; the 404 suggests what a typo meant and nothing to a scanner')
+console.log('ui refresh: the 404 suggests what a typo meant and nothing to a scanner')
 
 /* ─────  Home hero: the replay of this page load  ─────
 

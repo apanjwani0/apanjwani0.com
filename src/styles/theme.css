@@ -55,6 +55,11 @@
      value cleared AA on the new surface by 0.002 (4.502:1). #1e7a4c holds
      4.68:1 there and 4.93:1 on --color-surface — the same green to the eye. */
   --color-success: #1e7a4c;  /* success, correct input          */
+  /* Amber ink for "careful, not wrong" (a graded-as-fold hand, a caution note).
+     Held to AA on bg, surface and surface-2 by the contrast sweep: 5.93, 5.48
+     and 5.21:1. The soft fill takes --color-text only, like --color-accent-soft. */
+  --color-warning: #8a5a00;
+  --color-warning-soft: #fdf1d6;
   --color-shadow: rgba(0, 0, 0, 0.5); /* drop-shadow / elevation ink */
   /* Tones: colours a visitor gives to their own content (Flowmap's nodes). A
      tone is a border and a faint tint under --color-text, never text ink. */
@@ -85,6 +90,22 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* ── Layers and focus ────────────────────────────────────────
+     The four stacking levels the chrome uses, so no stylesheet names a bare
+     number: the backdrops (starfield, sky), the page content, the fixed nav and
+     the skip link, which must beat everything. */
+  --z-sky: 0;
+  --z-content: 1;
+  --z-nav: 10;
+  --z-skip: 100;
+  /* The one keyboard focus ring. shared.css draws it on :focus-visible; a
+     component that needs a tighter offset restates only --focus-offset. */
+  --focus-ring: 2px solid var(--color-accent);
+  --focus-offset: 3px;
+  /* The smallest comfortable touch target (44px). Applied to links under
+     `pointer: coarse` in shared.css; the control kit has its own 44px rule. */
+  --target-min: 2.75rem;
+
   /* ── Fonts ───────────────────────────────────────────────── */
   /* The faces are declared in fonts.css. Change a typeface here: every text
      style and control reads one of these two tokens, nothing names a family. */
@@ -104,8 +125,8 @@
   --text-sm: 0.95rem;     /* meta: dates, roles, captions       */
   --text-base: 1.0625rem; /* body + section headings (17px)     */
   --text-card: 1.125rem;  /* listing card title (18px)          */
-  --text-lg: 1.3rem;      /* large heading                      */
-  --text-title: 2.1rem;   /* page title (h1)                    */
+  --text-lg: clamp(1.15rem, 1.05rem + 0.5vw, 1.3rem); /* large heading, 1.3rem from ~800px up */
+  --text-title: clamp(1.75rem, 1.35rem + 1.6vw, 2.1rem); /* page title (h1), 2.1rem from ~750px up */
   /* Long-form article body only (learnings, blogs). Deliberately larger than
      --text-base: a UI label and a paragraph someone reads for six minutes have
      different optimal sizes, and one token cannot serve both. */
@@ -188,6 +209,21 @@
   --radius-lg: 0.375rem;    /* cards, stages, panels (6px)       */
   --radius-xl: 0.5rem;      /* large editor/output surfaces (8px) */
   --radius-pill: 999px;     /* fully-rounded pills/badges        */
+  /* Measures and fluid spacing the shared chrome repeats. Named here so no
+     component stylesheet carries a literal rem, em or ms (asserted in
+     scripts/smoke/design.mjs). Not --space-* on purpose: that prefix is the
+     ordered rung scale, which these are not. */
+  --measure-narrow: 34rem;  /* an error page's column            */
+  --measure-about: 38rem;   /* the footer's about block          */
+  --measure-text: 42rem;    /* a lede or short prose block       */
+  --pad-block-fluid: clamp(2rem, 8vw, 4rem); /* an error page's vertical room */
+  --pad-tool-y: 2rem;       /* the tools' workbench and its pending placeholder */
+  --gap-fluid: clamp(1rem, 4vw, 1.75rem);    /* between a row of text links */
+  --gap-nav: clamp(1rem, 4vw, 2rem);         /* between the nav's section links */
+  --nav-pad: clamp(1rem, 3.5vw, 1.4rem) clamp(1.25rem, 5vw, 2rem);
+  --tracking-label: 0.04em; /* mono nav, breadcrumb and footer labels */
+  --tracking-wide: 0.25em;  /* a spaced-out code, like the 404       */
+  --underline-offset: 0.3em; /* how far a link's underline sits below the text */
   --max-width: 768px;       /* readable content column (prose)  */
   --content-width: 1200px;  /* wide column for listing/index pages (card grids) */
   --tool-width: clamp(1120px, 70vw, 1800px); /* ~70% of viewport on wide screens; floored so it never gets narrower than a laptop, capped so ultrawides stay readable */
@@ -232,6 +268,8 @@
   --color-accent-soft: #1a1733;
   --color-error: #ff6b6b;
   --color-success: #4ade80;
+  --color-warning: #f5b94a;       /* 11.44:1 on bg, 10.88 on surface, 9.89 on surface-2 */
+  --color-warning-soft: #2a2110;
   --tone-blue: #5b9bff;
   --tone-green: #3fcf86;
   --tone-amber: #f2a93b;

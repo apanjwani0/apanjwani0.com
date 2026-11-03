@@ -33,7 +33,6 @@
  * and ResizeObserver are both torn down if the component is removed.
  */
 
-import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 import { copyText } from '../../../lib/flash'
 import { clamp, cappedDpr } from '../../../lib/math'
 import { lsGet, lsSet, lsGetNumber } from '../../../lib/storage'
@@ -290,7 +289,7 @@ class WallpaperForgeTool extends HTMLElement {
             <button data-action="regen" type="button" aria-keyshortcuts="R">Regenerate</button>
             <button data-action="download-image" type="button" aria-keyshortcuts="D">Export image</button>
             <button data-action="download-gif" type="button" aria-keyshortcuts="G">Export GIF</button>
-            <output data-type="wf-export-status" aria-live="polite"></output>
+            <output data-type="wf-export-status" role="status" aria-live="polite"></output>
           </div>
           <div data-group="pattern" role="group" aria-label="Pattern engine">
             <span data-type="wf-group-label">Pattern</span>
@@ -950,6 +949,8 @@ class WallpaperForgeTool extends HTMLElement {
       off.width = width
       off.height = height
       const ctx = off.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
+      // Loaded on the first GIF: the encoder is a chunk only this button needs.
+      const { GIFEncoder, quantize, applyPalette } = await import('gifenc')
       const gif = GIFEncoder()
 
       for (let frame = 0; frame < frames; frame++) {

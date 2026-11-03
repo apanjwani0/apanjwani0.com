@@ -5,6 +5,7 @@ import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import Head from '../components/Head.astro'
 import '../styles/shared.css'
+import '../styles/palette.css'
 
 interface Props {
   toolTitle?: string
@@ -71,6 +72,7 @@ const ogImage = ogImageMeta(site, ogCard, toolTitle)
       // initSiteUI (src/lib/site-ui.ts) is the site chrome both shells share.
       import { initNav } from '../lib/nav-ui.ts'
       import { initAnalytics } from '../lib/analytics-client.ts'
+      import '../lib/sw-register.ts'
       import { initSiteUI } from '../lib/site-ui.ts'
       initNav()
       initAnalytics()

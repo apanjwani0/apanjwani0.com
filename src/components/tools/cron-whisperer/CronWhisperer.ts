@@ -1231,6 +1231,10 @@ class CronWhispererTool extends HTMLElement {
   }
 
   private setStatus(label: string) {
+    // An error interrupts the reader (alert); anything else waits its turn (status).
+    const failed = this.statusEl.hasAttribute('data-error')
+    this.statusEl.setAttribute('role', failed ? 'alert' : 'status')
+    this.statusEl.setAttribute('aria-live', failed ? 'assertive' : 'polite')
     this.statusEl.textContent = label
   }
 

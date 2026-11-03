@@ -1,6 +1,11 @@
 import { defineMiddleware } from 'astro:middleware'
 import { isFromCloudflare } from './lib/security'
 import { looksAutomated, recordVisit, referrerHost } from './lib/visits'
+import { getLearnings } from './lib/config'
+import { httpDate, learningArticleSlug, markdownTwinPath, newestLearningDate, prefersMarkdown, slashlessRedirect } from './lib/reach'
+
+/** The generated documents whose Last-Modified is the newest article's date. */
+const FRESHNESS_PATHS = ['/sitemap.xml', '/llms.txt', '/llms-full.txt', '/feed.xml']
 
 function createNonce(): string {
   const bytes = new Uint8Array(16)
@@ -59,14 +64,53 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const locals = context.locals as any
   locals.cspNonce = cspNonce
 
-  const response = await next()
   const { pathname } = context.url
+
+  // Canonical hygiene: /tools/chainsaw/ and /tools/chainsaw are one page, and
+  // the sitemap lists the second. A GET or HEAD for the first is answered with a
+  // 301 to the second, query string kept. It sits after the origin lock (a
+  // bypass attempt learns nothing) and sets its own Cache-Control, so it lands
+  // in the caching chain's "route set its own policy" branch and no existing
+  // branch moves. See slashlessRedirect for what it refuses to redirect.
+  const method = context.request.method
+  const slashless = method === 'GET' || method === 'HEAD' ? slashlessRedirect(pathname, context.url.search) : null
+
+  // An article asked for as Markdown. The HTML address answers with the twin's
+  // content (Vary: Accept below). The edge cache keys on the URL and not on
+  // Accept, so this response must never be stored: a cached copy would be
+  // handed to every browser that follows.
+  const articleSlug = learningArticleSlug(pathname)
+  const wantsMarkdown = !slashless && articleSlug !== undefined && prefersMarkdown(context.request.headers.get('accept'))
+
+  const response = slashless
+    ? new Response(null, { status: 301, headers: { Location: slashless, 'Cache-Control': 'public, max-age=0, s-maxage=3600' } })
+    : await next(wantsMarkdown ? markdownTwinPath(articleSlug!) : undefined)
+  if (wantsMarkdown) response.headers.set('Cache-Control', 'no-store')
 
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   response.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=(self)')
+  // The article's two forms share an address, so the response says it varies by
+  // Accept, and the HTML form points at its Markdown twin.
+  if (articleSlug !== undefined || /^\/learnings\/[A-Za-z0-9_-]+\.md$/.test(pathname)) {
+    response.headers.append('Vary', 'Accept')
+  }
+  if (articleSlug !== undefined && !wantsMarkdown && response.status === 200) {
+    response.headers.set('Link', `<${markdownTwinPath(articleSlug)}>; rel="alternate"; type="text/markdown"`)
+  }
+  // Last-Modified only from a real date: the newest published article's. With
+  // none, the header is left off rather than stamped with the request time.
+  if (FRESHNESS_PATHS.includes(pathname) && response.status === 200) {
+    try {
+      const newest = newestLearningDate(await getLearnings(context.locals))
+      if (newest) response.headers.set('Last-Modified', httpDate(newest))
+    } catch {
+      // A config read that fails costs the header, never the response.
+    }
+  }
+
   // A route that answers with a BODYLESS 404 or 500 is not the response the
   // visitor gets: Astro re-renders the matching error page (src/pages/404.astro
   // or 500.astro) for it, running this middleware a second time with a fresh
@@ -129,17 +173,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
       } else if (isGet && response.status === 200) {
         // Public, successful page → cacheable. s-maxage drives the CDN edge;
         // stale-while-revalidate lets it refresh in the background so no visitor
-        // ever blocks on the origin. The sitemap changes far less often than page
-        // content, so it gets a longer fresh window (1 h vs 10 m) to cut origin
+        // ever blocks on the origin. The sitemap, llms.txt, llms-full.txt and the
+        // feed change far less often than page
+        // content, so they get a longer fresh window (1 h vs 10 m) to cut origin
         // hits from crawlers while still refreshing within the day.
         //
         // max-age=0 keeps *browsers* from pinning stale HTML: without it an edit
         // stays invisible to anyone who already loaded the page until their own
         // cache expires, which is not something a purge can fix.
-        const isSitemap = pathname === '/sitemap.xml'
+        const isSlowDocument = FRESHNESS_PATHS.includes(pathname)
         response.headers.set(
           'Cache-Control',
-          `public, max-age=0, ${isSitemap ? 's-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
+          `public, max-age=0, ${isSlowDocument ? 's-maxage=3600' : 's-maxage=600'}, stale-while-revalidate=86400`,
         )
       }
     }

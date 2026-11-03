@@ -15,6 +15,7 @@
  */
 import { escapeHtml as csEsc } from '../../../lib/escape'
 import { copyText } from '../../../lib/flash'
+import { permalinkHash, permalinkHref, readPermalink } from '../../../lib/permalink'
 import {
   caaRenewalOutlook,
   type CaaOutlook,
@@ -22,6 +23,8 @@ import {
 } from '../../../lib/caa'
 import {
   CS_ALLOWED_PORTS,
+  CS_MAX_HOST_CHARS,
+  csCheckTarget,
   csChainLinks,
   csChainState,
   csDaysLeft,
@@ -151,16 +154,25 @@ class ChainsawTool extends HTMLElement {
     this.statusEl = this.root.querySelector('[data-type="cs-status"]') as HTMLElement
     this.resultsEl = this.root.querySelector('[data-for="results"]') as HTMLElement
 
-    // A result is worth sending to whoever owns the server, so the target rides
-    // in the URL. Read back through the same validation the server applies —
-    // a hand-edited ?host must cost the prefill, never the page.
-    let deepLinked = ''
+    // Two ways in with a target already named, and they differ on purpose.
+    //  - `#h=<target>` is a permalink: the visitor's own earlier check, minted by
+    //    "Copy link to this check". It fills the form AND runs, because opening
+    //    it is asking for that check again. It is read through `csCheckTarget`,
+    //    the form's own gate, so a hand-edited link costs the prefill, never the
+    //    page.
+    //  - `?host=` (the hub's "try" link, DNS Sightline's cross-link) only fills
+    //    the form. A server tool waits for its button, so a link someone else
+    //    wrote spends none of the visitor's budget.
+    let permalinked: string | null = null
+    let prefilled = ''
     try {
+      permalinked = readPermalink(location.hash, CS_MAX_HOST_CHARS + 16, v => csCheckTarget(v).ok)
       const fromUrl = new URLSearchParams(location.search).get('host') ?? ''
-      if (fromUrl && fromUrl.length <= 280) deepLinked = fromUrl
+      if (fromUrl && fromUrl.length <= CS_MAX_HOST_CHARS + 16) prefilled = fromUrl
     } catch { /* no URL access in some embedded contexts */ }
-    if (deepLinked) {
-      this.targetInput.value = deepLinked
+    const named = permalinked ?? prefilled
+    if (named) {
+      this.targetInput.value = named
     } else {
       try {
         const saved = localStorage.getItem(CS_LS_TARGET)
@@ -191,7 +203,7 @@ class ChainsawTool extends HTMLElement {
       if (field?.matches('[data-input="testname"]')) this.testName((field as HTMLInputElement).value)
     })
 
-    if (deepLinked) void this.inspect()
+    if (permalinked) void this.inspect()
   }
 
   disconnectedCallback() {
@@ -213,26 +225,29 @@ class ChainsawTool extends HTMLElement {
     void copyText(text, btn)
   }
 
+  /** The permalink: it re-runs this check when opened (see the note in the handshake card). */
   private shareLink(report: CsReport): string {
     const target = report.port === 443 ? report.host : `${report.host}:${report.port}`
-    try {
-      const url = new URL(location.href)
-      url.search = `?host=${encodeURIComponent(target)}`
-      url.hash = ''
-      return url.href
-    } catch {
-      return `/tools/chainsaw?host=${encodeURIComponent(target)}`
-    }
+    return permalinkHref(permalinkHash(target))
   }
 
-  private setStatus(text: string) {
+  /** A failure is announced as an alert; progress and the all-clear stay a polite status. */
+  private setStatus(text: string, error = false) {
     this.statusEl.textContent = text
+    this.statusEl.setAttribute('role', error ? 'alert' : 'status')
+    this.statusEl.setAttribute('aria-live', error ? 'assertive' : 'polite')
   }
 
   private async inspect() {
     const raw = this.targetInput.value.trim()
     if (!raw) {
-      this.setStatus('Enter a hostname first.')
+      this.setStatus('Enter a hostname first.', true)
+      return
+    }
+    // The server's own syntactic gate, so a typo costs no request.
+    const gate = csCheckTarget(raw)
+    if (!gate.ok) {
+      this.setStatus(gate.reason, true)
       return
     }
     try { localStorage.setItem(CS_LS_TARGET, raw) } catch { /* private mode */ }
@@ -251,12 +266,12 @@ class ChainsawTool extends HTMLElement {
       const res = await fetch(`/api/tools/chainsaw?target=${encodeURIComponent(raw)}`, { signal: controller.signal })
       data = await res.json() as CsResponse
       if (res.status === 429) {
-        this.setStatus('Rate limited — each check opens real TLS connections, so give it a minute.')
+        this.setStatus('Rate limited — each check opens real TLS connections, so give it a minute.', true)
         return
       }
     } catch {
       if (controller.signal.aborted) return
-      this.setStatus('The request failed — check your connection and try again.')
+      this.setStatus('The request failed — check your connection and try again.', true)
       return
     } finally {
       if (this.inflight === controller) this.runButton.disabled = false
@@ -264,7 +279,7 @@ class ChainsawTool extends HTMLElement {
     if (controller.signal.aborted) return
 
     if (!data.ok || !data.report) {
-      this.setStatus(data.error ?? 'That host could not be inspected.')
+      this.setStatus(data.error ?? 'That host could not be inspected.', true)
       return
     }
 
@@ -272,14 +287,15 @@ class ChainsawTool extends HTMLElement {
     this.report = data.report
     this.render(data.report)
 
-    // Mirror the target into the URL so the result can be sent to whoever owns
-    // the server. Pinned to the path it was scheduled on and wrapped, because
-    // Safari rate-limits replaceState and throws past the limit.
+    // Mirror the target into the address bar as the permalink, so the result can
+    // be sent to whoever owns the server. Pinned to the path it was scheduled on
+    // and wrapped, because Safari rate-limits replaceState and throws past the
+    // limit.
     try {
       const path = location.pathname
       if (path.endsWith('/chainsaw')) {
         const target = data.report.port === 443 ? data.report.host : `${data.report.host}:${data.report.port}`
-        history.replaceState(null, '', `${path}?host=${encodeURIComponent(target)}`)
+        history.replaceState(null, '', `${path}${permalinkHash(target)}`)
       }
     } catch { /* not worth failing a render over */ }
   }
@@ -292,7 +308,7 @@ class ChainsawTool extends HTMLElement {
     const now = Date.now()
     const leaf = report.presented[0]
     if (!leaf) {
-      this.setStatus('The host answered, but presented no certificate this tool could read.')
+      this.setStatus('The host answered, but presented no certificate this tool could read.', true)
       return
     }
     const match = csMatchHost(report.host, leaf)
@@ -453,9 +469,10 @@ class ChainsawTool extends HTMLElement {
         <div data-group="cs-cardhead">
           <h2 id="cs-hs-h">The handshake</h2>
           <div data-group="toolbar">
-            <button data-copy="link" type="button">Copy link to this result</button>
+            <button data-copy="link" type="button">Copy link to this check</button>
           </div>
         </div>
+        <p data-type="cs-hint">This link re-runs the check when opened.</p>
         <dl data-type="cs-facts">
           ${rows.map(([k, v]) => `<div><dt>${csEsc(k)}</dt><dd>${csEsc(v)}</dd></div>`).join('')}
         </dl>

@@ -41,22 +41,6 @@ div[data-type="mw-slider"] output {
   text-align: right;
 }
 
-div[data-group="seed"] {
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-div[data-group="seed"] input[type="text"] {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 0.28rem 0.5rem;
-  width: 11ch;
-}
-
 /* live status line */
 p[data-type="mw-status"] {
   margin: 0;
@@ -88,4 +72,3 @@ div[data-type="mw-legend"] i {
   display: inline-block;
   border: 1px solid var(--color-border);
 }
-
