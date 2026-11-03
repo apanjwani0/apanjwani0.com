@@ -10,7 +10,7 @@ Build and test notes, caching, analytics, share cards, AI crawlers, deploy and t
   and `const f = (a) => ({…})` followed by a bare `{` block (phantom parse
   errors).
 - `boot:check` starts the built server with the Dockerfile's own command on a
-  loopback port and requires a full 200 page from `/`. Neither `build` nor
+  loopback port and requires a full 200 page from `/`. It then sends a same-origin write the way Cloudflare delivers it (needs `security.allowedDomains`) and a cross-site one (must be 403). Neither `build` nor
   `check` starts the server, so a dependency mismatch can ship an origin that
   crashes on boot. It deletes `ASTRO_NODE_LOGGING` from the child's env on
   purpose: that variable skips the boot path that crashes on a mismatch. The Dockerfile's final

@@ -114,6 +114,12 @@ No header, cookie, query param or body field may gate access on its own.
 `getClientIp()` is untrusted and only buckets rate limits. Authorization rests
 on a secret the client can't forge, or on the surface not existing.
 
+### `security.allowedDomains` lists the site's hosts
+
+Without it the Node adapter rebuilds `Request.url` as `localhost`, so
+`isSameOrigin()` refuses every same-site write in production. `boot:check`
+asserts it with a Cloudflare-shaped request. Details: [docs/security.md](docs/security.md).
+
 ### Origin exposure
 
 The origin has a public IP with port 80 open, so Cloudflare is bypassable and

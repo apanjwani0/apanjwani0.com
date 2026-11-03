@@ -28,6 +28,7 @@
  */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { request as httpRequest } from 'node:http'
 import { createServer } from 'node:net'
 import { fileURLToPath } from 'node:url'
 
@@ -140,6 +141,32 @@ if (!(response.headers.get('content-type') ?? '').includes('text/html')) {
 }
 if (!/<\/html>\s*$/i.test(body)) await fail('GET / returned a truncated document (no closing </html>)')
 ok(`a complete HTML document (${body.length} chars)`)
+
+// A same-site browser write must get through isSameOrigin() as Cloudflare
+// delivers it: Host apanjwani0.com, X-Forwarded-Proto https, a matching Origin.
+// Without security.allowedDomains the adapter rebuilds Request.url as
+// http://localhost:<port>, the origins never match, and every one of those
+// writes (analytics, the game boards, the Webhook Inspector) answers 403 in
+// production while every unit test, which builds its own Request, stays green.
+// fetch() cannot set Host, hence node:http.
+function rawWrite(origin) {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({
+      host: '127.0.0.1', port, method: 'DELETE',
+      path: `/api/hook/${'0'.repeat(32)}/requests`,
+      headers: { ...headers, host: 'apanjwani0.com', 'x-forwarded-proto': 'https', origin },
+    }, (res) => { res.resume(); resolve(res.statusCode) })
+    req.on('error', reject)
+    req.setTimeout(5_000, () => req.destroy(new Error('timeout')))
+    req.end()
+  })
+}
+const sameSite = await rawWrite('https://apanjwani0.com').catch((e) => e.message)
+if (sameSite === 403) await fail('a same-origin write behind Cloudflare answered 403: Request.url does not carry the real host (security.allowedDomains in astro.config.mjs)')
+ok(`a same-origin write as Cloudflare delivers it gets through (${sameSite})`)
+const crossSite = await rawWrite('https://evil.example').catch((e) => e.message)
+if (crossSite !== 403) await fail(`a cross-site write answered ${crossSite}, expected 403`)
+ok('a cross-site write is refused (403)')
 
 await sleep(SETTLE_MS)
 if (exited) await fail(`the server exited ${SETTLE_MS}ms after its first 200 (code ${exited.code}, signal ${exited.signal})`)
