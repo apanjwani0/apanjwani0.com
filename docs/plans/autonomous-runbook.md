@@ -85,7 +85,7 @@ Ordered. Sizes are rough (S/M/L). Items from review-response keep its numbers.
    - llms.txt starts "Software Engineer.".
 
    Then run `npm run origin:check`.
-2. [ ] **Search budgets across the site** (S, autonomous). The 26 Oct sweep
+2. [x] ~~**Search budgets across the site**~~ (done with the PR #45 merge; asserted in `tools-hub-smoke.mjs`) (S, autonomous). The 26 Oct sweep
    found:
    - `/games/poker-trainer`: title 71, description 220;
    - `/games/2048`: title 67, description 172;

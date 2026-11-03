@@ -273,6 +273,26 @@ console.log('polish: the hub sky stops after 20 s idle, and a focused card is ri
 }
 console.log('tool pages: every live tool\'s title fits 60 characters and its description 160')
 
+/* ─────  Game, Driftfield mode and cron preset pages fit a search result too  ─────
+   The 26 Oct sweep found 2048, Bytele, two Driftfield modes and nine cron
+   presets past the same budgets as the tools above.
+   (mutation: drop the short form in cronPresetSeoTitle → every-5-minutes fails) */
+{
+  const { games } = await import('../src/config/games.ts')
+  const { DRIFTFIELD_MODES } = await import('../src/lib/driftfield.ts')
+  const { CRON_PRESETS, cronPresetDescription, cronPresetSeoTitle } = await import('../src/lib/cron-presets.ts')
+  const pages = [
+    ...games.map(g => ({ id: `/games/${g.slug}`, title: g.seoTitle || g.title, d: g.metaDescription || g.description })),
+    ...DRIFTFIELD_MODES.map(m => ({ id: `driftfield/${m.slug}`, title: m.seoTitle, d: m.description })),
+    ...CRON_PRESETS.map(p => ({ id: `cron/${p.slug}`, title: cronPresetSeoTitle(p), d: cronPresetDescription(p) })),
+  ]
+  for (const p of pages) {
+    assert.ok(p.title.length <= 60, `${p.id}: title is ${p.title.length} characters ("${p.title}") — keep it within 60`)
+    assert.ok(p.d.length <= 160, `${p.id}: description is ${p.d.length} characters — keep it within 160`)
+  }
+}
+console.log('game, Driftfield mode and cron preset pages: every title fits 60 characters and every description 160')
+
 /* ─────  Two tools no longer shift on load  ─────
    Measured in the tool sweep: Flowmap opened its source drawer after
    Cytoscape loaded (0.115 CLS on a first visit), and Driftfield sized its
