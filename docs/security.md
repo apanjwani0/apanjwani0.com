@@ -21,6 +21,15 @@ No header, cookie, query param or body field may gate access on its own.
 `getClientIp()` is untrusted and only buckets rate limits. Authorization rests
 on a secret the client can't forge, or on the surface not existing.
 
+### A CSRF check compares against the real host
+
+`isSameOrigin()` compares the browser's `Origin` with `Request.url`. The Node
+adapter only lets a `Host` listed in `security.allowedDomains`
+(`astro.config.mjs`) shape `Request.url`; any other host becomes
+`http://localhost:<port>`, so with the list missing every same-site write answers
+403 in production while the unit asserts, which build their own `Request`, stay
+green. `boot:check` sends one write as Cloudflare delivers it and one cross-site.
+
 ### Origin exposure
 
 The origin has a public IP with port 80 open, so Cloudflare is bypassable and

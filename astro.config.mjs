@@ -360,7 +360,16 @@ export default defineConfig({
   // ADMIN_SECRET, and the analytics + webhook-clear endpoints call the shared
   // isSameOrigin() in src/lib/security.ts (asserted by security-smoke). Every
   // NEW state-changing endpoint must call it too — nothing global backstops it.
-  security: { checkOrigin: false },
+  // allowedDomains lets Request.url carry the real host. Without it the Node
+  // adapter rebuilds every URL as http://localhost:<port>, so isSameOrigin()
+  // refuses every same-site browser write in production.
+  security: {
+    checkOrigin: false,
+    allowedDomains: [
+      { protocol: 'https', hostname: 'apanjwani0.com' },
+      { protocol: 'https', hostname: 'www.apanjwani0.com' },
+    ],
+  },
   devToolbar: { enabled: false },
   vite: {
     plugins: [adminSavePlugin, heroProbePlugin],
