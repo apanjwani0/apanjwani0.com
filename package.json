@@ -30,7 +30,7 @@
     "gifenc": "^1.0.3",
     "html2canvas": "^1.4.1",
     "marked": "^17.0.5",
-    "web-vitals": "^5.3.0"
+    "web-vitals": "^6.2.3"
   },
   "overrides": {
     "defu": "^6.1.7",
