@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import node from '@astrojs/node';
+import embedPreload from './src/integrations/embed-preload.mjs';
 // To deploy to Cloudflare Workers instead, swap the two lines below:
 // import cloudflare from '@astrojs/cloudflare';
 import { writeFile } from 'node:fs/promises';
@@ -119,6 +120,8 @@ export interface Learning {
   /** Shown on the hub and as the meta description when \`metaDescription\` is unset. */
   summary: string
   date: string
+  /** The last day the content changed (YYYY-MM-DD); drives dateModified and the sitemap. */
+  updated?: string
   /** Markdown. Rendered through src/lib/markdown.ts — never handed to set:html raw. */
   content: string
   /**
@@ -344,6 +347,8 @@ const heroProbePlugin = {
 export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
+  // Gives pages the built URL of each embed's script so they can modulepreload it.
+  integrations: [embedPreload()],
   // Astro's default CSRF guard (security.checkOrigin) rejects cross-origin form
   // POSTs. That is incompatible with the Webhook Inspector's capture endpoint
   // (/api/hook/*), which exists precisely to receive requests from arbitrary
@@ -355,7 +360,16 @@ export default defineConfig({
   // ADMIN_SECRET, and the analytics + webhook-clear endpoints call the shared
   // isSameOrigin() in src/lib/security.ts (asserted by security-smoke). Every
   // NEW state-changing endpoint must call it too — nothing global backstops it.
-  security: { checkOrigin: false },
+  // allowedDomains lets Request.url carry the real host. Without it the Node
+  // adapter rebuilds every URL as http://localhost:<port>, so isSameOrigin()
+  // refuses every same-site browser write in production.
+  security: {
+    checkOrigin: false,
+    allowedDomains: [
+      { protocol: 'https', hostname: 'apanjwani0.com' },
+      { protocol: 'https', hostname: 'www.apanjwani0.com' },
+    ],
+  },
   devToolbar: { enabled: false },
   vite: {
     plugins: [adminSavePlugin, heroProbePlugin],

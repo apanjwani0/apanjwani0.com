@@ -61,8 +61,9 @@ class AudioTranscriberTool extends HTMLElement {
         </div>
         <div data-type="at-main">
           <div data-type="at-controls">
-            <select data-type="at-language">${langOptions}</select>
-            <span data-type="at-status">Ready</span>
+            <select data-type="at-language" aria-label="Spoken language">${langOptions}</select>
+            <span data-type="at-status" role="status" aria-live="polite">Ready</span>
+            <span data-type="at-error" role="alert"></span>
             <span data-type="at-duration" hidden>00:00</span>
           </div>
           <div data-type="at-mic-area">
@@ -71,7 +72,7 @@ class AudioTranscriberTool extends HTMLElement {
             </button>
           </div>
           <div data-type="at-output">
-            <div data-type="at-transcript" data-placeholder="Transcript will appear here..."></div>
+            <div data-type="at-transcript" role="region" aria-label="Transcript" data-placeholder="Transcript will appear here..."></div>
           </div>
           <div data-type="at-actions">
             <button data-action="copy">Copy</button>
@@ -109,21 +110,23 @@ class AudioTranscriberTool extends HTMLElement {
     }
 
     this.recognition.onerror = (event: any) => {
-      const status = this.querySelector<HTMLElement>('[data-type="at-status"]')!
+      let message: string
       switch (event.error) {
         case 'not-allowed':
-          status.textContent = 'Microphone permission denied'
+          message = 'The microphone is blocked. Allow it for this site in the browser, then try again.'
           break
         case 'no-speech':
-          status.textContent = 'No speech detected'
+          message = 'No speech was heard. Check that the right microphone is selected.'
           break
         case 'network':
-          status.textContent = 'Network error'
+          message = 'The browser could not reach its speech service. Check the connection and try again.'
           break
         default:
-          status.textContent = `Error: ${event.error}`
+          message = `Speech recognition stopped with the error "${event.error}".`
       }
+      // Stop first: stopping writes "Stopped", and the error must be the last word.
       this.stopRecording()
+      this.querySelector<HTMLElement>('[data-type="at-error"]')!.textContent = message
     }
 
     this.recognition.onend = () => {
@@ -200,6 +203,7 @@ class AudioTranscriberTool extends HTMLElement {
     const duration = this.querySelector<HTMLElement>('[data-type="at-duration"]')!
 
     atReflectMic(mic, true)
+    this.querySelector<HTMLElement>('[data-type="at-error"]')!.textContent = ''
     status.textContent = 'Listening...'
     duration.hidden = false
 

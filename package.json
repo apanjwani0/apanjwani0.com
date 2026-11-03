@@ -16,9 +16,10 @@
     "poker:check": "tsx scripts/poker-check.mjs",
     "trainer:catalogue": "npx tsx src/components/games/poker-trainer/ui/catalogue.gen.ts docs/poker-assets.html",
     "analytics:smoke": "tsx scripts/analytics-smoke.mjs",
-    "security:smoke": "tsx scripts/security-smoke.mjs && tsx scripts/tools-hub-smoke.mjs",
+    "security:smoke": "tsx scripts/run-smoke.mjs",
     "boot:check": "node scripts/boot-check.mjs",
-    "origin:check": "bash scripts/origin-check.sh"
+    "origin:check": "bash scripts/origin-check.sh",
+    "indexnow": "node scripts/indexnow.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.6",
@@ -28,7 +29,8 @@
     "dompurify": "^3.4.12",
     "gifenc": "^1.0.3",
     "html2canvas": "^1.4.1",
-    "marked": "^17.0.5"
+    "marked": "^17.0.5",
+    "web-vitals": "^5.3.0"
   },
   "overrides": {
     "defu": "^6.1.7",

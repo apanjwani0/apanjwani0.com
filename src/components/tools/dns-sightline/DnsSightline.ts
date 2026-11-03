@@ -19,7 +19,8 @@
  */
 import { escapeHtml as sgEsc } from '../../../lib/escape'
 import { copyText } from '../../../lib/flash'
-import { SG_KNOWN_CAS, SG_TYPES, sgCanonicalRecord, sgCountByLevel, sgPickAnswer } from './analyze'
+import { permalinkHash, permalinkHref, permalinkParam, readPermalink } from '../../../lib/permalink'
+import { SG_KNOWN_CAS, SG_MAX_INPUT_CHARS, SG_TYPES, sgCanonicalRecord, sgCountByLevel, sgPickAnswer, sgValidateName } from './analyze'
 // Type-only, and erased at build: none of the resolver code in ./inspect ships.
 import type { SgInspection } from './inspect'
 import { sgRenderResults } from './panels'
@@ -103,20 +104,30 @@ class DnsSightlineTool extends HTMLElement {
     this.statusEl = this.root.querySelector('[data-type="sg-status"]') as HTMLElement
     this.resultsEl = this.root.querySelector('[data-for="results"]') as HTMLElement
 
-    // A result is worth sending to whoever owns the zone, so the name rides in
-    // the URL. Read back through the same validation the server applies — a
-    // hand-edited ?name must cost the prefill, never the page.
-    let deepLinked = ''
+    // Two ways in with a name already given, and they differ on purpose.
+    //  - `#h=<name>` (with `&ca=` when a CA was chosen) is a permalink: the
+    //    visitor's own earlier check, minted by "Copy link to this check". It
+    //    fills the form AND runs, because opening it is asking for that check
+    //    again. It is read through `sgValidateName`, the form's own gate, so a
+    //    hand-edited link costs the prefill, never the page.
+    //  - `?name=&ca=` (the hub's "try" link, Chainsaw's cross-link) only fills the
+    //    form. A server tool waits for its button, so a link someone else wrote
+    //    spends none of the visitor's budget.
+    const knownCa = (id: string | null) => (id && SG_KNOWN_CAS.some(c => c.id === id) ? id : '')
+    let permalinked: string | null = null
+    let prefilled = ''
     try {
+      permalinked = readPermalink(location.hash, SG_MAX_INPUT_CHARS, v => sgValidateName(v).ok)
       const params = new URLSearchParams(location.search)
       const fromUrl = params.get('name') ?? ''
-      if (fromUrl && fromUrl.length <= 300) deepLinked = fromUrl
-      const caFromUrl = params.get('ca') ?? ''
-      if (caFromUrl && SG_KNOWN_CAS.some(c => c.id === caFromUrl)) this.caSelect.value = caFromUrl
+      if (fromUrl && fromUrl.length <= SG_MAX_INPUT_CHARS) prefilled = fromUrl
+      const ca = permalinked !== null ? knownCa(permalinkParam(location.hash, 'ca', 64)) : knownCa(params.get('ca'))
+      if (ca) this.caSelect.value = ca
     } catch { /* no URL access in some embedded contexts */ }
 
-    if (deepLinked) {
-      this.nameInput.value = deepLinked
+    const named = permalinked ?? prefilled
+    if (named) {
+      this.nameInput.value = named
     } else {
       try {
         const saved = localStorage.getItem(SG_LS_NAME)
@@ -148,7 +159,7 @@ class DnsSightlineTool extends HTMLElement {
       if (btn) this.copyFor(btn.dataset.copy ?? '', btn)
     })
 
-    if (deepLinked) void this.inspect()
+    if (permalinked) void this.inspect()
   }
 
   disconnectedCallback() {
@@ -156,10 +167,13 @@ class DnsSightlineTool extends HTMLElement {
     this.inflight = null
   }
 
+  /** A failure is announced as an alert; progress and a finished run stay a polite status. */
   private setStatus(text: string, tone: '' | 'ok' | 'bad' = '') {
     this.statusEl.textContent = text
     if (tone) this.statusEl.setAttribute('data-tone', tone)
     else this.statusEl.removeAttribute('data-tone')
+    this.statusEl.setAttribute('role', tone === 'bad' ? 'alert' : 'status')
+    this.statusEl.setAttribute('aria-live', tone === 'bad' ? 'assertive' : 'polite')
   }
 
   private async inspect() {
@@ -167,6 +181,12 @@ class DnsSightlineTool extends HTMLElement {
     if (!value) {
       this.setStatus('Enter a domain name first.', 'bad')
       this.nameInput.focus()
+      return
+    }
+    // The server's own syntactic gate, so a typo costs no request.
+    const gate = sgValidateName(value)
+    if (!gate.ok) {
+      this.setStatus(gate.reason, 'bad')
       return
     }
 
@@ -199,14 +219,13 @@ class DnsSightlineTool extends HTMLElement {
         `${body.report.deadlineHit ? 'Stopped at the time limit, so some sections are incomplete · ' : ''}${body.report.queries} DNS queries in ${body.report.elapsedMs}ms · ${counts.error} error${counts.error === 1 ? '' : 's'}, ${counts.warn} warning${counts.warn === 1 ? '' : 's'}`,
         counts.error || body.report.deadlineHit ? 'bad' : 'ok',
       )
-      // Keep the address bar in step so the result is shareable. replaceState,
-      // not pushState: one inspection is not a history entry.
+      // Keep the address bar in step so the result is shareable, as the
+      // permalink. replaceState, not pushState: one inspection is not a history
+      // entry. Pinned to the path it was scheduled on.
       try {
-        const next = new URL(location.href)
-        next.searchParams.set('name', body.report.name)
-        if (this.caSelect.value) next.searchParams.set('ca', this.caSelect.value)
-        else next.searchParams.delete('ca')
-        history.replaceState(null, '', next.toString())
+        if (location.pathname.endsWith('/dns-sightline')) {
+          history.replaceState(null, '', `${location.pathname}${this.permalink(body.report.name)}`)
+        }
       } catch { /* no history access */ }
     } catch (err: any) {
       if (err?.name === 'AbortError') return
@@ -220,7 +239,19 @@ class DnsSightlineTool extends HTMLElement {
   /* ---------------- rendering ---------------- */
 
   private render(r: SgReport) {
-    this.resultsEl.innerHTML = sgRenderResults(r)
+    this.resultsEl.innerHTML = `
+      <section data-type="sg-card" aria-label="Link to this check">
+        <div data-group="toolbar">
+          <button data-copy="link" type="button">Copy link to this check</button>
+        </div>
+        <p data-type="sg-hint">This link re-runs the check when opened.</p>
+      </section>
+      ${sgRenderResults(r)}`
+  }
+
+  /** The fragment that re-runs this check: the name, and the CA when one is chosen. */
+  private permalink(name: string): string {
+    return permalinkHash(name, { ca: this.caSelect.value })
   }
 
   /* ---------------- copy ---------------- */
@@ -246,6 +277,8 @@ class DnsSightlineTool extends HTMLElement {
       }).join('\n')
     } else if (kind === 'spf') {
       text = r.spf.record ?? ''
+    } else if (kind === 'link') {
+      text = permalinkHref(this.permalink(r.name))
     }
     if (!text) return
     void copyText(text, btn)

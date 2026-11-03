@@ -109,6 +109,66 @@ export const CS_ALLOWED_PORTS: number[] = [
   8883,  // mqtts
 ]
 
+/** The longest hostname a target may name; `csValidateTarget` (tls-inspect.ts) holds the same number. */
+export const CS_MAX_HOST_CHARS = 253
+
+/**
+ * The page's copy of the server's syntactic target gate, `csValidateTarget`
+ * (`src/lib/tls-inspect.ts`), which imports `node:net` and so cannot ship to the
+ * browser. The form runs it before asking, so a typo costs no request, and a
+ * `#h=` permalink is read back through it before anything runs. The server
+ * stays authoritative: `scripts/smoke/mcp.mjs` drives both over one corpus and
+ * fails if they ever disagree on an input, so this cannot drift into a looser
+ * copy. No network here.
+ */
+export function csCheckTarget(raw: string): { ok: true } | { ok: false; reason: string } {
+  const bad = (reason: string) => ({ ok: false as const, reason })
+  let text = raw.trim()
+  if (!text) return bad('Enter a hostname to inspect.')
+  if (text.length > CS_MAX_HOST_CHARS + 16) return bad('That target is too long to be a hostname.')
+
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
+    let parsed: URL
+    try {
+      parsed = new URL(text)
+    } catch {
+      return bad('That does not parse as a URL.')
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return bad('Paste a hostname, or an http/https URL.')
+    if (parsed.username || parsed.password) return bad('Targets with embedded credentials are not dialled.')
+    text = parsed.port ? `${parsed.hostname}:${parsed.port}` : parsed.hostname
+  }
+
+  let host = text
+  let port = 443
+  const family = (h: string) => (canonicalIp(h) === null ? 0 : h.includes(':') ? 6 : 4)
+  const bracketed = /^\[([^\]]+)\](?::(\d+))?$/.exec(host)
+  if (bracketed) {
+    host = bracketed[1]
+    if (bracketed[2]) port = Number.parseInt(bracketed[2], 10)
+  } else {
+    const colons = host.split(':')
+    if (colons.length === 2) {
+      host = colons[0]
+      port = Number.parseInt(colons[1], 10)
+    } else if (colons.length > 2 && family(host) !== 6) {
+      return bad('That is not a hostname — wrap an IPv6 literal in brackets, like [2606:4700::1111].')
+    }
+  }
+
+  host = host.replace(/\.$/, '').toLowerCase()
+  if (!host) return bad('That target has no host.')
+  if (host.length > CS_MAX_HOST_CHARS) return bad('That hostname is longer than a hostname may be.')
+  if (!Number.isInteger(port)) return bad('That port is not a number.')
+  if (!CS_ALLOWED_PORTS.includes(port)) {
+    return bad(`Port ${port} is not on this tool's list of ports that speak TLS on connect (${CS_ALLOWED_PORTS.join(', ')}).`)
+  }
+  if (family(host) === 0 && (!/^[a-z0-9.-]+$/.test(host) || host.startsWith('-') || host.endsWith('-'))) {
+    return bad('That does not look like a hostname.')
+  }
+  return { ok: true }
+}
+
 export const CS_MS_PER_DAY = 86_400_000
 /** CA/Browser Forum ceiling for certificates issued since 2020-09-01. */
 export const CS_MAX_LEAF_DAYS = 398

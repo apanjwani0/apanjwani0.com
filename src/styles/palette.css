@@ -1,0 +1,271 @@
+/* The command palette (src/lib/find-ui.ts) and the nav button that opens it.
+   Tokens only; both shells import this sheet. The dialog is built by script, so
+   none of these rules match anything until the first open. */
+
+/* ── The nav button: reads as one more link in the cluster ── */
+nav[data-type="hero-nav"] button[data-action="palette"] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  line-height: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color var(--motion-fast) var(--ease-out);
+}
+
+/* A larger hit area than the words, without moving the row. */
+nav[data-type="hero-nav"] button[data-action="palette"]::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-md) * -1) calc(var(--space-sm) * -1);
+}
+
+nav[data-type="hero-nav"] button[data-action="palette"]:hover {
+  background: none;
+  color: var(--color-text);
+}
+
+nav[data-type="hero-nav"] button[data-action="palette"] svg {
+  inline-size: 1em;
+  block-size: 1em;
+  flex: none;
+}
+
+nav[data-type="hero-nav"] button[data-action="palette"] kbd {
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0;
+  color: var(--color-muted);
+}
+
+/* A touch screen has no key to press; the hint would only take room. */
+@media (max-width: 640px), (pointer: coarse) {
+  nav[data-type="hero-nav"] button[data-action="palette"] kbd {
+    display: none;
+  }
+}
+
+/* ── The dialog ── */
+div[data-type="palette"] {
+  --palette-width: 36rem;
+  position: fixed;
+  inset: 0;
+  /* Above the skip link, which is itself above the nav. */
+  z-index: calc(var(--z-skip) + 1);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  box-sizing: border-box;
+  padding: max(var(--space-section), 12vh) var(--space-page-x) var(--space-page-x);
+  opacity: 0;
+  transition: opacity var(--motion-base) var(--ease-out);
+}
+
+div[data-type="palette"][data-state="open"] {
+  opacity: 1;
+}
+
+/* The page behind does not scroll while the dialog is up. */
+html[data-palette-open] {
+  overflow: hidden;
+}
+
+div[data-type="palette-scrim"] {
+  position: absolute;
+  inset: 0;
+  background: var(--color-shadow);
+  -webkit-backdrop-filter: blur(var(--space-xs));
+  backdrop-filter: blur(var(--space-xs));
+}
+
+div[data-type="palette-dialog"] {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(100%, var(--palette-width));
+  max-block-size: 100%;
+  overflow: hidden;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-3);
+}
+
+div[data-type="palette-field"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+  border-block-end: 1px solid var(--color-border);
+}
+
+div[data-type="palette-field"] input {
+  flex: 1;
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--space-md) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+}
+
+/* The field row carries the focus mark: a bar in the accent under it, since a
+   ring would be cut off by the dialog's rounded edge. */
+div[data-type="palette-field"] input:focus-visible {
+  outline: 0;
+}
+
+div[data-type="palette-field"]:focus-within {
+  border-block-end-color: var(--color-accent);
+  box-shadow: 0 1px 0 var(--color-accent);
+}
+
+div[data-type="palette-field"] input::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
+}
+
+div[data-type="palette-field"] button {
+  flex: none;
+  margin: 0;
+  padding: var(--space-2xs) var(--space-sm);
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out);
+}
+
+div[data-type="palette-field"] button:hover {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+div[role="listbox"][aria-label="Matching pages"] {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-xs) var(--space-xs) var(--space-md);
+}
+
+div[role="listbox"][aria-label="Matching pages"]:empty {
+  display: none;
+}
+
+p[data-type="palette-group"] {
+  margin: 0;
+  padding: var(--space-lg) var(--space-lg) var(--space-xs);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+}
+
+div[role="listbox"] a[role="option"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+div[role="listbox"] a[role="option"]:hover {
+  text-decoration: none;
+}
+
+div[role="listbox"] a[role="option"][aria-selected="true"] {
+  background: var(--color-accent-soft);
+}
+
+span[data-type="palette-title"] {
+  font-size: var(--text-base);
+}
+
+span[data-type="palette-title"] mark {
+  background: transparent;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+span[data-type="palette-desc"] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+p[data-type="palette-status"] {
+  margin: 0;
+  padding: var(--space-xl);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+p[data-type="palette-status"]:empty {
+  display: none;
+}
+
+p[data-type="palette-hint"] {
+  margin: 0;
+  padding: var(--space-md) var(--space-xl);
+  border-block-start: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+/* The result count is for a screen reader, which hears it as the list changes. */
+p[data-type="palette-count"] {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* No keys to name on a touch screen. */
+@media (pointer: coarse) {
+  p[data-type="palette-hint"] {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  div[data-type="palette"],
+  div[role="listbox"] a[role="option"],
+  nav[data-type="hero-nav"] button[data-action="palette"],
+  div[data-type="palette-field"] button {
+    transition: none;
+  }
+}

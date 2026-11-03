@@ -351,8 +351,32 @@
   color: var(--color-error);
 }
 
+/* A tone is never colour alone: each one leads with a word, drawn here with
+   ::before so the text a tool writes stays plain. Browsers and screen readers
+   both read generated content, so "Error: " is heard as well as seen. The
+   tone goes on the message element inside a status line, not on the flex line
+   itself, whose space-between layout the extra box would disturb. */
+[data-controls] [data-type='badge'][data-tone='error']::before,
+[data-controls] [data-type='status-line'] [data-tone='error']::before {
+  content: 'Error: ';
+}
+
+[data-controls] [data-type='badge'][data-tone='success']::before,
+[data-controls] [data-type='status-line'] [data-tone='success']::before {
+  content: 'Done: ';
+}
+
+[data-controls] [data-type='status-line'] [data-tone='note']::before {
+  content: 'Note: ';
+}
+
+[data-controls] [data-type='status-line'] [data-tone='error'] { color: var(--color-error); }
+[data-controls] [data-type='status-line'] [data-tone='success'] { color: var(--color-success); }
+[data-controls] [data-type='status-line'] [data-tone='note'] { color: var(--color-accent); }
+
 /* One quiet line of state under a workspace: counts on the left, the latest
-   message on the right. */
+   message on the right. A tool's message element inside it is the live region
+   (role="status", or role="alert" while it holds an error). */
 [data-controls] [data-type='status-line'] {
   display: flex;
   flex-wrap: wrap;

@@ -1,0 +1,27 @@
+# Weekly dependency PRs into develop (the flow is feature -> develop -> main).
+# Minor and patch bumps share one PR so the gate runs once; each major gets its
+# own PR so a breaking change is reviewed alone. Nothing is ignored.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"

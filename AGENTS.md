@@ -19,11 +19,6 @@ experience / blogs / learnings / games / tools sections.
   `@astrojs/cloudflare` is the swap-in. `astro.config.mjs` is the only
   deployment-specific file.
 - **Oat** is the base layer, vendored as `public/oat.min.{css,js}`. Keep it out of Vite: its CSS minifier merges Oat's `@layer` blocks and restyles buttons. No React/Vue/Svelte.
-- **Lightweight**: no JS framework, no CSS framework or runtime component
-  library. A component Oat lacks is built here, small and dependency-free, on
-  the tokens. Every dependency earns its place, and the heavy ones (cytoscape,
-  html2canvas, gifenc, marked) load per route, so a page pays only for what it
-  uses.
 - **TypeScript** throughout; `@astrojs/check` for type checking.
 
 **Content**: `src/config/*.ts` holds the interfaces and default data. The
@@ -57,7 +52,8 @@ npm run security:smoke # assert the security invariants
 npm run poker:check    # poker engine checks
 npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
-npm run origin:check   # assert the DEPLOYED edge posture against production
+npm run origin:check   # assert the DEPLOYED edge posture against production (also daily: .github/workflows/origin-check.yml)
+npm run indexnow -- <url…>  # submit changed URLs to IndexNow (deploy.yml does this from the sitemap diff)
 npm run trainer:catalogue   # poker trainer asset sheet -> docs/poker-assets.html (gitignored)
 node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc encoder
 ```
@@ -67,7 +63,10 @@ node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc enc
 gate on every PR and every push to `develop` (`.github/workflows/ci.yml`).
 `security:smoke` runs `scripts/security-smoke.mjs`, then
 `scripts/tools-hub-smoke.mjs` (hub, shells, site copy, /terms, tool-page SEO
-budgets); put new assertions of that kind in the second file.
+budgets), then every file in `scripts/smoke/` in name order (one file per
+area: `reach.mjs`, `palette.mjs`, `webhook.mjs`, …). A new area gets its own
+file there; an assertion about an existing invariant joins the file that holds
+its siblings.
 
 Notes on `check`, `boot:check` and deploys: [docs/operations.md](docs/operations.md).
 
@@ -82,16 +81,6 @@ const site = await getSite(Astro.locals)
 
 ## Operations rules
 
-### Caching
-
-- `max-age=0` is deliberate: browser-cached HTML can't be purged. Keep
-  Cloudflare's Browser Cache TTL on "Respect Existing Headers" or it overrides
-  this.
-- The middleware's branch order is asserted: admin first, then responses that
-  set their own `Cache-Control`, then `/api/*` → `no-store`, then 5xx →
-  `no-store`, and only then the 404 rule. An API 404 is often a resource that exists a moment later; don't
-  reorder.
-
 ### Analytics
 
 Two independent, aggregate-only layers: a client beacon and a server counter.
@@ -101,21 +90,10 @@ that needs per-visitor identity needs a different design. Don't rebuild what
 Cloudflare's dashboard already shows. Keep Cloudflare Web Analytics
 auto-injection off, and never weaken the CSP for its beacon.
 
-### Share cards
-
-- **Run `npm run og` after adding a tool or game or changing a title or
-  description, and commit the PNGs.** Off macOS, set `CHROME_PATH`;
-  `npm run og -- <file-prefix>` renders only matching cards. The three hubs
-  have their own cards (`hub-<kind>.png`).
-
-### AI crawlers
-
-- **Never disallow a search or user-fetch agent** (OAI-SearchBot, ChatGPT-User,
-  Claude-SearchBot, Claude-User): that takes the site out of AI answers.
-- Google-Extended stays allowed, because Google ties Gemini's training and its
-  answers to that one token.
-
-Caching, analytics, share cards, crawlers: [docs/operations.md](docs/operations.md).
+Caching (`max-age=0` is deliberate; the middleware's branch order is asserted; the service worker caches only `offline.html` and never HTML),
+share cards (run `npm run og` and commit the PNGs after changing a tool, game,
+title or description) and AI crawlers (never disallow a search or user-fetch
+agent): [docs/operations.md](docs/operations.md).
 
 ## Security
 
@@ -135,6 +113,12 @@ authenticates a header the caller chooses.
 No header, cookie, query param or body field may gate access on its own.
 `getClientIp()` is untrusted and only buckets rate limits. Authorization rests
 on a secret the client can't forge, or on the surface not existing.
+
+### `security.allowedDomains` lists the site's hosts
+
+Without it the Node adapter rebuilds `Request.url` as `localhost`, so
+`isSameOrigin()` refuses every same-site write in production. `boot:check`
+asserts it with a Cloudflare-shaped request. Details: [docs/security.md](docs/security.md).
 
 ### Origin exposure
 
@@ -196,7 +180,7 @@ exactly one inline script ships: the head bootstrap (`ROOT_BOOT_JS`,
 - ClientRouter re-inserts a changed inline script under a nonce the live page
   refuses, so the bootstrap is a constant with nothing interpolated. **Don't add
   a second inline script**: data goes in a JSON-LD block or a fetched file (the
-  palette's index is planned as `/search.json`), behaviour in a bundled module.
+  palette's index is `/search.json`), behaviour in a bundled module.
 
 ### Unguessable ids are a security control
 
@@ -219,21 +203,6 @@ The tool-engine rules (an observation must not be taken through a lens that alte
 
 ## Key Conventions
 
-- **A tool's claims live in a module, not in the component**
-  (`webhook-inspector/signature.ts`, `cron-whisperer/schedule.ts` and
-  `crontab.ts`, `token-bench/diagnose.ts`, `chainsaw/analyze.ts`,
-  `deep-shore/escape.ts`, `dns-sightline/analyze.ts`, `src/lib/jwt.ts`), so
-  `security:smoke` can run them against the real thing.
-- **Semantic elements and `data-type` idioms**: style standard elements and
-  `data-*` attributes rather than custom classes, with tokens only. Oat is a
-  base layer the site builds on, not the design system. A component Oat lacks
-  is built here, small and dependency-free. Fixes to Oat's own rules go in the
-  fork; anything site-specific stays in this repo.
-- **SEO support copy is off.** `seoContent` still renders when set, but every
-  entry ships empty: generated how-to and FAQ filler is boring, and dropping it
-  is a deliberate SEO trade-off. Anything added there must earn its place like
-  an article.
-- **Client mounting with ClientRouter.** Bundled scripts run once per session, so anything that mounts does it inside `document.addEventListener('astro:page-load', …)`. Test by clicking an in-site link, not by reloading.
 - **No sample, mock or placeholder data**, not even labelled "(sample)". Leave out what can't be measured, or measure it for real; a dev-only real measurement sits behind `import.meta.env.DEV` and is loopback-only.
 - **UI copy is plain, simple, explanatory full sentences** a beginner can follow. Say what happens and why, and define a term the first time. No clipped or clever one-liners.
 - **Nothing blinks, breathes or pulses on a timer** (status LEDs, glows, halos): the owner reads it as the page flickering. Ease transitions, and give a hover effect a short rest delay.
@@ -251,33 +220,21 @@ The tool-engine rules (an observation must not be taken through a lens that alte
   retention numbers are read from, or asserted against, the enforcing module.
 - **One copy of each client helper** (`escape.ts`, `storage.ts`, `flash.ts`, `download.ts`, `format.ts`, `math.ts`, `motion.ts`, `date.ts`): import them rather than writing a private copy.
 
-Everything else (the shared tool/game frame, the skeleton, fonts, canvas export, the "server" badge): [docs/conventions.md](docs/conventions.md).
+Also in [docs/conventions.md](docs/conventions.md): a tool's claims live in a module (so `security:smoke` can run them), semantic elements and `data-type` idioms, SEO support copy is off, client mounting with ClientRouter, the shared tool/game frame, the skeleton, fonts, canvas export and the "server" badge.
 
 ## Design System
 
-All visual design comes from the tokens in `src/styles/theme.css`. Re-theme by
-editing tokens only. The design system is the site's own (the tokens plus the
-shared idioms in `shared.css`); Oat is the base layer under it.
-
 - **Never hardcode** a colour, font, size or spacing in a stylesheet; use
-  `var(--color-*)`, `var(--font-*)`, `var(--text-*)`, `var(--space-*)`.
+  `var(--color-*)`, `var(--font-*)`, `var(--text-*)`, `var(--space-*)`. Re-theme
+  by editing the tokens in `src/styles/theme.css` only.
 
 Tokens, control kit, theming, contrast: [docs/design-system.md](docs/design-system.md).
 
 ## Home hero
 
-- **Never the host**: no provider, runtime or anything else about the origin,
-  which is what helps someone reach it around Cloudflare. The visitor's own
-  address appears only as its first two groups, and is never kept.
-- **No tools or games in the hero** (the owner's rule): not in the copy, not as
-  a link or a hover affordance, not even by name. The site nav keeps "tools"
-  and "games" for search reach, and the meta description still lists them.
-  The nav drops its wordmark on `/` (owner, 2026-10-02): it links home.
-- **Looping motion is allowed here and in the hubs' sky, nowhere else.** It
-  still stops when the hero is hidden or off screen, and renders the finished
-  replay as one still frame under `prefers-reduced-motion`.
-
-The full hero spec: [docs/home-hero.md](docs/home-hero.md).
+Three binding owner rules live in [docs/home-hero.md](docs/home-hero.md): never
+name the host or runtime, no tools or games in the hero, and looping motion only
+in the hero and the hubs' sky. Read it before touching the hero.
 
 ## Standing Rules
 
@@ -293,9 +250,9 @@ The full hero spec: [docs/home-hero.md](docs/home-hero.md).
    `npm run security:smoke`, and add an assertion there for any new invariant.
 5. **No new secrets on the production host.** A value needed only in dev stays
    out of the container env.
-7. **Commit messages are one short line**, no body, no attribution (no `Co-Authored-By`, no "Generated with" footer).
-8. **While the owner tests on the dev server, every edit reloads their open tab.** Say so before edit-heavy work or mutation tests, or batch the edits.
-9. **A design the owner cuts is moved out runnable**, never just deleted: `../screensavers/<name>/` with its own `index.html` and a prebuilt bundle (monsoon and liquid-light are there).
+6. **Commit messages are one short line**, no body, no attribution (no `Co-Authored-By`, no "Generated with" footer).
+7. **While the owner tests on the dev server, every edit reloads their open tab.** Say so before edit-heavy work or mutation tests, or batch the edits.
+8. **A design the owner cuts is moved out runnable**, never just deleted: `../screensavers/<name>/` with its own `index.html` and a prebuilt bundle (monsoon and liquid-light are there).
 
 Long explanations go in the `docs/` file named in the Map below; add every new `docs/` file to [docs/README.md](docs/README.md).
 
@@ -335,5 +292,5 @@ the whole current list.
 - [docs/security.md](docs/security.md): the security rules in full.
 - [docs/conventions.md](docs/conventions.md), [docs/design-system.md](docs/design-system.md), [docs/home-hero.md](docs/home-hero.md): UI rules.
 - [docs/learnings.md](docs/learnings.md): articles and embeds; voice in [docs/plans/learnings-voice.md](docs/plans/learnings-voice.md).
-- [docs/operations.md](docs/operations.md): build notes, caching, analytics, share cards, crawlers, deploy, browser check, agent tools.
-- [docs/plans/](docs/plans/) and [docs/ideas.md](docs/ideas.md): plans and backlog.
+- [docs/operations.md](docs/operations.md): build notes, caching, analytics, share cards, crawlers, deploy, browser check.
+- [docs/plans/](docs/plans/) and [docs/ideas.md](docs/ideas.md): plans and backlog. An unattended session starts at [docs/plans/autonomous-runbook.md](docs/plans/autonomous-runbook.md).

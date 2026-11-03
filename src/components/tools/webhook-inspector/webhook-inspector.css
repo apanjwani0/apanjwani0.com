@@ -418,3 +418,118 @@ div[data-tool="webhook-inspector"] [data-type="wi-sig"][data-state="error"] {
 div[data-tool="webhook-inspector"] [data-type="wi-signote"] {
   color: var(--color-accent);
 }
+
+/* ── Live note, configured response, resend ───────────────────────────────────
+   Same pairing as the secret row: plain labelled controls on the tokens, no new
+   chrome. Nothing here animates; a status changes its words, not its glow. */
+div[data-tool="webhook-inspector"] [data-type="wi-livenote"] {
+  margin: var(--space-md) 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-bodybtns"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-respform"] {
+  display: grid;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-respform"] label,
+div[data-tool="webhook-inspector"] [data-type="wi-resend"] > label {
+  margin-top: var(--space-sm);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-respform"] input,
+div[data-tool="webhook-inspector"] [data-group="wi-respform"] select,
+div[data-tool="webhook-inspector"] [data-group="wi-respform"] textarea,
+div[data-tool="webhook-inspector"] [data-type="wi-resend"] input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-respform"] textarea {
+  resize: vertical;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-respstate"],
+div[data-tool="webhook-inspector"] [data-type="wi-resp-msg"],
+div[data-tool="webhook-inspector"] [data-type="wi-resend-msg"] {
+  margin: var(--space-md) 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-resp-err"],
+div[data-tool="webhook-inspector"] [data-type="wi-resend-err"] {
+  margin: var(--space-sm) 0 0;
+  color: var(--color-error);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Colour is never the only signal: an error starts with the word. */
+div[data-tool="webhook-inspector"] [data-type="wi-resp-err"]:not(:empty)::before,
+div[data-tool="webhook-inspector"] [data-type="wi-resend-err"]:not(:empty)::before {
+  content: "Error: ";
+  font-weight: 600;
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-resend"] {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-resendrow"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: stretch;
+  margin-top: var(--space-xs);
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-resendrow"] input {
+  flex: 1 1 14rem;
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-resendrow"] button {
+  flex: 0 0 auto;
+  padding: var(--space-xs) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+div[data-tool="webhook-inspector"] [data-group="wi-resendrow"] button:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+}
+
+div[data-tool="webhook-inspector"] [data-type="wi-resend-msg"] [data-type="wi-body"] {
+  margin-top: var(--space-xs);
+}

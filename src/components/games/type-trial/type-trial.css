@@ -390,6 +390,13 @@ p[data-type="tt-daily-note"] {
   color: var(--color-muted);
 }
 
+p[data-type="tt-daily-honour"] {
+  margin: var(--space-lg) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
 ol[data-type="tt-daily-board"] {
   margin: 0;
   padding: 0;

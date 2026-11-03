@@ -25,7 +25,13 @@ export interface Site {
   footerBio: string
   avatar: string
   nav: NavItem[]
-  social: { github: string; linkedin: string }
+  /**
+   * Identity and contact links. `email` is an address, not a URL: pages render
+   * it as a `mailto:` link only after `safeEmailAddress()` accepts it.
+   */
+  social: { github: string; linkedin: string; email?: string }
+  /** A résumé or CV: an https URL or a path on this site. Unset hides the link. */
+  resumeUrl?: string
   sections: Record<string, boolean>
 }
 

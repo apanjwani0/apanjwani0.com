@@ -17,6 +17,8 @@
  */
 import { escapeHtml as lpEsc } from '../../../lib/escape'
 import { copyText } from '../../../lib/flash'
+import { permalinkHash, permalinkHref, permalinkParam, readPermalink } from '../../../lib/permalink'
+import { LP_MAX_URL_CHARS, lpValidateUrl } from './validate'
 import {
   lpFirst,
   lpLint,
@@ -64,6 +66,8 @@ class LinkPeekTool extends HTMLElement {
   private inflight: AbortController | null = null
   private lastMeta: LpMeta | null = null
   private lastFinalUrl = ''
+  /** The URL as it was checked, which is what a permalink re-checks. */
+  private lastInput = ''
 
   connectedCallback() {
     this.innerHTML = `
@@ -114,6 +118,22 @@ class LinkPeekTool extends HTMLElement {
       if (savedUa && LP_UA_OPTIONS.some(o => o.key === savedUa)) this.uaSelect.value = savedUa
     } catch { /* private mode */ }
 
+    // `#h=<url>` (with `&ua=` when a crawler other than the default was chosen)
+    // is a permalink: the visitor's own earlier check, minted by "Copy link to
+    // this check". It fills the form AND runs, because opening it is asking for
+    // that check again; a server tool otherwise waits for its button, and the
+    // hub's "try" links only fill. It is read through `lpValidateUrl`, the
+    // form's own gate, so a hand-edited link costs the prefill, never the page.
+    let permalinked: string | null = null
+    try {
+      permalinked = readPermalink(location.hash, LP_MAX_URL_CHARS, v => lpValidateUrl(v).ok)
+      if (permalinked !== null) {
+        this.urlInput.value = permalinked
+        const ua = permalinkParam(location.hash, 'ua', 16)
+        if (ua && LP_UA_OPTIONS.some(o => o.key === ua)) this.uaSelect.value = ua
+      }
+    } catch { /* no URL access in some embedded contexts */ }
+
     this.root.querySelector('[data-action="peek"]')!.addEventListener('click', () => void this.peek())
     this.urlInput.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
@@ -143,8 +163,26 @@ class LinkPeekTool extends HTMLElement {
         this.copy(lpMetaSnippet(this.lastMeta, this.lastFinalUrl), btn)
       } else if (what === 'value' && btn.dataset.value !== undefined) {
         this.copy(btn.dataset.value, btn)
+      } else if (what === 'link' && this.lastInput) {
+        this.copy(permalinkHref(this.permalink()), btn)
       }
     })
+
+    if (permalinked) void this.peek()
+  }
+
+  /** The fragment that re-runs this check: the URL, and the crawler when it is not the default. */
+  private permalink(): string {
+    return permalinkHash(this.lastInput, { ua: this.uaSelect.value === 'peek' ? '' : this.uaSelect.value })
+  }
+
+  /** The button that mints the permalink, and the sentence that says what the link does. */
+  private linkBlock(): string {
+    return `
+        <div data-group="toolbar">
+          <button data-copy="link" type="button">Copy link to this check</button>
+        </div>
+        <p data-type="lp-hint">This link re-runs the check when opened.</p>`
   }
 
   disconnectedCallback() {
@@ -155,14 +193,23 @@ class LinkPeekTool extends HTMLElement {
     void copyText(text, btn)
   }
 
-  private setStatus(text: string) {
+  /** A failure is announced as an alert; progress and the all-clear stay a polite status. */
+  private setStatus(text: string, error = false) {
     this.statusEl.textContent = text
+    this.statusEl.setAttribute('role', error ? 'alert' : 'status')
+    this.statusEl.setAttribute('aria-live', error ? 'assertive' : 'polite')
   }
 
   private async peek() {
     const raw = this.urlInput.value.trim()
     if (!raw) {
-      this.setStatus('Enter a URL first.')
+      this.setStatus('Enter a URL first.', true)
+      return
+    }
+    // The server's own syntactic gate, so a typo costs no request.
+    const gate = lpValidateUrl(raw)
+    if (!gate.ok) {
+      this.setStatus(gate.reason, true)
       return
     }
     try { localStorage.setItem(LP_LS_URL, raw) } catch { /* private mode */ }
@@ -182,38 +229,50 @@ class LinkPeekTool extends HTMLElement {
       )
       data = await res.json() as LpPageResponse
       if (res.status === 429) {
-        this.setStatus('Rate limited — this tool fetches real pages, so give it a minute.')
+        this.setStatus('Rate limited — this tool fetches real pages, so give it a minute.', true)
         return
       }
     } catch {
       if (controller.signal.aborted) return
-      this.setStatus('The preview request failed — check your connection and try again.')
+      this.setStatus('The preview request failed — check your connection and try again.', true)
       return
     }
     if (controller.signal.aborted) return
 
     if (!data.ok) {
-      this.setStatus(data.error ?? 'The page could not be previewed.')
+      this.setStatus(data.error ?? 'The page could not be previewed.', true)
       return
     }
     if (data.kind === 'non-html') {
       this.setStatus('')
+      this.lastInput = raw
+      this.mirrorPermalink()
       this.resultsEl.innerHTML = `
         <section data-type="lp-card" data-card="fetched" aria-label="Fetch result">
           <p data-type="lp-hint">That URL answers with <strong>${lpEsc(data.contentType || 'no content-type')}</strong> (HTTP ${data.status}), not an HTML page — there are no meta tags to unfurl. Slack and iMessage preview some file types (images, video) directly; X shows a bare link.</p>
+          ${this.linkBlock()}
         </section>`
       return
     }
     if (!data.meta || !data.finalUrl) {
-      this.setStatus('The page came back in a shape this tool does not understand.')
+      this.setStatus('The page came back in a shape this tool does not understand.', true)
       return
     }
 
     this.setStatus('')
     this.lastMeta = data.meta
     this.lastFinalUrl = data.finalUrl
+    this.lastInput = raw
+    this.mirrorPermalink()
     this.render(data)
     void this.loadImages(data)
+  }
+
+  /** Keep the address bar in step as the permalink, pinned to this tool's path. */
+  private mirrorPermalink() {
+    try {
+      if (location.pathname.endsWith('/link-peek')) history.replaceState(null, '', `${location.pathname}${this.permalink()}`)
+    } catch { /* not worth failing a render over */ }
   }
 
   /* ---------------------------------------------------------------- */
@@ -232,6 +291,7 @@ class LinkPeekTool extends HTMLElement {
     this.resultsEl.innerHTML = `
       <section data-type="lp-card" data-card="fetched" aria-label="Fetch result">
         <p data-type="lp-fetchline">Fetched <a href="${lpEsc(finalUrl)}" rel="nofollow noopener noreferrer" target="_blank">${lpEsc(finalUrl)}</a>${hopNote} — HTTP ${data.status}, ${lpEsc(data.contentType || 'text/html')}, ${formatBytes(data.bytes ?? 0)}${truncNote}</p>
+        ${this.linkBlock()}
       </section>
 
       <section data-type="lp-card" data-card="previews" aria-labelledby="lp-prev-h">

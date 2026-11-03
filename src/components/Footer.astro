@@ -16,10 +16,13 @@
  *   3. visible authorship + a rel="me" identity signal on every page.
  *
  * Serif reads (name, bio), mono operates (label, links). Styling is tokens-only
- * and self-contained here.
+ * and self-contained here. The last row is a plain "back to top" anchor to
+ * `#main-content` (no script), and the contact links are the identity links plus
+ * an email and, only when one is configured, a résumé.
  */
 import { getSite, navLinks, type Site } from '../lib/config'
-import { safeExternalUrl } from '../lib/security'
+import { safeEmailAddress } from '../lib/config-schema'
+import { safeExternalUrl, safeInternalPath } from '../lib/security'
 
 interface Props {
   site?: Site
@@ -34,9 +37,14 @@ const links = navLinks(site)
 
 // Same-origin-safe identity links; rel="me" reinforces the home hero's author
 // claims on every page. Filtered through the URL allowlist like everywhere else.
-const social = Object.entries(site.social)
-  .map(([platform, url]) => [platform, safeExternalUrl(url)] as const)
-  .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+const social = (['github', 'linkedin'] as const)
+  .map((platform) => [platform, safeExternalUrl(site.social[platform])] as const)
+  .filter((entry): entry is readonly ['github' | 'linkedin', string] => Boolean(entry[1]))
+
+// Contact: a mailto from a validated address (never a raw string in an href),
+// and a résumé that may be a full https URL or a file on this site.
+const email = safeEmailAddress(site.social.email)
+const resume = site.resumeUrl ? (safeExternalUrl(site.resumeUrl) ?? safeInternalPath(site.resumeUrl)) : null
 
 ---
 
@@ -48,7 +56,7 @@ const social = Object.entries(site.social)
           link, one label, wherever it appears. */}
       <a href="/" data-type="footer-name" aria-label={`${site.name} — home`}>{site.name}</a>
       {site.footerBio && <p data-type="footer-bio">{site.footerBio}</p>}
-      {social.length > 0 && (
+      {(social.length > 0 || email || resume) && (
         <div data-type="footer-social">
           {social.map(([platform, url]) => (
             <a
@@ -58,6 +66,8 @@ const social = Object.entries(site.social)
               aria-label={`${site.name} on ${platform} (opens in a new tab)`}
             >{platform}</a>
           ))}
+          {email && <a href={`mailto:${email}`} aria-label={`Email ${site.name}`}>email</a>}
+          {resume && <a href={resume} target="_blank" rel="noopener noreferrer" aria-label={`${site.name}'s résumé (opens in a new tab)`}>résumé</a>}
         </div>
       )}
       {/* The as-is terms and what each tool keeps: one page for the site. */}
@@ -66,14 +76,17 @@ const social = Object.entries(site.social)
     <nav data-type="footer-nav" aria-label="Footer">
       {links.map((link) => <a href={link.href}>{link.label}</a>)}
     </nav>
+    {/* A plain in-page anchor: main has tabindex="-1", so this moves focus there
+        too, and it needs no script. */}
+    <a href="#main-content" data-type="back-to-top">back to top <span aria-hidden="true">↑</span></a>
   </div>
 </footer>
 
 <style>
   footer[data-type="site-footer"] {
-    /* Sits above the fixed starfield canvas (z-index:0) on pages that show it. */
+    /* Sits above the fixed starfield canvas (--z-sky) on pages that show it. */
     position: relative;
-    z-index: 1;
+    z-index: var(--z-content);
     border-top: 1px solid var(--color-border);
     padding: var(--space-section) var(--space-page-x);
     font-family: var(--font-mono);
@@ -101,7 +114,7 @@ const social = Object.entries(site.social)
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-lg);
-    max-width: 38rem;
+    max-width: var(--measure-about);
   }
 
   footer[data-type="site-footer"] p {
@@ -149,11 +162,25 @@ const social = Object.entries(site.social)
     color: var(--color-text);
     text-decoration: underline;
     text-decoration-color: var(--color-accent);
-    text-underline-offset: 0.3em;
+    text-underline-offset: var(--underline-offset);
   }
 
-  footer[data-type="site-footer"] a:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
+  /* The focus ring is the site-wide one (shared.css); the footer draws no ring
+     of its own. */
+  footer[data-type="site-footer"] a[data-type="back-to-top"] {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  /* A coarse pointer: shared.css makes each link 44px tall, which already
+     supplies the space between rows, so the stacks drop their own gaps. */
+  @media (pointer: coarse) {
+    footer[data-type="site-footer"] nav[data-type="footer-nav"] {
+      gap: 0;
+    }
+
+    footer[data-type="site-footer"] div[data-type="footer-social"] {
+      row-gap: 0;
+    }
   }
 </style>

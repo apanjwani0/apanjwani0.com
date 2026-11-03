@@ -328,6 +328,155 @@ export function equityVsRange(
   }
 }
 
+/* ─────────────────────  three players: hero against two ranges  ───────────────────── */
+
+export interface MultiwayEquityResult {
+  /** Hero's expected share of the pot, averaged over every legal pair of opposing hands. */
+  equity: number
+  /** Pairs (one hand from each range, sharing no card) that were enumerated. */
+  pairs: number
+  /** Boards to come for EACH pair. Every pair has the same count, so work is `pairs * runouts`. */
+  runouts: number
+  /**
+   * Share of pairs where hero holds the single best hand, strictly, on at least
+   * half of the boards to come. On the river that is simply "hero beats both
+   * hands outright"; a tie for best never counts as ahead.
+   */
+  aheadOf: number
+}
+
+/** A card as a number 0..51, so two hands can be checked for a shared card without building strings. */
+function cardId(card: Card): number {
+  return (card.r - 2) * 4 + SUITS.indexOf(card.s)
+}
+
+/** Boards to come once hero (2), both opponents (2 + 2) and the board are known. */
+function multiwayRunouts(board: Card[]): number {
+  return combinations(52 - 6 - board.length, 5 - board.length)
+}
+
+/**
+ * How many (hand from A, hand from B) pairs share no card, ignoring any combo
+ * that uses a board card.
+ *
+ * Assumes the combos are two-card Hold'em hands. Hero's own cards are not
+ * known here, so this can only over-count (never under-count) what
+ * `equityVsRanges` will enumerate; that is the safe direction for a ceiling.
+ */
+function legalPairs(a: Card[][], b: Card[][], board: Card[]): number {
+  const dead = new Set(board.map(cardId))
+  const idsA = a.filter(h => !h.some(c => dead.has(cardId(c)))).map(h => [cardId(h[0]), cardId(h[1])])
+  const idsB = b.filter(h => !h.some(c => dead.has(cardId(c)))).map(h => [cardId(h[0]), cardId(h[1])])
+  let pairs = 0
+  for (const x of idsA) {
+    for (const y of idsB) {
+      if (x[0] !== y[0] && x[0] !== y[1] && x[1] !== y[0] && x[1] !== y[1]) pairs++
+    }
+  }
+  return pairs
+}
+
+/**
+ * Work a three-player query costs: legal pairs times boards to come for each.
+ *
+ * Assumes Hold'em, a board of 3 to 5 cards, and that hero holds two cards. The
+ * caller checks this against its ceiling and refuses rather than sampling.
+ */
+export function multiwayWork(a: Card[][], b: Card[][], board: Card[] = []): number {
+  return legalPairs(a, b, board) * multiwayRunouts(board)
+}
+
+/**
+ * Hero's exact equity against two opponents, each holding one hand from a range.
+ *
+ * With two opponents there is no single "their hand" to average over: the
+ * question is every pair of hands they could hold together. So this enumerates
+ * each (a, b) pair that shares no card (card removal again: two players cannot
+ * both hold the ace of spades), and for each pair every board still to come.
+ * Hero's share of a board is 1 for a win, 1/2 for a two-way tie and 1/3 for a
+ * three-way tie. Pairs are weighted equally, which treats every legal pair as
+ * equally likely, the same convention `equityVsRange` uses for one opponent.
+ *
+ * Assumes Hold'em and a board of 3 to 5 cards. Combos that use a card hero or
+ * the board holds are skipped. Throws, rather than sampling, when the work is
+ * above `maxWork` or when no legal pair remains.
+ */
+export function equityVsRanges(
+  hero: Card[],
+  ranges: readonly [Card[][], Card[][]],
+  board: Card[] = [],
+  maxWork: number = Number.POSITIVE_INFINITY,
+): MultiwayEquityResult {
+  if (hero.length !== 2) throw new Error("Hero needs exactly two hole cards (Hold'em).")
+  if (board.length < 3 || board.length > 5) throw new Error('A three-way query needs a board of three to five cards.')
+  const heroKeys = new Set([...hero, ...board].map(cardKey))
+  if (heroKeys.size !== hero.length + board.length) throw new Error("A card appears twice among hero's cards and the board.")
+  const live = (range: Card[][]) => range.filter(h => h.length === 2 && !h.some(c => heroKeys.has(cardKey(c))))
+  const listA = live(ranges[0])
+  const listB = live(ranges[1])
+
+  const runouts = multiwayRunouts(board)
+  const work = legalPairs(listA, listB, board) * runouts
+  if (work === 0) throw new Error('Every pair of opposing hands is blocked by the known cards.')
+  if (work > maxWork) throw new Error('That many pairs of opposing hands cannot be counted exactly in the time allowed.')
+
+  const baseDeck = remainingDeck([...hero, ...board])
+  const fillCount = 5 - board.length
+  const fullBoard: Card[] = new Array(5)
+  for (let i = 0; i < board.length; i++) fullBoard[i] = board[i]
+  const seven: Card[][] = [new Array(7), new Array(7), new Array(7)]
+  const handsOf = [hero, hero, hero]
+  const scores = new Int32Array(3)
+
+  let total = 0
+  let pairs = 0
+  let ahead = 0
+
+  for (const a of listA) {
+    for (const b of listB) {
+      if (cardKey(a[0]) === cardKey(b[0]) || cardKey(a[0]) === cardKey(b[1])
+        || cardKey(a[1]) === cardKey(b[0]) || cardKey(a[1]) === cardKey(b[1])) continue
+      pairs++
+      handsOf[1] = a
+      handsOf[2] = b
+      const taken = new Set([cardKey(a[0]), cardKey(a[1]), cardKey(b[0]), cardKey(b[1])])
+      const deck = baseDeck.filter(card => !taken.has(cardKey(card)))
+
+      let share = 0
+      let outright = 0
+      let boards = 0
+      const evaluateOne = () => {
+        boards++
+        for (let p = 0; p < 3; p++) {
+          const cards = seven[p]
+          cards[0] = handsOf[p][0]
+          cards[1] = handsOf[p][1]
+          for (let k = 0; k < 5; k++) cards[2 + k] = fullBoard[k]
+          scores[p] = scoreBest(cards)
+        }
+        const best = Math.max(scores[0], scores[1], scores[2])
+        if (scores[0] !== best) return
+        const tied = (scores[1] === best ? 1 : 0) + (scores[2] === best ? 1 : 0)
+        if (tied === 0) { share += 1; outright++ } else share += 1 / (tied + 1)
+      }
+      const choose = (start: number, depth: number) => {
+        if (depth === fillCount) { evaluateOne(); return }
+        const last = deck.length - (fillCount - depth)
+        for (let i = start; i <= last; i++) {
+          fullBoard[board.length + depth] = deck[i]
+          choose(i + 1, depth + 1)
+        }
+      }
+      choose(0, 0)
+
+      total += share / boards
+      if (outright / boards >= 0.5) ahead++
+    }
+  }
+
+  return { equity: total / pairs, pairs, runouts, aheadOf: ahead / pairs }
+}
+
 /**
  * Cards that improve a hand to the current best, given a board.
  *

@@ -1,7 +1,7 @@
 /**
  * Server-side page-view rollups.
  *
- * The client beacon in analytics-client.ts only fires on tool/game pages, only
+ * The client beacon in analytics-client.ts fires on every page kind, only
  * when JS runs, and is blocked by most content blockers. This counts every SSR
  * HTML render instead — no client code, nothing to block. One honest caveat:
  * the Cloudflare edge cache sits in front, and an edge HIT never reaches the

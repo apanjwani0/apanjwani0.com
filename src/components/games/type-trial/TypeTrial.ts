@@ -269,6 +269,7 @@ class TypeTrialTool extends HTMLElement {
           </form>
           <p data-type="tt-daily-note" role="status" aria-live="polite" hidden></p>
           <ol data-type="tt-daily-board"></ol>
+          <p data-type="tt-daily-honour">Scores on this board are not verified. It is an honour-system board among people who play the same daily, not a competition.</p>
         </section>
       </div>
     `

@@ -16,19 +16,6 @@ div[data-type="fg-controls"] [data-palette][aria-pressed="true"] {
   border-color: var(--color-accent);
 }
 
-div[data-group="seed"] input[type="text"] {
-  flex: 1;
-  min-width: 8rem;
-  max-width: 16rem;
-  padding: 0.3rem var(--space-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
 div[data-group="seed"] input[type="text"]:focus-visible {
   /* outline + offset come from games-common.css; keep the bespoke border tint */
   border-color: var(--color-accent);
@@ -37,4 +24,3 @@ div[data-group="seed"] input[type="text"]:focus-visible {
 div[data-type="fg-slider"] label {
   min-width: 5.5rem;
 }
-

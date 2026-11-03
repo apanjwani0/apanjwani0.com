@@ -251,7 +251,7 @@ console.log('terms: retention numbers match the code, noindex, out of the sitema
   assert.match(sky, /\n  sync\(\)\n(?:\s*\/\/.*\n)*\s*armIdle\(\)\n/, 'the idle timer is armed at mount, not through the throttled input handler')
   const shared = (await read('src/styles/shared.css')).replace(/\/\*[\s\S]*?\*\//g, '')
   const block = shared.match(/@supports selector\(:has\(\*\)\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
-  assert.match(block, /:has\(\[data-type="card-title"\] a:focus-visible\)\s*\{[^}]*outline:\s*2px solid var\(--color-accent\)/, 'a focused card title rings the card')
+  assert.match(block, /:has\(\[data-type="card-title"\] a:focus-visible\)\s*\{[^}]*outline:\s*var\(--focus-ring\)/, 'a focused card title rings the card')
   const outside = shared.replace(/@supports selector\(:has\(\*\)\) \{[\s\S]*?\n\}/, '')
   assert.doesNotMatch(outside, /card-title"\] a:focus-visible\s*\{[^}]*outline:\s*none/, 'the title loses its own ring only where :has() can draw the card\'s')
 }
@@ -272,6 +272,26 @@ console.log('polish: the hub sky stops after 20 s idle, and a focused card is ri
   }
 }
 console.log('tool pages: every live tool\'s title fits 60 characters and its description 160')
+
+/* ─────  Game, Driftfield mode and cron preset pages fit a search result too  ─────
+   The 26 Oct sweep found 2048, Bytele, two Driftfield modes and nine cron
+   presets past the same budgets as the tools above.
+   (mutation: drop the short form in cronPresetSeoTitle → every-5-minutes fails) */
+{
+  const { games } = await import('../src/config/games.ts')
+  const { DRIFTFIELD_MODES } = await import('../src/lib/driftfield.ts')
+  const { CRON_PRESETS, cronPresetDescription, cronPresetSeoTitle } = await import('../src/lib/cron-presets.ts')
+  const pages = [
+    ...games.map(g => ({ id: `/games/${g.slug}`, title: g.seoTitle || g.title, d: g.metaDescription || g.description })),
+    ...DRIFTFIELD_MODES.map(m => ({ id: `driftfield/${m.slug}`, title: m.seoTitle, d: m.description })),
+    ...CRON_PRESETS.map(p => ({ id: `cron/${p.slug}`, title: cronPresetSeoTitle(p), d: cronPresetDescription(p) })),
+  ]
+  for (const p of pages) {
+    assert.ok(p.title.length <= 60, `${p.id}: title is ${p.title.length} characters ("${p.title}") — keep it within 60`)
+    assert.ok(p.d.length <= 160, `${p.id}: description is ${p.d.length} characters — keep it within 160`)
+  }
+}
+console.log('game, Driftfield mode and cron preset pages: every title fits 60 characters and every description 160')
 
 /* ─────  Two tools no longer shift on load  ─────
    Measured in the tool sweep: Flowmap opened its source drawer after
@@ -300,3 +320,64 @@ console.log('layout shift: Flowmap opens its drawer before Cytoscape loads, Drif
   assert.match(card, /\{meta && <p data-type="card-meta" set:html=\{meta\} \/>\}/, 'the card-meta paragraph exists only when the slot produced content')
 }
 console.log('cards: no empty meta line when a conditional meta slot renders nothing')
+
+/* ─────  Every embed links its own stylesheets, and none sits unlisted  ─────
+   games-embed.css bundled every game's CSS, so each game and article page
+   carried about 115 KB for the one component it renders. A page now links the
+   sheets EMBED_STYLES names for its embed. The failure is silent either way:
+   a sheet left out of the list renders its component unstyled, on the game
+   route and in every article that embeds it.
+   (mutations: drop a sheet from an entry → fails; add a stylesheet under
+   src/components/games/ without listing it → fails; drop the export bar from
+   an engine that imports canvas-export → fails; put the static import back on a
+   page → fails)
+   Reads embeds.ts itself, not a copy: a sheet only counts if the map names it. */
+{
+  const { EMBED_TAGS, EMBED_STYLES } = await import('../src/lib/embeds.ts')
+  const gamesDir = new URL('src/components/games/', root)
+  const onDisk = (await readdir(gamesDir, { recursive: true }))
+    .filter(f => f.endsWith('.css')).map(f => `components/games/${f.replace(/\\/g, '/')}`)
+  const exportBar = 'styles/canvas-export.css'
+  const common = 'components/games/games-common.css'
+  assert.ok(onDisk.length >= 15 && onDisk.includes(common), `found ${onDisk.length} game stylesheets — too few to be checking anything`)
+
+  const listed = new Set(Object.values(EMBED_STYLES).flat())
+  for (const sheet of onDisk) assert.ok(listed.has(sheet), `${sheet} is not in any EMBED_STYLES entry, so no page links it`)
+  for (const sheet of listed) {
+    await read(`src/${sheet}`) // throws on a path that names no file
+    assert.ok(sheet === exportBar || onDisk.includes(sheet), `${sheet} is listed but is not a game stylesheet`)
+  }
+  assert.deepEqual(Object.keys(EMBED_STYLES).sort(), Object.keys(EMBED_TAGS).sort(), 'EMBED_STYLES and EMBED_TAGS name the same components')
+  for (const [slug, sheets] of Object.entries(EMBED_STYLES)) {
+    assert.equal(sheets[0], common, `${slug} lists the shared floor first, so the component sheets can override it`)
+    assert.equal(new Set(sheets).size, sheets.length, `${slug} lists a sheet twice`)
+    assert.ok(sheets.length >= 2, `${slug} has no stylesheet of its own`)
+  }
+
+  // A component that attaches the export bar needs its sheet; the dispatch in
+  // game-mount.ts names each component's directory.
+  const mountSrc = await read('src/lib/game-mount.ts')
+  for (const slug of Object.keys(EMBED_TAGS)) {
+    const at = mountSrc.indexOf(`slug === '${slug}') return import('`)
+    assert.notEqual(at, -1, `${slug} has no mountGame branch`)
+    const rest = mountSrc.slice(at).split("import('")[1]
+    const dir = new URL(rest.slice(0, rest.indexOf("'")), new URL('src/lib/', root))
+    const folder = new URL('./', dir)
+    let usesBar = false
+    for (const f of (await readdir(folder)).filter(x => x.endsWith('.ts'))) {
+      if (/canvas-export/.test(await readFile(new URL(f, folder), 'utf-8'))) usesBar = true
+    }
+    assert.equal(EMBED_STYLES[slug].includes(exportBar), usesBar,
+      `${slug} ${usesBar ? 'imports canvas-export but does not list its stylesheet' : 'lists the export bar stylesheet without importing canvas-export'}`)
+  }
+
+  // The three routes link through embedStyles() and no page imports a sheet of its own.
+  for (const rel of ['src/pages/games/[slug].astro', 'src/pages/learnings/[slug].astro', 'src/pages/tools/driftfield/[mode].astro']) {
+    const src = await read(rel)
+    assert.match(src, /embedStyles\(/, `${rel} must link its embed's stylesheets through embedStyles()`)
+    assert.doesNotMatch(src, /^import\s+['"][^'"]*(?:games\/|games-embed)[^'"]*\.css['"]/m, `${rel} imports a game stylesheet statically, which puts it in the page for every embed`)
+    assert.match(src, /<link slot="head" rel="stylesheet"/, `${rel} must put the links in the head`)
+  }
+  assert.match(await read('src/layouts/Base.astro'), /<slot name="head" \/>/, 'Base has the head slot the game and article routes link through')
+}
+console.log('embeds: every component stylesheet is named by EMBED_STYLES, each embed links only its own, and the export bar follows canvas-export')

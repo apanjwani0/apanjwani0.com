@@ -27,7 +27,7 @@
  *
  * Everything is still enumerated exactly, never sampled. Where a query is too
  * large to enumerate, the tool refuses and says so instead of quietly becoming
- * approximate — see PT_MAX_RANK_WORK and PT_MAX_RANGE_WORK.
+ * approximate — see PT_MAX_RANK_WORK here and PT_MAX_RANGE_WORK in engine/scenarios.ts.
  *
  * All module-level names are pt-/PT_-prefixed: game component files share one
  * global script scope.
@@ -43,19 +43,47 @@ import {
   rangeWork,
   rankHand,
   requiredEquity,
+  type MultiwayEquityResult,
+  type RangeEquityResult,
   type Variant,
 } from './engine/equity'
 import {
   cachedEquityVsRange,
+  cachedEquityVsRanges,
   cachedExactEquity,
   cachedRangeCombos,
   type ParsedCombos,
 } from './engine/equity-cache'
-import { PRESET_RANGES, parseRange, rangeCombos } from './engine/ranges'
+import { MIN_CONTINUING, RIVER_BLUFFS, continuingRange, fallbackSentence, toneForSize, type BetTone } from './engine/continuing'
+import {
+  RAISE_MARGIN,
+  fmtChips,
+  fmtPercent,
+  judge,
+  raiseContinuingCombos,
+  raiseModelled,
+  raiseTo,
+  type Judgement,
+} from './engine/decide'
+import { PRESET_RANGES } from './engine/ranges'
+import {
+  PT_MAX_RANGE_WORK,
+  SCENARIO_TEMPLATES,
+  dealSpot,
+  decodeLegacySpot,
+  decodeSpot,
+  derive,
+  encodeSpot,
+  spotWork,
+  type Position,
+  type Spot,
+} from './engine/scenarios'
 import { cardBackSvg, cardSvg } from './ui/cards-svg'
-import { chipSvg, chipStackSvg, type ChipValue } from './ui/assets-svg'
+import { buttonSvg, chipSvg, chipStackSvg, type ChipValue } from './ui/assets-svg'
 import { RANK_LABEL, SUITS, SUIT_SYMBOL, type Card, type Suit } from './engine/types'
+import { escapeHtml } from '../../../lib/escape'
 import { copyText } from '../../../lib/flash'
+import { lsGet, lsGetNumber, lsSet } from '../../../lib/storage'
 
 /**
  * Work a single hand-vs-hand query may cost, in five-card reads.
@@ -91,23 +119,6 @@ import { copyText } from '../../../lib/flash'
  */
 const PT_MAX_RANK_WORK = 8_000_000
 
-/**
- * The same ceiling for range queries, where cost is combos x runouts.
- *
- * This is what decides which street a drill is dealt on, so it is a lesson
- * setting and not only a speed one: the drill picks the street to fit the range
- * rather than capping the range to fit the street, because a wide range is the
- * interesting case and narrowing it to keep the flop would be optimising the
- * lesson away to preserve a cosmetic preference.
- *
- * It was also chosen against a much slower enumerator — a 570-combo button range
- * on a flop is 564,300 boards, which used to be half a minute of blocking work
- * and now measures ~115ms. Widening it would move drills onto earlier streets,
- * which changes what the drill teaches, so it is left where it is deliberately
- * rather than by omission.
- */
-const PT_MAX_RANGE_WORK = 60_000
-
 const PT_RANKS = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2]
 
 type PtMode = 'drill' | 'solve' | 'learn'
@@ -137,39 +148,6 @@ function ptCards(cards: Card[]): string {
   return cards.map(c => `<span data-type="pt-card">${cardSvg(c)}</span>`).join('')
 }
 
-function ptParseCard(str: string): Card | null {
-  if (!str) return null
-  const s = str.trim().toLowerCase()
-  if (s.length < 2 || s.length > 3) return null
-  const rankStr = s.slice(0, s.length - 1)
-  const suitChar = s.slice(-1) as Suit
-  if (!SUITS.includes(suitChar)) return null
-  let rank: number
-  if (rankStr === 'a') rank = 14
-  else if (rankStr === 'k') rank = 13
-  else if (rankStr === 'q') rank = 12
-  else if (rankStr === 'j') rank = 11
-  else if (rankStr === 't' || rankStr === '10') rank = 10
-  else {
-    const n = Number(rankStr)
-    if (n >= 2 && n <= 9) rank = n
-    else return null
-  }
-  return { r: rank, s: suitChar }
-}
-
-function ptParseCards(str: string): Card[] {
-  if (!str) return []
-  const matches = str.match(/(?:10|[2-9tjqka])[cdhs]/gi)
-  if (!matches) return []
-  const cards: Card[] = []
-  for (const m of matches) {
-    const c = ptParseCard(m)
-    if (c) cards.push(c)
-  }
-  return cards
-}
-
 function ptFormatCard(c: Card): string {
   const r = c.r === 10 ? 'T' : (RANK_LABEL[c.r] ?? String(c.r))
   return `${r}${c.s}`
@@ -179,22 +157,107 @@ function ptFormatCardsDisplay(cards: Card[]): string {
   return cards.map(c => `${RANK_LABEL[c.r] ?? c.r}${SUIT_SYMBOL[c.s] ?? c.s}`).join(' ')
 }
 
-function ptHasDuplicates(cards: Card[]): boolean {
-  const seen = new Set<string>()
-  for (const c of cards) {
-    const k = ptKey(c)
-    if (seen.has(k)) return true
-    seen.add(k)
+/** Any three-card board: the tone sentences do not depend on the cards, only on the street. */
+const PT_NOTE_BOARD: Card[] = [{ r: 14, s: 's' }, { r: 7, s: 'd' }, { r: 2, s: 'c' }]
+
+/** The engine's own sentence for a bet size, so the Learn tab quotes it rather than retyping it. */
+const ptToneNote = (tone: BetTone, kind: 'bet' | 'raise' = 'bet') => continuingRange([], PT_NOTE_BOARD, tone, kind).note
+
+/** The whole-percent range of bets, as a share of the pot, that the engine calls each tone. */
+function ptToneBounds(): Record<'small' | 'medium' | 'large' | 'overbet', [number, number]> {
+  const bounds: Record<string, [number, number]> = {}
+  for (let percent = 1; percent <= 300; percent++) {
+    const tone = toneForSize(percent, 100)
+    bounds[tone] = bounds[tone] ? [bounds[tone][0], percent] : [percent, percent]
   }
-  return false
+  return bounds as Record<'small' | 'medium' | 'large' | 'overbet', [number, number]>
 }
 
+/** A dealt spot and the seed that reproduces it. A legacy shared link has no seed. */
+interface PtDrill {
+  spot: Spot
+  seed: number | null
+}
+
+/** What answering produced: the exact equity figures and the decision made from them. */
+interface PtGraded {
+  judgement: Judgement
+  result: RangeEquityResult | MultiwayEquityResult
+  /** Equity against the hands that would call a raise, with how many hands that is. Null when no raise is modelled. */
+  raiseResult: { equity: number; combos: number; runouts: number } | null
+  right: boolean
+}
+
+type PtFilter = 'all' | 'heads-up' | 'multiway' | 'shoves' | 'three-bet' | 'river'
+
+/** The situation filter: each choice is a set of template ids, or null for "every template, by weight". */
+const PT_FILTERS: ReadonlyArray<{ id: PtFilter; label: string; templates: readonly string[] | null; note: string }> = [
+  { id: 'all', label: 'All', templates: null, note: 'Every kind of situation, dealt about as often as each one comes up at a table.' },
+  { id: 'heads-up', label: 'Heads-up', templates: ['srp-ip', 'srp-oop', 'three-bet-pot', 'facing-shove', 'bet-raised', 'river-polar'], note: 'Heads-up means one opponent. These are all the situations where you face a single player.' },
+  { id: 'multiway', label: 'Multiway', templates: ['multiway'], note: 'Multiway means more than two players are in the hand. Here two opponents have put chips in before you act.' },
+  { id: 'shoves', label: 'Shoves', templates: ['facing-shove'], note: 'A shove is a bet of all of a player\'s chips. You can only call or fold.' },
+  { id: 'three-bet', label: 'Three-bet pots', templates: ['three-bet-pot'], note: 'A three-bet pot is one where someone re-raised the first raise before the flop, so the pot is bigger and the ranges are tighter.' },
+  { id: 'river', label: 'River', templates: ['river-polar'], note: 'The river is the last card. There are no draws left, so every hand is either made or a bluff.' },
+]
+
+const PT_POSITION_NAME: Record<Position, string> = {
+  UTG: 'under the gun',
+  MP: 'middle position',
+  CO: 'cutoff',
+  BTN: 'button',
+  SB: 'small blind',
+  BB: 'big blind',
+}
+
+/** How many answers `pt:history` keeps. */
+const PT_HISTORY_LIMIT = 200
+/** The accuracy table appears once this many answers are recorded. */
+const PT_HISTORY_MIN = 5
+
+const PT_TEMPLATE_TITLE = new Map(SCENARIO_TEMPLATES.map(template => [template.id, template.title]))
+
+/** The saved answer history, with anything unreadable or unknown dropped. */
+function ptLoadHistory(): Array<[string, boolean]> {
+  try {
+    const raw = JSON.parse(lsGet('pt:history') ?? '[]')
+    if (!Array.isArray(raw)) return []
+    const rows: Array<[string, boolean]> = []
+    for (const row of raw) {
+      if (Array.isArray(row) && typeof row[0] === 'string' && PT_TEMPLATE_TITLE.has(row[0]) && typeof row[1] === 'boolean') {
+        rows.push([row[0], row[1]])
+      }
+    }
+    return rows.slice(-PT_HISTORY_LIMIT)
+  } catch {
+    return []
+  }
+}
+
+/** One template id from a filter's set, weighted by how often the template comes up. */
+function ptPickTemplate(ids: readonly string[]): string {
+  const pool = SCENARIO_TEMPLATES.filter(template => ids.includes(template.id))
+  let roll = (crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296) * pool.reduce((sum, t) => sum + t.weight, 0)
+  for (const template of pool) {
+    roll -= template.weight
+    if (roll < 0) return template.id
+  }
+  return pool[pool.length - 1].id
+}
+
+/**
+ * The address of a spot. A dealt spot is its template and seed (`?s=`); a
+ * legacy shared spot has neither, so it keeps the old explicit form.
+ */
 function ptSpotUrl(d: PtDrill): string {
-  const heroStr = d.hero.map(ptFormatCard).join('')
-  const boardStr = d.board.map(ptFormatCard).join('')
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://apanjwani0.com'
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/games/poker-trainer'
-  return `${origin}${pathname}?hero=${heroStr}&board=${boardStr}&pot=${d.pot}&bet=${d.bet}&range=${d.rangeId}`
+  const spot = d.spot
+  if (d.seed !== null && PT_TEMPLATE_TITLE.has(spot.templateId)) {
+    return `${origin}${pathname}?s=${encodeSpot(spot, d.seed)}`
+  }
+  const heroStr = spot.hero.map(ptFormatCard).join('')
+  const boardStr = spot.board.map(ptFormatCard).join('')
+  return `${origin}${pathname}?hero=${heroStr}&board=${boardStr}&pot=${spot.potBefore}&bet=${spot.bet}&range=${spot.opponents[0].rangeId}`
 }
 
 /** A term the reader may not know, defined inline on click rather than in a glossary. */
@@ -202,114 +265,275 @@ function ptTerm(term: string, definition: string): string {
   return `<details data-type="pt-term"><summary>${term}</summary><p>${definition}</p></details>`
 }
 
-/** Realistic casino pot chip stacks cluster and prominent value badge. */
-function ptPotCluster(pot: number, bet: number, isFinal = false, betChipVal: ChipValue = 25): string {
-  const total = isFinal ? pot : pot + bet
-  const sideChip: ChipValue = betChipVal === 100 ? 25 : betChipVal
+/** The chip denomination drawn for a bet of this size. */
+function ptChipValue(chips: number): ChipValue {
+  return chips >= 100 ? 100 : chips >= 25 ? 25 : 5
+}
+
+/** A pair of numbers as the text of a plain sentence: `1,234.5`. */
+const ptCount = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 })
+
+/** The seat of a position as a short phrase: "the button (BTN)". */
+const ptSeatPhrase = (position: Position) => `the ${PT_POSITION_NAME[position]} (${position})`
+
+/** The pot, itemised with the same names the ledger uses. */
+function ptPotCluster(spot: Spot): string {
+  const d = derive(spot)
+  const chipVal = ptChipValue(spot.bet)
+  const sideChip: ChipValue = chipVal === 100 ? 25 : chipVal
+  const row = (name: string, chips: number) => `<div><dt>${name}</dt><dd>${fmtChips(chips)}</dd></div>`
   return `
     <div data-type="pt-pot-cluster">
       <div data-type="pt-pot-stacks" aria-hidden="true">
         <span data-type="pt-pot-stack" data-chip="25">${chipStackSvg(sideChip, 3)}</span>
         <span data-type="pt-pot-stack" data-chip="100">${chipStackSvg(100, 5)}</span>
-        <span data-type="pt-pot-stack" data-chip="${betChipVal}">${chipStackSvg(betChipVal, 4)}</span>
+        <span data-type="pt-pot-stack" data-chip="${chipVal}">${chipStackSvg(chipVal, 4)}</span>
       </div>
       <div data-type="pt-pot-banner">
         <div data-type="pt-pot-meta">
           <span data-type="pt-pot-dot"></span>
-          <span data-type="pt-pot-title">${isFinal ? 'FINAL POT' : 'MAIN POT'}</span>
+          <span data-type="pt-pot-title">The pot</span>
         </div>
-        <div data-type="pt-pot-val">
-          <strong>${total}</strong> <span data-type="pt-pot-unit">chips</span>
-        </div>
-        ${!isFinal && bet ? `<span data-type="pt-pot-sub">Current: ${pot} + Bet: ${bet}</span>` : ''}
+        <dl data-type="pt-pot-rows">
+          ${row('Pot before their bet', spot.potBefore)}
+          ${row('Their bet', spot.bet)}
+          ${spot.callersIn > 0 ? row('Chips from callers', spot.callersIn) : ''}
+          ${spot.heroIn > 0 ? row('Chips you already put in', spot.heroIn) : ''}
+          <div data-total="true"><dt>Pot now</dt><dd>${fmtChips(d.potNow)} <span data-type="pt-pot-unit">chips</span></dd></div>
+        </dl>
       </div>
     </div>
   `
 }
 
-/** Human coach takeaway explaining the decision in plain table-action terms. */
-function ptCoachVerdict(
-  choice: PtChoice,
-  correct: PtChoice,
-  equityPct: string,
-  requiredPct: string,
-  ev: number,
-  bet: number,
-  finalPot: number,
-  rangeLabel: string,
-): { headline: string; detail: string } {
-  const potBeforeCall = finalPot - bet
-  const potOddsRatio = (potBeforeCall / bet).toFixed(1)
-  const evAbs = Math.abs(ev).toFixed(1)
-  const evFormatted = `${ev >= 0 ? '+' : '-'}${evAbs}`
-
-  if (correct === 'raise') {
-    if (choice === 'raise') {
-      return {
-        headline: 'Good raise. You are well ahead of their range.',
-        detail: `With <strong>${equityPct}% equity</strong> against ${rangeLabel}, you win most runouts. Raising gets more chips in while you are ahead and makes them pay to see more cards.`,
-      }
-    }
-    if (choice === 'call') {
-      return {
-        headline: 'Profitable call, but raising was even stronger.',
-        detail: `Calling is profitable (+EV), but with <strong>${equityPct}% equity</strong> against ${rangeLabel}, raising charges draws and builds a bigger pot while you are ahead.`,
-      }
-    }
-    return {
-      headline: 'Costly mistake. You folded a strong hand.',
-      detail: `You had <strong>${equityPct}% equity</strong> against ${rangeLabel}, so you win most runouts. Folding gave up a pot you were favoured to win.`,
-    }
-  }
-
-  if (correct === 'call') {
-    if (choice === 'call') {
-      return {
-        headline: "Profitable call. You're getting the right price to continue.",
-        detail: `The pot offers <strong>${potOddsRatio}:1 pot odds</strong> (calling ${bet} to contest a ${finalPot} chip pot). You needed <strong>${requiredPct}%</strong> equity to break even, and your hand has <strong>${equityPct}%</strong> against ${rangeLabel} (${evFormatted} chips EV).`,
-      }
-    }
-    if (choice === 'raise') {
-      return {
-        headline: 'Overplayed hand. Calling was the high-EV line.',
-        detail: `You have <strong>${equityPct}% equity</strong>—enough to comfortably call the ${potOddsRatio}:1 price, but raising risks turning a profitable calling hand into an unnecessary bluff.`,
-      }
-    }
-    return {
-      headline: 'Missed value. You were offered a big pot discount.',
-      detail: `The pot offered <strong>${potOddsRatio}:1 pot odds</strong>, requiring only <strong>${requiredPct}%</strong> equity to break even. With <strong>${equityPct}%</strong> against ${rangeLabel}, folding surrendered ${evAbs} chips in expected value.`,
-    }
-  }
-
-  // correct === 'fold'
-  if (choice === 'fold') {
-    return {
-      headline: 'Disciplined fold. The price was too high for your hand.',
-      detail: `Calling required <strong>${requiredPct}%</strong> equity, but your hand only wins <strong>${equityPct}%</strong> against ${rangeLabel}. Calling would bleed ${evAbs} chips over time.`,
-    }
-  }
-  if (choice === 'raise') {
-    return {
-      headline: 'Spewing chips. Bluffing into a range that has you crushed.',
-      detail: `Your hand only has <strong>${equityPct}% equity</strong> against ${rangeLabel}. Pushing chips into a stronger range without fold equity loses money fast.`,
-    }
-  }
-  return {
-    headline: 'Overpaying. You chased a negative-expectation bet.',
-    detail: `Calling costs ${bet} chips to win ${finalPot}, demanding <strong>${requiredPct}%</strong> equity to break even. With only <strong>${equityPct}%</strong> against ${rangeLabel}, this call loses ${evAbs} chips on average.`,
-  }
+/** The line of the situation: its title, where you sit and how deep you are. */
+function ptSituationHeader(spot: Spot): string {
+  const stack = spot.effectiveStack
+  const bb = stack / spot.blinds.bb
+  return `
+    <section data-type="pt-situation" aria-label="The situation">
+      <p data-type="pt-situation-line">
+        <strong>${escapeHtml(spot.title)}</strong>
+        <span>Your seat: ${escapeHtml(ptSeatPhrase(spot.heroPosition))}</span>
+        <span>Effective stack, the chips you have left behind: ${fmtChips(stack)} chips (${fmtChips(bb)} big blinds)</span>
+      </p>
+      <ol data-type="pt-story">
+        ${spot.line.map((step, i) => `<li${i === spot.line.length - 1 ? ' data-current="true"' : ''}>${escapeHtml(step)}</li>`).join('')}
+      </ol>
+    </section>
+  `
 }
 
-interface PtDrill {
-  hero: Card[]
-  board: Card[]
-  rangeId: string
-  rangeLabel: string
-  rangeNote: string
-  combos: Card[][]
-  pot: number
-  bet: number
-  street: string
+/** One opponent's seat: position, the range they play, and what they put in this street. */
+function ptOpponentSeat(spot: Spot, index: number, answered: boolean): string {
+  const opp = spot.opponents[index]
+  const two = spot.opponents.length > 1
+  const name = two ? (opp.role === 'bettor' ? 'Bettor' : 'Caller') : 'Opponent'
+  const chips = opp.role === 'bettor' ? spot.bet : spot.callersIn
+  const verb = opp.role === 'caller' ? 'Called' : spot.allIn ? 'All in' : spot.heroIn > 0 ? 'Raised to' : 'Bet'
+  return `
+    <div data-type="pt-opp" data-role="${opp.role}">
+      <div data-type="pt-player-pill">
+        <span data-type="pt-player-name">${name}</span>
+        <span data-type="pt-position">${opp.position}</span>
+        ${opp.position === 'BTN' ? `<span data-type="pt-dealer" title="Dealer button">${buttonSvg('D')}</span>` : ''}
+      </div>
+      <span data-type="pt-seat-range">${escapeHtml(opp.rangeLabel)} · ${opp.combos.length} hands</span>
+      <div data-type="pt-cards" data-cards-villain>
+        <span data-type="pt-card-back">${cardBackSvg('slate')}</span>
+        <span data-type="pt-card-back">${cardBackSvg('slate')}</span>
+      </div>
+      <div data-type="pt-villain-bet">
+        <span data-type="pt-chip-stack-mini">${chipStackSvg(ptChipValue(chips), 3)}</span>
+        <span>${verb}: <strong>${fmtChips(chips)} chips</strong></span>
+      </div>
+      ${answered ? `<p data-type="pt-range-note">${escapeHtml(opp.rangeNote)}</p>` : ''}
+    </div>
+  `
+}
+
+/** The lines that say why the drill offers no raise, or null when it does. */
+function ptNoRaiseReason(spot: Spot): string | null {
+  if (raiseModelled(spot)) return null
+  if (spot.opponents.length > 1) return 'With two opponents this drill grades the call only.'
+  if (spot.allIn) return 'They are all in, so raising adds nothing.'
+  return 'You do not have enough chips behind to raise, so this drill grades the call only.'
+}
+
+/** The headline for what you chose against what the numbers said, with the engine's own reasons as the detail. */
+function ptCoachVerdict(choice: PtChoice, judgement: Judgement): { headline: string; detail: string } {
+  const correct = judgement.correct
+  const detail = judgement.reasons.map(escapeHtml).join(' ')
+  let headline: string
+  if (correct === 'raise') {
+    headline = choice === 'raise' ? 'Good raise. It wins more on average than calling.'
+      : choice === 'call' ? 'Profitable call, but raising was even stronger.'
+      : 'Costly mistake. You folded a hand that was worth a raise.'
+  } else if (correct === 'call') {
+    headline = choice === 'call' ? "Profitable call. You're getting the right price to continue."
+      : choice === 'raise' ? 'Overplayed hand. Calling was the high-EV line.'
+      : 'Missed value. Calling was profitable here.'
+  } else {
+    headline = choice === 'fold' ? 'Disciplined fold. The price was too high for your hand.'
+      : choice === 'raise' ? 'Costly raise. Your hand is behind the hands that would continue.'
+      : 'Overpaying. You chased a negative-expectation bet.'
+  }
+  return { headline, detail }
+}
+
+/** One quantity in the ledger: its name, its value, the working with the real numbers, and what it means. */
+function ptLedgerCard(kind: string, title: string, value: string, working: string, definition: string): string {
+  return `
+    <div data-type="pt-math-card" data-card-kind="${kind}">
+      <div data-type="pt-math-head">
+        <span data-type="pt-math-title">${escapeHtml(title)}</span>
+        <span data-type="pt-math-val">${escapeHtml(value)}</span>
+      </div>
+      <p data-type="pt-math-desc">${escapeHtml(definition)}</p>
+      <div data-type="pt-math-ledger">
+        <div data-type="pt-ledger-row">
+          <span data-type="pt-ledger-label">Working</span>
+          <div data-type="pt-ledger-content"><code>${escapeHtml(working)}</code></div>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+/** The signed chip amount the ledger prints for an expected value. */
+const ptSigned = (chips: number) => `${chips > 0 ? '+' : ''}${fmtChips(chips)}`
+
+/** How the raise amount was reached, in words and numbers. */
+function ptRaiseWorking(spot: Spot, to: number): string {
+  if (to === 3 * spot.bet) return `3 × ${fmtChips(spot.bet)} = ${fmtChips(to)} chips`
+  if (to >= spot.effectiveStack) return `${fmtChips(to)} chips, all of the ${fmtChips(spot.effectiveStack)} you have behind`
+  return `2.5 × ${fmtChips(spot.bet)} = ${fmtChips(to)} chips, rounded to 5`
+}
+
+/** The raise half of the ledger: one card with every quantity the raise needed, or the reason there is none. */
+function ptRaiseCard(spot: Spot, judgement: Judgement, raiseResult: PtGraded['raiseResult']): string {
+  const raise = judgement.raise
+  if (!raise || !raiseResult) {
+    return `
+      <div data-type="pt-math-card" data-card-kind="raise">
+        <div data-type="pt-math-head"><span data-type="pt-math-title">Why no raise was modelled</span></div>
+        <p data-type="pt-math-desc">${escapeHtml(ptNoRaiseReason(spot) ?? 'A raise could not be worked out for this spot.')}</p>
+      </div>
+    `
+  }
+  const { potNow } = judgement.derived
+  const hands = spot.opponents[0].combos.length
+  const added = raise.to - spot.heroIn
+  const theirAdded = raise.to - spot.bet
+  const callTotal = potNow + added + theirAdded
+  const row = (label: string, value: string, working: string, definition: string) => `
+    <div data-type="pt-ledger-row">
+      <span data-type="pt-ledger-label">${label}: ${escapeHtml(value)}</span>
+      <div data-type="pt-ledger-content">
+        <code>${escapeHtml(working)}</code>
+        <span>${escapeHtml(definition)}</span>
+      </div>
+    </div>
+  `
+  const margin = RAISE_MARGIN * potNow
+  return `
+    <div data-type="pt-math-card" data-card-kind="raise" data-wide>
+      <div data-type="pt-math-head">
+        <span data-type="pt-math-title">If you raise</span>
+        <span data-type="pt-math-val">${ptSigned(raise.ev)} chips</span>
+      </div>
+      <p data-type="pt-math-desc">A raise wins the pot at once when they fold, and builds a bigger pot when they call. This is worked out against the hands that would call a raise; every other hand of theirs is assumed to fold.</p>
+      <div data-type="pt-math-ledger">
+        ${row('Raise to', `${fmtChips(raise.to)} chips`, ptRaiseWorking(spot, raise.to), 'The total you would have in the pot this street after raising.')}
+        ${row('Share that folds', fmtPercent(raise.theyFold), `(${hands} − ${raise.callingCombos}) ÷ ${hands} = ${fmtPercent(raise.theyFold)}`, `The share of their ${hands} hands that give up instead of paying ${fmtChips(raise.to - spot.bet)} more.`)}
+        ${row('Share that calls', fmtPercent(raise.theyCall), `${raise.callingCombos} ÷ ${hands} = ${fmtPercent(raise.theyCall)}`, 'The share of their hands that stay in against your raise.')}
+        ${row('Your equity against the callers', fmtPercent(raise.equityVsCallers), `${ptCount(raise.equityVsCallers * raiseResult.runouts)} ÷ ${raiseResult.runouts.toLocaleString()} runouts = ${fmtPercent(raise.equityVsCallers)}`, `Your equity counted only against the ${raise.callingCombos} hands that call, because those are the hands you play a big pot against.`)}
+        ${row('Equity you need if called', fmtPercent(raise.breakEven), `${fmtChips(added)} ÷ (${fmtChips(potNow)} + ${fmtChips(added)} + ${fmtChips(theirAdded)}) = ${fmtPercent(raise.breakEven)}`, 'The break-even equity of the raise, found the same way as for a call: the chips you add divided by the pot once they have called.')}
+        ${row('Raise EV', `${ptSigned(raise.ev)} chips`, `${fmtPercent(raise.theyFold)} × ${fmtChips(potNow)} + ${fmtPercent(raise.theyCall)} × (${fmtPercent(raise.equityVsCallers)} × ${fmtChips(callTotal)} − ${fmtChips(added)}) = ${ptSigned(raise.ev)}`, 'The average chips a raise wins: the pot now when they fold, plus your share of the bigger pot minus the chips you add when they call.')}
+      </div>
+      <p data-type="pt-math-desc">A raise is only the best play when its EV beats the EV of calling (${ptSigned(judgement.callEv)} chips) by more than ${RAISE_MARGIN * 100}% of the pot now (${fmtChips(margin)} chips), and when your equity against the callers is at least the equity you need if called. The margin is there because this drill does not model what happens on later streets, and because it uses one fixed guess about which hands would call a raise.</p>
+    </div>
+  `
+}
+
+/** The ledger of every number behind the answer, each named once and used by that name everywhere. */
+function ptLedger(spot: Spot, graded: PtGraded): string {
+  const j = graded.judgement
+  const d = j.derived
+  const result = graded.result
+  const cards: string[] = []
+
+  const ledgerChips = spot.ledger.map(entry => entry.chips)
+  const ledgerAdds = ledgerChips.reduce((a, b) => a + b, 0) === spot.potBefore
+  cards.push(ptLedgerCard('pot', 'Pot before their bet', `${fmtChips(spot.potBefore)} chips`,
+    ledgerAdds && ledgerChips.length > 1 ? `${ledgerChips.map(fmtChips).join(' + ')} = ${fmtChips(spot.potBefore)} chips` : `${fmtChips(spot.potBefore)} chips`,
+    spot.heroIn > 0
+      ? 'The chips in the middle before the betting on this street began, added up from the story above; the chips you bet on this street are listed separately.'
+      : 'The chips in the middle before the betting on this street began, added up from the story above.'))
+
+  cards.push(ptLedgerCard('pot', 'Their bet', `${fmtChips(spot.bet)} chips`,
+    `${fmtChips(spot.bet)} ÷ ${fmtChips(spot.potBefore)} = ${Math.round((spot.bet / spot.potBefore) * 100)}% of the pot before their bet`,
+    spot.heroIn > 0
+      ? 'The total they raised to, which includes the chips you had already put in.'
+      : spot.allIn
+        ? 'All of the chips they have left, which is the most a bet can be.'
+        : 'The chips they put in on this street.'))
+
+  if (spot.callersIn > 0) {
+    cards.push(ptLedgerCard('pot', 'Chips from callers', `${fmtChips(spot.callersIn)} chips`,
+      `${fmtChips(spot.callersIn)} chips`,
+      'The chips the second opponent put in to match the bet before it got back to you.'))
+  }
+  if (spot.heroIn > 0) {
+    cards.push(ptLedgerCard('pot', 'Chips you already put in', `${fmtChips(spot.heroIn)} chips`,
+      `${fmtChips(spot.heroIn)} chips`,
+      'The chips you bet on this street before they raised; they are already in the pot and count toward your call.'))
+  }
+
+  const nowParts = [spot.potBefore, spot.bet, spot.callersIn, spot.heroIn].filter((n, i) => i < 2 || n > 0)
+  cards.push(ptLedgerCard('pot', 'Pot now', `${fmtChips(d.potNow)} chips`,
+    `${nowParts.map(fmtChips).join(' + ')} = ${fmtChips(d.potNow)} chips`,
+    'All the chips on the table at the moment you have to decide.'))
+
+  cards.push(ptLedgerCard('pot', 'Your call', `${fmtChips(d.toCall)} chips`,
+    `${fmtChips(spot.bet)} − ${fmtChips(spot.heroIn)} = ${fmtChips(d.toCall)} chips`,
+    'The extra chips you must put in to stay in the hand: their bet minus the chips you already put in.'))
+
+  cards.push(ptLedgerCard('pot', 'Pot after your call', `${fmtChips(d.potAfterCall)} chips`,
+    `${fmtChips(d.potNow)} + ${fmtChips(d.toCall)} = ${fmtChips(d.potAfterCall)} chips`,
+    'The pot you would be playing for if you call: the pot now plus your call.'))
+
+  cards.push(ptLedgerCard('potodds', 'Break-even equity', fmtPercent(d.breakEven),
+    `${fmtChips(d.toCall)} ÷ ${fmtChips(d.potAfterCall)} = ${fmtPercent(d.breakEven)}`,
+    'The share of the pot your hand must win, on average, for calling to lose nothing over many hands: your call divided by the pot after your call.'))
+
+  cards.push(ptLedgerCard('potodds', 'Pot odds', `${d.potOdds.toFixed(1)} to 1`,
+    `${fmtChips(d.potNow)} ÷ ${fmtChips(d.toCall)} = ${d.potOdds.toFixed(1)} to 1`,
+    'The same price said another way: for every chip you pay to call, the pot now already holds this many chips.'))
+
+  if ('pairs' in result) {
+    const total = result.pairs * result.runouts
+    cards.push(ptLedgerCard('equity', 'Your equity', fmtPercent(result.equity),
+      `${ptCount(result.equity * total)} ÷ (${result.pairs.toLocaleString()} pairs × ${result.runouts.toLocaleString()} runouts = ${total.toLocaleString()}) = ${fmtPercent(result.equity)}`,
+      'Your average share of the pot over every pair of hands the two opponents could hold and every set of cards that could still come, where a tie splits the pot evenly.'))
+    cards.push(ptLedgerCard('equity', 'Share of their hands you are ahead of', fmtPercent(result.aheadOf),
+      `${ptCount(result.aheadOf * result.pairs)} ÷ ${result.pairs.toLocaleString()} pairs = ${fmtPercent(result.aheadOf)}`,
+      'The share of pairs of their hands where you hold the single best hand on at least half of the cards to come.'))
+  } else {
+    cards.push(ptLedgerCard('equity', 'Your equity', fmtPercent(result.equity),
+      `(wins + ½ × ties) ÷ runouts = ${ptCount(result.equity * result.runouts)} ÷ ${result.runouts.toLocaleString()} = ${fmtPercent(result.equity)}`,
+      `Your share of the pot over every one of their ${result.combos} hands and every set of cards that could still come, counting a win as 1 and a tie as one half.`))
+    cards.push(ptLedgerCard('equity', 'Share of their hands you are ahead of', fmtPercent(result.aheadOf),
+      `${Math.round(result.aheadOf * result.combos)} ÷ ${result.combos} hands = ${fmtPercent(result.aheadOf)}`,
+      'The share of their hands that you beat more than half of the time, whatever the price of the call.'))
+  }
+
+  cards.push(ptLedgerCard('ev', 'EV of calling', `${ptSigned(j.callEv)} chips`,
+    `${fmtPercent(j.equity)} × ${fmtChips(d.potAfterCall)} − ${fmtChips(d.toCall)} = ${ptSigned(j.callEv)} chips`,
+    'Expected value (EV) is the average number of chips calling wins or loses if the hand ended at showdown with no more betting; equity is rounded here, so the last digit can differ slightly.'))
+
+  cards.push(ptRaiseCard(spot, j, graded.raiseResult))
+  return cards.join('')
 }
 
 class PokerTrainerGame extends HTMLElement {
@@ -318,6 +542,11 @@ class PokerTrainerGame extends HTMLElement {
   // Drill state
   private drill: PtDrill | null = null
   private choice: PtChoice | null = null
+  private graded: PtGraded | null = null
+  /** A sentence saying why this spot cannot be graded, or null. */
+  private blocked: string | null = null
+  private filter: PtFilter = 'all'
+  private history: Array<[string, boolean]> = []
   private streak = 0
   private best = 0
 
@@ -333,7 +562,10 @@ class PokerTrainerGame extends HTMLElement {
   private rangeText = PRESET_RANGES[0].text
 
   connectedCallback() {
-    this.best = Number(localStorage.getItem('pt:best') ?? 0) || 0
+    this.best = lsGetNumber('pt:best', 0)
+    this.history = ptLoadHistory()
+    const savedFilter = lsGet('pt:filter')
+    this.filter = PT_FILTERS.find(f => f.id === savedFilter)?.id ?? 'all'
 
     this.innerHTML = `
       <div data-type="pt-game">
@@ -371,9 +603,9 @@ class PokerTrainerGame extends HTMLElement {
       this.mode = 'learn'
     }
 
-    const customSpot = this.parseSpotFromUrl()
-    if (customSpot) {
-      this.drill = customSpot
+    const sharedSpot = this.parseSpotFromUrl()
+    if (sharedSpot) {
+      this.setDrill(sharedSpot)
       this.mode = 'drill'
     } else {
       this.deal()
@@ -424,73 +656,120 @@ class PokerTrainerGame extends HTMLElement {
   /* ─────────────────────────────  drill  ───────────────────────────── */
 
   /**
-   * Deal a spot: hero's hand, a board, and an opponent RANGE rather than an
-   * opponent hand.
+   * Make a spot the one on the table.
    *
-   * The street is chosen to fit the range's cost (see PT_MAX_RANGE_WORK), which
-   * is why a wide button range tends to arrive on a turn and a tight three-bet
-   * range on a flop. That is a real property of the arithmetic, not a random
-   * variation, and the UI says which street you are on.
+   * A shared link can carry a spot too big to count exactly (the old links took
+   * any pot and bet), so the work is checked here and the drill says so rather
+   * than freezing the tab or sampling.
+   */
+  private setDrill(drill: PtDrill) {
+    this.drill = drill
+    this.choice = null
+    this.graded = null
+    this.blocked = spotWork(drill.spot) <= PT_MAX_RANGE_WORK
+      ? null
+      : 'This shared spot is too big to count exactly in your browser, and this drill never estimates, so it will not grade it. Press Next spot to deal a new one.'
+  }
+
+  /**
+   * Deal a spot from the chosen situations.
+   *
+   * The engine picks the street to fit the cost of counting (see
+   * PT_MAX_RANGE_WORK), so a wide range tends to arrive late in the hand. That
+   * is a property of the arithmetic, and the situation line says which street
+   * you are on. The seed is the whole spot: it is what a shared link carries.
    */
   private deal() {
-    const deck = ptShuffledDeck()
-    const preset = PRESET_RANGES[crypto.getRandomValues(new Uint32Array(1))[0] % PRESET_RANGES.length]
-    const hero = deck.slice(0, 2)
+    const ids = PT_FILTERS.find(f => f.id === this.filter)?.templates ?? null
+    const seed = crypto.getRandomValues(new Uint32Array(1))[0]
+    this.setDrill(dealSpot(seed, ids ? ptPickTemplate(ids) : undefined))
+  }
 
-    // Widen the board until the query is affordable. Five cards (a river) is
-    // one runout per combo, so this always terminates.
-    let boardSize = 3
-    let combos = rangeCombos(parseRange(preset.text).classes, [...hero, ...deck.slice(2, 2 + boardSize)])
-    while (boardSize < 5 && rangeWork(combos.length, deck.slice(2, 2 + boardSize)) > PT_MAX_RANGE_WORK) {
-      boardSize++
-      combos = rangeCombos(parseRange(preset.text).classes, [...hero, ...deck.slice(2, 2 + boardSize)])
+  /**
+   * Count the equity exactly and decide. Null when the count could not be made.
+   *
+   * Every query goes through the memo: this runs again whenever the tab is
+   * redrawn, and re-counting boards to redraw text that cannot have changed
+   * is the bug the Solve tab once had.
+   */
+  private grade(spot: Spot, choice: PtChoice): PtGraded | null {
+    try {
+      const hero = spot.hero
+      const result = spot.opponents.length === 1
+        ? cachedEquityVsRange(hero, spot.opponents[0].combos, spot.board)
+        : cachedEquityVsRanges(hero, [spot.opponents[0].combos, spot.opponents[1].combos], spot.board, PT_MAX_RANGE_WORK)
+      let raiseResult: PtGraded['raiseResult'] = null
+      if (raiseModelled(spot)) {
+        const callers = cachedEquityVsRange(hero, raiseContinuingCombos(spot), spot.board)
+        raiseResult = { equity: callers.equity, combos: callers.combos, runouts: callers.runouts }
+      }
+      const judgement = judge(spot, result, raiseResult)
+      // A call is accepted when a raise was best: calling is still profitable then.
+      const right = choice === judgement.correct || (judgement.correct === 'raise' && choice === 'call')
+      return { judgement, result, raiseResult, right }
+    } catch {
+      return null
     }
-    const board = deck.slice(2, 2 + boardSize)
-    combos = rangeCombos(parseRange(preset.text).classes, [...hero, ...board])
+  }
 
-    const pot = 100
-    // Bet sizes people actually face: a third, a half, two-thirds, or the pot.
-    const sizes = [33, 50, 66, 100]
-    const bet = sizes[crypto.getRandomValues(new Uint32Array(1))[0] % sizes.length]
-
-    this.drill = {
-      hero,
-      board,
-      rangeId: preset.id,
-      rangeLabel: preset.label,
-      rangeNote: preset.note,
-      combos,
-      pot,
-      bet,
-      street: boardSize === 3 ? 'flop' : boardSize === 4 ? 'turn' : 'river',
+  /** Take the player's choice, grade it once, and keep the streak and the history. */
+  private answer(choice: PtChoice) {
+    const d = this.drill
+    if (!d || this.choice || this.blocked) return
+    if (choice === 'raise' && !raiseModelled(d.spot)) return
+    const graded = this.grade(d.spot, choice)
+    if (!graded) {
+      this.blocked = 'This spot could not be counted exactly here, so it is not graded. Press Next spot to deal a new one.'
+      this.renderDrill()
+      return
     }
-    this.choice = null
+    this.choice = choice
+    this.graded = graded
+    if (graded.right) {
+      this.streak++
+      if (this.streak > this.best) {
+        this.best = this.streak
+        lsSet('pt:best', String(this.best))
+      }
+    } else {
+      this.streak = 0
+    }
+    if (PT_TEMPLATE_TITLE.has(d.spot.templateId)) {
+      this.history = [...this.history, [d.spot.templateId, graded.right] as [string, boolean]].slice(-PT_HISTORY_LIMIT)
+      lsSet('pt:history', JSON.stringify(this.history))
+    }
+    this.renderDrill()
+  }
+
+  private next(scrollToSpot = false) {
+    this.deal()
+    this.renderDrill()
+    if (scrollToSpot) this.querySelector('[data-type="pt-spotcard"]')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  private setFilter(filter: PtFilter) {
+    this.filter = filter
+    lsSet('pt:filter', filter)
+    this.next()
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
     if (this.mode !== 'drill') return
+    if (e.ctrlKey || e.metaKey || e.altKey) return
     // Don't intercept if user is typing in an input
     const tag = (e.target as HTMLElement)?.tagName
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
 
     const key = e.key.toLowerCase()
     if (!this.choice) {
-      if (key === 'f') {
-        this.choice = 'fold'
-        this.renderDrill()
-      } else if (key === 'c') {
-        this.choice = 'call'
-        this.renderDrill()
-      } else if (key === 'r') {
-        this.choice = 'raise'
-        this.renderDrill()
-      }
-    } else {
-      if (key === ' ' || key === 'enter' || key === 'n') {
-        e.preventDefault()
-        this.deal()
-        this.renderDrill()
-      }
+      if (key === 'f') this.answer('fold')
+      else if (key === 'c') this.answer('call')
+      else if (key === 'r') this.answer('raise')
+    } else if (key === ' ' || key === 'enter' || key === 'n') {
+      // A focused button or link already acts on Space and Enter itself.
+      if ((key === ' ' || key === 'enter') && (tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY')) return
+      e.preventDefault()
+      this.next()
     }
   }
 
@@ -512,53 +791,38 @@ class PokerTrainerGame extends HTMLElement {
     }
   }
 
+  /**
+   * The spot a link names, or null.
+   *
+   * `?s=` is the current form (a template and a seed, re-dealt exactly). The old
+   * forms (`?spot=hero:board:pot:bet:range` and the separate `hero`, `board`,
+   * `pot`, `bet`, `range` parameters) still open, as a one-opponent spot.
+   */
   private parseSpotFromUrl(): PtDrill | null {
     try {
       const params = new URLSearchParams(window.location.search)
-      let heroRaw = params.get('hero') ?? ''
-      let boardRaw = params.get('board') ?? ''
-      let potRaw = params.get('pot')
-      let betRaw = params.get('bet')
-      let rangeId = params.get('range') ?? ''
-
-      const spotParam = params.get('spot')
-      if (spotParam) {
-        const parts = spotParam.includes(':') ? spotParam.split(':') : spotParam.split('-')
-        if (parts.length >= 2) {
-          heroRaw = parts[0]
-          boardRaw = parts[1]
-          if (parts[2]) potRaw = parts[2]
-          if (parts[3]) betRaw = parts[3]
-          if (parts[4]) rangeId = parts[4]
-        }
+      const fresh = params.get('s')
+      if (fresh) {
+        const found = decodeSpot(fresh)
+        if (found) return found
       }
-
-      if (!heroRaw || !boardRaw) return null
-
-      const hero = ptParseCards(heroRaw)
-      const board = ptParseCards(boardRaw)
-      if (hero.length !== 2 || board.length < 3 || board.length > 5) return null
-      if (ptHasDuplicates([...hero, ...board])) return null
-
-      const preset = PRESET_RANGES.find(p => p.id === rangeId) ?? PRESET_RANGES[0]
-      const combos = rangeCombos(parseRange(preset.text).classes, [...hero, ...board])
-      if (combos.length === 0) return null
-
-      const pot = Math.max(10, Math.min(1000, Number(potRaw) || 100))
-      const bet = Math.max(5, Math.min(1000, Number(betRaw) || 50))
-      const street = board.length === 3 ? 'flop' : board.length === 4 ? 'turn' : 'river'
-
-      return {
-        hero,
-        board,
-        rangeId: preset.id,
-        rangeLabel: preset.label,
-        rangeNote: preset.note,
-        combos,
-        pot,
-        bet,
-        street,
+      const legacy = params.get('spot')
+      if (legacy) {
+        const found = decodeSpot(legacy)
+        if (found) return found
       }
+      const hero = params.get('hero')
+      const board = params.get('board')
+      if (hero && board) {
+        return decodeLegacySpot({
+          hero,
+          board,
+          pot: params.get('pot') ?? undefined,
+          bet: params.get('bet') ?? undefined,
+          range: params.get('range') ?? undefined,
+        })
+      }
+      return null
     } catch {
       return null
     }
@@ -573,380 +837,313 @@ class PokerTrainerGame extends HTMLElement {
     const host = this.querySelector('[data-panel="drill"]') as HTMLElement
     const d = this.drill
     if (!d) return
-
-    // Pick a chip token matching bet
-    const betChipVal: ChipValue = d.bet >= 100 ? 100 : d.bet >= 25 ? 25 : 5
-    const preMade = rankHand(d.hero, d.board, 'holdem')
-    const preMadeName = d.board.length >= 3 ? rankHand(d.hero, [...d.board], 'holdem').name : preMade.name
-
-    if (!this.choice) {
-      host.innerHTML = `
-        <div data-type="pt-spotcard">
-          <div data-type="pt-felt">
-            <div data-type="pt-felt-header">
-              <div data-type="pt-street-group">
-                <span data-type="pt-beacon"></span>
-                <span data-type="pt-street">Street: ${d.street.toUpperCase()} (${d.board.length} Cards)</span>
-              </div>
-              <div data-type="pt-header-right">
-                <div data-type="pt-chip-badge">
-                  <span data-type="pt-chip-icon">${chipSvg(betChipVal)}</span>
-                  <span>Facing: <strong>${d.bet} chips</strong> into <strong>${d.pot}</strong></span>
-                </div>
-                <div data-type="pt-streak-pill">
-                  <span>Streak: <strong>${this.streak}</strong> 🔥</span>
-                </div>
-              </div>
-            </div>
-
-            ${this.renderDrillTable(d, false, preMadeName, betChipVal)}
-
-            <div data-type="pt-action-strip">
-              <div data-type="pt-action-price">
-                <span>Price to call: </span><strong>${pct(requiredEquity(d.pot + d.bet, d.bet))}</strong> break-even
-              </div>
-
-              <div data-type="pt-choices">
-                <button data-choice="fold" type="button">
-                  <span>Fold</span>
-                  <kbd>F</kbd>
-                </button>
-                <button data-choice="call" data-variant="primary" type="button">
-                  <span>Call ${d.bet}</span>
-                  <kbd>C</kbd>
-                </button>
-                <button data-choice="raise" type="button">
-                  <span>Raise</span>
-                  <kbd>R</kbd>
-                </button>
-              </div>
-            </div>
-
-            <div data-type="pt-status-bar">
-              <span data-type="pt-score">Streak <strong>${this.streak}</strong> · Best <strong>${this.best}</strong></span>
-              <button data-action="share-spot" type="button" class="pt-share-btn"><span>🔗 Share spot</span></button>
-              <span data-type="pt-shortcut-hint">Tip: Use keys <kbd>F</kbd>, <kbd>C</kbd>, <kbd>R</kbd></span>
-            </div>
-          </div>
-        </div>
-      `
-
-      const shareSpotBtn = host.querySelector<HTMLElement>('[data-action="share-spot"]')
-      if (shareSpotBtn) {
-        shareSpotBtn.addEventListener('click', () => {
-          const url = ptSpotUrl(d)
-          copyText(url, shareSpotBtn, { copied: '✓ Link copied!' })
-        })
-      }
-
-      for (const button of host.querySelectorAll<HTMLElement>('[data-choice]')) {
-        button.addEventListener('click', () => {
-          this.choice = button.dataset.choice as PtChoice
-          this.renderDrill()
-        })
-      }
-      return
-    }
-
-    // Answered — reveal the arithmetic. Memoised: this render runs again on
-    // every tab switch, and re-counting half a million boards to redraw text
-    // that cannot have changed is the same bug the Solve tab had.
-    const result = cachedEquityVsRange(d.hero, d.combos, d.board)
-    const required = requiredEquity(d.pot + d.bet, d.bet)
-    const ev = callEv(d.pot + d.bet, d.bet, result.equity)
-    const correct: PtChoice = result.equity >= 0.68 ? 'raise'
-      : result.equity > required ? 'call'
-      : 'fold'
-    const right = this.choice === correct
-      || (correct === 'raise' && this.choice === 'call')
-
-    if (right) {
-      this.streak++
-      if (this.streak > this.best) {
-        this.best = this.streak
-        localStorage.setItem('pt:best', String(this.best))
-      }
-    } else {
-      this.streak = 0
-    }
-
-    const made = rankHand(d.hero, d.board.length === 5 ? d.board : d.board, 'holdem')
-    const madeName = d.board.length >= 3
-      ? rankHand(d.hero, [...d.board], 'holdem').name
-      : made.name
-
-    const equityPct = (result.equity * 100).toFixed(1)
-    const requiredPct = (required * 100).toFixed(1)
-
-    const finalPot = d.pot + 2 * d.bet
-    const coach = ptCoachVerdict(this.choice, correct, equityPct, requiredPct, ev, d.bet, finalPot, d.rangeLabel)
-    const past = { fold: 'folded', call: 'called', raise: 'raised' }[this.choice]
-    const verdictDetail = this.choice === correct
-      ? `You ${past} (${equityPct}% equity vs ${requiredPct}% needed).`
-      : correct === 'raise' && this.choice === 'call'
-      ? `You called (+EV line); raising had higher value (${equityPct}% equity vs ${requiredPct}% needed).`
-      : `You ${past}; math says <strong>${correct}</strong> (${equityPct}% equity vs ${requiredPct}% needed).`
+    const graded = this.choice ? this.graded : null
 
     host.innerHTML = `
-      <div data-type="pt-spotcard" data-answered>
-        <div data-type="pt-felt" data-felt-verdict="${right ? 'right' : 'wrong'}">
-          <div data-type="pt-felt-header">
-            <div data-type="pt-street-group">
-              <span data-type="pt-beacon"></span>
-              <span data-type="pt-street">Street: ${d.street.toUpperCase()} (${d.board.length} Cards)</span>
-            </div>
-            <div data-type="pt-header-right">
-              <div data-type="pt-chip-badge">
-                <span data-type="pt-chip-icon">${chipSvg(betChipVal)}</span>
-                <span>Final Pot: <strong>${finalPot} chips</strong></span>
-              </div>
-              <div data-type="pt-streak-pill">
-                <span>Streak: <strong>${this.streak}</strong> 🔥</span>
-              </div>
-            </div>
+      ${this.filterHtml()}
+      <div data-type="pt-spotcard"${graded ? ' data-answered' : ''}>
+        ${graded && this.choice ? this.answeredHtml(d, graded, this.choice) : this.questionHtml(d)}
+      </div>
+      ${this.accuracyHtml()}
+    `
+
+    for (const button of host.querySelectorAll<HTMLElement>('[data-filter]')) {
+      button.addEventListener('click', () => this.setFilter(button.dataset.filter as PtFilter))
+    }
+    for (const button of host.querySelectorAll<HTMLElement>('[data-choice]')) {
+      button.addEventListener('click', () => this.answer(button.dataset.choice as PtChoice))
+    }
+    host.querySelector('[data-action="share-spot"]')?.addEventListener('click', event => {
+      copyText(ptSpotUrl(d), event.currentTarget as HTMLElement, { copied: '✓ Link copied!' })
+    })
+    host.querySelector('[data-action="share-result"]')?.addEventListener('click', event => {
+      if (graded) copyText(this.shareText(d, graded), event.currentTarget as HTMLElement, { copied: '✓ Copied spot!' })
+    })
+    host.querySelector('[data-action="next"]')?.addEventListener('click', () => this.next())
+    host.querySelector('[data-action="next-bottom"]')?.addEventListener('click', () => this.next(true))
+  }
+
+  /** The situation filter, with a sentence saying what the chosen one means. */
+  private filterHtml(): string {
+    const active = PT_FILTERS.find(f => f.id === this.filter) ?? PT_FILTERS[0]
+    return `
+      <div data-type="pt-filter">
+        <div data-type="pt-filter-buttons" role="group" aria-label="Which situations to practise">
+          ${PT_FILTERS.map(f => `<button type="button" data-filter="${f.id}" aria-pressed="${f.id === active.id}">${f.label}</button>`).join('')}
+        </div>
+        <p data-type="pt-filter-note">${escapeHtml(active.note)}</p>
+      </div>
+    `
+  }
+
+  /** The felt's header: the street, the two numbers you decide with, and the streak. */
+  private feltHeader(spot: Spot): string {
+    const derived = derive(spot)
+    return `
+      <div data-type="pt-felt-header">
+        <div data-type="pt-street-group">
+          <span data-type="pt-beacon"></span>
+          <span data-type="pt-street">Street: ${spot.street.toUpperCase()} (${spot.board.length} cards)</span>
+        </div>
+        <div data-type="pt-header-right">
+          <div data-type="pt-chip-badge">
+            <span data-type="pt-chip-icon">${chipSvg(ptChipValue(spot.bet))}</span>
+            <span>Your call: <strong>${fmtChips(derived.toCall)}</strong> · Pot now: <strong>${fmtChips(derived.potNow)}</strong></span>
           </div>
-
-          ${this.renderDrillTable(d, true, madeName, betChipVal)}
-
-          <!-- Immediate verdict and next action in place of action buttons -->
-          <div data-type="pt-action-strip" data-answered="true">
-            <div data-type="pt-verdict-summary" data-right="${right}">
-              <span data-type="pt-verdict-tag">${right ? '✓ Correct' : '✗ Mistake'}</span>
-              <span data-type="pt-verdict-detail">${verdictDetail}</span>
-            </div>
-            <div data-type="pt-choices" data-answered="true">
-              <button data-action="next" data-variant="primary" type="button">
-                <span>Next spot</span>
-                <kbd>Space</kbd>
-              </button>
-              <button data-action="share-result" type="button" class="pt-share-btn">
-                <span>🔗 Share</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Table Coach Breakdown -->
-          <div data-type="pt-coach-card" data-verdict="${right ? 'right' : 'wrong'}">
-            <span data-type="pt-coach-headline">${coach.headline}</span>
-            <p data-type="pt-coach-detail">${coach.detail}</p>
-          </div>
-
-          <!-- Visual Equity vs Pot Odds Threshold Gauge -->
-          <div data-type="pt-gauge">
-            <div data-type="pt-gauge-labels">
-              <span>Your Equity vs Range: <strong>${equityPct}%</strong></span>
-              <span>Break-even Price: <strong>${requiredPct}%</strong></span>
-            </div>
-            <div data-type="pt-gauge-meter" role="meter" aria-valuenow="${equityPct}" aria-valuemin="0" aria-valuemax="100">
-              <div data-type="pt-gauge-fill" style="width: ${equityPct}%" data-positive="${result.equity >= required}"></div>
-              <div data-type="pt-gauge-target" style="left: ${requiredPct}%" title="Break-even target (${requiredPct}%)"></div>
-            </div>
-            <div data-type="pt-gauge-ticks">
-              <span>0%</span>
-              <span data-type="pt-target-tag" style="left: ${requiredPct}%">▲ Break-even threshold (${requiredPct}%)</span>
-              <span>100%</span>
-            </div>
-          </div>
-
-          <!-- Educational Calculation Ledger Cards (Collapsible for progressive disclosure) -->
-          <!-- Educational Calculation Ledger (Clean Formula Receipts) -->
-          <details data-type="pt-math-details">
-            <summary data-type="pt-math-summary">
-              <span>📐 Exact Math Breakdown (${equityPct}% equity · ${ev >= 0 ? '+' : ''}${ev.toFixed(1)} chips EV)</span>
-              <span data-type="pt-math-toggle-hint">Click to inspect</span>
-            </summary>
-            <div data-type="pt-math-cards">
-              <!-- Card 1: Your Equity -->
-              <div data-type="pt-math-card" data-card-kind="equity">
-                <div data-type="pt-math-head">
-                  <span data-type="pt-math-title">Your Equity</span>
-                  <span data-type="pt-math-val">${equityPct}%</span>
-                </div>
-                <p data-type="pt-math-desc">Wins <strong>${equityPct}%</strong> of ${result.runouts.toLocaleString()} exact runouts vs ${d.rangeLabel}.</p>
-                <div data-type="pt-math-ledger">
-                  <div data-type="pt-ledger-row">
-                    <span data-type="pt-ledger-label">Equation</span>
-                    <div data-type="pt-ledger-content">
-                      <code>(Wins + 0.5 × Ties) ÷ ${result.runouts.toLocaleString()} runouts = ${equityPct}%</code>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Card 2: Pot Odds -->
-              <div data-type="pt-math-card" data-card-kind="potodds">
-                <div data-type="pt-math-head">
-                  <span data-type="pt-math-title">Equity you needed to call</span>
-                  <span data-type="pt-math-val">${requiredPct}%</span>
-                </div>
-                <p data-type="pt-math-desc">Calling ${d.bet} to contest ${finalPot} (${((finalPot - d.bet) / d.bet).toFixed(1)}:1 pot odds).</p>
-                <div data-type="pt-math-ledger">
-                  <div data-type="pt-ledger-row">
-                    <span data-type="pt-ledger-label">Equation</span>
-                    <div data-type="pt-ledger-content">
-                      <code>${d.bet} call ÷ ${finalPot} final pot = ${requiredPct}% break-even</code>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Card 3: Expected Value -->
-              <div data-type="pt-math-card" data-card-kind="ev">
-                <div data-type="pt-math-head">
-                  <span data-type="pt-math-title">Expected Value (EV)</span>
-                  <span data-type="pt-math-val" data-ev="${ev >= 0 ? 'pos' : 'neg'}">${ev >= 0 ? '+' : ''}${ev.toFixed(1)} chips</span>
-                </div>
-                <p data-type="pt-math-desc">${ev >= 0 ? `Net gain of +${(ev * 100).toFixed(0)} chips every 100 hands.` : `Net loss of ${(Math.abs(ev) * 100).toFixed(0)} chips every 100 hands.`}</p>
-                <div data-type="pt-math-ledger">
-                  <div data-type="pt-ledger-row">
-                    <span data-type="pt-ledger-label">Equation</span>
-                    <div data-type="pt-ledger-content">
-                      <code>(${equityPct}% × ${finalPot}) − ${d.bet} = ${ev >= 0 ? '+' : ''}${ev.toFixed(1)} chips</code>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </details>
-
-          <!-- Detailed Combos Breakdown -->
-          <div data-type="pt-splits">
-            <div data-type="pt-split-col">
-              <h3>Hands You Are Behind</h3>
-              <div data-type="pt-combos-list">
-                ${result.worst.map(w => `
-                  <div data-type="pt-comborow">
-                    <div data-type="pt-comborow-cards">${ptCards(w.hand)}</div>
-                    <span data-type="pt-comborow-eq" data-crushed="true">${pct(w.equity)} equity</span>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-
-            <div data-type="pt-split-col">
-              <h3>Hands You Are Ahead Of</h3>
-              <div data-type="pt-combos-list">
-                ${result.best.map(w => `
-                  <div data-type="pt-comborow">
-                    <div data-type="pt-comborow-cards">${ptCards(w.hand)}</div>
-                    <span data-type="pt-comborow-eq" data-crushed="false">${pct(w.equity)} equity</span>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          </div>
-
-          <details data-type="pt-caveat">
-            <summary>Why this grades pot odds and not full GTO</summary>
-            <p>This drill grades immediate expected value (+EV): whether calling makes chips against their range right now. Full Game Theory Optimal (GTO) play balances your entire range across all future streets, which requires desktop solver computations.</p>
-          </details>
-
-          <div data-type="pt-bottom-actions">
-            <button data-action="next-bottom" data-variant="primary" type="button">
-              <span>Next spot</span>
-              <kbd>Space</kbd>
-            </button>
-          </div>
-
-          <div data-type="pt-status-bar">
-            <p data-type="pt-score">Streak <strong>${this.streak}</strong> · Best <strong>${this.best}</strong></p>
+          <div data-type="pt-streak-pill">
+            <span>Streak: <strong>${this.streak}</strong> 🔥</span>
           </div>
         </div>
       </div>
     `
-
-    const shareResultBtn = host.querySelector<HTMLElement>('[data-action="share-result"]')
-    if (shareResultBtn) {
-      shareResultBtn.addEventListener('click', () => {
-        const url = ptSpotUrl(d)
-        const streetLabel = d.street.toUpperCase()
-        const summary = [
-          `Poker Trainer — ${streetLabel} Drill`,
-          `Hero: ${ptFormatCardsDisplay(d.hero)} | Board: ${ptFormatCardsDisplay(d.board)}`,
-          `Facing: ${d.bet} chips into ${d.pot} (${requiredPct}% pot odds needed)`,
-          `Exact Equity vs ${d.rangeLabel}: ${equityPct}% (${right ? '✓ +EV Line' : '✗ -EV Line'})`,
-          `Practice exact odds: ${url}`,
-        ].join('\n')
-        copyText(summary, shareResultBtn, { copied: '✓ Copied spot!' })
-      })
-    }
-
-    const nextHandler = () => {
-      this.deal()
-      this.renderDrill()
-    }
-    host.querySelector('[data-action="next"]')!.addEventListener('click', nextHandler)
-
-    const nextBottomBtn = host.querySelector<HTMLElement>('[data-action="next-bottom"]')
-    if (nextBottomBtn) {
-      nextBottomBtn.addEventListener('click', () => {
-        this.deal()
-        this.renderDrill()
-        const spot = this.querySelector('[data-type="pt-spotcard"]')
-        if (spot) spot.scrollIntoView({ behavior: 'smooth' })
-      })
-    }
   }
 
-  private renderDrillTable(d: PtDrill, isAnswered: boolean, madeName: string, betChipVal: ChipValue): string {
-    const ghostCards = !isAnswered && d.board.length === 3
+  /** The table: the opponents across the top, the pot and board in the middle, you at the bottom. */
+  private tableHtml(spot: Spot, answered: boolean): string {
+    const ghost = spot.board.length === 3
       ? '<span data-type="pt-ghost-card">Turn</span><span data-type="pt-ghost-card">River</span>'
-      : !isAnswered && d.board.length === 4
-      ? '<span data-type="pt-ghost-card">River</span>'
-      : ''
-
-    const villainBetHtml = !isAnswered
-      ? `<div data-type="pt-villain-bet">
-          <span data-type="pt-chip-stack-mini">${chipStackSvg(betChipVal, 3)}</span>
-          <span>Bet: <strong>${d.bet} chips</strong></span>
-        </div>`
-      : ''
-
-    const potClusterHtml = isAnswered
-      ? ptPotCluster(d.pot + 2 * d.bet, 0, true, betChipVal)
-      : ptPotCluster(d.pot, d.bet, false, betChipVal)
-
+      : spot.board.length === 4
+        ? '<span data-type="pt-ghost-card">River</span>'
+        : ''
+    const made = rankHand(spot.hero, spot.board, 'holdem').name
     return `
-      <div data-type="pt-table"${isAnswered ? ' data-table-answered' : ''}>
+      <div data-type="pt-table"${answered ? ' data-table-answered' : ''}>
         <div data-type="pt-table-watermark">POKER TRAINER</div>
 
-        <!-- Top: Opponent Range -->
         <div data-type="pt-seat-villain">
-          <div data-type="pt-player-pill">
-            <span data-type="pt-player-name">Opponent</span>
-            <span data-type="pt-rangetag">${d.rangeLabel}</span>
-            <span data-type="pt-combocount">${d.combos.length} combinations</span>
-          </div>
-          <div data-type="pt-cards" data-cards-villain>
-            <span data-type="pt-card-back">${cardBackSvg('slate')}</span>
-            <span data-type="pt-card-back">${cardBackSvg('slate')}</span>
-          </div>
-          ${villainBetHtml}
+          ${spot.opponents.map((_, i) => ptOpponentSeat(spot, i, answered)).join('')}
         </div>
 
-        <!-- Center: Community Board & Pot -->
         <div data-type="pt-table-center">
-          ${potClusterHtml}
+          ${ptPotCluster(spot)}
           <div data-type="pt-cards" data-cards-board>
-            ${ptCards(d.board)}
-            ${ghostCards}
+            ${ptCards(spot.board)}
+            ${ghost}
           </div>
         </div>
 
-        <!-- Bottom: Hero Seat -->
         <div data-type="pt-seat-hero">
           <div data-type="pt-cards" data-cards-hero>
-            ${ptCards(d.hero)}
+            ${ptCards(spot.hero)}
           </div>
+          ${spot.heroIn > 0 ? `
+            <div data-type="pt-villain-bet">
+              <span data-type="pt-chip-stack-mini">${chipStackSvg(ptChipValue(spot.heroIn), 3)}</span>
+              <span>You bet: <strong>${fmtChips(spot.heroIn)} chips</strong></span>
+            </div>` : ''}
           <div data-type="pt-hero-badge-group">
             <div data-type="pt-player-pill">
-              <span data-type="pt-player-name">Hero</span>
-              <span data-type="pt-variant-tag">Hold'em</span>
+              <span data-type="pt-player-name">You</span>
+              <span data-type="pt-position">${spot.heroPosition}</span>
+              ${spot.heroPosition === 'BTN' ? `<span data-type="pt-dealer" title="Dealer button">${buttonSvg('D')}</span>` : ''}
             </div>
-            <span data-type="pt-made-pill">${madeName}</span>
+            <span data-type="pt-made-pill">${escapeHtml(made)}</span>
           </div>
         </div>
       </div>
+    `
+  }
+
+  /** Before answering: the story, the table, the price and the buttons. */
+  private questionHtml(d: PtDrill): string {
+    const spot = d.spot
+    const derived = derive(spot)
+    const to = raiseTo(spot)
+    const noRaise = ptNoRaiseReason(spot)
+    return `
+      <div data-type="pt-felt">
+        ${this.feltHeader(spot)}
+        ${ptSituationHeader(spot)}
+        ${this.tableHtml(spot, false)}
+
+        <div data-type="pt-action-strip">
+          ${this.blocked ? `
+            <p data-type="pt-no-raise">${escapeHtml(this.blocked)}</p>
+            <div data-type="pt-choices">
+              <button data-action="next" data-variant="primary" type="button"><span>Next spot</span><kbd>Space</kbd></button>
+            </div>
+          ` : `
+            <div data-type="pt-action-price">
+              Your call is <strong>${fmtChips(derived.toCall)} chips</strong> and the pot after your call is <strong>${fmtChips(derived.potAfterCall)} chips</strong>, so break-even equity is <strong>${fmtPercent(derived.breakEven)}</strong>. Equity is your share of the pot over every card still to come.
+            </div>
+            <div data-type="pt-choices">
+              <button data-choice="fold" type="button">
+                <span>Fold</span>
+                <kbd>F</kbd>
+              </button>
+              <button data-choice="call" data-variant="primary" type="button">
+                <span>Call ${fmtChips(derived.toCall)}</span>
+                <kbd>C</kbd>
+              </button>
+              ${to !== null ? `
+              <button data-choice="raise" type="button">
+                <span>Raise to ${fmtChips(to)}</span>
+                <kbd>R</kbd>
+              </button>` : ''}
+            </div>
+            ${noRaise ? `<p data-type="pt-no-raise">${escapeHtml(noRaise)}</p>` : ''}
+          `}
+        </div>
+
+        <div data-type="pt-status-bar">
+          <span data-type="pt-score">Streak <strong>${this.streak}</strong> · Best <strong>${this.best}</strong></span>
+          <button data-action="share-spot" type="button" class="pt-share-btn"><span>🔗 Share spot</span></button>
+          <span data-type="pt-shortcut-hint">Tip: Use keys <kbd>F</kbd>, <kbd>C</kbd>${to !== null ? ', <kbd>R</kbd>' : ''}</span>
+        </div>
+      </div>
+    `
+  }
+
+  /** After answering: the verdict, the gauge, the ledger of every number, and who they might hold. */
+  private answeredHtml(d: PtDrill, graded: PtGraded, choice: PtChoice): string {
+    const spot = d.spot
+    const j = graded.judgement
+    const derived = j.derived
+    const right = graded.right
+    const coach = ptCoachVerdict(choice, j)
+    const past = { fold: 'folded', call: 'called', raise: 'raised' }[choice]
+    const numbers = `Your equity is ${fmtPercent(j.equity)} and break-even equity is ${fmtPercent(derived.breakEven)}.`
+    const verdict = choice === j.correct
+      ? `You ${past}. ${numbers}`
+      : right
+        ? `You called, which wins chips on average, but raising was better. ${numbers}`
+        : `You ${past}, but the best play was to ${j.correct}. ${numbers}`
+    const equityPct = (j.equity * 100).toFixed(1)
+    const breakEvenPct = (derived.breakEven * 100).toFixed(1)
+    const result = graded.result
+
+    const lists = 'pairs' in result
+      ? spot.opponents.map(opp => `
+          <div data-type="pt-split-col">
+            <h3>${PT_POSITION_NAME[opp.position]} (${opp.position}), the ${opp.role}</h3>
+            <p data-type="pt-math-desc">${escapeHtml(opp.rangeLabel)}, ${opp.combos.length} hands. ${escapeHtml(opp.rangeNote)}</p>
+          </div>`).join('')
+      : `
+          <div data-type="pt-split-col">
+            <h3>Their hands you are behind</h3>
+            <div data-type="pt-combos-list">
+              ${result.worst.map(w => `
+                <div data-type="pt-comborow">
+                  <div data-type="pt-comborow-cards">${ptCards(w.hand)}</div>
+                  <span data-type="pt-comborow-eq" data-crushed="true">${pct(w.equity)} equity</span>
+                </div>`).join('')}
+            </div>
+          </div>
+          <div data-type="pt-split-col">
+            <h3>Their hands you are ahead of</h3>
+            <div data-type="pt-combos-list">
+              ${result.best.map(w => `
+                <div data-type="pt-comborow">
+                  <div data-type="pt-comborow-cards">${ptCards(w.hand)}</div>
+                  <span data-type="pt-comborow-eq" data-crushed="false">${pct(w.equity)} equity</span>
+                </div>`).join('')}
+            </div>
+          </div>`
+
+    return `
+      <div data-type="pt-felt" data-felt-verdict="${right ? 'right' : 'wrong'}">
+        ${this.feltHeader(spot)}
+        ${ptSituationHeader(spot)}
+        ${this.tableHtml(spot, true)}
+
+        <div data-type="pt-action-strip" data-answered="true">
+          <div data-type="pt-verdict-summary" data-right="${right}">
+            <span data-type="pt-verdict-tag">${right ? '✓ Correct' : '✗ Mistake'}</span>
+            <span data-type="pt-verdict-detail">${escapeHtml(verdict)}</span>
+          </div>
+          <div data-type="pt-choices" data-answered="true">
+            <button data-action="next" data-variant="primary" type="button">
+              <span>Next spot</span>
+              <kbd>Space</kbd>
+            </button>
+            <button data-action="share-result" type="button" class="pt-share-btn">
+              <span>🔗 Share</span>
+            </button>
+          </div>
+        </div>
+
+        <div data-type="pt-coach-card" data-verdict="${right ? 'right' : 'wrong'}">
+          <span data-type="pt-coach-headline">${coach.headline}</span>
+          <p data-type="pt-coach-detail">${coach.detail}</p>
+        </div>
+
+        <div data-type="pt-gauge">
+          <div data-type="pt-gauge-labels">
+            <span>Your equity: <strong>${equityPct}%</strong></span>
+            <span>Break-even equity: <strong>${breakEvenPct}%</strong></span>
+          </div>
+          <div data-type="pt-gauge-meter" role="meter" aria-valuenow="${equityPct}" aria-valuemin="0" aria-valuemax="100" aria-label="Your equity">
+            <div data-type="pt-gauge-fill" style="width: ${equityPct}%" data-positive="${j.equity >= derived.breakEven}"></div>
+            <div data-type="pt-gauge-target" style="left: ${breakEvenPct}%" title="Break-even equity (${breakEvenPct}%)"></div>
+          </div>
+          <div data-type="pt-gauge-ticks">
+            <span>0%</span>
+            <span>100%</span>
+          </div>
+        </div>
+
+        <details data-type="pt-math-details" open>
+          <summary data-type="pt-math-summary">
+            <span>Every number behind this answer</span>
+            <span data-type="pt-math-toggle-hint">Click to collapse</span>
+          </summary>
+          <div data-type="pt-math-cards">${ptLedger(spot, graded)}</div>
+        </details>
+
+        <div data-type="pt-splits">${lists}</div>
+
+        <details data-type="pt-caveat">
+          <summary>Why this grades pot odds and not a full solved strategy</summary>
+          <p>This drill grades immediate expected value (+EV): whether calling or raising makes chips against the hands their bet leaves them with, if the hand ended now. A solved strategy balances your whole range across every later street, which needs desktop solver computations. <a href="#learn-decides">How the drill decides</a> lists every rule it used.</p>
+        </details>
+
+        <div data-type="pt-bottom-actions">
+          <button data-action="next-bottom" data-variant="primary" type="button">
+            <span>Next spot</span>
+            <kbd>Space</kbd>
+          </button>
+        </div>
+
+        <div data-type="pt-status-bar">
+          <p data-type="pt-score">Streak <strong>${this.streak}</strong> · Best <strong>${this.best}</strong></p>
+        </div>
+      </div>
+    `
+  }
+
+  /** The text copied by Share: the situation, the story in one sentence, and the numbers by their ledger names. */
+  private shareText(d: PtDrill, graded: PtGraded): string {
+    const spot = d.spot
+    const j = graded.judgement
+    const x = j.derived
+    return [
+      `Poker Trainer: ${spot.title}, on the ${spot.street}`,
+      `You hold ${ptFormatCardsDisplay(spot.hero)} on ${ptFormatCardsDisplay(spot.board)} in ${ptSeatPhrase(spot.heroPosition)}. ${spot.line[spot.line.length - 1]}`,
+      `Pot before their bet ${fmtChips(spot.potBefore)}, their bet ${fmtChips(spot.bet)}${spot.callersIn > 0 ? `, chips from callers ${fmtChips(spot.callersIn)}` : ''}${spot.heroIn > 0 ? `, chips you already put in ${fmtChips(spot.heroIn)}` : ''}, pot now ${fmtChips(x.potNow)}, your call ${fmtChips(x.toCall)}.`,
+      `Break-even equity ${fmtPercent(x.breakEven)}, your equity ${fmtPercent(j.equity)}, EV of calling ${ptSigned(j.callEv)} chips${j.raise ? `, Raise EV ${ptSigned(j.raise.ev)} chips` : ''}.`,
+      `Best play: ${j.correct}. ${graded.right ? '✓ I got it right.' : '✗ I got it wrong.'}`,
+      `Try it: ${ptSpotUrl(d)}`,
+    ].join('\n')
+  }
+
+  /** Accuracy by situation, from the saved history, once there is enough of it to mean something. */
+  private accuracyHtml(): string {
+    if (this.history.length < PT_HISTORY_MIN) return ''
+    const rows = SCENARIO_TEMPLATES.map(template => {
+      const mine = this.history.filter(([id]) => id === template.id)
+      return { title: template.title, answered: mine.length, right: mine.filter(([, ok]) => ok).length }
+    }).filter(row => row.answered > 0)
+    return `
+      <section data-type="pt-accuracy" aria-label="Your accuracy by situation">
+        <h3>Your accuracy by situation</h3>
+        <table data-type="pt-accuracy-table">
+          <thead><tr><th>Situation</th><th>Answered</th><th>Right</th><th>Percent</th></tr></thead>
+          <tbody>
+            ${rows.map(row => `<tr><td>${escapeHtml(row.title)}</td><td>${row.answered}</td><td>${row.right}</td><td>${Math.round((row.right / row.answered) * 100)}%</td></tr>`).join('')}
+          </tbody>
+        </table>
+        <p data-type="pt-accuracy-note">This counts your last ${this.history.length} answers and is kept only in this browser.</p>
+      </section>
     `
   }
 
@@ -954,6 +1151,7 @@ class PokerTrainerGame extends HTMLElement {
 
   private renderLearn() {
     const host = this.querySelector('[data-panel="learn"]') as HTMLElement
+    const bounds = ptToneBounds()
     host.innerHTML = `
       <div data-type="pt-learn">
         <header data-type="pt-learn-hero">
@@ -968,6 +1166,7 @@ class PokerTrainerGame extends HTMLElement {
             <a href="#learn-gto">🤖 GTO Reality</a>
             <a href="#learn-omaha">♠️ Omaha Rules</a>
             <a href="#learn-exact">⚖️ Exact Math</a>
+            <a href="#learn-decides">🧭 How the drill decides</a>
             <a href="#quant-prep">📊 Quant Prep</a>
           </nav>
         </header>
@@ -986,6 +1185,7 @@ class PokerTrainerGame extends HTMLElement {
             <div data-type="pt-concept-body">
               <p><strong>Think in runouts, not luck.</strong> If the remaining cards deal out 100 times, your equity is the exact percentage of those pots you scoop.</p>
               <p><strong>Equity equals pot ownership.</strong> When a final pot holds 100 chips and your hand wins 60% of runouts, your hand is worth 60 chips right now. You never need to guess their exact cards—you only need your winning share against their full range.</p>
+              <p>See <a href="#learn-decides">how the drill decides</a> for how this idea is used when it grades you.</p>
             </div>
             <div data-type="pt-concept-box">
               <span data-type="pt-box-title">Pot Share</span>
@@ -1010,6 +1210,7 @@ class PokerTrainerGame extends HTMLElement {
             <div data-type="pt-concept-body">
               <p><strong>Every call is buying a discount.</strong> If you pay 25 chips to contest a final pot of 100 chips, you risk 25 to win the 75 already in the pot: 3-to-1 pot odds.</p>
               <p><strong>The break-even test.</strong> Divide your call by the total final pot: 25 ÷ 100 = 25%. You only need to win 1 out of 4 times to break even. If your hand equity is 30%, calling prints chips long-term.</p>
+              <p>See <a href="#learn-decides">how the drill decides</a> for how this idea is used when it grades you.</p>
             </div>
             <div data-type="pt-concept-box">
               <span data-type="pt-box-title">Break-Even Price</span>
@@ -1058,6 +1259,7 @@ class PokerTrainerGame extends HTMLElement {
             <div data-type="pt-concept-body">
               <p><strong>Nobody holds just one hand.</strong> Good players raise a predictable cluster of hands based on their table position: pocket pairs, suited aces, Broadways, and suited connectors. That whole cluster is their range.</p>
               <p><strong>Combo math beats fear.</strong> Pocket Aces has only 6 card combinations. Ace-King has 16 combinations. An opponent is almost 3 times more likely to hold Ace-King than pocket Aces. Always measure your hand against their entire range, not the single scariest hand.</p>
+              <p>See <a href="#learn-decides">how the drill decides</a> for how this idea is used when it grades you.</p>
             </div>
             <div data-type="pt-concept-box">
               <span data-type="pt-box-title">Combo Frequency</span>
@@ -1106,6 +1308,7 @@ class PokerTrainerGame extends HTMLElement {
             <div data-type="pt-concept-body">
               <p><strong>What GTO actually solves.</strong> Real Game Theory Optimal play balances your entire range across every street and bet size so opponents cannot exploit you. It takes minutes to hours of desktop solver compute per spot.</p>
               <p><strong>What wins at real tables.</strong> Most human opponents do not play balanced GTO. Pot odds solve the immediate, practical table test: <em>"Does calling right now make chips against what they actually do?"</em> That is exact, instant, and directly profitable.</p>
+              <p>See <a href="#learn-decides">how the drill decides</a> for how this idea is used when it grades you.</p>
             </div>
             <div data-type="pt-concept-box">
               <span data-type="pt-box-title">The Real Distinction</span>
@@ -1162,6 +1365,35 @@ class PokerTrainerGame extends HTMLElement {
             <div data-type="pt-concept-takeaway">
               <strong>The Table Rule</strong>
               Trust exact numbers over sampled estimates when calculating thin break-even edges.
+            </div>
+          </article>
+
+          <!-- 9b. How the drill decides -->
+          <article data-type="pt-concept-card" id="learn-decides">
+            <div data-type="pt-concept-top">
+              <span data-type="pt-concept-tag">10 · THIS DRILL</span>
+              <h3>How the drill decides</h3>
+            </div>
+            <div data-type="pt-concept-tldr">
+              <strong>The Dilemma</strong>
+              The drill tells you that you were right or wrong, and you want to know exactly which rules it used to say so.
+            </div>
+            <div data-type="pt-concept-body">
+              <p><strong>Their bet size sets their hands.</strong> Each opponent starts with the hands a player in that seat would play before the flop. Then the size of their bet takes hands away, as a share of the pot before their bet. Up to ${bounds.small[1]}% is a small bet. ${escapeHtml(ptToneNote('small'))} From ${bounds.medium[0]}% to ${bounds.medium[1]}% is a medium bet. ${escapeHtml(ptToneNote('medium'))} From ${bounds.large[0]}% to ${bounds.large[1]}% is a large bet. ${escapeHtml(ptToneNote('large'))} Anything over ${bounds.large[1]}%, and any all-in, is an overbet. ${escapeHtml(ptToneNote('overbet'))}</p>
+              <p><strong>A raise, and a thin range.</strong> ${escapeHtml(ptToneNote('large', 'raise'))} On the river there are no draws, so an overbet or a raise also keeps the ${RIVER_BLUFFS} weakest hands that missed completely, as bluffs. If a rule would leave fewer than ${MIN_CONTINUING} hands, ${escapeHtml(fallbackSentence(MIN_CONTINUING).replace(/^Very/, 'very'))}</p>
+              <p><strong>The break-even rule.</strong> Calling is right when your equity is above the break-even equity, which is your call divided by the pot after your call. In chips, the EV of calling is your equity times the pot after your call, minus your call, and the drill says fold when that is zero or less.</p>
+              <p><strong>The raise model.</strong> When there is one opponent who is not all in, and you have chips left to raise with, the drill also works out a raise to three times their bet (two and a half times if you cannot afford three, and never more than all of your chips). It guesses that only their stronger hands would call a raise and that every other hand folds. Raise EV is the share that folds times the pot now, plus the share that calls times (your equity against the callers times the bigger pot, minus the chips you add).</p>
+              <p><strong>When a raise is the best play.</strong> Raise EV must beat the EV of calling by more than ${RAISE_MARGIN * 100}% of the pot now. The margin is there because the model ignores later streets. Your equity against the callers must also be at least the equity you need if called. That is the rule against pure bluffs: the drill never recommends a raise that only works because they fold, since how often they fold is a guess.</p>
+              <p><strong>Two opponents.</strong> The drill grades the call only, because a raise would have to be answered by both of them.</p>
+              <p><strong>Every number is counted, never sampled.</strong> The drill adds up every pair of hands they could hold and every set of cards that could still come. When that is too much to count in a browser, it deals a later street instead of estimating.</p>
+            </div>
+            <div data-type="pt-concept-box">
+              <span data-type="pt-box-title">The Two Rules</span>
+              <code>Call if: your equity &gt; break-even equity · Raise if: Raise EV &gt; EV of calling + ${RAISE_MARGIN * 100}% of pot now</code>
+            </div>
+            <div data-type="pt-concept-takeaway">
+              <strong>The Table Rule</strong>
+              Work out the break-even equity before you answer, then check yourself against the numbers the drill shows afterwards.
             </div>
           </article>
 

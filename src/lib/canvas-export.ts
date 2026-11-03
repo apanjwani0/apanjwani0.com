@@ -40,7 +40,6 @@
  * feedback above describes.
  */
 
-import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 import { downloadBlob } from './download'
 import { formatBytes as formatBytesBase } from './format'
 
@@ -137,6 +136,9 @@ async function encodeGif(
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
   if (!ctx) throw new Error('Could not get a 2D context for the GIF canvas.')
 
+  // Loaded on the first GIF, not with the page: every engine route imports this
+  // module, and the encoder is a chunk only the GIF button needs.
+  const { GIFEncoder, quantize, applyPalette } = await import('gifenc')
   const gif = GIFEncoder()
   for (let frame = 0; frame < frames; frame++) {
     ctx.clearRect(0, 0, width, height)

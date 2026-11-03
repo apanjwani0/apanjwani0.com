@@ -6,11 +6,18 @@ Disallow: /api/
 
 # Crawlers that only collect AI training data. Search and AI answers stay
 # open: OAI-SearchBot, ChatGPT-User, Claude-SearchBot and Claude-User follow
-# the group above. The owner's choice, 2026-09-28.
+# the group above, and Google-Extended is left alone on purpose (AGENTS.md).
+# The owner's choice, 2026-09-28; the last five were added 2026-11-02 so the
+# group matches the Content-Signal line.
 User-agent: GPTBot
 User-agent: ClaudeBot
 User-agent: CCBot
 User-agent: Applebot-Extended
+User-agent: Meta-ExternalAgent
+User-agent: Bytespider
+User-agent: anthropic-ai
+User-agent: cohere-ai
+User-agent: Diffbot
 Disallow: /
 
 Sitemap: https://apanjwani0.com/sitemap.xml

@@ -28,6 +28,18 @@ span[data-type="at-status"] {
   color: var(--color-muted);
 }
 
+/* The error is its own live region so a screen reader interrupts for it; it
+   sits empty (no box) until there is something to say. It leads with a word
+   so the state is not carried by colour alone. */
+span[data-type="at-error"] {
+  font-size: var(--text-xs);
+  color: var(--color-error);
+}
+
+span[data-type="at-error"]:not(:empty)::before {
+  content: "Error: ";
+}
+
 span[data-type="at-duration"] {
   font-family: var(--font-mono);
   font-size: var(--text-xs);

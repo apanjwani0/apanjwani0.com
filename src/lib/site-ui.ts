@@ -4,12 +4,13 @@
  *
  * Wires, once per document:
  *  - `astro:before-swap` → `patchIncomingDocument`, so a ClientRouter swap
- *    keeps the visitor's theme, `data-js` and `data-kit` instead of resetting
+ *    keeps the visitor's theme and `data-js` instead of resetting
  *    `<html>` to the incoming page's SSR attributes (src/lib/theme.ts).
  *  - `watchThemePref`, so the page follows a preference changed in another
  *    tab, by the OS while it is `system`, or before a back/forward restore.
- *  - the four feature entry points, each owned by one item of the UI refresh:
- *    `initThemeUI` (B), `initFindUI` (C), `initKitUI` (D), `initMotion` (E).
+ *  - the feature entry points, each owned by one item of the UI refresh:
+ *    `initThemeUI` (B), `initFindUI` (the command palette, built) and
+ *    `initMotion` (E).
  *
  * The module script runs once per ClientRouter session (bundled scripts are
  * not re-run on in-site navigation) and once per full load on ToolBase pages,
@@ -20,7 +21,6 @@
 import { patchIncomingDocument, watchThemePref } from './theme'
 import { initThemeUI } from './theme-ui'
 import { initFindUI } from './find-ui'
-import { initKitUI } from './kit-ui'
 import { initMotion } from './motion'
 
 let wired = false
@@ -37,6 +37,5 @@ export function initSiteUI(): void {
   watchThemePref()
   initThemeUI()
   initFindUI()
-  initKitUI()
   initMotion()
 }

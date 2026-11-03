@@ -47,7 +47,7 @@ const { items, inset = false } = Astro.props
 
 <style>
   nav[data-type="breadcrumb"] {
-    margin: 0 0 1.25rem;
+    margin: 0 0 var(--space-card);
   }
 
   /* Tool pages live outside <main>; match the workbench width + gutter so the
@@ -55,7 +55,7 @@ const { items, inset = false } = Astro.props
   nav[data-type="breadcrumb"][data-inset] {
     max-width: var(--tool-width);
     margin-inline: auto;
-    padding: 1.25rem var(--space-page-x) 0;
+    padding: var(--space-card) var(--space-page-x) 0;
     margin-bottom: 0;
     box-sizing: border-box;
   }
@@ -67,17 +67,17 @@ const { items, inset = false } = Astro.props
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     font-family: var(--font-mono);
     font-size: var(--text-label);
-    letter-spacing: 0.04em;
+    letter-spacing: var(--tracking-label);
     color: var(--color-muted);
   }
 
   nav[data-type="breadcrumb"] li {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
   }
 
   nav[data-type="breadcrumb"] a {
@@ -89,7 +89,7 @@ const { items, inset = false } = Astro.props
     color: var(--color-text);
     text-decoration: underline;
     text-decoration-color: var(--color-accent);
-    text-underline-offset: 0.3em;
+    text-underline-offset: var(--underline-offset);
   }
 
   nav[data-type="breadcrumb"] [aria-current="page"] {

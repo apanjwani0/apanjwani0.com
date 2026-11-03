@@ -7,7 +7,7 @@
  * (anyone can request any URL), and the 404 is the page every scanner hits.
  */
 
-import type { IndexEntry } from './site-index'
+import type { IndexEntry, IndexKind } from './site-index'
 
 export interface FuzzyMatch {
   /** Higher is better. Only comparable between matches of the same query. */
@@ -100,6 +100,78 @@ export function fuzzyScore(query: string, text: string): FuzzyMatch | null {
     }
   }
   return { score: M[n - 1][m - 1], hits }
+}
+
+/* ── Palette ranking ───────────────────────────────────────────────────── */
+
+export interface RankedEntry {
+  entry: IndexEntry
+  /** Higher is better. Only comparable within one query. */
+  score: number
+  /** Indices into `entry.t` of the matched characters, for highlighting. */
+  hits: number[]
+}
+
+/**
+ * A title match outranks a keyword match, which outranks a description match;
+ * the kind then breaks near-ties, so "cron" lists the Cron Whisperer tool ahead
+ * of the fourteen "Cron every …" presets that share its first word.
+ */
+const TIER_TITLE = 100
+const TIER_WORDS = 50
+const TIER_DESCRIPTION = 20
+const KIND_BONUS: Readonly<Record<IndexKind, number>> = {
+  tool: 0.4, game: 0.3, section: 0.3, learning: 0.2, project: 0.2, post: 0.2, mode: 0.1, preset: 0,
+}
+/** A title match must score at least this much per typed character, or it is a scatter of letters, not a match. */
+const TITLE_FLOOR_PER_CHAR = 0.25
+/** Keyword and description matches are plain substrings, and only from two characters up. */
+const SUBSTRING_MIN = 2
+/** The Driftfield modes and Cron Whisperer presets are variations of two tools; they may not crowd the list. */
+const VARIATIONS_MAX = 3
+
+/**
+ * The entries a palette query finds, best first, at most `limit`. An empty
+ * query lists the section pages and the tools, in site order. Pure: no
+ * storage, no network, so the same query over the same index always answers
+ * the same.
+ */
+export function rankEntries(query: string, entries: readonly IndexEntry[], limit = 8): RankedEntry[] {
+  const q = query.trim().toLowerCase().slice(0, QUERY_MAX)
+  if (q === '') {
+    return entries
+      .filter(e => e.k === 'section' || e.k === 'tool')
+      .slice(0, limit)
+      .map(entry => ({ entry, score: 0, hits: [] }))
+  }
+  const found: RankedEntry[] = []
+  entries.forEach((entry, order) => {
+    let score = -1
+    let hits: number[] = []
+    const title = fuzzyScore(q, entry.t)
+    if (title && title.score >= q.length * TITLE_FLOOR_PER_CHAR) {
+      score = TIER_TITLE + title.score + (entry.t.toLowerCase().startsWith(q) ? 2 : 0)
+      hits = title.hits
+    } else if (q.length >= SUBSTRING_MIN && entry.w?.toLowerCase().includes(q)) {
+      score = TIER_WORDS
+    } else if (q.length >= SUBSTRING_MIN && entry.d?.toLowerCase().includes(q)) {
+      score = TIER_DESCRIPTION
+    }
+    // The order in the index breaks exact ties, kept stable by the sort below.
+    if (score >= 0) found.push({ entry, score: score + (KIND_BONUS[entry.k] ?? 0) - order * 1e-6, hits })
+  })
+  found.sort((a, b) => b.score - a.score)
+  const out: RankedEntry[] = []
+  let variations = 0
+  for (const item of found) {
+    if (item.entry.k === 'mode' || item.entry.k === 'preset') {
+      if (variations >= VARIATIONS_MAX) continue
+      variations += 1
+    }
+    out.push(item)
+    if (out.length >= limit) break
+  }
+  return out
 }
 
 /* ── 404 suggestions ───────────────────────────────────────────────────── */

@@ -22,6 +22,31 @@
   outline-offset: -2px;
 }
 
+/* The seed field (flow-field / maze-weaver / turing-bloom / lsystem / deep-shore).
+   One copy. Each game used to declare its own, five slightly different ones in
+   a single stylesheet bundle, so the field rendered as whichever sheet came
+   last and the declarations a game "owned" were often overridden by another's.
+   Now that a page loads only its own sheet this is the one the field is styled
+   from; it keeps the width the field has always rendered at (grow to 16rem). */
+div[data-group="seed"] {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+div[data-group="seed"] input[type="text"] {
+  flex: 1;
+  min-width: 8rem;
+  max-width: 16rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.28rem 0.5rem;
+  width: 11ch;
+}
+
 /* Seed text inputs (flow-field / maze-weaver / deep-shore): tighter ring.
    `fractal-garden` was named here until 2026-09-21 and had not existed for
    months — it is the L-system, which lives in Driftfield now. deep-shore names

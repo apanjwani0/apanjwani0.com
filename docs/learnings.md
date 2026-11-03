@@ -31,8 +31,9 @@ A learning's optional `embed` names an `EMBED_TAGS` key. The route mounts it
 through `mountEmbed()` (`src/lib/game-mount.ts`), which strips the component's
 own chrome and runs the same `mountGame()` dispatch `/games/[slug]` uses.
 
-- `game-mount.ts` is the only copy of the dispatch, and `games-embed.css` the
-  only list of component stylesheets.
+- `game-mount.ts` is the only copy of the dispatch, and `EMBED_STYLES`
+  (`src/lib/embeds.ts`) the only list of component stylesheets. The article links
+  just its embed's sheets; never import a game stylesheet in a page.
 - A component's own `<h1>` and blurb are stripped by a `MutationObserver`, not a
   sweep after mount: the markup lands before or after `astro:page-load`
   depending on the module cache. One observer per container, released at the

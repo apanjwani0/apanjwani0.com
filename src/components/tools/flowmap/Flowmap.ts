@@ -627,12 +627,17 @@ class FlowmapTool extends HTMLElement {
     }
   }
 
-  private say(text: string) {
+  /** One line under the board. A failure is `tone: 'error'`: it leads with "Error:" (controls.css) and interrupts a screen reader as an alert. */
+  private say(text: string, tone?: 'error' | 'success' | 'note') {
     const el = this.querySelector('[data-type="fm-message"]') as HTMLElement | null
     if (!el) return
+    el.setAttribute('role', tone === 'error' ? 'alert' : 'status')
+    el.setAttribute('aria-live', tone === 'error' ? 'assertive' : 'polite')
+    if (tone) el.dataset.tone = tone
+    else delete el.dataset.tone
     el.textContent = text
     clearTimeout(this.messageTimer)
-    this.messageTimer = window.setTimeout(() => { el.textContent = '' }, FM_MESSAGE_MS)
+    this.messageTimer = window.setTimeout(() => { el.textContent = ''; delete el.dataset.tone }, FM_MESSAGE_MS)
   }
 
   private renderCount(matches?: number) {
@@ -655,12 +660,12 @@ class FlowmapTool extends HTMLElement {
 
   private draw(text: string) {
     if (!text.trim()) {
-      this.say('Paste an outline or a flowchart first.')
+      this.say('Paste an outline or a flowchart first.', 'error')
       return
     }
     const parsed = normalizeGraph(parseGraphText(text))
     if (!parsed.nodes.length) {
-      this.say('Nothing recognisable in there. Try one item per line, or A --> B.')
+      this.say('Nothing recognisable in there. Try one item per line, or A --> B.', 'error')
       return
     }
     this.endConnect()
@@ -864,19 +869,19 @@ class FlowmapTool extends HTMLElement {
       const url = `${location.origin}${location.pathname}#g=${encodeGraph(this.graph)}`
       history.replaceState(history.state, '', url)
       void navigator.clipboard?.writeText(url)
-        .then(() => this.say('Link copied. The whole board is in it.'))
-        .catch(() => this.say('Copy failed. The address bar has the link.'))
+        .then(() => this.say('Link copied. The whole board is in it.', 'success'))
+        .catch(() => this.say('Copy failed. The address bar has the link.', 'error'))
     })
     on('copy-mermaid', () => {
       menu.open = false
       const text = toMermaid(this.graph).replace(/^flowchart TD/, `flowchart ${this.direction === 'LR' ? 'LR' : 'TD'}`)
       void navigator.clipboard?.writeText(text)
-        .then(() => this.say('Mermaid copied.'))
-        .catch(() => this.say('Copy failed.'))
+        .then(() => this.say('Mermaid copied.', 'success'))
+        .catch(() => this.say('Copy failed.', 'error'))
     })
     on('png', async button => {
       menu.open = false
-      if (!this.graph.nodes.length) { this.say('Nothing to save yet.'); return }
+      if (!this.graph.nodes.length) { this.say('Nothing to save yet.', 'note'); return }
       // The whole diagram, not the visible part of the canvas: Cytoscape
       // re-renders it at the chosen scale, so the large one is sharp, not an
       // upscale. Saved through the shared download helper.

@@ -93,6 +93,8 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
       </label>
       <label>github<input name="github" value={siteConfig.social.github} /></label>
       <label>linkedin<input name="linkedin" value={siteConfig.social.linkedin} /></label>
+      <label>email (optional)<input name="email" type="email" value={siteConfig.social.email ?? ''} /></label>
+      <label>résumé url (optional)<input name="resumeUrl" value={siteConfig.resumeUrl ?? ''} /></label>
       <div class="form-actions">
         <button type="submit">save site</button>
       </div>
@@ -250,25 +252,27 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
   <section id="tab-analytics" class="tab-panel hidden">
     <div class="form-actions">
       <button type="button" id="refresh-analytics" class="add-btn">refresh analytics</button>
-      <span class="analytics-note">aggregate tool/game views only — no ids, ips, or raw referrers</span>
+      <span class="analytics-note">page-speed counts only, kept in fixed buckets — no ids, ips, or raw referrers. Each cell is the bucket holding the 75th percentile; hover for the bucket counts.</span>
     </div>
     <div class="analytics-table-wrap">
       <table class="analytics-table">
         <thead>
           <tr>
-            <th>type</th>
-            <th>slug</th>
+            <th>path</th>
+            <th>nav</th>
+            <th>viewport</th>
             <th>views</th>
-            <th>direct</th>
             <th>direct %</th>
-            <th>avg load</th>
-            <th>avg route</th>
-            <th>avg lcp</th>
-            <th>avg ttfb</th>
+            <th>lcp p75</th>
+            <th>cls p75</th>
+            <th>inp p75</th>
+            <th>ttfb p75</th>
+            <th>fcp p75</th>
+            <th>route p75</th>
           </tr>
         </thead>
         <tbody id="analytics-body">
-          <tr><td colspan="9" class="analytics-empty">open this tab to load analytics</td></tr>
+          <tr><td colspan="11" class="analytics-empty">open this tab to load analytics</td></tr>
         </tbody>
       </table>
     </div>
@@ -718,27 +722,24 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
     setTimeout(() => { toast.className = 'toast hidden' }, 3000)
   }
 
+  type AnalyticsVital = { n: number; counts: number[]; p75: string | null }
   type AnalyticsRow = {
-    kind: string
-    slug: string
+    path: string
+    nav: string
+    vp: string
     views: number
-    directEntries: number
     directRate: number
-    avgLoadMs: number | null
-    avgRouteMs: number | null
-    avgLcpMs: number | null
-    avgTtfbMs: number | null
+    vitals: Record<string, AnalyticsVital>
   }
+
+  const ANALYTICS_COLUMNS = ['lcpMs', 'cls', 'inpMs', 'ttfbMs', 'fcpMs', 'routeMs']
 
   let analyticsLoaded = false
 
-  function formatMs(value: number | null) {
-    return value === null ? '—' : `${Math.round(value)} ms`
-  }
-
-  function addAnalyticsCell(row: HTMLTableRowElement, value: string | number) {
+  function addAnalyticsCell(row: HTMLTableRowElement, value: string | number, title?: string) {
     const cell = document.createElement('td')
     cell.textContent = String(value)
+    if (title) cell.title = title
     row.appendChild(cell)
   }
 
@@ -749,9 +750,9 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
     if (rows.length === 0) {
       const row = document.createElement('tr')
       const cell = document.createElement('td')
-      cell.colSpan = 9
+      cell.colSpan = 11
       cell.className = 'analytics-empty'
-      cell.textContent = 'no tool or game views recorded yet'
+      cell.textContent = 'no page views recorded yet'
       row.appendChild(cell)
       body.appendChild(row)
       return
@@ -759,15 +760,19 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
 
     for (const item of rows) {
       const row = document.createElement('tr')
-      addAnalyticsCell(row, item.kind)
-      addAnalyticsCell(row, item.slug)
+      addAnalyticsCell(row, item.path)
+      addAnalyticsCell(row, item.nav)
+      addAnalyticsCell(row, item.vp)
       addAnalyticsCell(row, item.views)
-      addAnalyticsCell(row, item.directEntries)
       addAnalyticsCell(row, `${item.directRate}%`)
-      addAnalyticsCell(row, formatMs(item.avgLoadMs))
-      addAnalyticsCell(row, formatMs(item.avgRouteMs))
-      addAnalyticsCell(row, formatMs(item.avgLcpMs))
-      addAnalyticsCell(row, formatMs(item.avgTtfbMs))
+      for (const key of ANALYTICS_COLUMNS) {
+        const vital = item.vitals[key]
+        addAnalyticsCell(
+          row,
+          vital?.p75 ?? '—',
+          vital ? `${vital.n} measured; counts per bucket: ${vital.counts.join(', ')}` : undefined,
+        )
+      }
       body.appendChild(row)
     }
   }
@@ -775,7 +780,7 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
   async function loadAnalytics(force = false) {
     if (analyticsLoaded && !force) return
     const body = document.getElementById('analytics-body')!
-    body.innerHTML = '<tr><td colspan="9" class="analytics-empty">loading analytics...</td></tr>'
+    body.innerHTML = '<tr><td colspan="11" class="analytics-empty">loading analytics...</td></tr>'
 
     try {
       const res = await fetch('/api/admin/analytics')
@@ -784,7 +789,7 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
       renderAnalyticsRows(Array.isArray(json.rows) ? json.rows : [])
       analyticsLoaded = true
     } catch {
-      body.innerHTML = '<tr><td colspan="9" class="analytics-empty">failed to load analytics</td></tr>'
+      body.innerHTML = '<tr><td colspan="11" class="analytics-empty">failed to load analytics</td></tr>'
     }
   }
 
@@ -833,7 +838,9 @@ const embedKeys = Object.keys(GAME_TAGS).join(', ')
       social: {
         github: fd.get('github'),
         linkedin: fd.get('linkedin'),
+        ...(fd.get('email') ? { email: fd.get('email') } : {}),
       },
+      ...(fd.get('resumeUrl') ? { resumeUrl: fd.get('resumeUrl') } : {}),
       sections: JSON.parse(fd.get('sections') as string),
     })
     // Apply theme to DOM immediately — no reload needed
