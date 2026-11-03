@@ -162,6 +162,10 @@ cohere-ai and Diffbot.
   answers with it when `Accept` ranks `text/markdown` above `text/html`
   (`Vary: Accept`, and `no-store`, because the edge keys on the URL and not on
   `Accept`). Article HTML carries `Link: </learnings/<slug>.md>; rel="alternate"`.
+  Behind Cloudflare the negotiation rarely fires: the edge serves its cached
+  HTML for the URL whatever `Accept` says, so the `.md` address is the one to
+  rely on. A Cache Rule that bypasses the cache when `Accept` contains
+  `text/markdown` would make it work (optional, the owner's call).
 - `Last-Modified` on the sitemap, `/llms.txt`, `/llms-full.txt` and `/feed.xml`
   is the newest published article's `updated ?? date`, and is left off when no
   article has a real date. A trailing-slash GET or HEAD 301s to the slashless

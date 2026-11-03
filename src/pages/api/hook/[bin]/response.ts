@@ -15,7 +15,7 @@
  * 599 (the runtime cannot send 1xx), at most 8 headers of 256 characters from an
  * allowlist (no Set-Cookie, nothing that frames the response or caches it), a body
  * of at most 8 KB, a content type from a safe list (no HTML: this origin would be
- * serving it), and a public `Location` for any redirect. Every refusal is a fixed
+ * serving it), and a `Location` only back at the bin itself (never an open redirect). Every refusal is a fixed
  * sentence.
  *
  * Auth is the bin id, as everywhere here. PUT and DELETE are state-changing and
@@ -23,7 +23,6 @@
  * isSameOrigin themselves.
  */
 import type { APIRoute } from 'astro'
-import { lpCheckResolved } from '../../../../lib/link-peek-fetch'
 import {
   BodyTooLargeError,
   InvalidJsonError,
@@ -80,16 +79,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
     return reply(400, { error: 'The request could not be read.' })
   }
 
-  const checked = validateBinResponse(input)
+  const checked = validateBinResponse(input, binId)
   if (!checked.ok) return reply(400, { error: checked.error })
-
-  // The syntax and host rules ran inside validateBinResponse; a name that
-  // resolves to a private address is refused here, where a lookup is allowed.
-  const location = checked.value.headers.find(h => h.name === 'location')
-  if (location) {
-    const resolved = await lpCheckResolved(new URL(location.value).hostname)
-    if (!resolved.ok) return reply(400, { error: 'Location must point at a public address that resolves.' })
-  }
 
   setBinResponse(binId, checked.value)
   return reply(200, { ok: true, response: checked.value })

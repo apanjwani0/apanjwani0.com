@@ -33,6 +33,7 @@ import {
   isValidBinId,
   subscribeBin,
   WEBHOOK_BIN_TTL_MS,
+  WEBHOOK_MAX_STREAMS_PER_CLIENT,
   WEBHOOK_STREAM_KEEPALIVE_MS,
   WEBHOOK_STREAM_MAX_MS,
   type BinEvent,
@@ -65,9 +66,13 @@ export const GET: APIRoute = ({ params, request }) => {
 
   const slot = acquireStreamSlot(binId, client)
   if (!slot.ok) {
-    return slot.reason === 'full'
-      ? reply(503, 'Too many live streams are open right now, so this page will check for new requests every two seconds instead.', { 'Retry-After': '30' })
-      : reply(409, 'This address already has a live stream open for this URL, so this page will check every two seconds instead.')
+    if (slot.reason === 'full') {
+      return reply(503, 'Too many live streams are open right now, so this page will check for new requests every two seconds instead.', { 'Retry-After': '30' })
+    }
+    if (slot.reason === 'client-full') {
+      return reply(429, `Your address already has ${WEBHOOK_MAX_STREAMS_PER_CLIENT} live streams open, so this page will check for new requests every two seconds instead.`, { 'Retry-After': '30' })
+    }
+    return reply(409, 'This address already has a live stream open for this URL, so this page will check every two seconds instead.')
   }
 
   const encoder = new TextEncoder()
@@ -109,6 +114,9 @@ export const GET: APIRoute = ({ params, request }) => {
 
         const onAbort = () => finish()
         request.signal.addEventListener('abort', onAbort, { once: true })
+        // An abort that happened before start() ran fires no event, and the
+        // slot would otherwise stay held until the 25-minute hard stop.
+        const abortedEarly = request.signal.aborted
 
         finish = reason => {
           if (closed) return
@@ -127,6 +135,7 @@ export const GET: APIRoute = ({ params, request }) => {
         // `retry` is the reconnect delay EventSource uses; `ready` tells the page
         // the stream is live so it can fetch anything that arrived in the gap.
         send(`retry: 3000\n\n: connected\n\nevent: ready\ndata: ${JSON.stringify({ maxAgeMs: WEBHOOK_STREAM_MAX_MS })}\n\n`)
+        if (abortedEarly) finish()
       },
       cancel() {
         finish()

@@ -32,7 +32,6 @@
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { lpIsForbiddenHostname, lpValidateUrl } from './link-peek-fetch'
 
 export interface CapturedHeader {
   name: string
@@ -191,22 +190,31 @@ function emit(binId: string, event: BinEvent): void {
 }
 
 const streamSlots = new Set<string>()
+/** Open streams per client key; never more entries than open slots. */
+const streamsByClient = new Map<string, number>()
+/** One address may hold this many streams across all bins, so it cannot take every slot. */
+export const WEBHOOK_MAX_STREAMS_PER_CLIENT = 4
 
 export type StreamSlot =
   | { ok: true; release: () => void }
-  | { ok: false; reason: 'full' | 'duplicate' }
+  | { ok: false; reason: 'full' | 'duplicate' | 'client-full' }
 
 /**
  * Reserve one of the process's WEBHOOK_MAX_STREAMS slots for (client, bin).
  * One per pair: a second tab on the same address and bin is refused and polls.
+ * At most WEBHOOK_MAX_STREAMS_PER_CLIENT per address across bins, because any
+ * well-formed id may be streamed and one address could otherwise fill the cap.
  * `clientKey` is untrusted and only buckets; the set never exceeds the cap, so
  * a flood of invented keys cannot grow it.
  */
 export function acquireStreamSlot(binId: string, clientKey: string): StreamSlot {
   const key = `${clientKey}\n${binId}`
   if (streamSlots.has(key)) return { ok: false, reason: 'duplicate' }
+  const held = streamsByClient.get(clientKey) ?? 0
+  if (held >= WEBHOOK_MAX_STREAMS_PER_CLIENT) return { ok: false, reason: 'client-full' }
   if (streamSlots.size >= WEBHOOK_MAX_STREAMS) return { ok: false, reason: 'full' }
   streamSlots.add(key)
+  streamsByClient.set(clientKey, held + 1)
   let released = false
   return {
     ok: true,
@@ -214,6 +222,9 @@ export function acquireStreamSlot(binId: string, clientKey: string): StreamSlot 
       if (released) return
       released = true
       streamSlots.delete(key)
+      const left = (streamsByClient.get(clientKey) ?? 1) - 1
+      if (left > 0) streamsByClient.set(clientKey, left)
+      else streamsByClient.delete(clientKey)
     },
   }
 }
@@ -427,6 +438,12 @@ export function isAllowedResponseHeader(name: string): boolean {
 }
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+
+/** `/api/hook/<binId>` or `/api/hook/<binId>?<query>`, and nothing else. */
+function isOwnBinLocation(value: string, binId: string): boolean {
+  const base = `/api/hook/${binId}`
+  return value === base || (value.startsWith(`${base}?`) && !/[#\\]/.test(value))
+}
 const NO_BODY_STATUSES = new Set([204, 205, 304])
 
 export type ResponseCheck = { ok: true; value: BinResponse } | { ok: false; error: string }
@@ -436,12 +453,13 @@ export type ResponseCheck = { ok: true; value: BinResponse } | { ok: false; erro
  *
  * Pure and synchronous so the route, the loader and the smoke test share it.
  * Every refusal is a fixed sentence: nothing the caller sent is echoed back.
- * `Location` is held to the SSRF guard's syntax and host rules (a public
- * http(s) URL on a default port) even though this server never follows it: the
- * visitor's browser does, and a redirect from this origin to a private address
- * is a way to aim a victim at their own network.
+ * `Location` may only point back at this bin (`/api/hook/<binId>`, with an
+ * optional query). Any other target would make this site an open redirect:
+ * anyone could mint a link on this domain that sends a visitor wherever they
+ * chose. Following the redirect lands on the bin, so the follow-up request is
+ * captured too, which is what a redirect test wants to see.
  */
-export function validateBinResponse(input: unknown): ResponseCheck {
+export function validateBinResponse(input: unknown, binId: string): ResponseCheck {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { ok: false, error: 'The response must be an object with a status, headers, body and content type.' }
   }
@@ -504,15 +522,10 @@ export function validateBinResponse(input: unknown): ResponseCheck {
     }
     if (seen.has(name)) return { ok: false, error: 'A header can be set only once.' }
     seen.add(name)
-    if (name === 'location') {
-      const target = lpValidateUrl(value)
-      if (!target.ok || lpIsForbiddenHostname(target.url.hostname)) {
-        return { ok: false, error: 'Location must be a full http or https URL to a public address on the default port.' }
-      }
-      headers.push({ name, value: target.url.href })
-    } else {
-      headers.push({ name, value })
+    if (name === 'location' && !isOwnBinLocation(value, binId)) {
+      return { ok: false, error: 'Location can only point back at this URL (/api/hook/ followed by this URL\'s id, optionally with a query), so the site never redirects visitors somewhere else.' }
     }
+    headers.push({ name, value })
   }
 
   if (REDIRECT_STATUSES.has(status) && !seen.has('location')) {
@@ -630,7 +643,7 @@ export function parsePersistedBins(text: string, now = Date.now()): Map<string, 
     }
     let response: BinResponse | null = null
     if (row.response !== undefined && row.response !== null) {
-      const checked = validateBinResponse(row.response)
+      const checked = validateBinResponse(row.response, row.id)
       if (checked.ok) response = checked.value
     }
     if (requests.length === 0 && !response) continue
@@ -734,8 +747,20 @@ function markDirty(): void {
   ;(flushTimer as unknown as { unref?: () => void }).unref?.()
 }
 
-/** Write the store now (atomic: a temp file, then a rename). A failure re-arms; it never throws. */
-export async function flushWebhookBins(): Promise<boolean> {
+let flushChain: Promise<unknown> = Promise.resolve()
+
+/**
+ * Write the store now (atomic: a temp file, then a rename). A failure re-arms; it never throws.
+ * Flushes run one at a time: two overlapping writes to the same temp file could
+ * publish a half-written one.
+ */
+export function flushWebhookBins(): Promise<boolean> {
+  const run = flushChain.then(flushOnce)
+  flushChain = run
+  return run
+}
+
+async function flushOnce(): Promise<boolean> {
   if (!persistPath || !dirty) return false
   const path = persistPath
   try {
@@ -758,8 +783,9 @@ function flushSync(): void {
   if (!persistPath || !dirty) return
   try {
     mkdirSync(dirname(persistPath), { recursive: true })
-    writeFileSync(`${persistPath}.tmp`, serializeBins(), { encoding: 'utf-8', mode: 0o600 })
-    renameSync(`${persistPath}.tmp`, persistPath)
+    // Its own temp name: an async flush may still be writing `.tmp`.
+    writeFileSync(`${persistPath}.exit.tmp`, serializeBins(), { encoding: 'utf-8', mode: 0o600 })
+    renameSync(`${persistPath}.exit.tmp`, persistPath)
     dirty = false
   } catch {
     // Shutting down: nothing left to retry with.

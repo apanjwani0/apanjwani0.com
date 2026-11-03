@@ -29,6 +29,9 @@ Session pickup. Rewritten each session, not appended. Last updated 3 Nov 2026.
 6. Export the Search Console "Not found (404)" URL list (3 pages); 301s
    follow if successors exist. Do not click "Validate fix" on the redirect,
    noindex and canonical rows: they fail by design.
+7. Optional: a Cloudflare Cache Rule that bypasses the cache when `Accept`
+   contains `text/markdown`, so article Markdown negotiation works at the edge
+   (docs/operations.md). The `.md` links work without it.
 
 ## Open at the end of the session
 

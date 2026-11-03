@@ -39,7 +39,7 @@ import {
   serializeBins,
   setBinResponse,
   subscribeBin,
-  validateBinResponse,
+  validateBinResponse as validateBinResponseFor,
   WEBHOOK_BIN_TTL_MS,
   WEBHOOK_FLUSH_MS,
   WEBHOOK_MAX_BINS,
@@ -49,6 +49,7 @@ import {
   WEBHOOK_MAX_RESPONSE_BODY_BYTES,
   WEBHOOK_MAX_RESPONSE_HEADERS,
   WEBHOOK_MAX_STREAMS,
+  WEBHOOK_MAX_STREAMS_PER_CLIENT,
   WEBHOOK_MAX_TOTAL_BYTES,
   WEBHOOK_STREAM_KEEPALIVE_MS,
   WEBHOOK_STREAM_MAX_MS,
@@ -301,6 +302,8 @@ ok('signatures are checked over the exact bytes: a non-UTF-8 body verifies from 
 
 {
   const good = { status: 200, headers: [], contentType: 'application/json', body: '{"ok":true}' }
+  const OWN = 'own-bin-' + 'q'.repeat(20)
+  const validateBinResponse = (input, binId = OWN) => validateBinResponseFor(input, binId)
   assert.equal(validateBinResponse(good).ok, true)
   const bad = (patch, what) => {
     const r = validateBinResponse({ ...good, ...patch })
@@ -311,7 +314,7 @@ ok('signatures are checked over the exact bytes: a non-UTF-8 body verifies from 
   for (const status of [0, 99, 100, 101, 103, 199, 600, 200.5, '200', null, NaN]) bad({ status }, `status ${String(status)}`)
   assert.match(bad({ status: 101 }), /1xx/, 'the 1xx refusal says why')
   for (const status of [200, 201, 204, 301, 429, 500, 599]) {
-    const patch = status >= 301 && status <= 308 ? { status, headers: [{ name: 'Location', value: 'https://example.com/x' }] } : { status, body: status === 204 ? '' : 'x' }
+    const patch = status >= 301 && status <= 308 ? { status, headers: [{ name: 'Location', value: `/api/hook/${OWN}` }] } : { status, body: status === 204 ? '' : 'x' }
     assert.equal(validateBinResponse({ ...good, ...patch }).ok, true, `status ${status}`)
   }
   bad({ status: 204, body: 'x' }, '204 cannot carry a body')
@@ -336,7 +339,7 @@ ok('signatures are checked over the exact bytes: a non-UTF-8 body verifies from 
     assert.equal(isAllowedResponseHeader(name), false, `${name} is not an allowed response header`)
     assert.equal(validateBinResponse({ ...good, headers: [{ name, value: 'v' }] }).ok, false, `${name} is refused`)
   }
-  for (const name of ['location', 'retry-after', 'content-language', 'allow', 'ratelimit-limit', 'x-request-id', 'x-anything-custom']) {
+  for (const name of ['retry-after', 'content-language', 'allow', 'ratelimit-limit', 'x-request-id', 'x-anything-custom']) {
     assert.equal(isAllowedResponseHeader(name), true, `${name} is allowed`)
   }
 
@@ -354,20 +357,23 @@ ok('signatures are checked over the exact bytes: a non-UTF-8 body verifies from 
   }
   assert.equal(safeResponseContentType('Application/JSON; charset=UTF-8'), 'application/json; charset=utf-8', 'normalised')
 
-  // Redirects need a Location, and the Location is held to the SSRF guard.
+  // Redirects need a Location, and it may only point back at this bin: any other
+  // target makes this site an open redirect (mutation: accept any public URL → the
+  // example.com row passes and this fails).
   for (const status of [301, 302, 303, 307, 308]) bad({ status }, `${status} needs a Location`)
   for (const target of [
-    'http://127.0.0.1/', 'http://localhost/', 'http://10.0.0.5/x', 'http://172.16.0.1/', 'http://172.31.255.255/', 'http://192.168.1.1/',
-    'http://169.254.169.254/latest/meta-data/', 'http://[::1]/', 'http://[fc00::1]/', 'http://[fd12:3456::1]/', 'http://[fe80::1]/',
-    'http://[::ffff:127.0.0.1]/', 'http://[::ffff:10.0.0.1]/', 'http://[::ffff:169.254.169.254]/', 'http://0x7f000001/', 'http://2130706433/',
-    'http://metadata.google.internal/', 'http://router/', 'http://printer.local/',
-    'ftp://example.com/', 'javascript:alert(1)', '/relative/path', '//example.com/x', 'https://user:pw@example.com/', 'https://example.com:8443/', 'not a url',
+    'https://example.com/next', 'http://127.0.0.1/', 'http://169.254.169.254/latest/meta-data/', '//example.com/x', 'javascript:alert(1)',
+    '/api/hook/' + 'r'.repeat(24), `/api/hook/${OWN}x`, `/api/hook/${OWN}/requests`, `/api/hook/${OWN}#frag`, `/api/hook/${OWN}?a=\\evil`,
+    `https://example.com/api/hook/${OWN}`, `/tools/../api/hook/${OWN}`, '/', 'not a url',
   ]) {
     const r = validateBinResponse({ ...good, status: 302, headers: [{ name: 'Location', value: target }] })
     assert.equal(r.ok, false, `Location ${target} must be refused`)
   }
-  assert.equal(validateBinResponse({ ...good, status: 302, headers: [{ name: 'Location', value: 'https://example.com/next?a=1' }] }).ok, true)
-  assert.equal(validateBinResponse({ ...good, status: 201, headers: [{ name: 'Location', value: 'http://127.0.0.1/' }] }).ok, false, 'a Location on a non-redirect is held to the same rule')
+  for (const target of [`/api/hook/${OWN}`, `/api/hook/${OWN}?status=200&delay=100`]) {
+    assert.equal(validateBinResponse({ ...good, status: 302, headers: [{ name: 'Location', value: target }] }).ok, true, `Location ${target} is this bin`)
+  }
+  assert.equal(validateBinResponse({ ...good, status: 302, headers: [{ name: 'Location', value: `/api/hook/${OWN}` }] }, 'other-bin-' + 'q'.repeat(20)).ok, false, "one bin cannot redirect to another's URL")
+  assert.equal(validateBinResponse({ ...good, status: 201, headers: [{ name: 'Location', value: 'https://example.com/' }] }).ok, false, 'a Location on a non-redirect is held to the same rule')
 
   // No refusal echoes what was sent.
   const marker = 'ZZ-MARKER-ZZ'
@@ -382,7 +388,7 @@ ok('signatures are checked over the exact bytes: a non-UTF-8 body verifies from 
     assert.ok(!r.error.includes(marker), `a refusal never echoes the input: ${r.error}`)
   }
 }
-ok('a configured response is held to its bounds: status 200-599, 8 headers of 256 characters from an allowlist, 8 KB body, safe content types, public Location only; refusals echo nothing')
+ok('a configured response is held to its bounds: status 200-599, 8 headers of 256 characters from an allowlist, 8 KB body, safe content types, Location only back at the bin itself; refusals echo nothing')
 
 // The configured response is counted in the global byte budget.
 {
@@ -727,6 +733,35 @@ ok('the resend route validates both ids, checks the origin, never echoes the URL
   slot.release()
   assert.equal(openStreamCount(), 0, 'release is idempotent')
 
+  // One address holds at most WEBHOOK_MAX_STREAMS_PER_CLIENT streams across bins,
+  // because any well-formed id can be streamed (mutation: drop the per-client check →
+  // the extra stream opens).
+  const mine = []
+  for (let i = 0; i < WEBHOOK_MAX_STREAMS_PER_CLIENT; i += 1) {
+    const res = await open(newBin(), '192.0.2.77')
+    assert.equal(res.status, 200, `stream ${i + 1} of ${WEBHOOK_MAX_STREAMS_PER_CLIENT} for one address`)
+    mine.push(res)
+  }
+  const tooMany = await open(newBin(), '192.0.2.77')
+  assert.equal(tooMany.status, 429, 'one more stream from the same address is refused')
+  assert.ok(!(await tooMany.text()).includes('192.0.2'), 'a fixed sentence')
+  const otherAddr = await open(newBin(), '192.0.2.78')
+  assert.equal(otherAddr.status, 200, 'another address still gets one')
+  for (const res of [...mine, otherAddr]) await res.body.cancel()
+  assert.equal(openStreamCount(), 0)
+  const freed = await open(newBin(), '192.0.2.77')
+  assert.equal(freed.status, 200, 'cancelling frees the address\'s slots')
+  await freed.body.cancel()
+
+  // A request already aborted when the stream starts releases its slot at once
+  // (mutation: remove the abortedEarly check → the count stays 1 for 25 minutes).
+  const gone0 = openStreamCount()
+  const ac = new AbortController()
+  ac.abort()
+  const early = await GET({ params: { bin: newBin() }, request: new Request(`http://localhost/api/hook/x/stream`, { signal: ac.signal, headers: { 'cf-connecting-ip': '192.0.2.79' } }) })
+  assert.equal(early.status, 200)
+  assert.equal(openStreamCount(), gone0, 'an aborted-before-start stream holds no slot')
+
   // The bin going away closes the stream, with a reason.
   const goneBin = newBin()
   recordRequest(goneBin, mkReq())
@@ -848,15 +883,15 @@ assert.equal(WEBHOOK_STREAM_KEEPALIVE_MS, 20_000)
   assert.equal(res.headers.get('content-type'), 'text/xml')
   assert.equal(res.headers.get('content-disposition'), 'attachment')
 
-  // A public redirect target is accepted (a literal address needs no lookup); a private one is not.
-  assert.equal((await put(bin, ip, { status: 302, headers: [{ name: 'Location', value: 'https://93.184.216.34/next' }], body: '' })).status, 200)
+  // A redirect back at the bin is accepted and followed into a second capture; any other target is refused.
+  assert.equal((await put(bin, ip, { status: 302, headers: [{ name: 'Location', value: `/api/hook/${bin}?status=200` }], body: '' })).status, 200)
   res = await hit(bin, ip)
   assert.equal(res.status, 302)
-  assert.equal(res.headers.get('location'), 'https://93.184.216.34/next')
-  const refused = await put(bin, ip, { status: 302, headers: [{ name: 'Location', value: 'http://169.254.169.254/latest' }], body: '' })
+  assert.equal(res.headers.get('location'), `/api/hook/${bin}?status=200`)
+  const refused = await put(bin, ip, { status: 302, headers: [{ name: 'Location', value: 'https://93.184.216.34/next' }], body: '' })
   assert.equal(refused.status, 400)
-  assert.ok(!(await refused.text()).includes('169.254'))
-  assert.equal(getBinResponse(bin).headers[0].value, 'https://93.184.216.34/next', 'a refused save leaves the previous answer in place')
+  assert.ok(!(await refused.text()).includes('93.184'))
+  assert.equal(getBinResponse(bin).headers[0].value, `/api/hook/${bin}?status=200`, 'a refused save leaves the previous answer in place')
 
   // Request-level bounds and errors.
   assert.equal((await put(bin, ip, 'not json')).status, 400)
@@ -945,6 +980,16 @@ ok('ndjson export: one captured request per line, oldest first, newline-terminat
     assert.equal(await stat(file).then(() => true, () => false), true, 'the debounced flush wrote the file')
     assert.equal((await stat(file)).mode & 0o777, 0o600, 'the file is private to the server user')
     assert.equal(await stat(`${file}.tmp`).then(() => true, () => false), false, 'written atomically: no temp file left')
+
+    // Overlapping flushes run one after the other. The first is queued behind any
+    // earlier one, so it serialises after both writes and the second finds nothing
+    // left (mutation: call flushOnce directly → the two overlap and both write,
+    // [true, true], racing on the same temp file).
+    recordRequest(a, mkReq({ bodyText: 'overlap-1' }))
+    const first = flushWebhookBins()
+    recordRequest(a, mkReq({ bodyText: 'overlap-2' }))
+    assert.deepEqual(await Promise.all([first, flushWebhookBins()]), [true, false], 'overlapping flushes are serialised')
+    assert.equal(await stat(`${file}.tmp`).then(() => true, () => false), false, 'no temp file left after overlapping flushes')
 
     recordRequest(a, mkReq({ bodyText: 'final' }))
     assert.equal(await flushWebhookBins(), true)

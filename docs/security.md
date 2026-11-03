@@ -289,7 +289,9 @@ characters, enforced server-side.
 ### Long-lived connections and outbound sends are bounded like everything else
 
 The Webhook Inspector's stream (`GET /api/hook/:bin/stream`, SSE) is one per
-client per bin, at most 64 per process, closed after 25 minutes, on bin expiry,
+client per bin, at most 4 per client across bins (any well-formed id can be
+streamed, so one address could otherwise fill the cap), at most 64 per process,
+closed after 25 minutes, on bin expiry, on an abort that came before it started,
 and when a reader falls 256 KB behind; opening one spends a per-client bucket
 before the shared one. "Resend to URL" (`POST …/requests/:id/replay`) goes
 through Link Peek's address guard, resolves once and pins the connection to the
@@ -297,7 +299,11 @@ checked address, follows no redirects, reads at most 64 KB, returns 2 KB, and
 never echoes the target. A bin's configured answer (`PUT …/response`) is
 bounded in status (200–599), headers (8, allowlisted names) and body (8 KB,
 counted in the global budget), serves no HTML or SVG, and a redirect's
-`Location` must pass the same guard. Bins persist to `data/webhook-bins.json`
+`Location` may only point back at the bin itself (`/api/hook/<bin>?…`):
+any other target makes the site an open redirect, and a same-bin target
+needs no DNS lookup. Flushes to disk run one at a time; each is a synchronous
+`JSON.stringify` of at most 16 MB every 5 s while busy, a known pause left as
+is. Bins persist to `data/webhook-bins.json`
 with every row re-validated on load; the 6 h idle TTL and the caps still
 apply. Asserted in `scripts/smoke/webhook.mjs`.
 
