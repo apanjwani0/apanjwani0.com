@@ -79,6 +79,14 @@ jobs:
           # Pull this commit's image
           docker pull "$DOCKER_IMAGE"
 
+          # The new image's user must be able to write the mounted data dir (counts,
+          # leaderboards). Checked before the old container stops, so a mismatch
+          # fails the deploy while the live site keeps serving.
+          mkdir -p /opt/portfolio/data
+          docker run --rm -v /opt/portfolio/data:/app/data --entrypoint sh "$DOCKER_IMAGE" \
+            -c 'f=/app/data/.write-check && touch "$f" && rm "$f"' \
+            || { echo "✗ image user $(docker run --rm --entrypoint id "$DOCKER_IMAGE") cannot write /opt/portfolio/data ($(stat -c %u:%g /opt/portfolio/data))"; exit 1; }
+
           # Stop + remove existing container
           docker stop portfolio 2>/dev/null || true
           docker rm   portfolio 2>/dev/null || true
@@ -92,7 +100,6 @@ jobs:
           printf 'ORIGIN_SHARED_SECRET=%s\n' "$ORIGIN_SHARED_SECRET" > "$envfile"
 
           # Run new container
-          mkdir -p /opt/portfolio/data
           docker run -d \
             --name portfolio \
             --restart unless-stopped \

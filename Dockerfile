@@ -23,8 +23,10 @@ RUN npm ci --omit=dev
 
 # data/ is mounted as a volume at runtime — JSON config written by /admin
 # persists here across container restarts and image upgrades.
-RUN addgroup -S portfolio \
-  && adduser -S portfolio -G portfolio \
+# uid/gid 1001 = the host user that owns /opt/portfolio/data (the Actions runner's
+# user). Unpinned, adduser picked uid 100 and every write to data/ failed with EACCES.
+RUN addgroup -S -g 1001 portfolio \
+  && adduser -S -u 1001 -G portfolio portfolio \
   && mkdir -p data \
   && chown -R portfolio:portfolio /app
 

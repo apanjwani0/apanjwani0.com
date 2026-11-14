@@ -367,7 +367,12 @@ export async function recordAnalyticsEvent(locals: unknown, event: AnalyticsEven
   if (!data[key] && Object.values(data).filter(row => row.date === date).length >= MAX_ROWS_PER_DAY) return
   // ponytail: local JSON can lose simultaneous increments; use SQLite/Postgres if this site gets real traffic.
   data[key] = updateAnalyticsAggregate(data[key] ?? null, event)
-  await writeLocalAnalytics(capAnalyticsStore(data))
+  try {
+    await writeLocalAnalytics(capAnalyticsStore(data))
+  } catch (error) {
+    // A count that cannot be saved is lost; the beacon still succeeds (same rule as visits.ts).
+    console.error('[analytics] write failed', error)
+  }
 }
 
 export async function readAnalyticsAggregates(locals: unknown): Promise<AnalyticsAggregate[]> {
