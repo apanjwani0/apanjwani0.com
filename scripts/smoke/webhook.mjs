@@ -1114,7 +1114,7 @@ ok('ndjson export: one captured request per line, oldest first, newline-terminat
   assert.match(src, /process\.once\(signal, \(\) => \{\s*flushSync\(\)/, 'a SIGTERM (a deploy) flushes once, synchronously')
   assert.match(src, /import\.meta\.env\.SSR === true/, 'persistence is on only inside the running site, never under the smoke runner')
   assert.equal(WEBHOOK_BIN_TTL_MS, 6 * 60 * 60 * 1000, 'the idle window is still six hours')
-  assert.match(src, /sweepTimer\)?\.unref|\(sweepTimer as unknown as \{ unref\?: \(\) => void \}\)\.unref\?\.\(\)/, 'the sweep timer is unref\'d so it never holds the process open')
+  assert.match(src, /\(sweepHolder\.__webhookSweepTimer as unknown as \{ unref\?: \(\) => void \}\)\.unref\?\.\(\)/, 'the sweep timer is unref\'d so it never holds the process open')
   assert.equal(WEBHOOK_SWEEP_MS, 10 * 60 * 1000)
 }
 ok('bins and their configured responses flush (debounced, atomic, mode 0600) to data/webhook-bins.json and reload with every row re-validated: ids, sizes, counts, TTL, bin cap and byte budget; a malformed row is dropped alone')

@@ -794,7 +794,8 @@ function flushSync(): void {
 
 /** How often an idle process drops expired bins (the TTL is 6 h, so ten minutes late is harmless). */
 export const WEBHOOK_SWEEP_MS = 10 * 60 * 1000
-let sweepTimer: ReturnType<typeof setInterval> | null = null
+// Held on globalThis so a dev hot reload replaces the previous module's timer instead of leaving it running.
+const sweepHolder = globalThis as { __webhookSweepTimer?: ReturnType<typeof setInterval> }
 
 /**
  * Expire bins on a clock, not only when a store call happens to come in. `sweep`
@@ -806,9 +807,9 @@ let sweepTimer: ReturnType<typeof setInterval> | null = null
  * smoke runner exit on their own. Restarting replaces the timer (a test seam).
  */
 export function startSweeper(everyMs = WEBHOOK_SWEEP_MS): void {
-  if (sweepTimer) clearInterval(sweepTimer)
-  sweepTimer = setInterval(() => sweep(Date.now()), everyMs)
-  ;(sweepTimer as unknown as { unref?: () => void }).unref?.()
+  if (sweepHolder.__webhookSweepTimer) clearInterval(sweepHolder.__webhookSweepTimer)
+  sweepHolder.__webhookSweepTimer = setInterval(() => sweep(Date.now()), everyMs)
+  ;(sweepHolder.__webhookSweepTimer as unknown as { unref?: () => void }).unref?.()
 }
 
 /**

@@ -198,7 +198,7 @@ export function isFromCloudflare(
 ): boolean {
   if (!secret) return true
   const presented = request.headers.get('x-origin-auth')
-  if (!presented || presented.length !== secret.length) return false
+  if (!presented) return false // no length check: both sides are hashed to 32 bytes, so a length test would only leak the secret's length
   return timingSafeEqualText(presented, secret)
 }
 

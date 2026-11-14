@@ -155,7 +155,7 @@ console.log('hardening: names resolve through c-ares, local-only names are refus
    pairing over every route; this pins that these routes HAVE one, and that the
    shared cap is larger than one client's, or normal use would trip it). */
 {
-  const writes = ['src/pages/api/hook/[bin].ts', 'src/pages/api/games/type-trial/daily.ts', 'src/pages/api/games/hue-hunt/daily.ts', 'src/pages/api/games/interest.ts', 'src/pages/api/hook/[bin]/stream.ts']
+  const writes = ['src/pages/api/hook/[bin].ts', 'src/pages/api/games/type-trial/daily.ts', 'src/pages/api/games/hue-hunt/daily.ts', 'src/pages/api/games/interest.ts', 'src/pages/api/hook/[bin]/stream.ts', 'src/pages/api/analytics/event.ts']
   for (const route of writes) {
     const code = (await src(route)).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
     const caps = Object.fromEntries([...code.matchAll(/const (allow\w+) = createRateLimiter\(60_000, (\d+)\)/g)].map((m) => [m[1], Number(m[2])]))
@@ -164,7 +164,7 @@ console.log('hardening: names resolve through c-ares, local-only names are refus
     assert.ok(caps[pair[2]] >= caps[pair[1]] * 4, `${route}: the shared cap (${caps[pair[2]]}) leaves room for several clients at their own cap (${caps[pair[1]]})`)
   }
 }
-console.log('hardening: capture, both leaderboard submits, interest votes and stream opens each spend a shared bucket after the client\'s')
+console.log('hardening: capture, both leaderboard submits, interest votes, stream opens and analytics events each spend a shared bucket after the client\'s')
 
 /* ── 6. Deploy hygiene: what the pipeline passes, pulls and bases on. ─────── */
 {
