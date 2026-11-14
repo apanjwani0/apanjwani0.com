@@ -25,7 +25,7 @@ import {
 import { GAME_TAGS, gameTag, isPlayableGame } from '../src/lib/games.ts'
 import { games } from '../src/config/games.ts'
 import { tools } from '../src/config/tools.ts'
-import { SERVER_TOOLS, isServerTool } from '../src/lib/tools.ts'
+import { RELATED, SERVER_TOOLS, isServerTool } from '../src/lib/tools.ts'
 import { site } from '../src/config/site.ts'
 import { isBlogsPublic, isProjectsPublic, navLinks } from '../src/lib/config.ts'
 import { looksAutomated, pruneVisits, recordVisit, referrerHost, serializeBounded } from '../src/lib/visits.ts'
@@ -1234,13 +1234,28 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
     const all = src.match(/<RelatedLinks\b[^>]*>/g) ?? []
     assert.ok(all.length > 0 && all.every(tag => /\binset\b/.test(tag)), `${name} renders RelatedLinks outside main's gutter, so every one takes inset (on a phone the links ran to the screen edge)`)
   }
-  // Sibling chip rows ("More tools/games/learnings") were removed: the hub is one click away and a
-  // row of every product on every product page is crawl noise. Only the article-about-it row and
+  // Sibling chip rows of EVERY product ("More tools/games/learnings") were removed as crawl noise.
+  // Aman, 15 Nov 2026: a small hand-picked "Related" row (3-4 links, RELATED in lib/tools.ts) is back
+  // on tool and game pages, because Search Console showed individual pages with almost no internal
+  // links. Beside it, the article-about-it row and
   // a tool's own family of sub-pages (Driftfield's modes, Cron Whisperer's "Common schedules"),
   // which have no other crawl links, keep one.
   for (const [name, src] of [['tools/[slug].astro', toolPage], ['games/[slug].astro', await read('pages/games/[slug].astro')], ['learnings/[slug].astro', await read('pages/learnings/[slug].astro')]]) {
     const headings = [...src.matchAll(/<RelatedLinks\b[^>]*\bheading="([^"]+)"/g)].map(m => m[1])
-    assert.ok(headings.every(h => h === 'Read about it' || (name === 'tools/[slug].astro' && h === 'Common schedules')), `${name} renders a sibling row again: ${headings.join(', ')}`)
+    assert.ok(headings.every(h => h === 'Read about it' || (name !== 'learnings/[slug].astro' && h === 'Related') || (name === 'tools/[slug].astro' && h === 'Common schedules')), `${name} renders a sibling row again: ${headings.join(', ')}`)
+  }
+  // The Related map stays hand-picked and real: a typo'd slug would drop out silently (the row
+  // filters to live pages), and a long list is the crawl noise the old sibling rows were.
+  const productPaths = new Set([...tools.map(t => `/tools/${t.slug}`), ...games.map(g => `/games/${g.slug}`)])
+  // A target must be public: a disabled one drops out at runtime and the row silently shrinks.
+  const livePaths = new Set([...tools.filter(t => t.status === 'live').map(t => `/tools/${t.slug}`), ...games.filter(isPlayableGame).map(g => `/games/${g.slug}`)])
+  for (const [from, targets] of Object.entries(RELATED)) {
+    assert.ok(productPaths.has(from), `RELATED key ${from} is a real tool or game`)
+    assert.ok(targets.length >= 3 && targets.length <= 4, `RELATED ${from} lists 3 or 4 pages, not ${targets.length}`)
+    for (const t of targets) assert.ok(livePaths.has(t) && t !== from, `RELATED ${from} -> ${t} is another live tool or playable game`)
+  }
+  for (const [name, src] of [['tools/[slug].astro', toolPage], ['games/[slug].astro', await read('pages/games/[slug].astro')]]) {
+    assert.ok((src.match(/heading="Related"/g) ?? []).length <= 1, `${name} renders at most one Related row`)
   }
   assert.match(modePage, /heading="More Driftfield modes"/, "Driftfield modes keep their sibling row: it is their only crawl route to each other")
   // The footer's bio is part of the site config and its validator, so an admin save can't drop it.

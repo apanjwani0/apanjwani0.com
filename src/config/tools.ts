@@ -7,6 +7,8 @@ export interface Tool {
   status: ToolStatus
   href?: string  // required when status === 'external'
   seoTitle?: string
+  /** The page's h1 when it should say more than the title (the title stays the name on cards and breadcrumbs). */
+  heading?: string
   metaDescription?: string
   intro?: string
   seoContent?: string
@@ -21,20 +23,46 @@ export const tools: Tool[] = [
     title: 'Webhook Inspector',
     description: 'Get a unique URL, send any webhook to it, and inspect the requests live.',
     status: 'live',
-    seoTitle: 'Webhook Tester & Inspector — Webhook Inspector',
-    metaDescription: 'Free webhook tester: get an instant URL, watch requests arrive with headers and body, then verify the Stripe, GitHub or Slack signature against your secret.',
+    seoTitle: 'Free Webhook Tester Online — Webhook Inspector',
+    metaDescription: 'Free online webhook tester: get a URL, send a test webhook to it and watch the headers and body arrive live. Check Stripe, GitHub or Slack signatures too.',
     keywords: 'webhook tester, webhook inspector, test webhook, webhook debugger, request bin, requestbin, http request inspector, capture webhook, inspect webhook, webhook url, receive webhook, webhook.site alternative, test http request, mock http endpoint, webhook testing tool, online webhook, debug webhook, http echo, request catcher, verify webhook signature, webhook signature checker, stripe signature verification, x-hub-signature-256, slack signing secret, shopify hmac, webhook hmac, signature mismatch, raw body hmac',
     intro: 'A live webhook and HTTP request tester that uses a real server, not just your browser. You get a unique capture URL that is saved on this device so you can reuse and share it; point any webhook sender or HTTP client at it — Stripe, GitHub, Slack, Shopify, Zapier, a cron job, or your own code — and every request it makes appears here within a couple of seconds, complete with the method, query string, every header, and the raw or pretty-printed body. Expand any request to read the full details, copy the body in one click, and clear the log when you are done. The capture URL doubles as a controllable HTTP target for debugging clients: append ?status=500 to make it return that status and exercise your retry logic, ?delay=2000 to simulate a slow upstream (2s is the cap), or ?echo=1 to have it send your request body straight back. Send a sample request with one button to see it work immediately. Paste the signing secret and every captured request is checked against it: Stripe, GitHub, Slack and Shopify are recognised from their headers and verified with the exact payload each one signs, and for any other sender the raw body is HMAC-ed with SHA-256, SHA-1 and SHA-512 and matched against every header, which tells you which header is the signature and how it is encoded. It keeps "correctly signed" and "still inside the replay window" as separate answers, and it never takes the algorithm from a label inside the message. The secret is used in your browser with Web Crypto and is never saved or uploaded. Captured requests live on the server only long enough to inspect — a few hours of inactivity — and are visible only to whoever holds the unguessable URL: there is no account and no public listing. Press R to refresh, C to clear, N for a fresh URL, and P to pause the live feed.',
+    seoContent: `## What is a webhook tester?
+
+A webhook tester gives you a temporary web address that accepts any request and shows you exactly what was sent. Point a service at it to see what its webhook really looks like before you write the code that receives it.
+
+## How to test a webhook
+
+1. Copy the URL at the top of the page. It is made for you and saved on this device.
+2. Paste it into the webhook settings of the service you are testing, or press Send test request.
+3. Watch the request appear in the list, then open it to read the method, headers and body.
+
+## Good to know
+
+Anyone who has the URL can read its requests, so do not share it, and do not send real secrets. Requests are dropped after a few hours of inactivity, and bodies over 64 KB are cut short. To see how your client handles a failure, add ?status=500 to the URL and it will answer with that status.`,
   },
   {
     slug: 'link-peek',
     title: 'Link Peek',
     description: 'Preview how a URL unfurls in Slack, X and iMessage — and lint its Open Graph tags.',
     status: 'live',
-    seoTitle: 'Link Preview Checker — Open Graph & Twitter Card Tester',
-    metaDescription: 'See how a link unfurls in Slack, X and iMessage before you share it. Fetches it the way each bot does and lints missing or wrong Open Graph and Twitter tags.',
+    seoTitle: 'Twitter (X) Link Preview Checker & Tester — Link Peek',
+    metaDescription: 'Twitter link preview checker: paste a URL to see how it looks on X, Slack and iMessage, and find missing or wrong Open Graph and Twitter Card tags.',
     keywords: 'link preview checker, open graph checker, og tag tester, twitter card validator, unfurl preview, social share preview, og:image checker, meta tag preview, slack link preview, imessage link preview, link unfurler, opengraph debugger, social card preview, og debugger, check open graph tags, preview link before sharing, twitter card preview, facebook debugger alternative',
-    intro: 'A link preview checker that fetches with a real server, because a browser cannot: paste any URL and this tool fetches the page server-side — as Slackbot, Twitterbot, facebookexternalhit, a plain browser, or its own UA, since sites really do serve different tags to different bots — follows its redirects with every hop validated, and reads the Open Graph and Twitter-card tags exactly the way each platform reads them. Three mockups then show what your link will look like in Slack, on X, and in iMessage, using the true precedence rules: X reads twitter:* before og:* and renders no card at all without twitter:card, Slack prefers og:* and uses the twitter:card type only to pick the image size, and iMessage shows the og:title over the domain. The og:image itself is fetched once (bounded) and measured, so the preview shows the real file and the tool can compare its actual pixel size against the declared og:image:width and og:image:height — the lie static checkers cannot catch. A lint pass lists everything wrong or missing by name: absent tags, present-but-empty tags, relative or insecure image URLs, titles that will truncate, undeclared dimensions, duplicate tags where only the first one counts, and an unknown twitter:card value. When you have read the findings, copy a corrected, ready-to-paste meta snippet built from what the page already has, with a TODO comment standing in for each gap. Only public URLs are fetched — private and internal addresses are refused, every redirect hop is re-checked, and nothing about the page or your usage is stored. Your last URL and bot choice are remembered on this device.',
+    intro: 'A free link preview checker. Paste a URL to see how it will look when you share it on X (Twitter), Slack and iMessage, and to find missing or wrong Open Graph and Twitter Card tags.',
+    seoContent: `## What is a link preview?
+
+When you paste a link into X (Twitter), Slack or iMessage, the app fetches the page and reads a few meta tags in its head, mainly Open Graph and Twitter Card tags. It uses them to build the title, description and image shown under the link. Link Peek shows you that preview before you share the link.
+
+## How to check a link
+
+1. Paste the full address, starting with https://, into the box. You can also choose which bot to fetch the page as, such as Slackbot or Twitterbot.
+2. Press Preview.
+3. Look at the three previews, then read the list of problems. Copy the corrected meta tags and paste them into your page.
+
+## Good to know
+
+X reads its own twitter: tags first, and shows no card at all if twitter:card is missing. Apps also keep an old preview for a while, so a link you already shared may still look wrong after you fix the tags. Only public web addresses can be checked.`,
   },
   {
     slug: 'dns-sightline',
@@ -91,20 +119,51 @@ export const tools: Tool[] = [
     title: 'List Forge',
     description: 'Convert a column to a comma-separated list — and back again.',
     status: 'live',
-    seoTitle: 'Column to Comma List Converter — List Forge',
-    metaDescription: 'Turn a column into a comma-separated list, CSV row or SQL-ready list, then convert it back. Trim, dedupe, quote and sort in your browser.',
+    seoTitle: 'List to Comma Separated String Converter — List Forge',
+    metaDescription: 'Convert a list to a comma separated string online, or turn a comma separated list back into a column. Add quotes, remove duplicates and sort. No upload.',
     keywords: 'column to comma separated list, comma separator, list to csv, convert column to csv, csv to list, comma separated list generator, delimiter converter, semicolon separated list, pipe separated list, remove duplicates from list, sort list online, add quotes to list, excel column to comma separated',
-    intro: 'A two-pane converter that works in both directions: type or paste a column on the left (one item per line, straight out of a spreadsheet) and the delimited list appears on the right — or paste a delimited list on the right and get the column back. Whichever pane you edit is the source, so nothing is ever rewritten under your cursor. Pick the delimiter (comma, comma + space, semicolon, pipe, space, tab, new line, or your own), wrap each value in double or single quotes, and add a prefix and suffix to every item and to the list as a whole — enough to build an SQL IN clause, a JSON-ish array, or a plain CSV row. Clean the data on the way through: trim items, drop empty lines, collapse extra spaces or strip whitespace entirely, remove duplicates, lowercase, sort A→Z, and reverse. Quoted values are handled properly — a delimiter inside quotes never splits an item, and quotes inside a value are doubled the way CSV expects. A live item and character count sits under the panes; copy either side in one click (or turn on auto-copy), download the list as .csv or .txt, and reset when you are done. Your settings and both panes are remembered in your browser, and everything runs locally with nothing uploaded.',
+    intro: 'Paste a list with one item per line and get a comma separated string. Paste a comma separated string and get a column list back. It all runs in your browser.',
+    seoContent: `## What it does
+
+List Forge turns a column of items, one per line, into a comma separated string, and turns a delimited list back into a column. It is useful for pasting a spreadsheet column into a SQL query, a code array or a CSV row.
+
+## How to convert a list
+
+1. Paste your list into the left box, one item per line. To go the other way, paste the comma separated list into the right box instead.
+2. Open Settings and choose the separator: comma, comma and space, semicolon, pipe, space, tab, new line or your own. You can also wrap each item in quotes, trim spaces, remove duplicates and sort.
+3. Copy the result, or download it as a .csv or .txt file.
+
+## Good to know
+
+The box you type in is the source, and the other box is rebuilt from it. When you turn a list back into a column, a separator inside quotes does not split that item, so "Paris, France" stays as one item. Your lists stay in your browser and are never uploaded.`,
   },
   {
     slug: 'epoch-wizard',
     title: 'Epoch Wizard',
+    heading: 'Epoch Wizard: Epoch Converter',
     description: 'Convert Unix / epoch timestamps to human dates and back.',
     status: 'live',
-    seoTitle: 'Unix Timestamp Converter — Epoch Wizard',
-    metaDescription: 'Convert Unix timestamps to readable dates and back. See seconds, milliseconds, UTC, local time, ISO output and code snippets. No upload.',
+    seoTitle: 'Epoch Converter — Current Unix Timestamp',
+    metaDescription: 'Free epoch converter. See the current epoch time in seconds and milliseconds, turn a Unix timestamp into a date, or a date into a timestamp.',
     keywords: 'unix timestamp converter, epoch converter, epoch time, unix time converter, timestamp to date, date to timestamp, epoch to human date, unix epoch, milliseconds to date, convert timestamp, current unix timestamp, epoch clock, utc timestamp, iso 8601 converter, seconds to duration, unix time now',
-    intro: 'A complete epoch / Unix timestamp workbench that runs entirely in your browser. A live clock ticks the current epoch in seconds, milliseconds, microseconds and nanoseconds, each one copy-able. Paste any timestamp and it detects the unit from the digit count — 10 for seconds, 13 for milliseconds, 16 for microseconds, 19 for nanoseconds — or force a unit yourself, then read it as your local time, UTC, ISO-8601, and a relative "x ago". Go the other way too: type a date as ISO-8601, Y-M-D, M/D/Y, D-M-Y or RFC-2822, choose whether to read it in local time or UTC, and get the epoch back in seconds and milliseconds. Look up the start and end epochs of any day, month or year; break a raw number of seconds down into years, weeks, days, hours and minutes; and copy get-current-plus-convert code for eleven languages including JavaScript, Python, Go, Java, PHP, Ruby, C#, Rust, PostgreSQL, MySQL and shell. Preferences — 12- or 24-hour clock, whether to show UTC, the default unit and time zone — and your last inputs are remembered in your browser. Press C to clear every form. Nothing is uploaded.',
+    intro: 'Epoch converter and current Unix timestamp. See the current epoch time in seconds and milliseconds, turn a timestamp into a date, or a date into a timestamp. It runs in your browser and nothing is uploaded.',
+    seoContent: `## What is epoch time?
+
+Epoch time, also called Unix time or a Unix timestamp, is the number of seconds since 1 January 1970, 00:00:00 UTC. It is a single number, so it means the same moment in every time zone.
+
+## Seconds or milliseconds?
+
+Count the digits. A 10-digit number is in seconds, like 1763200000. A 13-digit number is in milliseconds. JavaScript and Java use milliseconds. Most Unix tools, databases and Python's time.time() use seconds. Paste either one and the converter works out which it is.
+
+## How to convert a timestamp
+
+1. Paste the timestamp into the box.
+2. Read the date in your local time and in UTC.
+3. To go the other way, type a date and read the epoch in seconds and milliseconds.
+
+## The year 2038
+
+Systems that keep epoch seconds in a signed 32-bit number run out on 19 January 2038 at 03:14:07 UTC. Systems with 64-bit time are fine.`,
   },
   {
     slug: 'chroma-lab',
@@ -131,10 +190,23 @@ export const tools: Tool[] = [
     title: 'Hash Smith',
     description: 'Hash text or files with SHA-256/1/384/512 & HMAC, and generate UUIDs.',
     status: 'live',
-    seoTitle: 'SHA Hash, HMAC & UUID Generator — Hash Smith',
-    metaDescription: 'Generate SHA hashes, HMAC signatures and UUIDs from text or files in your browser. Verify checksums locally, without uploads.',
+    seoTitle: 'SHA-256 Hash Generator & UUID Generator — Hash Smith',
+    metaDescription: 'Free SHA-256, SHA-1, SHA-384 and SHA-512 hash generator with HMAC and file checksums, plus a v4 and v7 UUID generator. Runs in your browser, no upload.',
     keywords: 'sha256 hash, sha-256 generator, sha1 hash, sha512 hash, sha384, hash generator, online hash, hmac generator, hmac sha256, checksum calculator, verify checksum, file hash, file checksum, md5 alternative, uuid generator, guid generator, uuid v4, uuid v7, generate uuid, random uuid, base64 hash, crypto subtle',
-    intro: 'A hashing and UUID workbench that runs entirely in your browser on the built-in Web Crypto API, so nothing is ever uploaded. On the Text tab, type or paste anything and get its SHA-1, SHA-256, SHA-384 and SHA-512 digests all at once, live as you type — read each one as hex (lower or UPPERCASE) or Base64, and copy any single digest in one click. Flip to HMAC mode to authenticate the text with a secret key using the same four algorithms, exactly how API requests and webhooks are signed. On the File tab, pick any file to hash it locally with the same algorithms, then paste a published checksum into the verify box: the matching row lights up, so you can confirm a download is intact — the comparison ignores spaces, colons and letter case and checks every algorithm, so you need not know which one was used. On the UUID tab, mint v4 (fully random) or v7 (time-ordered, ideal as a database key) identifiers, or the nil UUID, in bulk up to a hundred at a time, toggling UPPERCASE, hyphens and {braces}, then copy them all. Everything is copy-first, keyboard-friendly — Ctrl/⌘ + Enter copies the current output — and your non-secret inputs and settings are remembered in your browser.',
+    intro: 'Generate a SHA-256 hash (or SHA-1, SHA-384, SHA-512, HMAC) from text or a file, and create UUIDs. It all runs in your browser and nothing is uploaded.',
+    seoContent: `## What it does
+
+Hash Smith makes SHA-1, SHA-256, SHA-384 and SHA-512 hashes of text or a file, signs text with a secret key as an HMAC, and generates UUIDs. A hash is a short fingerprint of your data: the same input always gives the same hash.
+
+## How to use it
+
+1. To hash text, open the Text tab, type or paste, and read the four hashes. Show them as hex or Base64 and copy the one you need.
+2. To check a download, open the File tab, pick the file, and paste the checksum the publisher gave you. The matching row lights up.
+3. For a UUID, open the UUID tab, choose v4 (random) or v7 (time-ordered), pick how many, and press Generate.
+
+## A hash is not a UUID
+
+A SHA-256 hash is 256 bits long and a UUID is 128 bits, and this tool does not turn one into the other. Use the UUID tab to make a new UUID, and the Text tab to hash.`,
   },
   {
     slug: 'cron-whisperer',

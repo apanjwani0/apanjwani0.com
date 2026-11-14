@@ -288,7 +288,15 @@ nav[data-type="hero-nav"] a[data-active] {
 
 @media (pointer: coarse) and (max-width: 640px) {
   :root {
-    --space-header-offset: 6.3rem;
+    --space-header-offset: 6.3rem; /* the two-line nav on tool, game and other pages: ~101px */
+  }
+
+  /* The home nav is one line, 57px (320 to 412). With the 101px default its hero
+     frame sat 44px low until nav-ui.ts measured the nav, then jumped up: 0.088 of
+     the home page's 0.099 CLS (15 Nov 2026). Scoped to the hero so other pages keep
+     the default that matches their nav. */
+  section[data-type="hero"][data-hero] {
+    --space-header-offset: 3.5625rem;
   }
 
   nav[data-type="hero-nav"] {

@@ -48,9 +48,12 @@ export function cronPresetSeoTitle(p: CronPreset): string {
   return long.length <= 60 ? long : `${p.title} (${p.expr}) Explained`
 }
 
-/** The preset page's meta description: the name, the expression, then what it reads as. */
+/** The preset page's meta description: the name, the expression, what it reads
+ *  as, then what the page offers. Kept within 120-160 characters. */
 export function cronPresetDescription(p: CronPreset): string {
-  return `${p.title}: ${p.expr}. ${cronPresetCopy(p.expr).describe}`
+  const base = `${p.title}: the cron expression ${p.expr} reads as "${cronPresetCopy(p.expr).describe}"`
+  const long = `${base} See its next run times and edit it in Cron Whisperer, free.`
+  return long.length <= 160 ? long : `${base} Try it in Cron Whisperer.`
 }
 
 export function cronPreset(slug: string | undefined): CronPreset | undefined {

@@ -31,6 +31,8 @@ export interface DriftfieldMode {
   seoTitle: string
   description: string
   keywords: string
+  /** Optional short how-to, markdown. Rendered under the engine like a tool's `seoContent`. */
+  seoContent?: string
 }
 
 export const DRIFTFIELD_MODES: DriftfieldMode[] = [
@@ -69,10 +71,23 @@ export const DRIFTFIELD_MODES: DriftfieldMode[] = [
   {
     slug: 'sand-loom',
     title: 'Sand Loom',
-    seoTitle: 'Falling Sand Simulation — Generative Sand Art',
+    seoTitle: 'Falling Sand Game Online — Free Sand Simulator',
     description:
-      'Grains falling one at a time until the pile finds its own critical slope, and every avalanche size becomes possible.',
-    keywords: 'falling sand simulation, sandpile model online, cellular automata sand, self organized criticality demo',
+      'A free falling sand game in your browser. Paint sand, water, fire, lava and more with your mouse and watch simple physics pile, flow and burn.',
+    keywords: 'falling sand game, falling sand simulator, sand simulator, sand physics, falling sand online, cellular automata sand',
+    seoContent: `## What is a falling sand game?
+
+A falling sand game is a small physics sandbox. The screen is a grid of tiny cells, each holding one material, and every material follows a few simple rules. Sand piles up, water flows and finds its level, and fire spreads. There is no goal: you paint and watch what happens.
+
+## How to play
+
+1. Pick a material from the palette: sand, water, stone, wood, plant, fire, oil, lava, acid or salt. The number keys 1 to 9 and 0 pick the first ten.
+2. Click or drag on the canvas to paint it. The Brush slider sets the size, and the Speed and Scale sliders set the pace and the size of the cells.
+3. Press Scene to load a ready-made demo, Pause to stop time, and Clear to start again.
+
+## Things to try
+
+Pour water onto lava and it turns to stone, with steam hissing off. Fire climbs wood and oil. Acid eats through solid material. Sand sinks through water, and oil floats on top of it.`,
   },
   {
     slug: 'starfield-toy',

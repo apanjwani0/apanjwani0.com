@@ -4,6 +4,7 @@ export const prerender = false
 import Base from '../layouts/Base.astro'
 import JsonLd from '../components/JsonLd.astro'
 import { getSite } from '../lib/config'
+import { existingOgHubCardPath } from '../lib/og'
 import { profilePageJsonLd, webSiteJsonLd } from '../lib/jsonld'
 import { safeEmailAddress } from '../lib/config-schema'
 import { safeExternalUrl, safeInternalPath } from '../lib/security'
@@ -11,6 +12,7 @@ import '../styles/home.css'
 import '../styles/hero-network.css'
 
 const site = await getSite(Astro.locals)
+const ogCard = await existingOgHubCardPath('home')
 
 // Bespoke hero line for the landing page. site.tagline stays the role line used
 // for SEO/meta and the rest of the site. The owner asked for no tools or games
@@ -53,7 +55,7 @@ const siteLd = webSiteJsonLd({
 })
 ---
 
-<Base bare starfield={false} description={homeDescription}>
+<Base bare starfield={false} description={homeDescription} ogCard={ogCard}>
   <JsonLd json={ldJson} />
   <JsonLd json={siteLd} />
 

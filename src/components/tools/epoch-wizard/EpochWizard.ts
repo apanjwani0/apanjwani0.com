@@ -259,12 +259,14 @@ class EpochWizardTool extends HTMLElement {
   connectedCallback() {
     this.settings = this.loadSettings()
     const nowSec = Math.floor(Date.now() / 1000)
+    // The page renders the h1 from the tool's config (`heading`); keep it rather than a second copy here.
+    const heading = this.querySelector('h1')?.textContent?.trim() || 'Epoch Wizard'
 
     this.innerHTML = `
       <div data-type="tool-page" data-tool="epoch-wizard">
         <div data-type="tool-header">
-          <h1>Epoch Wizard</h1>
-          <p>Convert Unix / epoch timestamps to human dates and back. A live clock in seconds, milliseconds, microseconds and nanoseconds; auto unit detection; UTC and local time; start/end-of-period epochs; a duration breakdown; and copy-ready code in eleven languages. Everything runs in your browser — press <kbd>C</kbd> to clear every form.</p>
+          <h1>${escapeHtml(heading)}</h1>
+          <p>Epoch converter and current Unix timestamp. See the current epoch time in seconds and milliseconds, turn a timestamp into a date, or a date into a timestamp. A live clock, UTC and local time, and copy-ready code in eleven languages. Everything runs in your browser. Press <kbd>C</kbd> to clear every form.</p>
         </div>
 
         <div data-group="toolbar">

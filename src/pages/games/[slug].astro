@@ -2,7 +2,7 @@
 export const prerender = false
 
 import Base from '../../layouts/Base.astro'
-import { getSite, getGames, getLearnings } from '../../lib/config'
+import { getSite, getGames, getLearnings, getTools } from '../../lib/config'
 import { render } from '../../lib/markdown'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import JsonLd from '../../components/JsonLd.astro'
@@ -11,6 +11,7 @@ import RelatedLinks from '../../components/RelatedLinks.astro'
 import { webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
+import { relatedLinks } from '../../lib/tools'
 import { MOVED_GAMES } from '../../lib/driftfield'
 import { getInterest } from '../../lib/interest'
 import { learningsAboutEmbed } from '../../lib/learnings'
@@ -27,10 +28,11 @@ if (slug === 'wallpaper-forge') return Astro.redirect('/tools/driftfield', 301)
 const movedGame = MOVED_GAMES[slug as string]
 if (movedGame) return Astro.redirect(movedGame, 301)
 
-const [site, games, learnings] = await Promise.all([
+const [site, games, learnings, tools] = await Promise.all([
   getSite(Astro.locals),
   getGames(Astro.locals),
   getLearnings(Astro.locals),
+  getTools(Astro.locals),
 ])
 const game = games.find(g => g.slug === slug && g.enabled)
 
@@ -46,6 +48,7 @@ const liveGame = games.find(g => isPlayableGame(g) && g.slug !== slug)
 // link it from — and the article's own hub is otherwise its only way in.
 const stories = learningsAboutEmbed(slug as string, learnings)
   .map(l => ({ title: l.title, href: `/learnings/${l.slug}` }))
+const related = relatedLinks(`/games/${slug}`, tools, games)
 const pageDescription = game.metaDescription || game.description
 const gameIntro = game.intro || game.description
 const gameIntroHtml = render(gameIntro)
@@ -178,6 +181,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
     </>
   )}
   {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
+  <RelatedLinks heading="Related" items={related} />
   <RelatedLinks heading="Read about it" items={stories} />
 
   {GameTag && slug === 'poker-trainer' && (
