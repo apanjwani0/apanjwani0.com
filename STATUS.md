@@ -4,7 +4,10 @@ Session pickup. Rewritten each session, not appended. Last updated 15 Nov 2026.
 
 ## Branches
 
-- `origin/main` is live at PR #61's merge (`38e122b`); `develop` carries the same content.
+- `origin/main` is live at PR #64's merge (`1bed06f`); `develop` carries the same content.
+- 15 Nov, late: the image runs as uid 1001, the owner of `/opt/portfolio/data` (#63). From 11 Aug it ran as
+  uid 100 and no data file ever saved in production (visits, analytics, both leaderboards, the interest
+  counter, webhook bins); verified saving after the deploy. Cloudflare now rate-limits 50 requests / 10 s per IP.
 - 15 Nov shipped: search fixes (#58, #59: Epoch Wizard title and how-to, plain how-tos on six global-search
   pages, hand-picked Related rows asserted in security-smoke, `/experience` 301 to `/`, the phone header
   offset scoped to the home hero) and security fixes (#60, #61: `/_image` returns 404, IPv6 rate keys by /64
@@ -19,6 +22,12 @@ Tracked in `~/Projects/STATUS.md` → Your moves → "Sites: search, security, a
 environment limited to `main`, Dependabot alerts and secret scanning, the origin lock, request indexing for
 the rewritten pages, Bing Webmaster Tools, and describing the Cloudflare Worker in front of the site. Also
 still open from 3 Nov: `resumeUrl` in `src/config/site.json`, and the optional Markdown cache bypass rule.
+
+## Parked with the `/projects` work (Aman, 15 Nov)
+
+- `/opt/portfolio/data/github-stats.json` is root-owned, so the GitHub stats cache cannot refresh (frozen
+  since 10 Aug; `writeCache` ignores the error). Fix when `/projects` comes back:
+  `ssh portfolio 'sudo chown 1001:1001 /opt/portfolio/data/github-stats.json'`.
 
 ## Open from 3 Nov (not rechecked 15 Nov)
 
