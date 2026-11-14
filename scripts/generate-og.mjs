@@ -190,6 +190,7 @@ async function main() {
   // The three hubs. A hub link is the one most likely to be posted somewhere
   // ("free dev tools"), and it used to unfurl as the portrait avatar.
   const hubs = [
+    { file: ogHubCardFile('home'), label: 'Portfolio', title: 'Aman Panjwani', description: 'Builds payment systems by day, and apps, tools and games by night.' },
     { file: ogHubCardFile('tools'), label: 'Tools', title: 'Free online tools', description: 'A webhook tester, a TLS chain checker, a DNS diff, a JWT verifier and more.' },
     { file: ogHubCardFile('games'), label: 'Games', title: 'Browser games', description: 'A daily word puzzle, a typing race, a hex-colour daily, a fractal deep-zoom and a poker trainer.' },
     { file: ogHubCardFile('learnings'), label: 'Learnings', title: 'Learnings', description: 'Short, visual explainers of how things work, with diagrams you can play with.' },

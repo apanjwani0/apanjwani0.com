@@ -51,6 +51,7 @@ without touching the build:
    traffic; any 5xx gets `no-store`, so the edge never keeps a fault. The
    sitemap, `/llms.txt`, `/llms-full.txt` and `/feed.xml` get `s-maxage=3600`.
 
+- Files in `public/` (`/oat.min.css`, `/oat.min.js`, icons) are served by the Node adapter's static handler before the middleware runs, so they carry `max-age=0` and the middleware cannot change that. A longer cache for them is a Cloudflare Cache Rule (Edge TTL or Browser TTL on those paths, dashboard, owner's side), not a code change.
 - `max-age=0` is deliberate: browser-cached HTML can't be purged. Keep
   Cloudflare's Browser Cache TTL on "Respect Existing Headers" or it overrides
   this.

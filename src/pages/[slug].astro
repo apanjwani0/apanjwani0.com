@@ -9,6 +9,10 @@ if (!slug) {
   return new Response(null, { status: 404, statusText: 'Not Found' })
 }
 
+// The experience section is retired (it stays in the resume data, not as a page).
+// Google still ranks the old URL, so it lands on the home page.
+if (slug === 'experience') return Astro.redirect('/', 301)
+
 const normalize = (path: string) => path.replace(/^\/?(blogs\/|games\/)?/, '').replace(/\/$/, '')
 const normalizedSlug = normalize(slug)
 

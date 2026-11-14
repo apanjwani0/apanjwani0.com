@@ -26,7 +26,7 @@ import { isPublishedLearning, type LearningFlags } from './learnings'
 
 /** The page kinds that get a generated card. Doubles as the `public/og/` filename
  *  prefix and the URL segment the card is named after. */
-export type OgCardKind = 'tools' | 'games' | 'learnings'
+export type OgCardKind = 'tools' | 'games' | 'learnings' | 'home'
 
 /** Dimensions of a generated card. */
 export const OG_CARD_WIDTH = 1200

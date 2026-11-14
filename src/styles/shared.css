@@ -288,7 +288,10 @@ nav[data-type="hero-nav"] a[data-active] {
 
 @media (pointer: coarse) and (max-width: 640px) {
   :root {
-    --space-header-offset: 6.3rem;
+    /* Measured 57px (320 to 412) once nav-ui.ts reports it. The token was 6.3rem
+       (~101px), so on a phone the home hero's frame sat 44px low until the script
+       ran, then jumped up: the 0.088 of the home page's 0.099 CLS (15 Nov 2026). */
+    --space-header-offset: 3.5625rem;
   }
 
   nav[data-type="hero-nav"] {
