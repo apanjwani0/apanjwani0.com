@@ -1247,10 +1247,12 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   // The Related map stays hand-picked and real: a typo'd slug would drop out silently (the row
   // filters to live pages), and a long list is the crawl noise the old sibling rows were.
   const productPaths = new Set([...tools.map(t => `/tools/${t.slug}`), ...games.map(g => `/games/${g.slug}`)])
+  // A target must be public: a disabled one drops out at runtime and the row silently shrinks.
+  const livePaths = new Set([...tools.filter(t => t.status === 'live').map(t => `/tools/${t.slug}`), ...games.filter(isPlayableGame).map(g => `/games/${g.slug}`)])
   for (const [from, targets] of Object.entries(RELATED)) {
     assert.ok(productPaths.has(from), `RELATED key ${from} is a real tool or game`)
     assert.ok(targets.length >= 3 && targets.length <= 4, `RELATED ${from} lists 3 or 4 pages, not ${targets.length}`)
-    for (const t of targets) assert.ok(productPaths.has(t) && t !== from, `RELATED ${from} -> ${t} is another real tool or game`)
+    for (const t of targets) assert.ok(livePaths.has(t) && t !== from, `RELATED ${from} -> ${t} is another live tool or playable game`)
   }
   for (const [name, src] of [['tools/[slug].astro', toolPage], ['games/[slug].astro', await read('pages/games/[slug].astro')]]) {
     assert.ok((src.match(/heading="Related"/g) ?? []).length <= 1, `${name} renders at most one Related row`)

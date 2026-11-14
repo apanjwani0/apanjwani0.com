@@ -148,6 +148,7 @@ function validTools(value: unknown): boolean {
     && (tool.status !== 'external' || safeExternalUrl(tool.href) !== null)
     && (tool.href === undefined || tool.status === 'external' || safeExternalUrl(tool.href) !== null)
     && optionalString(tool.seoTitle)
+    && optionalString(tool.heading)
     && optionalString(tool.metaDescription)
     && optionalString(tool.intro)
     && optionalString(tool.seoContent)
