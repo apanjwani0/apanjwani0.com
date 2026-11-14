@@ -1,39 +1,26 @@
 # Status
 
-Session pickup. Rewritten each session, not appended. Last updated 3 Nov 2026.
+Session pickup. Rewritten each session, not appended. Last updated 15 Nov 2026.
 
 ## Branches
 
-- `origin/main` is live at PR #44's merge (`fcb17d2`). `develop` and `main`
-  are level.
-- `claude/jolly-maxwell-kqmw95` is PR #45 (→ `develop`): the whole of
-  [docs/plans/polish-2026-11.md](docs/plans/polish-2026-11.md) built on one
-  branch after the owner took its eleven decisions (plan §8). Plan §7 is the
-  per-row status. Each row's assertions live in `scripts/smoke/<area>.mjs`.
-- Agent pushes use the `GITHUB_PAT` credential over git; the GitHub MCP
-  integration is read-only, and Copilot code review is not enabled on the repo.
+- `origin/main` is live at PR #61's merge (`38e122b`); `develop` carries the same content.
+- 15 Nov shipped: search fixes (#58, #59: Epoch Wizard title and how-to, plain how-tos on six global-search
+  pages, hand-picked Related rows asserted in security-smoke, `/experience` 301 to `/`, the phone header
+  offset scoped to the home hero) and security fixes (#60, #61: `/_image` returns 404, IPv6 rate keys by /64
+  plus shared caps on every writing route, synchronous origin-lock compare, c-ares lookups for visitor names,
+  a webhook sweep timer, env-file and `sha-` tag deploys, Astro 7.4.12). Review page:
+  `~/Projects/docs/security/review-2026-11-15-sites.html`.
+- The www → apex Redirect Rule is back in Cloudflare (15 Nov), so `origin:check` should be green again.
 
 ## Owner's pending moves
 
-1. Review PR #45. It is large by design (one branch, the owner's call); read
-   it row by row against plan §7. Merge to `develop`, then `main` as usual.
-2. After the deploy: purge the Cloudflare cache, run `npm run origin:check`.
-   Two of its new checks fail until you act: add a Cloudflare Redirect Rule
-   from `www` to the apex (the check's message names the settings), and the
-   IndexNow key file answers only once deployed.
-3. Verify the site in Bing Webmaster Tools (the IndexNow key doubles as
-   proof) and import from Search Console.
-4. Set `resumeUrl` in `src/config/site.json` if you want the résumé link; the
-   email is already there (D-1).
-5. Close the origin lock (AGENTS.md → *Origin exposure*).
-6. Export the Search Console "Not found (404)" URL list (3 pages); 301s
-   follow if successors exist. Do not click "Validate fix" on the redirect,
-   noindex and canonical rows: they fail by design.
-7. Optional: a Cloudflare Cache Rule that bypasses the cache when `Accept`
-   contains `text/markdown`, so article Markdown negotiation works at the edge
-   (docs/operations.md). The `.md` links work without it.
+Tracked in `~/Projects/STATUS.md` → Your moves → "Sites: search, security, agency (15 Nov)": Prod
+environment limited to `main`, Dependabot alerts and secret scanning, the origin lock, request indexing for
+the rewritten pages, Bing Webmaster Tools, and describing the Cloudflare Worker in front of the site. Also
+still open from 3 Nov: `resumeUrl` in `src/config/site.json`, and the optional Markdown cache bypass rule.
 
-## Open at the end of the session
+## Open from 3 Nov (not rechecked 15 Nov)
 
 - **Webhook Inspector (plan §4A)**: all six items shipped (SSE stream with a
   poll fallback, replay through Link Peek's guard, copy-as-curl of the captured
@@ -64,16 +51,15 @@ Session pickup. Rewritten each session, not appended. Last updated 3 Nov 2026.
   holds the permalink. Link Peek fetches through `node:http(s)` with a pinned
   lookup, not `fetch`. Old poker `?s=` permalinks for biased spots deal a
   different hero hand than before the bias (D-11).
-- **Search Console (3 Nov screenshot)**: 0 "Discovered, not indexed" (was 14),
-  2 "Crawled, not indexed". PageSpeed on the trainer: all four vitals green,
-  Speed Index amber (3.8 s) from the game chunk arriving late; a modulepreload
-  per embed shipped, worth about 150 ms on a latency-bound link and little on a
-  bandwidth-bound one. The remaining lever there is bytes.
+- **Search (15 Nov)**: 53 clicks and 1.4k impressions in 16 months, average position 46, one external link.
+  Topics by impressions: epoch (pos 81), falling sand (70), link preview (59), poker (24, nearest page one),
+  webhook (85). Results of the 15 Nov fixes show in early Dec. PageSpeed mobile 15 Nov: home 98, CLS 0.011.
 
 ## Next
 
-1. Finish the Webhook Inspector items left open above, then add the new
+1. Dependabot: close #53 (superseded by the 7.4.12 bump); review #55 (`marked` 18 touches `markdown.ts`).
+2. Finish the Webhook Inspector items left open above, then add the new
    routes to `src/lib/openapi.ts` and the MCP tools.
-2. Playwright smoke in CI (CLS on five pages, nonce parity on the 404, 375 px
+3. Playwright smoke in CI (CLS on five pages, nonce parity on the 404, 375 px
    sweep).
-3. The three articles (§2J), drafted figure-first under `learnings-voice.md`.
+4. The three articles (§2J), drafted figure-first under `learnings-voice.md`.
