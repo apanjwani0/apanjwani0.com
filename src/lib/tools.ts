@@ -1,3 +1,5 @@
+import { isPlayableGame, type GameFlags } from './games'
+
 /**
  * Tools that cannot run in the browser alone — each one needs this site's own
  * origin server. That is the quality bar AGENTS.md sets for a new tool ("a tool
@@ -75,3 +77,49 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
 
 /** The heading for tools no group names (a new tool, a wip or external one). */
 export const UNGROUPED_TITLE = 'More tools'
+
+/**
+ * The "Related" row on a tool or game page: three or four hand-picked pages
+ * that belong with it, keyed by the page's own path. A fact about the shelf
+ * (like TOOL_GROUPS), so it lives here and not in the regenerated config. A
+ * target that is not live drops out, so a retired page never leaves a dead link.
+ */
+const RELATED: Record<string, readonly string[]> = {
+  '/tools/epoch-wizard': ['/tools/cron-whisperer', '/tools/regex-lab', '/tools/json-tidy', '/tools/codec-forge'],
+  '/tools/cron-whisperer': ['/tools/epoch-wizard', '/tools/regex-lab', '/tools/hash-smith'],
+  '/tools/regex-lab': ['/tools/json-tidy', '/tools/list-forge', '/tools/cron-whisperer', '/tools/codec-forge'],
+  '/tools/json-tidy': ['/tools/codec-forge', '/tools/regex-lab', '/tools/list-forge', '/tools/epoch-wizard'],
+  '/tools/list-forge': ['/tools/json-tidy', '/tools/regex-lab', '/tools/codec-forge'],
+  '/tools/codec-forge': ['/tools/json-tidy', '/tools/hash-smith', '/tools/token-bench', '/tools/list-forge'],
+  '/tools/hash-smith': ['/tools/codec-forge', '/tools/token-bench', '/tools/webhook-inspector', '/tools/json-tidy'],
+  '/tools/token-bench': ['/tools/hash-smith', '/tools/codec-forge', '/tools/webhook-inspector', '/tools/json-tidy'],
+  '/tools/chroma-lab': ['/games/hue-hunt', '/tools/driftfield', '/tools/draftboard'],
+  '/tools/webhook-inspector': ['/tools/link-peek', '/tools/dns-sightline', '/tools/chainsaw', '/tools/hash-smith'],
+  '/tools/link-peek': ['/tools/webhook-inspector', '/tools/dns-sightline', '/tools/chainsaw', '/tools/codec-forge'],
+  '/tools/dns-sightline': ['/tools/chainsaw', '/tools/link-peek', '/tools/webhook-inspector'],
+  '/tools/chainsaw': ['/tools/dns-sightline', '/tools/link-peek', '/tools/webhook-inspector'],
+  '/tools/draftboard': ['/tools/flowmap', '/tools/list-forge', '/tools/json-tidy'],
+  '/tools/flowmap': ['/tools/draftboard', '/tools/driftfield', '/tools/json-tidy'],
+  '/tools/driftfield': ['/tools/chroma-lab', '/tools/flowmap', '/games/deep-shore', '/games/maze-weaver'],
+  '/tools/audio-transcriber': ['/tools/draftboard', '/tools/json-tidy', '/tools/list-forge'],
+  '/games/poker-trainer': ['/games/quintle', '/games/2048', '/games/type-trial', '/games/deep-shore'],
+  '/games/deep-shore': ['/tools/driftfield', '/games/maze-weaver', '/games/2048', '/games/poker-trainer'],
+  '/games/2048': ['/games/quintle', '/games/hue-hunt', '/games/maze-weaver', '/games/poker-trainer'],
+  '/games/quintle': ['/games/2048', '/games/type-trial', '/games/hue-hunt', '/games/poker-trainer'],
+  '/games/maze-weaver': ['/games/deep-shore', '/games/2048', '/games/hue-hunt', '/tools/driftfield'],
+  '/games/type-trial': ['/games/quintle', '/games/2048', '/games/poker-trainer'],
+  '/games/hue-hunt': ['/tools/chroma-lab', '/games/quintle', '/games/2048', '/games/maze-weaver'],
+}
+
+/** The Related row for a page path, from the tools and games that are live. */
+export function relatedLinks(
+  path: string,
+  tools: { slug: string; title: string; status: string }[],
+  games: (GameFlags & { title: string })[],
+): { title: string; href: string }[] {
+  const live = new Map<string, string>([
+    ...tools.filter(t => t.status === 'live').map(t => [`/tools/${t.slug}`, t.title] as [string, string]),
+    ...games.filter(isPlayableGame).map(g => [`/games/${g.slug}`, g.title] as [string, string]),
+  ])
+  return (RELATED[path] ?? []).filter(h => live.has(h)).map(h => ({ title: live.get(h)!, href: h }))
+}

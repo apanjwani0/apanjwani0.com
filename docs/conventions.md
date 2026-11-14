@@ -111,10 +111,10 @@ are asserted by `npm run security:smoke`.
   fork; anything site-specific stays in this repo.
 - **SSR everywhere**, `/tools` included: KV reads and the middleware headers
   need it.
-- **SEO support copy is off.** `seoContent` still renders when set, but every
-  entry ships empty: generated how-to and FAQ filler is boring, and dropping it
-  is a deliberate SEO trade-off. Anything added there must earn its place like
-  an article.
+- **SEO support copy is short and human.** `seoContent` renders when set (Aman,
+  15 Nov 2026: a tool page may carry a short written how-to). Visitors read it, so
+  it is plain words, short and genuinely useful: no keyword stuffing, no
+  generated FAQ filler. Most entries still ship empty; Epoch Wizard has one.
 - **StarField** runs behind the plain pages that keep `Base.astro`'s default
   (the 404, blogs, a learning with no figure). Keep it off tool and game detail
   pages (CPU), the card hubs and the home page, whose hero draws its own stars.

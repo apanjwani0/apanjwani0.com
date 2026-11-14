@@ -5,11 +5,12 @@ import ToolBase from '../../layouts/ToolBase.astro'
 import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import JsonLd from '../../components/JsonLd.astro'
 import RelatedLinks from '../../components/RelatedLinks.astro'
-import { getSite, getTools, getLearnings } from '../../lib/config'
+import { getSite, getTools, getLearnings, getGames } from '../../lib/config'
 import { webAppJsonLd } from '../../lib/jsonld'
 import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import { existingOgCardPath, toolHasOgCard } from '../../lib/og'
 import { render } from '../../lib/markdown'
+import { relatedLinks } from '../../lib/tools'
 import { validateSession } from '../../lib/session'
 import { getSessionToken } from '../../lib/security'
 import { learningsAboutEmbed } from '../../lib/learnings'
@@ -45,10 +46,11 @@ const MOVED: Record<string, string> = {
 const movedTo = MOVED[slug as string]
 if (movedTo) return Astro.redirect(movedTo, 301)
 
-const [site, tools, learnings] = await Promise.all([
+const [site, tools, learnings, games] = await Promise.all([
   getSite(Astro.locals),
   getTools(Astro.locals),
   getLearnings(Astro.locals),
+  getGames(Astro.locals),
 ])
 const tool = tools.find(t => t.slug === slug)
 
@@ -95,6 +97,11 @@ const TOOL_SLUGS = new Set([
 ])
 const NO_CHROME = new Set(['audio-transcriber'])
 const ToolTag = TOOL_SLUGS.has(slug as string) ? `${slug}-tool` as any : undefined
+// Epoch Wizard names itself for what people search, and shows the epoch at
+// request time, dated, so the cached HTML (up to 10 min old) never reads as live.
+const h1Text = slug === 'epoch-wizard' ? 'Epoch Wizard: Epoch Converter' : tool.title
+const epochNowMs = Date.now()
+const epochNowIso = new Date(epochNowMs).toISOString().slice(0, 19).replace('T', ' ')
 const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
 // The article about this tool, if one is published.
 const stories = learningsAboutEmbed(tool.slug, learnings)
@@ -103,6 +110,7 @@ const stories = learningsAboutEmbed(tool.slug, learnings)
 const cronPresetLinks = slug === CRON_WHISPERER_SLUG && isCronWhispererPublic(tools)
   ? CRON_PRESETS.map(p => ({ title: p.title, href: `/tools/${CRON_WHISPERER_SLUG}/${p.slug}` }))
   : []
+const related = relatedLinks(`/tools/${slug}`, tools, games)
 // Card only when the generator emits one AND the PNG is really on disk — a
 // forgotten `npm run og` must degrade to the avatar, not a 404ing og:image.
 const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug) : undefined
@@ -123,11 +131,15 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
   <Breadcrumbs items={crumbs} inset />
   {ToolTag && (
     <ToolTag data-tool={slug}>
-      {!NO_CHROME.has(slug as string) && <h1>{tool.title}</h1>}
+      {!NO_CHROME.has(slug as string) && <h1>{h1Text}</h1>}
       {!NO_CHROME.has(slug as string) && <p>{tool.intro || tool.description}</p>}
+      {slug === 'epoch-wizard' && (
+        <p data-type="epoch-now">Epoch time at {epochNowIso} UTC (when this page was generated): <strong>{Math.floor(epochNowMs / 1000)}</strong> seconds, <strong>{epochNowMs}</strong> milliseconds. The live clock starts as soon as the page loads.</p>
+      )}
     </ToolTag>
   )}
   {toolSeoContentHtml && <section data-type="seo-support" data-inset set:html={toolSeoContentHtml} />}
+  <RelatedLinks heading="Related" items={related} inset />
   <RelatedLinks heading="Common schedules" items={cronPresetLinks} inset />
   <RelatedLinks heading="Read about it" items={stories} inset />
 </ToolBase>

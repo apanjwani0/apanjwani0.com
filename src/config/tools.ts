@@ -101,10 +101,27 @@ export const tools: Tool[] = [
     title: 'Epoch Wizard',
     description: 'Convert Unix / epoch timestamps to human dates and back.',
     status: 'live',
-    seoTitle: 'Unix Timestamp Converter — Epoch Wizard',
-    metaDescription: 'Convert Unix timestamps to readable dates and back. See seconds, milliseconds, UTC, local time, ISO output and code snippets. No upload.',
+    seoTitle: 'Epoch Converter — Current Unix Timestamp',
+    metaDescription: 'Free epoch converter. See the current epoch time in seconds and milliseconds, turn a Unix timestamp into a date, or a date into a timestamp.',
     keywords: 'unix timestamp converter, epoch converter, epoch time, unix time converter, timestamp to date, date to timestamp, epoch to human date, unix epoch, milliseconds to date, convert timestamp, current unix timestamp, epoch clock, utc timestamp, iso 8601 converter, seconds to duration, unix time now',
-    intro: 'A complete epoch / Unix timestamp workbench that runs entirely in your browser. A live clock ticks the current epoch in seconds, milliseconds, microseconds and nanoseconds, each one copy-able. Paste any timestamp and it detects the unit from the digit count — 10 for seconds, 13 for milliseconds, 16 for microseconds, 19 for nanoseconds — or force a unit yourself, then read it as your local time, UTC, ISO-8601, and a relative "x ago". Go the other way too: type a date as ISO-8601, Y-M-D, M/D/Y, D-M-Y or RFC-2822, choose whether to read it in local time or UTC, and get the epoch back in seconds and milliseconds. Look up the start and end epochs of any day, month or year; break a raw number of seconds down into years, weeks, days, hours and minutes; and copy get-current-plus-convert code for eleven languages including JavaScript, Python, Go, Java, PHP, Ruby, C#, Rust, PostgreSQL, MySQL and shell. Preferences — 12- or 24-hour clock, whether to show UTC, the default unit and time zone — and your last inputs are remembered in your browser. Press C to clear every form. Nothing is uploaded.',
+    intro: 'Epoch converter and current Unix timestamp. See the current epoch time in seconds and milliseconds, turn a timestamp into a date, or a date into a timestamp. It runs in your browser and nothing is uploaded.',
+    seoContent: `## What is epoch time?
+
+Epoch time, also called Unix time or a Unix timestamp, is the number of seconds since 1 January 1970, 00:00:00 UTC. It is a single number, so it means the same moment in every time zone.
+
+## Seconds or milliseconds?
+
+Count the digits. A 10-digit number is in seconds, like 1763200000. A 13-digit number is in milliseconds. JavaScript and Java use milliseconds. Most Unix tools, databases and Python's time.time() use seconds. Paste either one and the converter works out which it is.
+
+## How to convert a timestamp
+
+1. Paste the timestamp into the box.
+2. Read the date in your local time and in UTC.
+3. To go the other way, type a date and read the epoch in seconds and milliseconds.
+
+## The year 2038
+
+Systems that keep epoch seconds in a signed 32-bit number run out on 19 January 2038 at 03:14:07 UTC. Systems with 64-bit time are fine.`,
   },
   {
     slug: 'chroma-lab',
