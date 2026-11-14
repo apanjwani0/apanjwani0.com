@@ -5,6 +5,7 @@ import {
   normalizeAnalyticsEvent,
   parseAnalyticsPath,
   pruneAnalytics,
+  recordAnalyticsEvent,
   summarizeAnalytics,
   updateAnalyticsAggregate,
   vitalBucketIndex,
@@ -100,5 +101,30 @@ const oneRow = JSON.stringify({ c: store.c }).length
 assert.deepEqual(Object.keys(capAnalyticsStore(store, 10 ** 6)), ['a', 'b', 'c'])
 assert.deepEqual(Object.keys(capAnalyticsStore(store, oneRow * 2 + 4)), ['b', 'c'])
 assert.deepEqual(Object.keys(capAnalyticsStore(store, 1)), ['c'])
+
+// A data dir the server cannot write (15 Nov: wrong uid on the box) loses the count but
+// must not throw, or every beacon answers 500.
+{
+  const { mkdtempSync, mkdirSync, chmodSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const home = process.cwd()
+  const dir = mkdtempSync(join(tmpdir(), 'analytics-'))
+  mkdirSync(join(dir, 'data'))
+  chmodSync(join(dir, 'data'), 0o500)
+  process.chdir(dir)
+  const origError = console.error
+  let logged = 0
+  console.error = () => { logged++ }
+  try {
+    await recordAnalyticsEvent({}, event)
+  } finally {
+    console.error = origError
+    process.chdir(home)
+    chmodSync(join(dir, 'data'), 0o700)
+    rmSync(dir, { recursive: true })
+  }
+  assert.equal(logged, 1)
+}
 
 console.log('analytics smoke ok')
