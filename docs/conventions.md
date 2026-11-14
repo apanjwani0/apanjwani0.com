@@ -114,7 +114,7 @@ are asserted by `npm run security:smoke`.
 - **SEO support copy is short and human.** `seoContent` renders when set (Aman,
   15 Nov 2026: a tool page may carry a short written how-to). Visitors read it, so
   it is plain words, short and genuinely useful: no keyword stuffing, no
-  generated FAQ filler. Most entries still ship empty; Epoch Wizard has one.
+  generated FAQ filler. Most entries still ship empty. These have one: Epoch Wizard, Link Peek, List Forge, Hash Smith, Webhook Inspector, Poker Trainer and the Sand Loom Driftfield mode (`DRIFTFIELD_MODES`).
 - **StarField** runs behind the plain pages that keep `Base.astro`'s default
   (the 404, blogs, a learning with no figure). Keep it off tool and game detail
   pages (CPU), the card hubs and the home page, whose hero draws its own stars.
