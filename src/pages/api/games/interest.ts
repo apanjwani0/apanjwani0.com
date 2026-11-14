@@ -37,6 +37,8 @@ const NO_STORE = { 'Cache-Control': 'no-store', 'Content-Type': 'application/jso
  *  human and a wall for a script. Reads are one per page view. */
 const allowVote = createRateLimiter(60_000, 8)
 const allowRead = createRateLimiter(60_000, 60)
+// Site-wide: one press per visitor, so 240 a minute is a launch-day crowd.
+const allowVoteGlobal = createRateLimiter(60_000, 240)
 const MAX_BODY_BYTES = 256
 
 function json(body: unknown, status = 200): Response {
@@ -61,7 +63,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
 export const POST: APIRoute = async ({ request, locals }) => {
   if (!isSameOrigin(request)) return json({ error: 'forbidden' }, 403)
-  if (!allowVote(rateLimitKey(request))) return json({ error: 'rate_limited' }, 429)
+  if (!(allowVote(rateLimitKey(request)) && allowVoteGlobal('global'))) return json({ error: 'rate_limited' }, 429)
 
   let payload: unknown
   try {

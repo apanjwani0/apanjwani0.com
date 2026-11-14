@@ -792,6 +792,26 @@ function flushSync(): void {
   }
 }
 
+/** How often an idle process drops expired bins (the TTL is 6 h, so ten minutes late is harmless). */
+export const WEBHOOK_SWEEP_MS = 10 * 60 * 1000
+// Held on globalThis so a dev hot reload replaces the previous module's timer instead of leaving it running.
+const sweepHolder = globalThis as { __webhookSweepTimer?: ReturnType<typeof setInterval> }
+
+/**
+ * Expire bins on a clock, not only when a store call happens to come in. `sweep`
+ * runs inside every store call, so on a quiet site an expired bin (and its
+ * captured headers and bodies) otherwise sat in memory and in
+ * data/webhook-bins.json long after /terms said it was gone. `dropBin` marks the
+ * store dirty, so the next flush rewrites the file without it. The timer is
+ * unref'd: it never keeps a process alive, so the build, `boot:check` and the
+ * smoke runner exit on their own. Restarting replaces the timer (a test seam).
+ */
+export function startSweeper(everyMs = WEBHOOK_SWEEP_MS): void {
+  if (sweepHolder.__webhookSweepTimer) clearInterval(sweepHolder.__webhookSweepTimer)
+  sweepHolder.__webhookSweepTimer = setInterval(() => sweep(Date.now()), everyMs)
+  ;(sweepHolder.__webhookSweepTimer as unknown as { unref?: () => void }).unref?.()
+}
+
 /**
  * A deploy stops the old container with SIGTERM. Whatever arrived inside the
  * last debounce window would be lost, so write once, synchronously, and exit.
@@ -801,6 +821,7 @@ function flushSync(): void {
 function hookSignals(): void {
   if (signalsHooked) return
   signalsHooked = true
+  startSweeper()
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => {
       flushSync()
@@ -808,3 +829,6 @@ function hookSignals(): void {
     })
   }
 }
+
+// Inside the running site the clock starts with the module, so a quiet process still expires bins.
+if (runtimeWantsPersistence()) startSweeper()

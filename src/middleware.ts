@@ -49,7 +49,7 @@ function buildCsp(nonce: string): string {
 
 export const onRequest = defineMiddleware(async (context, next) => {
   // Origin lock — see isFromCloudflare. No-op until ORIGIN_SHARED_SECRET is set.
-  if (!(await isFromCloudflare(context.request))) {
+  if (!(isFromCloudflare(context.request))) {
     // 404, not 403: a bypass attempt learns nothing about why it failed.
     // no-store: if the Transform Rule is ever broken, Cloudflare would forward
     // header-less requests — a cacheable lock-out 404 would outlive the fix.

@@ -37,6 +37,8 @@ import {
   safeResponseContentType,
   sanitizeStoredRequest,
   serializeBins,
+  startSweeper,
+  WEBHOOK_SWEEP_MS,
   setBinResponse,
   subscribeBin,
   validateBinResponse as validateBinResponseFor,
@@ -68,6 +70,7 @@ import {
   REPLAY_MAX_RESPONSE_BYTES,
   REPLAY_PREVIEW_BYTES,
   REPLAY_TIMEOUT_MS,
+  REPLAY_USER_AGENT,
   replayRequest,
   replayResolvePinned,
 } from '../../src/lib/webhook-replay.ts'
@@ -555,7 +558,7 @@ ok('copy as curl keeps method, headers and exact body bytes, drops hop-by-hop an
       headers: [
         { name: 'host', value: 'apanjwani0.com' }, { name: 'connection', value: 'close' }, { name: 'cf-connecting-ip', value: '203.0.113.9' },
         { name: 'x-forwarded-for', value: '203.0.113.9' }, { name: 'content-type', value: 'application/octet-stream' },
-        { name: 'stripe-signature', value: 't=1,v1=abc' },
+        { name: 'stripe-signature', value: 't=1,v1=abc' }, { name: 'user-agent', value: 'Stripe/1.0 (the original sender)' },
       ],
       bodyText: '{��}', bodyBase64: Buffer.from(bytes).toString('base64'),
     })
@@ -574,6 +577,11 @@ ok('copy as curl keeps method, headers and exact body bytes, drops hop-by-hop an
     assert.equal(got.headers['x-forwarded-for'], undefined)
     assert.equal(got.headers['cf-connecting-ip'], undefined)
     assert.equal(got.headers['x-webhook-inspector-replay'], '1', 'the receiver can tell it is a replay')
+    // A resend names this tool and the site, with where to report abuse; the
+    // captured sender's User-Agent never rides along.
+    assert.equal(got.headers['user-agent'], REPLAY_USER_AGENT, 'the replay carries its own fixed User-Agent')
+    assert.match(REPLAY_USER_AGENT, /^apanjwani0\.com Webhook Inspector \(replay; abuse: \S+@\S+\)$/)
+    assert.ok(!got.headers['user-agent'].includes('Stripe'), 'the captured User-Agent is replaced')
 
     const big = await replayRequest(mkReq({ method: 'GET', bodyText: '', size: 0 }), 'http://public.example.test/big', opts)
     assert.equal(big.ok, true)
@@ -1077,6 +1085,27 @@ ok('ndjson export: one captured request per line, oldest first, newline-terminat
     assert.equal(configurePersistence(file), 0, 'a file over the cap is left alone')
     await writeFile(file, '\u0000\u0000garbage', 'utf-8')
     assert.equal(configurePersistence(file), 0, 'garbage is an empty store, not a crash')
+
+    // Expiry runs on a clock. A bin that goes idle on a quiet site, with no store
+    // call after it, still leaves memory AND the file (mutation: remove the
+    // setInterval and the file keeps the bin).
+    assert.equal(configurePersistence(file), 0)
+    const quiet = newBin()
+    recordRequest(quiet, mkReq({ bodyText: 'expires on a quiet site' }))
+    assert.equal(await flushWebhookBins(), true)
+    assert.ok((await readFile(file, 'utf-8')).includes(quiet), 'the file holds the bin')
+    const realNowSweep = Date.now
+    mock.timers.enable({ apis: ['setInterval', 'setTimeout'] })
+    try {
+      startSweeper()
+      Date.now = () => realNowSweep() + WEBHOOK_BIN_TTL_MS + 60_000
+      mock.timers.tick(WEBHOOK_SWEEP_MS)        // the sweep drops the bin and arms the debounced flush
+      mock.timers.tick(WEBHOOK_FLUSH_MS)
+    } finally { Date.now = realNowSweep; mock.timers.reset() }
+    assert.equal(await flushWebhookBins().then(() => true), true)
+    assert.ok(!(await readFile(file, 'utf-8')).includes(quiet), 'the swept bin is gone from data/webhook-bins.json')
+    Date.now = () => realNowSweep() + WEBHOOK_BIN_TTL_MS + 60_000
+    try { assert.equal(listRequests(quiet).length, 0, 'and from memory') } finally { Date.now = realNowSweep }
   } finally {
     configurePersistence(null)
     await rm(dir, { recursive: true, force: true })
@@ -1085,6 +1114,8 @@ ok('ndjson export: one captured request per line, oldest first, newline-terminat
   assert.match(src, /process\.once\(signal, \(\) => \{\s*flushSync\(\)/, 'a SIGTERM (a deploy) flushes once, synchronously')
   assert.match(src, /import\.meta\.env\.SSR === true/, 'persistence is on only inside the running site, never under the smoke runner')
   assert.equal(WEBHOOK_BIN_TTL_MS, 6 * 60 * 60 * 1000, 'the idle window is still six hours')
+  assert.match(src, /\(sweepHolder\.__webhookSweepTimer as unknown as \{ unref\?: \(\) => void \}\)\.unref\?\.\(\)/, 'the sweep timer is unref\'d so it never holds the process open')
+  assert.equal(WEBHOOK_SWEEP_MS, 10 * 60 * 1000)
 }
 ok('bins and their configured responses flush (debounced, atomic, mode 0600) to data/webhook-bins.json and reload with every row re-validated: ids, sizes, counts, TTL, bin cap and byte budget; a malformed row is dropped alone')
 

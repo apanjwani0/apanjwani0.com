@@ -43,6 +43,12 @@ export const prerender = false
 // senders and load-testing clients, so the cap is set to stop a flood rather than
 // to police normal use.
 const allowCapture = createRateLimiter(60_000, 300)
+// Site-wide ceiling across every client and bin: 3000 a minute is 50 a second,
+// far above what a few thousand monthly visitors send, and low enough that a
+// botnet of distinct addresses cannot turn capture into a write firehose into
+// the in-memory store and its 5 s disk flush. Asked only after the client's
+// bucket said yes.
+const allowCaptureGlobal = createRateLimiter(60_000, 3000)
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -120,7 +126,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
   }
 
   // Checked before the body is read so a flood costs no allocation.
-  if (!allowCapture(rateLimitKey(request))) {
+  if (!(allowCapture(rateLimitKey(request)) && allowCaptureGlobal('global'))) {
     return new Response(JSON.stringify({ ok: false, error: 'rate limited' }), {
       status: 429,
       headers: baseHeaders({ 'Content-Type': 'application/json', 'Retry-After': '60' }),

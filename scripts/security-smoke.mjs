@@ -170,8 +170,8 @@ assert.equal(safeMarkdownUrl('mailto:hello@example.com'), 'mailto:hello@example.
 assert.equal(safeMarkdownUrl('/blogs/test'), '/blogs/test')
 assert.equal(safeMarkdownUrl('javascript:alert(1)'), null)
 
-assert.equal(await timingSafeEqualText('secret', 'secret'), true)
-assert.equal(await timingSafeEqualText('secret', 'wrong'), false)
+assert.equal(timingSafeEqualText('secret', 'secret'), true)
+assert.equal(timingSafeEqualText('secret', 'wrong'), false)
 
 // getClientIp must never surface x-forwarded-for: it is client-authored
 // end-to-end. cf-connecting-ip is only authoritative for traffic that actually
@@ -186,12 +186,12 @@ assert.equal(getClientIp(req({})), '')
 // Origin lock. Must fail CLOSED when configured, and be a no-op when not — an
 // empty secret has to allow traffic, or setting it before the Cloudflare
 // Transform Rule exists would take the whole site offline.
-assert.equal(await isFromCloudflare(req({}), ''), true, 'unset secret must not block')
-assert.equal(await isFromCloudflare(req({}), undefined), true)
-assert.equal(await isFromCloudflare(req({}), 'sekrit'), false, 'missing header must be rejected')
-assert.equal(await isFromCloudflare(req({ 'x-origin-auth': 'wrong!' }), 'sekrit'), false)
-assert.equal(await isFromCloudflare(req({ 'x-origin-auth': 'short' }), 'sekrit'), false)
-assert.equal(await isFromCloudflare(req({ 'x-origin-auth': 'sekrit' }), 'sekrit'), true)
+assert.equal(isFromCloudflare(req({}), ''), true, 'unset secret must not block')
+assert.equal(isFromCloudflare(req({}), undefined), true)
+assert.equal(isFromCloudflare(req({}), 'sekrit'), false, 'missing header must be rejected')
+assert.equal(isFromCloudflare(req({ 'x-origin-auth': 'wrong!' }), 'sekrit'), false)
+assert.equal(isFromCloudflare(req({ 'x-origin-auth': 'short' }), 'sekrit'), false)
+assert.equal(isFromCloudflare(req({ 'x-origin-auth': 'sekrit' }), 'sekrit'), true)
 
 // Unattributable traffic shares one bucket rather than getting a fresh bucket per
 // request — otherwise a per-IP limiter is bypassed by simply sending no IP.

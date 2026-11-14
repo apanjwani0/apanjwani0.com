@@ -139,7 +139,9 @@ The origin has a public IP with port 80 open, so Cloudflare is bypassable and
 Use `createRateLimiter()` (`src/lib/security.ts`) for every public endpoint.
 Never hand-roll a `Map` keyed by client IP: the keys come from a header, so it
 is a memory-exhaustion vector. The host is a 1 GB VM and the container is
-capped at `--memory=768m`.
+capped at `--memory=768m`. A client is an IPv4 address or an IPv6 /64
+(`rateLimitKey()` normalises), and a route that stores something or holds a
+socket also has a shared bucket.
 
 **A route with a per-client and a shared bucket asks the shared one only after
 the client's says yes**: `allowClient(key) && allowGlobal('global')`. A refused

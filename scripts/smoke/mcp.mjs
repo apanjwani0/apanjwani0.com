@@ -370,7 +370,7 @@ try {
   assert.deepEqual([chainsaw.allowClient.max, chainsaw.allowGlobal.max], [API_LIMITS.chainsaw.perClient, API_LIMITS.chainsaw.global], 'chainsaw limits')
   assert.deepEqual([dns.allowClient.max, dns.allowGlobal.max, dns.allowCaaClient.max, dns.allowCaaGlobal.max], [API_LIMITS.dnsSightline.perClient, API_LIMITS.dnsSightline.global, API_LIMITS.dnsSightlineCaa.perClient, API_LIMITS.dnsSightlineCaa.global], 'dns-sightline limits, scope=caa included')
   assert.deepEqual([peek.allowClient.max, peek.allowGlobal.max], [API_LIMITS.linkPeek.perClient, API_LIMITS.linkPeek.global], 'link-peek limits')
-  assert.equal(capture.allowCapture.max, API_LIMITS.hookCapture.perClient, 'capture limit')
+  assert.deepEqual([capture.allowCapture.max, capture.allowCaptureGlobal.max], [API_LIMITS.hookCapture.perClient, API_LIMITS.hookCapture.global], 'capture limits')
   assert.equal(playback.allowPlayback.max, API_LIMITS.hookList.perClient, 'list limit')
   for (const l of [chainsaw.allowClient, dns.allowClient, peek.allowClient, capture.allowCapture, playback.allowPlayback]) assert.equal(l.windowMs, 60_000, 'every documented window is a minute')
   const xl = path => doc.paths[path][Object.keys(doc.paths[path]).find(v => doc.paths[path][v]['x-rate-limit'])]['x-rate-limit']

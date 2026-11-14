@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import { defineConfig, passthroughImageService } from 'astro/config';
 import node from '@astrojs/node';
 import embedPreload from './src/integrations/embed-preload.mjs';
 // To deploy to Cloudflare Workers instead, swap the two lines below:
@@ -369,6 +369,14 @@ export default defineConfig({
       { protocol: 'https', hostname: 'apanjwani0.com' },
       { protocol: 'https', hostname: 'www.apanjwani0.com' },
     ],
+  },
+  // No page uses astro:assets, so /_image is attack surface with no user: the
+  // stock endpoint resizes any file under public/ on request (about 7 s of CPU
+  // each, and a varied w/q misses the edge cache). Its route answers 404, and the
+  // passthrough service means no transform code (sharp) is wired up.
+  image: {
+    service: passthroughImageService(),
+    endpoint: { route: '/_image', entrypoint: './src/image-endpoint-gone.ts' },
   },
   devToolbar: { enabled: false },
   vite: {
