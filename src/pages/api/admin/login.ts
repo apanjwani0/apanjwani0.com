@@ -47,7 +47,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // secret, not a guess, and counting successes locked out login-heavy E2E
   // flows (the old local limiter cleared itself on success for the same reason).
   // ponytail: in-memory per-isolate throttle; use Cloudflare WAF/KV if admin login traffic matters.
-  if (!(await timingSafeEqualText(password, secret))) {
+  if (!(timingSafeEqualText(password, secret))) {
     const allowed = allowAttempt(rateLimitKey(request))
     if (!allowed) {
       return new Response(JSON.stringify({ error: 'Too many attempts' }), {

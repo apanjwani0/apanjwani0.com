@@ -30,7 +30,7 @@ export const API_LIMITS = {
   dnsSightline: { perClient: 4, global: 16 },
   dnsSightlineCaa: { perClient: 12, global: 48 },
   linkPeek: { perClient: 10, global: 40 },
-  hookCapture: { perClient: 300 },
+  hookCapture: { perClient: 300, global: 3000 },
   hookList: { perClient: 120 },
 } as const
 
@@ -230,7 +230,7 @@ export function buildOpenApi(origin: string): Json {
             '404': { description: 'The bin id is shorter than 24 characters or uses other characters.', content: json('Error') },
             '429': { $ref: '#/components/responses/RateLimited' },
           },
-          'x-rate-limit': limit(API_LIMITS.hookCapture.perClient),
+          'x-rate-limit': limit(API_LIMITS.hookCapture.perClient, API_LIMITS.hookCapture.global),
         },
       },
       '/api/hook/{bin}/requests': {
