@@ -97,11 +97,6 @@ const TOOL_SLUGS = new Set([
 ])
 const NO_CHROME = new Set(['audio-transcriber'])
 const ToolTag = TOOL_SLUGS.has(slug as string) ? `${slug}-tool` as any : undefined
-// Epoch Wizard names itself for what people search, and shows the epoch at
-// request time, dated, so the cached HTML (up to 10 min old) never reads as live.
-const h1Text = slug === 'epoch-wizard' ? 'Epoch Wizard: Epoch Converter' : tool.title
-const epochNowMs = Date.now()
-const epochNowIso = new Date(epochNowMs).toISOString().slice(0, 19).replace('T', ' ')
 const toolSeoContentHtml = tool.seoContent ? render(tool.seoContent) : ''
 // The article about this tool, if one is published.
 const stories = learningsAboutEmbed(tool.slug, learnings)
@@ -131,11 +126,8 @@ const ogCard = toolHasOgCard(tool) ? await existingOgCardPath('tools', tool.slug
   <Breadcrumbs items={crumbs} inset />
   {ToolTag && (
     <ToolTag data-tool={slug}>
-      {!NO_CHROME.has(slug as string) && <h1>{h1Text}</h1>}
+      {!NO_CHROME.has(slug as string) && <h1>{tool.heading ?? tool.title}</h1>}
       {!NO_CHROME.has(slug as string) && <p>{tool.intro || tool.description}</p>}
-      {slug === 'epoch-wizard' && (
-        <p data-type="epoch-now">Epoch time at {epochNowIso} UTC (when this page was generated): <strong>{Math.floor(epochNowMs / 1000)}</strong> seconds, <strong>{epochNowMs}</strong> milliseconds. The live clock starts as soon as the page loads.</p>
-      )}
     </ToolTag>
   )}
   {toolSeoContentHtml && <section data-type="seo-support" data-inset set:html={toolSeoContentHtml} />}

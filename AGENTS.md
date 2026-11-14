@@ -220,7 +220,7 @@ The tool-engine rules (an observation must not be taken through a lens that alte
   retention numbers are read from, or asserted against, the enforcing module.
 - **One copy of each client helper** (`escape.ts`, `storage.ts`, `flash.ts`, `download.ts`, `format.ts`, `math.ts`, `motion.ts`, `date.ts`): import them rather than writing a private copy.
 
-Also in [docs/conventions.md](docs/conventions.md): a tool's claims live in a module (so `security:smoke` can run them), semantic elements and `data-type` idioms, SEO support copy is off, client mounting with ClientRouter, the shared tool/game frame, the skeleton, fonts, canvas export and the "server" badge.
+Also in [docs/conventions.md](docs/conventions.md): a tool's claims live in a module (so `security:smoke` can run them), semantic elements and `data-type` idioms, a short plain how-to on a tool page is allowed (Aman, 15 Nov), client mounting with ClientRouter, the shared tool/game frame, the skeleton, fonts, canvas export and the "server" badge.
 
 ## Design System
 

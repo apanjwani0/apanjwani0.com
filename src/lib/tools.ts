@@ -84,7 +84,7 @@ export const UNGROUPED_TITLE = 'More tools'
  * (like TOOL_GROUPS), so it lives here and not in the regenerated config. A
  * target that is not live drops out, so a retired page never leaves a dead link.
  */
-const RELATED: Record<string, readonly string[]> = {
+export const RELATED: Record<string, readonly string[]> = {
   '/tools/epoch-wizard': ['/tools/cron-whisperer', '/tools/regex-lab', '/tools/json-tidy', '/tools/codec-forge'],
   '/tools/cron-whisperer': ['/tools/epoch-wizard', '/tools/regex-lab', '/tools/hash-smith'],
   '/tools/regex-lab': ['/tools/json-tidy', '/tools/list-forge', '/tools/cron-whisperer', '/tools/codec-forge'],
@@ -100,8 +100,6 @@ const RELATED: Record<string, readonly string[]> = {
   '/tools/chainsaw': ['/tools/dns-sightline', '/tools/link-peek', '/tools/webhook-inspector'],
   '/tools/draftboard': ['/tools/flowmap', '/tools/list-forge', '/tools/json-tidy'],
   '/tools/flowmap': ['/tools/draftboard', '/tools/driftfield', '/tools/json-tidy'],
-  '/tools/driftfield': ['/tools/chroma-lab', '/tools/flowmap', '/games/deep-shore', '/games/maze-weaver'],
-  '/tools/audio-transcriber': ['/tools/draftboard', '/tools/json-tidy', '/tools/list-forge'],
   '/games/poker-trainer': ['/games/quintle', '/games/2048', '/games/type-trial', '/games/deep-shore'],
   '/games/deep-shore': ['/tools/driftfield', '/games/maze-weaver', '/games/2048', '/games/poker-trainer'],
   '/games/2048': ['/games/quintle', '/games/hue-hunt', '/games/maze-weaver', '/games/poker-trainer'],

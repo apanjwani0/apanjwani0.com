@@ -7,6 +7,8 @@ export interface Tool {
   status: ToolStatus
   href?: string  // required when status === 'external'
   seoTitle?: string
+  /** The page's h1 when it should say more than the title (the title stays the name on cards and breadcrumbs). */
+  heading?: string
   metaDescription?: string
   intro?: string
   seoContent?: string
@@ -99,6 +101,7 @@ export const tools: Tool[] = [
   {
     slug: 'epoch-wizard',
     title: 'Epoch Wizard',
+    heading: 'Epoch Wizard: Epoch Converter',
     description: 'Convert Unix / epoch timestamps to human dates and back.',
     status: 'live',
     seoTitle: 'Epoch Converter — Current Unix Timestamp',
