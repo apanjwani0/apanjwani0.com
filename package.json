@@ -22,9 +22,9 @@
     "indexnow": "node scripts/indexnow.mjs"
   },
   "dependencies": {
-    "@astrojs/node": "^11.1.6",
+    "@astrojs/node": "^11.1.12",
     "@types/cytoscape": "^3.21.9",
-    "astro": "^7.2.0",
+    "astro": "^7.4.7",
     "cytoscape": "^3.34.1",
     "dompurify": "^3.4.12",
     "gifenc": "^1.0.3",

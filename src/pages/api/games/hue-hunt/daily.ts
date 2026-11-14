@@ -52,6 +52,9 @@ const NO_STORE = { 'Cache-Control': 'no-store', 'Content-Type': 'application/jso
  *  board refreshes lock a player out of submitting. */
 const allowSubmit = createRateLimiter(60_000, 6)
 const allowRead = createRateLimiter(60_000, 60)
+// Site-wide: a round takes about a minute, so 120 submissions a minute is far
+// more than the real audience and still a wall against a spread-out flood.
+const allowSubmitGlobal = createRateLimiter(60_000, 120)
 
 /** Five guesses of at most 7 chars, a 24-char name and JSON punctuation is well
  *  under 200 bytes; the rest is headroom, not permission. */
@@ -70,7 +73,7 @@ export const GET: APIRoute = async ({ request }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   if (!isSameOrigin(request)) return json({ error: 'forbidden' }, 403)
-  if (!allowSubmit(rateLimitKey(request))) return json({ error: 'rate_limited' }, 429)
+  if (!(allowSubmit(rateLimitKey(request)) && allowSubmitGlobal('global'))) return json({ error: 'rate_limited' }, 429)
 
   let payload: unknown
   try {

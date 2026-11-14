@@ -39,6 +39,10 @@ const NO_STORE = { 'Cache-Control': 'no-store', 'Content-Type': 'application/jso
  *  tab open and after submit), so they get a looser ceiling. */
 const allowSubmit = createRateLimiter(60_000, 6)
 const allowRead = createRateLimiter(60_000, 60)
+// Site-wide: a run takes about a minute, so 120 finished runs a minute is the
+// whole audience at once and then some. The board's own entry cap bounds what a
+// flood could keep; this bounds the work each rejected row costs.
+const allowSubmitGlobal = createRateLimiter(60_000, 120)
 const MAX_BODY_BYTES = 1_024
 
 function json(body: unknown, status = 200): Response {
@@ -54,7 +58,7 @@ export const GET: APIRoute = async ({ request }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   if (!isSameOrigin(request)) return json({ error: 'forbidden' }, 403)
-  if (!allowSubmit(rateLimitKey(request))) return json({ error: 'rate_limited' }, 429)
+  if (!(allowSubmit(rateLimitKey(request)) && allowSubmitGlobal('global'))) return json({ error: 'rate_limited' }, 429)
 
   let payload: unknown
   try {

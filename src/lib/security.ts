@@ -1,8 +1,10 @@
+import { createHash, timingSafeEqual } from 'node:crypto'
+import { isIP } from 'node:net'
+
 const ADMIN_MAX_BODY_BYTES = 1_000_000
 const ADMIN_LOGIN_WINDOW_MS = 60_000
 const ADMIN_LOGIN_MAX_ATTEMPTS = 10
 
-const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
 export class BodyTooLargeError extends Error {}
@@ -156,16 +158,17 @@ export async function readLimitedJson(request: Request, maxBytes = ADMIN_MAX_BOD
   }
 }
 
-export async function timingSafeEqualText(a: string, b: string): Promise<boolean> {
-  const [left, right] = await Promise.all([
-    crypto.subtle.digest('SHA-256', encoder.encode(a)),
-    crypto.subtle.digest('SHA-256', encoder.encode(b)),
-  ])
-  const leftBytes = new Uint8Array(left)
-  const rightBytes = new Uint8Array(right)
-  let diff = 0
-  for (let i = 0; i < leftBytes.length; i += 1) diff |= leftBytes[i] ^ rightBytes[i]
-  return diff === 0
+/**
+ * Constant-time string compare. Hashes both sides to 32 bytes first, so the
+ * lengths always match and `timingSafeEqual` never throws or leaks a length.
+ * Synchronous node:crypto on purpose: `crypto.subtle.digest` runs on libuv's
+ * four-thread pool, the same pool slow DNS lookups fill, so an awaited digest in
+ * the origin lock would stall every request behind a lookup.
+ */
+export function timingSafeEqualText(a: string, b: string): boolean {
+  const left = createHash('sha256').update(a, 'utf8').digest()
+  const right = createHash('sha256').update(b, 'utf8').digest()
+  return timingSafeEqual(left, right)
 }
 
 export const ADMIN_LOGIN_LIMITS = {
@@ -189,13 +192,13 @@ export const ADMIN_LOGIN_LIMITS = {
  *
  * `secret` is passed in rather than read here so the check is testable.
  */
-export async function isFromCloudflare(
+export function isFromCloudflare(
   request: Request,
   secret = process.env.ORIGIN_SHARED_SECRET,
-): Promise<boolean> {
+): boolean {
   if (!secret) return true
   const presented = request.headers.get('x-origin-auth')
-  if (!presented || presented.length !== secret.length) return false
+  if (!presented) return false // no length check: both sides are hashed to 32 bytes, so a length test would only leak the secret's length
   return timingSafeEqualText(presented, secret)
 }
 
@@ -256,5 +259,34 @@ export function createRateLimiter(windowMs: number, maxHits: number) {
  * never authorizes it.
  */
 export function rateLimitKey(request: Request): string {
-  return getClientIp(request) || 'unattributed'
+  return clientBucket(getClientIp(request)) || 'unattributed'
+}
+
+/**
+ * The bucket one address belongs to. IPv4 is its own bucket. IPv6 is the /64
+ * prefix: one subscriber is handed a whole /64 (2^64 addresses), so keying on the
+ * full address would let a single attacker mint a fresh bucket per request.
+ * `::ffff:a.b.c.d` (an IPv4 peer seen on a dual-stack socket) is plain IPv4, and a
+ * zone id (`%eth0`) or brackets are dropped. Anything that is not an IP is
+ * returned unchanged (still bounded by the limiter's key cap).
+ */
+export function clientBucket(raw: string): string {
+  const ip = raw.trim().replace(/^\[|\]$/g, '').replace(/%.*$/, '')
+  if (isIP(ip) === 4) return ip
+  if (isIP(ip) !== 6) return raw
+  let text = ip.toLowerCase()
+  const dotted = text.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/)
+  if (dotted) {
+    const [a, b, c, d] = dotted[2].split('.').map(Number)
+    text = `${dotted[1]}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`
+  }
+  const [head, tail] = text.split('::')
+  const front = head ? head.split(':') : []
+  const back = tail === undefined ? [] : tail ? tail.split(':') : []
+  const groups = tail === undefined ? front : [...front, ...Array(8 - front.length - back.length).fill('0'), ...back]
+  const words = groups.map((g) => Number.parseInt(g, 16))
+  if (words.slice(0, 5).every((w) => w === 0) && words[5] === 0xffff) {
+    return `${words[6] >> 8}.${words[6] & 255}.${words[7] >> 8}.${words[7] & 255}`
+  }
+  return `${words.slice(0, 4).map((w) => w.toString(16)).join(':')}::/64`
 }

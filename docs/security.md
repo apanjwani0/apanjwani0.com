@@ -69,6 +69,16 @@ Never hand-roll a `Map` keyed by client IP: the keys come from a header, so it
 is a memory-exhaustion vector. The host is a 1 GB VM and the container is
 capped at `--memory=768m`.
 
+**A client is an IPv4 address or an IPv6 /64, never a full IPv6 address.**
+`rateLimitKey()` goes through `clientBucket()`: one subscriber holds a whole /64,
+so a per-address key lets one attacker mint a bucket per request. `::ffff:a.b.c.d`
+is the plain IPv4 bucket; zone ids and brackets are dropped.
+
+**Every route that stores something or holds a socket also has a shared bucket**
+(webhook capture 3000 a minute, the two leaderboard submits and interest votes
+120 to 240, stream opens 120, replay, response writes, the three server tools),
+sized far above real use. Rotating addresses beats any per-client limit.
+
 **A route with a per-client and a shared bucket asks the shared one only after
 the client's says yes**: `allowClient(key) && allowGlobal('global')`. A refused
 hit still counts, so asking both up front lets one refused client drain the
@@ -85,9 +95,24 @@ so budget for it.
   `src/lib/dns-doh.ts`) to the request's signal with `AbortSignal.any`, and
   `sgQuery` checks `signal.aborted` before asking anything: an abort listener
   never fires on a signal that has already aborted.
-- **Name lookups count.** `dns.lookup` runs on libuv's threadpool outside every
-  other budget, so Link Peek and Chainsaw both use `lookupAllBounded`
-  (`src/lib/dns-lookup.ts`, 3 s).
+- **Name lookups count.** Link Peek, Chainsaw and Resend to URL all use
+  `lookupAllBounded` (`src/lib/dns-lookup.ts`, 3 s), which asks a c-ares
+  `Resolver` (A and AAAA) instead of `dns.lookup`: a black-holed nameserver then
+  holds no libuv thread, and the query is cancelled at the bound. c-ares never
+  reads /etc/hosts, so `isLocalOnlyName` also refuses `localhost`, single-label,
+  `.localhost`, `.local`, `.internal`, `.home.arpa` and IP-literal names before
+  any query. The callers still classify every answer and pin the connection to
+  it. The container also sets `UV_THREADPOOL_SIZE=16` for the work that stays on
+  the pool (fs, zlib).
+- **Nothing awaits the thread pool on every request.** The origin-lock compare
+  (`timingSafeEqualText`) is synchronous `node:crypto` (`createHash` +
+  `timingSafeEqual`), not `crypto.subtle.digest`, which queues behind slow lookups.
+- **No endpoint without a user.** Astro registers `/_image` in every server
+  build. Nothing imports `astro:assets`, so `astro.config.mjs` swaps its entry for
+  `src/image-endpoint-gone.ts` (404) and uses the passthrough service: the stock
+  endpoint resized any file under `public/` for a stranger, about 7 s of CPU a
+  request, and a varying `w`/`q` misses the edge cache. Using `astro:assets` later
+  means giving this up on purpose.
 - **Validate before you spend the token.** A request that can't cause the harm
   (a target with no scheme) must not cost the visitor's or the instance's
   budget. The pre-check is syntactic only (no DNS, no socket), and the fetch
@@ -310,7 +335,11 @@ bounded in status (200–599), headers (8, allowlisted names) and body (8 KB,
 counted in the global budget), serves no HTML or SVG, and a redirect's
 `Location` may only point back at the bin itself (`/api/hook/<bin>?…`):
 any other target makes the site an open redirect, and a same-bin target
-needs no DNS lookup. Flushes to disk run one at a time; each is a synchronous
+needs no DNS lookup. Resend always sends its own `User-Agent` (`REPLAY_USER_AGENT`: the site, the
+tool and the abuse contact), never the captured one. Expired bins are swept every
+10 minutes by an unref'd timer (`startSweeper`) and the next flush rewrites
+`data/webhook-bins.json` without them, so a quiet site honours the 6 h in /terms.
+Flushes to disk run one at a time; each is a synchronous
 `JSON.stringify` of at most 16 MB every 5 s while busy, a known pause left as
 is. Bins persist to `data/webhook-bins.json`
 with every row re-validated on load; the 6 h idle TTL and the caps still

@@ -56,7 +56,10 @@ jobs:
       - name: Pull and restart container
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          DOCKER_IMAGE: ${{ env.IMAGE }}:latest
+          # The immutable tag the build job pushed for this exact commit, never
+          # :latest: a moved tag cannot change what a re-run of this job deploys.
+          DOCKER_IMAGE: ${{ env.IMAGE }}:sha-${{ github.sha }}
+          IMAGE_REPO: ${{ env.IMAGE }}
           # ADMIN_SECRET is deliberately NOT passed: the admin surface is dev-only
           # and every /admin route 404s in production, so the container has no use
           # for it. Secrets that nothing reads are pure liability on a host that is
@@ -73,12 +76,20 @@ jobs:
           # Authenticate against GHCR
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-          # Pull latest image
+          # Pull this commit's image
           docker pull "$DOCKER_IMAGE"
 
           # Stop + remove existing container
           docker stop portfolio 2>/dev/null || true
           docker rm   portfolio 2>/dev/null || true
+
+          # Secrets go to the container through a private env file, not as `-e NAME=value`
+          # arguments: arguments show in `ps` and /proc for every user on the box while
+          # docker runs. mktemp creates the file 0600; it is removed on any exit.
+          envfile="$(mktemp)"
+          trap 'rm -f "$envfile"' EXIT
+          chmod 600 "$envfile"
+          printf 'ORIGIN_SHARED_SECRET=%s\n' "$ORIGIN_SHARED_SECRET" > "$envfile"
 
           # Run new container
           mkdir -p /opt/portfolio/data
@@ -88,7 +99,7 @@ jobs:
             -p 80:4321 \
             -v /opt/portfolio/data:/app/data \
             -v /opt/portfolio/avatar.webp:/app/dist/client/avatar.webp \
-            -e ORIGIN_SHARED_SECRET="$ORIGIN_SHARED_SECRET" \
+            --env-file "$envfile" \
             --memory=768m \
             --memory-swap=1536m \
             --pids-limit=256 \
@@ -110,6 +121,9 @@ jobs:
             sleep 1
           done
 
+          # Sha-tagged images are not dangling, so prune does not reclaim them: remove
+          # every other tag of this image (the old container is already gone).
+          docker image ls --format '{{.Repository}}:{{.Tag}}' "$IMAGE_REPO" | grep -vxF "$DOCKER_IMAGE" | xargs -r docker rmi || true
           docker image prune -f
           echo "✓ Deployed $DOCKER_IMAGE"
 

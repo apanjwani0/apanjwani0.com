@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # ── Stage 1: build ────────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+# node:22-alpine, pinned by digest (15 Nov 2026) so a moved tag cannot change what ships.
+# To update: read the new digest (docker buildx imagetools inspect node:22-alpine), change both lines.
+FROM node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS builder
 WORKDIR /app
 
 COPY package*.json ./
@@ -11,7 +13,7 @@ COPY . .
 RUN npm run build
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-FROM node:22-alpine AS runtime
+FROM node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS runtime
 WORKDIR /app
 
 # Copy built output and production dependencies only
@@ -30,6 +32,9 @@ EXPOSE 4321
 ENV HOST=0.0.0.0
 ENV PORT=4321
 ENV NODE_ENV=production
+# Slow name lookups (dns.lookup) occupy libuv's 4 default threads and stall file reads and
+# crypto behind them; 16 leaves headroom. The visitor-typed names go through c-ares instead.
+ENV UV_THREADPOOL_SIZE=16
 
 USER portfolio
 

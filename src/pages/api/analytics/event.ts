@@ -18,10 +18,14 @@ export const prerender = false
 // page view, when the page is hidden or the visitor navigates on — and far below
 // what abuse needs.
 const allowEvent = createRateLimiter(60_000, 60)
+// Shared across all visitors, asked only after the visitor's own bucket says yes: many rotating
+// addresses at 60/min each would otherwise still mean unbounded rollup rewrites. 600/min is ten
+// times the site's busiest real minute; past it only analytics events drop, never a page.
+const allowEventGlobal = createRateLimiter(60_000, 600)
 
 export const POST: APIRoute = async ({ request, locals }) => {
   if (!isSameOrigin(request)) return new Response(null, { status: 403 })
-  if (!allowEvent(rateLimitKey(request))) return new Response(null, { status: 429 })
+  if (!(allowEvent(rateLimitKey(request)) && allowEventGlobal('global'))) return new Response(null, { status: 429 })
 
   let event
   try {
