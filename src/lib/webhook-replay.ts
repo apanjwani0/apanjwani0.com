@@ -33,11 +33,19 @@
 import http from 'node:http'
 import https from 'node:https'
 import { isIP } from 'node:net'
+import { site } from '../config/site'
 import { lookupAllBounded, type DnsLookupOptions } from './dns-lookup'
 import { lpIsForbiddenHostname, lpIsForbiddenIp, lpValidateUrl } from './link-peek-fetch'
 import { wiReplayHeaders } from '../components/tools/webhook-inspector/curl'
 import { wiBodyBytes } from '../components/tools/webhook-inspector/signature'
 import type { CapturedRequest } from './webhook-store'
+
+/**
+ * Names this tool and the site to whoever receives a resend, and says where to
+ * report abuse. It replaces any captured User-Agent: a stranger's server logs
+ * should show who really sent the request, not the original sender's client.
+ */
+export const REPLAY_USER_AGENT = `${new URL(site.url).hostname} Webhook Inspector (replay; abuse: ${site.social.email})`
 
 export const REPLAY_TIMEOUT_MS = 5000
 export const REPLAY_MAX_RESPONSE_BYTES = 64 * 1024
@@ -167,6 +175,7 @@ function send(
     headers[name] = have === undefined ? h.value : Array.isArray(have) ? [...have, h.value] : [have, h.value]
   }
   if (!headers['x-webhook-inspector-replay']) headers['x-webhook-inspector-replay'] = '1'
+  headers['user-agent'] = REPLAY_USER_AGENT
   if (body.length > 0 || method === 'POST' || method === 'PUT' || method === 'PATCH') {
     headers['content-length'] = String(body.length)
   }
