@@ -10,6 +10,7 @@ import { getLearnings, getSite, getTools } from '../../../lib/config'
 import { webAppJsonLd } from '../../../lib/jsonld'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, driftfieldMode, isDriftfieldPublic } from '../../../lib/driftfield'
 import { embedTag } from '../../../lib/embeds'
+import { render } from '../../../lib/markdown'
 import { existingOgCardPath } from '../../../lib/og'
 import { learningsAboutEmbed } from '../../../lib/learnings'
 import '../../../styles/seo-support.css'
@@ -51,6 +52,8 @@ const stories = learningsAboutEmbed(mode.slug, learnings)
 const siblings = DRIFTFIELD_MODES
   .filter(m => m.slug !== mode.slug)
   .map(m => ({ title: m.title, href: `/tools/${DRIFTFIELD_SLUG}/${m.slug}` }))
+
+const seoContentHtml = mode.seoContent ? render(mode.seoContent) : ''
 
 const ogCard = await existingOgCardPath('tools', `${DRIFTFIELD_SLUG}-${mode.slug}`)
 
@@ -123,6 +126,7 @@ const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
     ))}
   </div>
 
+  {seoContentHtml && <section data-type="seo-support" data-inset set:html={seoContentHtml} />}
   <RelatedLinks heading="More Driftfield modes" items={siblings} all={{ label: 'Driftfield', href: `/tools/${DRIFTFIELD_SLUG}` }} inset />
 
   <script>

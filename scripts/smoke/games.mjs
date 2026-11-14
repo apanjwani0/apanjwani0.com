@@ -2,9 +2,11 @@
  * Game invariants: no FAQ copy, nothing unplayable is listed, honest daily
  * boards, and every embed preloads the script it mounts.
  *
- * 1. No game ships support copy. `seoContent` is empty for every game and no
- *    FAQPage markup is emitted from the game page (docs/plans/polish-2026-11.md
- *    D-3: generated how-to and FAQ filler is a deliberate SEO trade-off).
+ * 1. No game ships generated support copy. `seoContent` is empty for every game
+ *    except Poker Trainer, whose short written how-to is allowed by the owner's
+ *    15 Nov 2026 decision (as for tool pages), and no FAQPage markup is emitted
+ *    from the game page (docs/plans/polish-2026-11.md D-3: generated how-to and
+ *    FAQ filler is a deliberate SEO trade-off).
  * 2. A game that is not playable is hidden, not parked (D-10). Every enabled
  *    game has a component, so the hub shows no "coming soon" card, and the
  *    detail page answers 404 for a game that is switched off.
@@ -30,10 +32,12 @@ const pass = line => console.log(`ok  ${line}`)
 
 /* 1. No FAQ copy ---------------------------------------------------------- */
 
+const GAMES_WITH_HOW_TO = new Set(['poker-trainer'])
 for (const g of games) {
-  assert.equal((g.seoContent ?? '').trim(), '', `${g.slug} ships seoContent; every game's must be empty`)
+  if (GAMES_WITH_HOW_TO.has(g.slug)) continue
+  assert.equal((g.seoContent ?? '').trim(), '', `${g.slug} ships seoContent; only ${[...GAMES_WITH_HOW_TO].join(', ')} may`)
 }
-pass(`every game's seoContent is empty (${games.length} games)`)
+pass(`every other game's seoContent is empty (${games.length} games)`)
 
 const gamePage = await read('src/pages/games/[slug].astro')
 const faqUse = text => /faqPageJsonLd|extractFaqs|FAQPage/.test(text)

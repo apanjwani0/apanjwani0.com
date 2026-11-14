@@ -31,10 +31,10 @@ export const games: Game[] = [
     "description": "A free Texas Hold'em poker trainer. Play seven kinds of spots: single raised pots, three-bet pots, all-in shoves, multiway pots, river bets, and a raise against your own bet. Each one comes with the story of the hand, so you know the position, the stacks and the pot.\n\nYou never see their cards. Their range narrows with the size of their bet, from a third of the pot up to a 2.5× overbet, and your equity against it is counted exactly: every runout and every pair of hands, never sampled. After you answer, every number is named and worked out. The drill grades immediate expected value, not a solved strategy.",
     "enabled": true,
     "interactive": true,
-    "seoTitle": "Free Poker Trainer: Exact Equity, Ranges and Pot Odds",
-    "metaDescription": "Free Hold'em trainer: seven situations, multiway pots and bets from a third of the pot to an overbet, with exact equity and every number explained.",
+    "seoTitle": "Holdem Odds Calculator & Pot Odds Trainer — Poker Trainer",
+    "metaDescription": "Free Hold'em odds calculator and poker equity trainer. Get exact equity and pot odds against a hand or a range, then practise real spots.",
     "keywords": "free poker trainer, free online poker trainer, poker trainer online, texas holdem poker trainer, poker odds calculator free, quant interview poker prep, jane street poker interview, sig poker interview, pot odds calculator, poker equity calculator, poker expected value drill, exact holdem odds, holdem equity, poker math trainer",
-    "intro": "Play a spot without seeing their cards, the way a real table works — then see every number behind the decision, computed by counting every possible runout.",
+    "intro": "A free Hold'em odds calculator and poker equity trainer. Work out your exact equity and pot odds against a hand or a range, or practise a spot and see every number behind the decision.",
     "features": [
       "Seven situations: single raised pots, three-bet pots, all-in shoves, multiway pots, river bets and a raise against your own bet",
       "Opponent ranges that narrow with bet size, from a third of the pot to a 2.5× overbet",
@@ -44,7 +44,7 @@ export const games: Game[] = [
       "Share a spot by link and see your accuracy by situation, kept only in your browser",
       "100% free client-side execution with zero ads or tracking"
     ],
-    "seoContent": ""
+    "seoContent": "## What this is\n\nPoker Trainer does two jobs in your browser. The Run the numbers tab is a Hold'em odds calculator: it gives your exact equity, which is your share of the pot on average, against one hand or a range of hands. The Play a spot tab deals you a real situation and checks your decision.\n\n## How to use the odds calculator\n\n1. Open the Run the numbers tab and pick your two cards, then the board cards if there are any (three, four or five).\n2. Choose whether they hold a specific hand or a range of hands, then pick the hand or the range.\n3. Read your equity. Below it, enter the pot and the amount to call to see the pot odds, and compare the two.\n\n## Good to know\n\nEvery count is exact, never a random sample. If a spot is too big to count in your browser, the page tells you so and asks for more board cards instead of guessing. The trainer grades the immediate expected value of your choice. It is not a solver, so it does not claim to know the perfect strategy."
   },
   {
     "slug": "2048",
