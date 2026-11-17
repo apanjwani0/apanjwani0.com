@@ -39,6 +39,7 @@ export function mountGame(): Promise<unknown> {
   else if (slug === 'deep-shore') return import('../components/games/deep-shore/DeepShore.ts')
   else if (slug === 'diagram-atlas') return import('../components/games/diagram-atlas/DiagramAtlas.ts')
   else if (slug === 'internet-atlas') return import('../components/games/internet-atlas/InternetAtlas.ts')
+  else if (slug === 'chainsaw') return import('../components/tools/chainsaw/Chainsaw.ts')
   return Promise.resolve()
 }
 
