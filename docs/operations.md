@@ -59,8 +59,10 @@ without touching the build:
   set their own `Cache-Control`, then `/api/*` → `no-store`, then 5xx →
   `no-store`, and only then the 404 rule. An API 404 is often a resource that exists a moment later; don't
   reorder.
-- After a deploy, pages serve the cached copy until the TTL. Purge via
-  Cloudflare → Caching → Configuration → Purge Everything. Check with
+- After a deploy, pages serve the cached copy until the TTL, and a new URL can serve a 404 cached while the
+  deploy ran (17 Nov: the new article and presets 404'd until purged). An agent purges the changed URLs after
+  each release with the Mac's `site-numbers-read` token (Cache Purge; `.env` in `~/Projects/docs/sites/metrics`),
+  or purge in Cloudflare → Caching → Configuration. Check with
   `curl -sSI https://apanjwani0.com/ | grep cf-cache-status` (want `HIT`).
 
 ## Analytics
@@ -187,8 +189,8 @@ artifact expiry, submits all of them). The new copy is uploaded only after the
 submission succeeds. `npm run indexnow -- <url>…` (or URLs on stdin; add
 `--dry-run` to print the request) submits by hand, at most 1000 per request.
 There is no cache purge step: a Cloudflare API token would be a new secret, and
-the owner declined one, so pages reach visitors when the edge TTL lapses.
-Owner action: verify the site in Bing Webmaster Tools.
+the owner declined one in GitHub, so pages reach visitors when the edge TTL lapses unless an agent purges them
+from the Mac (see Caching). Bing Webmaster Tools has the site (17 Nov).
 
 ## Deploy
 
