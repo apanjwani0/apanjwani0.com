@@ -1,10 +1,15 @@
 # Status
 
-Session pickup. Rewritten each session, not appended. Last updated 15 Nov 2026.
+Session pickup. Rewritten each session, not appended. Last updated 17 Nov 2026.
 
 ## Branches
 
-- `origin/main` is live at PR #64's merge (`1bed06f`); `develop` carries the same content.
+- **`develop` is ahead of `main` (17 Nov), waiting for Aman's release PR:** #65 (10 more Cron Whisperer presets,
+  25 in all; the Learnings article `unable-to-get-local-issuer-certificate` with Chainsaw as its figure, the first
+  tool used as a figure; Chainsaw and the article now say curl fails "on Linux", since stock macOS curl and iOS
+  fetch a missing intermediate) plus the 15 Nov pickup commit. Approved community posts wait for this release:
+  `~/Projects/docs/sites/outreach/` (Show HN links the Chainsaw page).
+- `origin/main` is live at PR #64's merge (`1bed06f`).
 - 15 Nov, late: the image runs as uid 1001, the owner of `/opt/portfolio/data` (#63). From 11 Aug it ran as
   uid 100 and no data file ever saved in production (visits, analytics, both leaderboards, the interest
   counter, webhook bins); verified saving after the deploy. Cloudflare now rate-limits 50 requests / 10 s per IP.
@@ -20,7 +25,7 @@ Session pickup. Rewritten each session, not appended. Last updated 15 Nov 2026.
 
 Tracked in `~/Projects/STATUS.md` → Your moves → "Sites: search, security, agency (15 Nov)": Prod
 environment limited to `main`, Dependabot alerts and secret scanning, the origin lock, request indexing for
-the rewritten pages, Bing Webmaster Tools, and describing the Cloudflare Worker in front of the site. Also
+the rewritten pages, Bing Webmaster Tools (now in `~/Projects/docs/sites/metrics/api-setup.md`), and describing the Cloudflare Worker in front of the site. Also
 still open from 3 Nov: `resumeUrl` in `src/config/site.json`, and the optional Markdown cache bypass rule.
 
 ## Parked with the `/projects` work (Aman, 15 Nov)
