@@ -44,7 +44,6 @@ export const CRON_PRESETS: CronPreset[] = [
   { slug: 'every-3-hours', expr: '0 */3 * * *', title: 'Cron every 3 hours' },
   { slug: 'every-4-hours', expr: '0 */4 * * *', title: 'Cron every 4 hours' },
   { slug: 'every-12-hours', expr: '0 */12 * * *', title: 'Cron every 12 hours' },
-  { slug: 'twice-a-day', expr: '0 0,12 * * *', title: 'Cron twice a day' },
   { slug: 'daily-at-noon', expr: '0 12 * * *', title: 'Cron every day at noon' },
   { slug: 'every-friday', expr: '0 0 * * 5', title: 'Cron every Friday' },
   { slug: 'weekends', expr: '0 0 * * 6,0', title: 'Cron on weekends' },
