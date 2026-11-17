@@ -8,9 +8,9 @@ Epoch Wizard's title (it breaks edge caching), and `hreflang` translations.
 ## Worth building (best first)
 
 1. **Learnings articles that answer real error searches.** Each one mounts its
-   tool as the figure and follows `docs/plans/learnings-voice.md`.
-   - Chainsaw: "unable to get local issuer certificate" (a missing
-     intermediate). This one first: the most urgent searches.
+   tool as the figure and follows `docs/plans/learnings-voice.md`. Partly done:
+   the Chainsaw one shipped (`/learnings/unable-to-get-local-issuer-certificate`,
+   17 Nov 2026; `chainsaw` is in `EMBED_TAGS`, so a tool can be a figure). Left:
    - Token Bench: "JWT signature verification failed" (RS256 vs HS256
      confusion, a stale `kid`, clock skew).
    - Cron Whisperer: "does cron run twice when the clocks go back" (links the
@@ -31,7 +31,7 @@ Epoch Wizard's title (it breaks edge caching), and `hreflang` translations.
 5. **Embeddable widgets** (`/embed/<tool>` iframes) earn backlinks. Each needs
    its own route that relaxes the CSP's `frame-ancestors`, so it is a security
    change. Wait until a tool has an audience.
-6. **More preset pages** (e.g. `/tools/json-tidy/json-to-yaml`). Only where
+6. **More preset pages** (done for cron: 25 presets by 17 Nov 2026, chosen from Search Console, where only exact phrases such as "every monday at 8am" reach page one; add more the same way, copy always derived from the engine. Open for others, e.g. `/tools/json-tidy/json-to-yaml`). Only where
    the page's text can be derived from the engine, as with cron. A
    converter's page would be thin text around a mode switch.
 7. **Flash Cricket, timed to the IPL or a World Cup**, once the game is
@@ -67,6 +67,6 @@ The sitemap, canonicals, redirects, `robots.txt`, JSON-LD and `index, follow` we
 - **No SEO tool or dashboard** (decided 17 Aug 2026, do not reopen). `open-seo` needs a paid DataForSEO key plus PostgreSQL; unlighthouse, seonaut and openserp are auditors and crawlers. All of them report on the problem and none creates a backlink, for 30 URLs, when Search Console already renders the numbers for free.
 - **Worth building once a trend exists:** the Search Console URL Inspection API (2,000 queries a day against 30 URLs) to turn "7 of 29" into a time series, and a sitemap-against-index diff that flags "in the sitemap but not indexed" and "indexed but noindex".
 - **IndexNow is not the fix for Google**: Google is not a participant. It reaches Bing, Yandex, Seznam and Naver, and ChatGPT's web search leans on Bing's index, so Bing Webmaster Tools and IndexNow matter for ChatGPT visibility. There is no IndexNow key file on the site yet; it is about 15 lines.
-- **The bare name does not find the site.** Searching "Aman Panjwani" returns other people (30+ share the name on LinkedIn); the site surfaces for the handle "apanjwani0" and for qualified queries ("Aman Panjwani Chalo"). The LinkedIn profile that ranks for the name is `/in/aman-panjwani-316b54170`, while `src/config/site.json` and the Person `sameAs` use `/in/apanjwani0`. LinkedIn answers scripts with HTTP 999, so whether they are the same profile is unverified: ask the owner before changing either.
+- **The bare name does not find the site.** Searching "Aman Panjwani" returns other people (30+ share the name on LinkedIn); the site surfaces for the handle "apanjwani0" and for qualified queries ("Aman Panjwani Chalo"). The owner confirmed his LinkedIn is `/in/apanjwani0`, so `src/config/site.json` and the Person `sameAs` are correct. The profile that ranks for the bare name, `/in/aman-panjwani-316b54170`, is a different person. Do not change either.
 - Promote the Webhook Inspector and Chainsaw first: they own a server URL other software talks to, which is the tool bar in AGENTS.md.
 

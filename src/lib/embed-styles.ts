@@ -11,7 +11,7 @@ import { EMBED_MODULES, EMBED_STYLES } from './embeds'
  * `EMBED_STYLES` names for its own component.
  */
 const SHEETS = import.meta.glob<string>(
-  ['../components/games/*.css', '../components/games/*/*.css', '../styles/canvas-export.css'],
+  ['../components/games/*.css', '../components/games/*/*.css', '../components/tools/tools-common.css', '../components/tools/chainsaw/chainsaw.css', '../styles/canvas-export.css'],
   { query: '?url', import: 'default', eager: true },
 )
 

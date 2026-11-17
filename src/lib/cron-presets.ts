@@ -39,6 +39,16 @@ export const CRON_PRESETS: CronPreset[] = [
   { slug: 'every-monday-at-8am', expr: '0 8 * * 1', title: 'Cron every Monday at 8am' },
   { slug: 'every-sunday', expr: '0 0 * * 0', title: 'Cron every Sunday' },
   { slug: 'first-of-the-month', expr: '0 0 1 * *', title: 'Cron on the first of the month' },
+  { slug: 'every-2-minutes', expr: '*/2 * * * *', title: 'Cron every 2 minutes' },
+  { slug: 'every-20-minutes', expr: '*/20 * * * *', title: 'Cron every 20 minutes' },
+  { slug: 'every-3-hours', expr: '0 */3 * * *', title: 'Cron every 3 hours' },
+  { slug: 'every-4-hours', expr: '0 */4 * * *', title: 'Cron every 4 hours' },
+  { slug: 'every-12-hours', expr: '0 */12 * * *', title: 'Cron every 12 hours' },
+  { slug: 'daily-at-noon', expr: '0 12 * * *', title: 'Cron every day at noon' },
+  { slug: 'every-friday', expr: '0 0 * * 5', title: 'Cron every Friday' },
+  { slug: 'weekends', expr: '0 0 * * 6,0', title: 'Cron on weekends' },
+  { slug: 'every-quarter', expr: '0 0 1 */3 *', title: 'Cron every quarter' },
+  { slug: 'once-a-year', expr: '0 0 1 1 *', title: 'Cron once a year' },
 ]
 
 /** The preset page's <title>. Google cuts a title at about 60 characters, so
