@@ -4853,10 +4853,11 @@ console.log('type trial ghost tokens are bounded, fingerprint-pinned, and decode
     const rest = mountSrc.slice(at + marker.length)
     const importPath = rest.slice(0, rest.indexOf("'"))
     // Derived from the import, not from the slug: '2048' lives in twenty48/.
-    const dir = importPath.replace(/\/[^/]+$/, '').replace('../components/games/', '')
-    assert.ok(dir && dir !== importPath, `${slug}'s dispatch must import from src/components/games/`)
+    const kind = importPath.startsWith('../components/tools/') ? 'tools' : 'games'
+    const dir = importPath.replace(/\/[^/]+$/, '').replace(`../components/${kind}/`, '')
+    assert.ok(dir && dir !== importPath, `${slug}'s dispatch must import from src/components/games/ or src/components/tools/ (a tool mounted as a figure)`)
     assert.ok(
-      (EMBED_STYLES[slug] ?? []).some(sheet => sheet.startsWith(`components/games/${dir}/`)),
+      (EMBED_STYLES[slug] ?? []).some(sheet => sheet.startsWith(`components/${kind}/${dir}/`)),
       `${slug}'s stylesheet is not named by EMBED_STYLES (src/lib/embeds.ts)`,
     )
   }
@@ -8538,7 +8539,7 @@ console.log('pr 19 review: a refused client never spends the shared bucket (deri
      game-mount.ts says which directory each slug renders from. */
   const { EMBED_NO_CHROME } = await import('../src/lib/embeds.ts')
   const mountSrc = await readFile(new URL('../src/lib/game-mount.ts', import.meta.url), 'utf-8')
-  const dispatch = [...mountSrc.matchAll(/slug === '([^']+)'\) return import\('\.\.\/components\/games\/([^/']+)\//g)]
+  const dispatch = [...mountSrc.matchAll(/slug === '([^']+)'\) return import\('\.\.\/components\/(?:games|tools)\/([^/']+)\//g)]
   assert.equal(dispatch.length, Object.keys(EMBED_TAGS).length, 'every embed has exactly one dispatch branch to read its source from')
   const chromeMarker = /<h1[\s>]|['"]h1['"]|data-type="[a-z0-9-]+-header"|'data-type': '[a-z0-9-]+-header'/
   for (const [, slug, dir] of dispatch) {
@@ -8549,7 +8550,7 @@ console.log('pr 19 review: a refused client never spends the shared bucket (deri
         else if (entry.name.endsWith('.ts')) sources.push(await readFile(new URL(`${d}/${entry.name}`, import.meta.url), 'utf-8'))
       }
     }
-    await collect(`../src/components/games/${dir}`)
+    await collect(`../src/components/${mountSrc.includes(`'../components/tools/${dir}/`) ? 'tools' : 'games'}/${dir}`)
     const writesChrome = sources.some(src => chromeMarker.test(src))
     assert.equal(EMBED_NO_CHROME.has(slug), !writesChrome, writesChrome
       ? `${slug} writes its own title block, so EMBED_NO_CHROME must not list it — its h1 would survive into the article`

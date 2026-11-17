@@ -153,6 +153,7 @@ export function wordCount(content: string): number {
 export function embedPagePath(embed: string | undefined, games: Game[], tools: Tool[]): string | undefined {
   if (!embed) return undefined
   if (games.some(g => g.slug === embed && isPlayableGame(g))) return `/games/${embed}`
+  if (tools.some(t => t.slug === embed && t.status === 'live')) return `/tools/${embed}`
   if (isDriftfieldPublic(tools) && DRIFTFIELD_MODES.some(m => m.slug === embed)) return `/tools/${DRIFTFIELD_SLUG}/${embed}`
   return undefined
 }

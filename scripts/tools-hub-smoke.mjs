@@ -345,11 +345,13 @@ console.log('cards: no empty meta line when a conditional meta slot renders noth
   for (const sheet of onDisk) assert.ok(listed.has(sheet), `${sheet} is not in any EMBED_STYLES entry, so no page links it`)
   for (const sheet of listed) {
     await read(`src/${sheet}`) // throws on a path that names no file
-    assert.ok(sheet === exportBar || onDisk.includes(sheet), `${sheet} is listed but is not a game stylesheet`)
+    assert.ok(sheet === exportBar || sheet.startsWith('components/tools/') || onDisk.includes(sheet), `${sheet} is listed but is not a game or tool stylesheet`)
   }
   assert.deepEqual(Object.keys(EMBED_STYLES).sort(), Object.keys(EMBED_TAGS).sort(), 'EMBED_STYLES and EMBED_TAGS name the same components')
   for (const [slug, sheets] of Object.entries(EMBED_STYLES)) {
-    assert.equal(sheets[0], common, `${slug} lists the shared floor first, so the component sheets can override it`)
+    // A tool mounted as a figure has the tools floor instead of the games one.
+    const floor = sheets[0].startsWith('components/tools/') ? 'components/tools/tools-common.css' : common
+    assert.equal(sheets[0], floor, `${slug} lists the shared floor first, so the component sheets can override it`)
     assert.equal(new Set(sheets).size, sheets.length, `${slug} lists a sheet twice`)
     assert.ok(sheets.length >= 2, `${slug} has no stylesheet of its own`)
   }

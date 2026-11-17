@@ -427,6 +427,13 @@ const { crumbs, json: breadcrumbLd } = buildBreadcrumbs([
   /* The component's own title block, hidden before it can paint — the script
      above then removes it outright. :global() is required: this markup is
      written by the component at runtime and never carries Astro's scope hash. */
+  /* A tool mounted as the figure draws its own workbench frame (the shared
+     tool width and gutter), which would overflow this column. */
+  figure[data-type="learning-embed"] :global([data-type="tool-page"]) {
+    max-width: none;
+    padding: 0;
+  }
+
   figure[data-type="learning-embed"] :global([data-type$="-header"]),
   figure[data-type="learning-embed"] :global(h1) {
     display: none;

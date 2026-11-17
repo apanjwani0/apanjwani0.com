@@ -39,6 +39,7 @@ own chrome and runs the same `mountGame()` dispatch `/games/[slug]` uses.
   depending on the module cache. One observer per container, released at the
   next `astro:before-swap`. A figure that writes no chrome is in
   `EMBED_NO_CHROME` and gets no observer (derived both ways).
+- A tool can be the figure (`chainsaw`): its `EMBED_TAGS`, `EMBED_MODULES` and `EMBED_STYLES` entries point at `src/components/tools/` and its sheets start with `tools-common.css`; the article CSS drops the tool frame's width and gutter.
 - An unknown `embed` degrades to a prose article; the smoke test asserts every
   shipped `embed` is in `EMBED_TAGS`.
 - **An article that quotes numbers is quoting the component, and the numbers

@@ -39,6 +39,8 @@ export const EMBED_TAGS: Record<string, string> = {
   // embedded in an article, which is why EMBED_TAGS is the wider list.
   'diagram-atlas': 'diagram-atlas-figure',
   'internet-atlas': 'internet-atlas-figure',
+  // A tool mounted as an article's figure (the "unable to get local issuer certificate" article).
+  'chainsaw': 'chainsaw-tool',
 }
 
 /**
@@ -68,6 +70,7 @@ export const EMBED_MODULES: Record<string, string> = {
   'deep-shore': 'components/games/deep-shore/DeepShore.ts',
   'diagram-atlas': 'components/games/diagram-atlas/DiagramAtlas.ts',
   'internet-atlas': 'components/games/internet-atlas/InternetAtlas.ts',
+  'chainsaw': 'components/tools/chainsaw/Chainsaw.ts',
 }
 
 /**
@@ -136,4 +139,6 @@ export const EMBED_STYLES: Record<string, readonly string[]> = {
     'components/games/diagram-atlas/diagram-atlas.css',
     'components/games/internet-atlas/internet-atlas.css',
   ],
+  // A tool's floor is tools-common.css, not the games one.
+  'chainsaw': ['components/tools/tools-common.css', 'components/tools/chainsaw/chainsaw.css'],
 }
