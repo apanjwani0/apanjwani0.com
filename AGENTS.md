@@ -52,7 +52,7 @@ npm run security:smoke # assert the security invariants
 npm run poker:check    # poker engine checks
 npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
-npm run origin:check   # assert the DEPLOYED edge posture against production (also daily: .github/workflows/origin-check.yml)
+npm run origin:check   # assert the DEPLOYED edge posture against production (also daily: .github/workflows/origin-check.yml); set ORIGIN_IP, never commit it
 npm run indexnow -- <url…>  # submit changed URLs to IndexNow (deploy.yml does this from the sitemap diff)
 npm run trainer:catalogue   # poker trainer asset sheet -> docs/poker-assets.html (gitignored)
 node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc encoder

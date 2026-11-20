@@ -38,5 +38,7 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm run security:smoke
+        env:
+          ORIGIN_IP: ${{ secrets.ORIGIN_IP }}   # exposure.mjs: the address must not be committed
       - run: npm run poker:check
       - run: npm run boot:check
