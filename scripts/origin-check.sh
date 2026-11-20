@@ -20,7 +20,8 @@
 set -uo pipefail   # deliberately not -e: every check must run so you see it all
 
 SITE=${SITE:-https://apanjwani0.com}
-ORIGIN_IP=${ORIGIN_IP:-80.225.248.246}
+# The origin address is never committed (the repo is public): pass it in the env.
+ORIGIN_IP=${ORIGIN_IP:-}
 
 fail=0
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
@@ -40,27 +41,32 @@ else
   note "not the secret (costs a redeploy)."
 fi
 
-printf '\n\033[1mOrigin not reachable directly\033[0m  (http://%s/)\n' "$ORIGIN_IP"
-direct_code=$(curl -sS -m 8 -o /dev/null -w '%{http_code}' "http://$ORIGIN_IP/" 2>/dev/null)
-curl_rc=$?
-if (( curl_rc == 28 || curl_rc == 7 )); then
-  ok "connection blocked (curl rc=$curl_rc) — firewall is doing its job"
-elif [[ $direct_code == 404 ]]; then
-  warn "app lock holding (404), but the box still answers"
-  note "Every scanner still wakes the origin and burns CPU, and the only thing"
-  note "standing between them and the app is one Cloudflare Transform Rule."
-  note "Close it at the network — see the CIDR list printed below."
-  # Not a failure: this is the documented intermediate state after the app-level
-  # lock is enabled but before the firewall half is done.
-  cache=$(curl -sSI -m 8 "http://$ORIGIN_IP/" 2>/dev/null | tr -d '\r' \
-          | awk -F': ' 'tolower($1)=="cache-control"{print $2}')
-  [[ $cache == *no-store* ]] \
-    && ok "the 404 is no-store (a broken rule cannot get cached and outlive the fix)" \
-    || bad "the 404 is cacheable ('${cache:-none}') — a bad rule would stick at the edge"
-elif [[ $direct_code == 200 ]]; then
-  bad "200 — Cloudflare is fully bypassable, the app is answering strangers directly"
+if [[ -z $ORIGIN_IP ]]; then
+  printf '\n\033[1mOrigin not reachable directly\033[0m\n'
+  warn "skipped: ORIGIN_IP is not set (the address stays out of the public repo)"
 else
-  warn "unexpected '${direct_code:-none}' (curl rc=$curl_rc)"
+  printf '\n\033[1mOrigin not reachable directly\033[0m  (the origin IP)\n'
+  direct_code=$(curl -sS -m 8 -o /dev/null -w '%{http_code}' "http://$ORIGIN_IP/" 2>/dev/null)
+  curl_rc=$?
+  if (( curl_rc == 28 || curl_rc == 7 )); then
+    ok "connection blocked (curl rc=$curl_rc) — firewall is doing its job"
+  elif [[ $direct_code == 404 ]]; then
+    warn "app lock holding (404), but the box still answers"
+    note "Every scanner still wakes the origin and burns CPU, and the only thing"
+    note "standing between them and the app is one Cloudflare Transform Rule."
+    note "Close it at the network — see the CIDR list printed below."
+    # Not a failure: this is the documented intermediate state after the app-level
+    # lock is enabled but before the firewall half is done.
+    cache=$(curl -sSI -m 8 "http://$ORIGIN_IP/" 2>/dev/null | tr -d '\r' \
+            | awk -F': ' 'tolower($1)=="cache-control"{print $2}')
+    [[ $cache == *no-store* ]] \
+      && ok "the 404 is no-store (a broken rule cannot get cached and outlive the fix)" \
+      || bad "the 404 is cacheable ('${cache:-none}') — a bad rule would stick at the edge"
+  elif [[ $direct_code == 200 ]]; then
+    bad "200 — Cloudflare is fully bypassable, the app is answering strangers directly"
+  else
+    warn "unexpected '${direct_code:-none}' (curl rc=$curl_rc)"
+  fi
 fi
 
 printf '\n\033[1mEdge caches HTML, browsers do not\033[0m\n'
