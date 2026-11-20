@@ -1,7 +1,7 @@
 name: Origin check
 
 # Runs scripts/origin-check.sh against production once a day. The script makes
-# only plain HTTP requests any stranger could make (no secrets, no SSH), so it
+# only plain HTTP requests any stranger could make (no SSH; its one secret is the origin address), so it
 # catches Cloudflare dashboard drift that nothing in git asserts: the origin
 # lock, Browser Cache TTL, the www redirect, the analytics beacon. A failed run
 # fails the job, and GitHub emails the owner; there is no other notification.
@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -30,4 +30,7 @@ jobs:
 
       # No npm ci: the script is bash and curl, and reads only public/ from the
       # checkout (the IndexNow key file name).
+      # The origin address is a repo secret, never a committed value (public repo).
       - run: npm run origin:check
+        env:
+          ORIGIN_IP: ${{ secrets.ORIGIN_IP }}

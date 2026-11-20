@@ -52,7 +52,7 @@ npm run security:smoke # assert the security invariants
 npm run poker:check    # poker engine checks
 npm run boot:check     # boot dist/server/entry.mjs, require a 200 page (after build)
 npm run analytics:smoke
-npm run origin:check   # assert the DEPLOYED edge posture against production (also daily: .github/workflows/origin-check.yml)
+npm run origin:check   # assert the DEPLOYED edge posture against production (also daily: .github/workflows/origin-check.yml); set ORIGIN_IP, never commit it
 npm run indexnow -- <url…>  # submit changed URLs to IndexNow (deploy.yml does this from the sitemap diff)
 npm run trainer:catalogue   # poker trainer asset sheet -> docs/poker-assets.html (gitignored)
 node scripts/wallpaper-forge-gif.selfcheck.mjs   # smoke test for the gifenc encoder
@@ -205,8 +205,8 @@ The tool-engine rules (an observation must not be taken through a lens that alte
 
 ## Key Conventions
 
-- **Never mention or link NextGen Studios, Snap Call or Numerology Guru** (Aman, 15 Nov): the owner is not
-  publicly the person behind that studio.
+- **Never mention or link the owner's other ventures** (15 Nov): this site is not publicly tied to them. Which
+  ventures these are lives in the owner's private notes outside this repo; never name them here.
 - **No sample, mock or placeholder data**, not even labelled "(sample)". Leave out what can't be measured, or measure it for real; a dev-only real measurement sits behind `import.meta.env.DEV` and is loopback-only.
 - **UI copy is plain, simple, explanatory full sentences** a beginner can follow. Say what happens and why, and define a term the first time. No clipped or clever one-liners.
 - **Nothing blinks, breathes or pulses on a timer** (status LEDs, glows, halos): the owner reads it as the page flickering. Ease transitions, and give a hover effect a short rest delay.

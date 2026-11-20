@@ -12,17 +12,17 @@ export interface Company {
 
 export const experience: Company[] = [
   {
-    "name": "Chalo Mobility",
+    "name": "Mobility tech company",
     "roles": [
       {
         "title": "SDE 2",
         "team": "Payments",
         "period": "Sept 2024 – Present",
         "bullets": [
-          "Designed and scaled payment infrastructure processing 100k+ daily transactions across Digital Wallets and Prepaid Cards (₹2.5M+ daily volume)",
+          "Designed and scaled payment infrastructure for digital wallets and prepaid cards",
           "Implemented idempotency mechanisms for zero duplicate transactions and strong financial data consistency",
-          "Led Partner Bank API migration complying with RBI regulations for Prepaid Payment Instruments (PPI)",
-          "Re-architected refund workflows and transaction reconciliation logic, reducing customer support incidents by 75%"
+          "Built payment integrations that meet RBI rules for prepaid payment instruments (PPI)",
+          "Re-architected refund workflows and transaction reconciliation logic, cutting customer support incidents"
         ]
       },
       {
@@ -31,9 +31,9 @@ export const experience: Company[] = [
         "period": "Jul 2022 – Aug 2024",
         "bullets": [
           "Architected a queue-based data processing pipeline for improved system stability",
-          "Led technical onboarding of 20+ city teams; streamlined reporting and contract management for 100+ operators",
+          "Led technical onboarding of city teams; streamlined reporting and contract management for operators",
           "Engineered settlement reconciliation and automated ledger system for operator financial tracking",
-          "Redesigned APIs and optimized DB queries — reduced response times by 70%"
+          "Redesigned APIs and optimized DB queries to cut response times"
         ]
       },
       {
@@ -41,8 +41,8 @@ export const experience: Company[] = [
         "team": "Recon",
         "period": "Jan 2022 – Jun 2022",
         "bullets": [
-          "Migrated backend services from legacy systems to Node.js, improving API performance by 40%",
-          "Identified and resolved critical code vulnerabilities, decreasing bug reports by 25%"
+          "Migrated backend services from legacy systems to Node.js, improving API performance",
+          "Identified and resolved critical code vulnerabilities, reducing bug reports"
         ]
       }
     ]
