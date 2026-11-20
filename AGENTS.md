@@ -205,8 +205,8 @@ The tool-engine rules (an observation must not be taken through a lens that alte
 
 ## Key Conventions
 
-- **Never mention or link NextGen Studios, Snap Call or Numerology Guru** (Aman, 15 Nov): the owner is not
-  publicly the person behind that studio.
+- **Never mention or link the owner's other ventures** (15 Nov): this site is not publicly tied to them. Which
+  ventures these are lives in the owner's private notes outside this repo; never name them here.
 - **No sample, mock or placeholder data**, not even labelled "(sample)". Leave out what can't be measured, or measure it for real; a dev-only real measurement sits behind `import.meta.env.DEV` and is loopback-only.
 - **UI copy is plain, simple, explanatory full sentences** a beginner can follow. Say what happens and why, and define a term the first time. No clipped or clever one-liners.
 - **Nothing blinks, breathes or pulses on a timer** (status LEDs, glows, halos): the owner reads it as the page flickering. Ease transitions, and give a hover effect a short rest delay.
