@@ -23,14 +23,14 @@
   },
   "dependencies": {
     "@astrojs/node": "^11.1.12",
-    "@types/cytoscape": "^3.21.9",
+    "@types/cytoscape": "^3.31.0",
     "astro": "^7.4.7",
-    "cytoscape": "^3.34.1",
+    "cytoscape": "^3.35.0",
     "dompurify": "^3.4.12",
     "gifenc": "^1.0.3",
     "html2canvas": "^1.4.1",
-    "marked": "^17.0.5",
-    "web-vitals": "^5.3.0"
+    "marked": "^18.1.2",
+    "web-vitals": "^6.2.3"
   },
   "overrides": {
     "defu": "^6.1.7",
@@ -38,11 +38,11 @@
     "sharp": "0.35.5"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.8",
-    "@astrojs/cloudflare": "^14.2.0",
+    "@astrojs/check": "^0.9.12",
+    "@astrojs/cloudflare": "^14.4.8",
     "@types/node": "^25.5.0",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "wrangler": "^4.112.0"
+    "wrangler": "^4.160.0"
   }
 }
