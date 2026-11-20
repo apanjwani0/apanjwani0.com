@@ -25,7 +25,7 @@ Session pickup. Rewritten each session, not appended. Last updated 17 Nov 2026.
 
 Tracked in `~/Projects/STATUS.md` → Your moves → "Sites: search, security, agency (15 Nov)": Prod
 environment limited to `main`, Dependabot alerts and secret scanning, the origin lock, request indexing for
-the rewritten pages (agents do this as loki.ai.ngs; Bing Webmaster Tools is set up), and describing the Cloudflare Worker in front of the site. Also
+the rewritten pages (agents do this with their own Google account; Bing Webmaster Tools is set up), and describing the Cloudflare Worker in front of the site. Also
 still open from 3 Nov: `resumeUrl` in `src/config/site.json`, and the optional Markdown cache bypass rule.
 
 ## Parked with the `/projects` work (Aman, 15 Nov)
