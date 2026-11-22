@@ -22,6 +22,7 @@ set -uo pipefail   # deliberately not -e: every check must run so you see it all
 SITE=${SITE:-https://apanjwani0.com}
 # The origin address is never committed (the repo is public): pass it in the env.
 ORIGIN_IP=${ORIGIN_IP:-}
+direct_code=''   # set only when ORIGIN_IP is; read again near the end under set -u
 
 fail=0
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
