@@ -8244,7 +8244,8 @@ console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unr
   // would boot fine there and still ship dead.
   const finalStage = dockerfile.slice(dockerfile.lastIndexOf('\nFROM '))
   const at = (re) => { const m = re.exec(finalStage); return m ? m.index : -1 }
-  const install = at(/^RUN npm ci --omit=dev$/m)
+  const install = at(/^RUN npm ci --omit=dev\b.*$/m)
+  const distCopy = at(/^COPY --from=builder\b.*\/app\/dist\b/m)
   const user = at(/^USER \S+$/m)
   const copy = at(/^COPY \S*\s*scripts\/boot-check\.mjs \.\/scripts\/boot-check\.mjs$/m)
   const run = at(/^RUN node scripts\/boot-check\.mjs$/m)
@@ -8253,6 +8254,9 @@ console.log('caa x issuer: one issue/issuewild rule shared by both tools, an unr
   assert.ok(copy > -1 && copy < run, 'the final stage copies the boot check in before running it')
   assert.ok(install > -1 && install < run, 'the image boot check runs after the production-only install, so it tests the tree that ships')
   assert.ok(user > -1 && user < run, 'the image boot check runs as the container user, not root')
+  assert.ok(install > -1 && distCopy > install, 'dependencies install before dist is copied, so a source-only deploy reuses the dependency layer')
+  assert.ok(user < install, 'the install runs as the container user, so no chown -R has to copy the tree into a second layer')
+  assert.ok(!/chown -R/.test(finalStage), 'no chown -R in the final stage: it would duplicate every file into a new layer')
   assert.ok(run < start, 'the image boot check runs before CMD')
 }
 console.log('boot check: starts the entry the Dockerfile runs, no inherited env var can switch off the branch that crashed, and the image runs it on its own production tree before it can ship')
