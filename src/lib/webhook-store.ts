@@ -32,6 +32,7 @@
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { onShutdown } from './shutdown'
 
 export interface CapturedHeader {
   name: string
@@ -813,21 +814,15 @@ export function startSweeper(everyMs = WEBHOOK_SWEEP_MS): void {
 }
 
 /**
- * A deploy stops the old container with SIGTERM. Whatever arrived inside the
- * last debounce window would be lost, so write once, synchronously, and exit.
- * (The handler replaces the default action, and PID 1 in a container does not
- * get a default action, so it has to exit itself.)
+ * Whatever arrived inside the last debounce window would be lost on a deploy's
+ * SIGTERM, so the store hands the shutdown owner (`shutdown.ts`) a synchronous
+ * flush to run before it exits.
  */
 function hookSignals(): void {
   if (signalsHooked) return
   signalsHooked = true
   startSweeper()
-  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-    process.once(signal, () => {
-      flushSync()
-      process.exit(signal === 'SIGINT' ? 130 : 0)
-    })
-  }
+  onShutdown(flushSync)
 }
 
 // Inside the running site the clock starts with the module, so a quiet process still expires bins.
