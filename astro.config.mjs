@@ -6,6 +6,7 @@ import embedPreload from './src/integrations/embed-preload.mjs';
 // import cloudflare from '@astrojs/cloudflare';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { request } from 'node:https';
 import { connect } from 'node:http2';
 import { promises as dns } from 'node:dns';
@@ -344,6 +345,20 @@ const heroProbePlugin = {
   },
 };
 
+/**
+ * Node adapter only: run `src/lib/shutdown-boot.ts` as the first thing the
+ * server entry does, so SIGTERM is handled before any request (PID 1 in the
+ * container ignores it otherwise). Swapping the adapter drops this plugin.
+ * @type {import('vite').Plugin}
+ */
+const shutdownAtBootPlugin = {
+  name: 'shutdown-at-boot',
+  transform(code, id) {
+    if (!id.replaceAll('\\', '/').endsWith('/@astrojs/node/dist/server.js')) return null;
+    return `import ${JSON.stringify(fileURLToPath(new URL('./src/lib/shutdown-boot.ts', import.meta.url)))};\n${code}`;
+  },
+};
+
 export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
@@ -380,7 +395,7 @@ export default defineConfig({
   },
   devToolbar: { enabled: false },
   vite: {
-    plugins: [adminSavePlugin, heroProbePlugin],
+    plugins: [adminSavePlugin, heroProbePlugin, shutdownAtBootPlugin],
     // A small bundled <script> is inlined into the page by default, and an
     // inline script without the response's nonce is refused by the CSP (the
     // coming-soon game page's "want this sooner" button never wired up). So
