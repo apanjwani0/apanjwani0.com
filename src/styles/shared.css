@@ -671,7 +671,6 @@ p[data-type="card-meta"] {
   stroke: none;
   fill: currentColor;
   font-family: var(--font-mono);
-  font-size: 13px;
   font-weight: 700;
 }
 [data-type="card-art"] .c-violet { --c: var(--color-art-violet); }
