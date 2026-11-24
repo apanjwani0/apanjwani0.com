@@ -8,7 +8,7 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import JsonLd from '../../components/JsonLd.astro'
 import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import RelatedLinks from '../../components/RelatedLinks.astro'
-import CardArt from '../../components/CardArt.astro'
+import { CARD_ART, CARD_ART_FALLBACK } from '../../lib/card-art'
 import { webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
@@ -114,8 +114,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
   {GameTag && embedPreloads(slug).map(href => <link slot="head" rel="modulepreload" href={href} />)}
   <Breadcrumbs items={crumbs} />
   {GameTag && (
-    <div data-type="game-identity">
-      <CardArt slug={game.slug} />
+    <div data-type="game-identity" data-hue={(CARD_ART[game.slug] ?? CARD_ART_FALLBACK).hue}>
     {GameTag && slug === 'poker-trainer' && (
       <poker-trainer-game data-game="poker-trainer">
         <div data-type="pt-game">

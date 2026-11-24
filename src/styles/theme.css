@@ -224,7 +224,7 @@
      ordered rung scale, which these are not. */
   --measure-narrow: 34rem;  /* an error page's column            */
   --measure-about: 38rem;   /* the footer's about block          */
-  --size-art-emblem: 6.5rem; /* a game page's header drawing   */
+  --size-art-glow: 10rem;    /* the glow behind a game page's header */
   --size-art-tile: 11.5rem;  /* a picture tile in the foot row    */
   --measure-text: 42rem;    /* a lede or short prose block       */
   --pad-block-fluid: clamp(2rem, 8vw, 4rem); /* an error page's vertical room */
