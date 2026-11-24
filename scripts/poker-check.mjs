@@ -35,9 +35,10 @@ import {
   parseRange,
   rangeCombos,
 } from '../src/components/games/poker-trainer/engine/ranges.ts'
-import { equityVsRanges, multiwayWork } from '../src/components/games/poker-trainer/engine/equity.ts'
+import { equityVsRanges, multiwayWork, riverRaiseCounts } from '../src/components/games/poker-trainer/engine/equity.ts'
 import { cachedEquityVsRanges, clearEquityCache } from '../src/components/games/poker-trainer/engine/equity-cache.ts'
 import {
+  CALLER_VS_RAISE_NOTE,
   MIN_CONTINUING,
   RIVER_BLUFFS,
   continuingRange,
@@ -46,6 +47,7 @@ import {
   toneForSize,
 } from '../src/components/games/poker-trainer/engine/continuing.ts'
 import {
+  FLAT_CALL_RANGE,
   PT_MAX_RANGE_WORK,
   SCENARIO_TEMPLATES,
   dealSpot,
@@ -60,9 +62,10 @@ import {
   RAISE_MARGIN,
   fmtChips,
   fmtPercent,
+  OUTCOME_WORDS,
   judge,
   raiseModelled,
-  raiseContinuingCombos,
+  raiseContinuing,
   raiseTo,
 } from '../src/components/games/poker-trainer/engine/decide.ts'
 import { evaluateBest, evaluateOmaha, compareRank } from '../src/components/games/poker-trainer/engine/evaluator.ts'
@@ -699,7 +702,7 @@ const R_ONE = (hero, board, rangeId, tone, extra = {}) => {
 }
 const decide = (spot) => {
   const result = equityVsRange(spot.hero, spot.opponents[0].combos, spot.board)
-  const raiseCombos = raiseContinuingCombos(spot)
+  const raiseCombos = raiseModelled(spot) ? raiseContinuing(spot)[0].combos : []
   const raiseResult = raiseCombos.length ? equityVsRange(spot.hero, raiseCombos, spot.board) : null
   return judge(spot, result, raiseResult)
 }
@@ -766,20 +769,202 @@ assert.equal(raiseTo({ ...draw, bet: 100, effectiveStack: 280 }), 250, '2.5x whe
 assert.equal(raiseTo({ ...draw, bet: 100, effectiveStack: 220 }), 220, 'capped at all-in')
 assert.equal(raiseTo({ ...draw, bet: 100, effectiveStack: 100 }), null, 'nothing left to raise with')
 assert.equal(raiseTo({ ...draw, allIn: true }), null)
-// Multiway: no raise is modelled, so the verdict is call or fold with a sentence saying why.
-const multiVerdicts = new Set()
-for (let seed = 1; seed <= 40; seed++) {
-  const multi = dealSpot(seed, 'multiway').spot
-  const multiResult = cachedEquityVsRanges(multi.hero, [multi.opponents[0].combos, multi.opponents[1].combos], multi.board, PT_MAX_RANGE_WORK)
-  const multiJudgement = judge(multi, multiResult)
-  multiVerdicts.add(multiJudgement.correct)
-  assert.equal(multiJudgement.raise, undefined, 'no raise is modelled three-way')
-  assert.ok(['call', 'fold'].includes(multiJudgement.correct))
-  assert.equal(multiJudgement.derived.potNow, multi.potBefore + 2 * multi.bet, 'a caller adds to the pot hero faces')
-  assert.equal(multiJudgement.correct === 'fold', multiJudgement.callEv <= 0)
-  if (multiJudgement.correct === 'call') assert.match(multiJudgement.reasons.join(' '), /two opponents/)
+// Multiway, judged the way the page judges it: exact three-way equity for the call, and on the
+// river the exact counts of how both opponents answer a raise.
+const judgeMultiway = (spot) => {
+  const result = cachedEquityVsRanges(spot.hero, [spot.opponents[0].combos, spot.opponents[1].combos], spot.board, PT_MAX_RANGE_WORK)
+  if (!raiseModelled(spot)) return { result, judgement: judge(spot, result) }
+  const keeps = raiseContinuing(spot)
+  const counts = riverRaiseCounts(spot.hero, spot.board, [spot.opponents[0].combos, spot.opponents[1].combos], keeps.map(k => k.combos))
+  return { result, keeps, counts, judgement: judge(spot, result, { counts, kept: [keeps[0].combos.length, keeps[1].combos.length] }) }
 }
-assert.ok(multiVerdicts.has('call') && multiVerdicts.has('fold'), 'three-way spots are both calls and folds')
+
+// The reported spot: big blind with K♦J♦ on 10♦ 8♥ 9♥ Q♠ 5♦, the cutoff bets 190 into 380 and
+// the button calls. Hero has the nuts, tied only by another king-jack, so the raise is right.
+// The ranges are narrowed the way the deal narrows them: a third of the pot on the flop, half on
+// the turn and half on the river.
+{
+  const hero = hand('Kd Jd')
+  const board = hand('Td 8h 9h Qs 5d')
+  const dead = [...hero, ...board]
+  let bettor = rangeCombos(parseRange(PRESET_RANGES.find(p => p.id === 'co').text).classes, dead)
+  let caller = rangeCombos(parseRange(FLAT_CALL_RANGE.text).classes, dead)
+  for (const [cards, tone, callTone] of [[3, 'small', 'medium'], [4, 'medium', 'medium'], [5, 'medium', 'medium']]) {
+    bettor = continuingRange(bettor, board.slice(0, cards), tone).combos
+    caller = continuingRange(caller, board.slice(0, cards), callTone).combos
+  }
+  const reported = {
+    templateId: 'multiway', title: 'test', blinds: { sb: 5, bb: 10 }, effectiveStack: 875, heroPosition: 'BB',
+    hero, board, street: 'river',
+    opponents: [
+      { position: 'CO', rangeId: 'co', rangeLabel: 'co', preflopCombos: [], combos: bettor, rangeNote: '', role: 'bettor' },
+      { position: 'BTN', rangeId: 'flat-call', rangeLabel: 'flat', preflopCombos: [], combos: caller, rangeNote: '', role: 'caller' },
+    ],
+    potBefore: 380, heroIn: 0, bet: 190, callersIn: 190, betTone: 'medium', allIn: false, line: [], ledger: [],
+  }
+  assert.equal(derive(reported).potNow, 760, 'the reported pot is 760')
+  assert.ok(raiseModelled(reported), 'a raise is modelled on a multiway river')
+  assert.equal(raiseTo(reported), 570, '3x the 190 chip bet')
+  const { judgement } = judgeMultiway(reported)
+  assert.equal(judgement.correct, 'raise', `the reported nut spot raises: ${judgement.reasons.join(' ')}`)
+  const ties = judgement.raiseMultiway.outcomes.filter(o => o.id !== 'both-fold' && o.pairs > 0)
+  assert.ok(ties.every(o => o.equity < 1 && o.equity > 0.9), 'only another king-jack ties the nuts here')
+}
+
+// Turn multiway: no raise is modelled, and the sentence says the river's betting is why.
+{
+  const river = dealSpot(1, 'multiway').spot
+  const turn = { ...river, street: 'turn', board: river.board.slice(0, 4) }
+  assert.equal(raiseModelled(turn), false, 'no raise three-way on the turn')
+  assert.equal(raiseTo(turn), null)
+  const turnJudgement = judge(turn, { equity: 0.5, aheadOf: 0.5 })
+  assert.equal(turnJudgement.raiseMultiway, undefined)
+  assert.equal(turnJudgement.correct, 'call')
+  assert.match(turnJudgement.reasons.join(' '), /two opponents on the turn.*betting still to come on the river/)
+  // All-in and short-stack reasons are unchanged three-way.
+  assert.match(judge({ ...river, allIn: true, betTone: 'all-in', effectiveStack: river.bet }, { equity: 0.5, aheadOf: 0.5 }).reasons.join(' '), /already all in/)
+  assert.match(judge({ ...river, effectiveStack: river.bet }, { equity: 0.5, aheadOf: 0.5 }).reasons.join(' '), /not have enough chips behind/)
+}
+
+// Multiway river raises over many seeds. Each one is counted again here with the evaluator's
+// HandRank (not the packed score the engine uses), the caller's rule is applied from its sentence,
+// the raise EV is rebuilt from the printed numbers, and the nut hand for the board is dealt to hero
+// in the same spot and must never grade as a call.
+{
+  const SEEDS = 200
+  const multiVerdicts = new Set()
+  let nutSpots = 0
+  const rankOf = (cards) => evaluateBest(cards)
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    const spot = dealSpot(seed, 'multiway').spot
+    const where = `multiway seed ${seed}`
+    assert.equal(spot.street, 'river', `${where}: multiway deals land on the river`)
+    const { result, keeps, counts, judgement } = judgeMultiway(spot)
+    const r = judgement.raiseMultiway
+    multiVerdicts.add(judgement.correct)
+    assert.ok(r && judgement.raise === undefined, `${where}: a three-way raise is modelled`)
+    assert.equal(judgement.derived.potNow, spot.potBefore + 2 * spot.bet, `${where}: a caller adds to the pot hero faces`)
+    assert.equal(judgement.correct === 'fold', judgement.callEv <= 0, where)
+    assert.equal(counts.pairs, result.pairs, `${where}: the raise counts the same pairs the call does`)
+
+    // The continuing hands match the sentences.
+    const boardRank = rankOf(spot.board)
+    const [bettor, caller] = spot.opponents
+    assert.equal(keeps[1].note, CALLER_VS_RAISE_NOTE)
+    assert.match(keeps[1].note, /keeps two pair or better/)
+    const callerKept = new Set(keeps[1].combos.map(comboId))
+    for (const combo of caller.combos) {
+      const best = rankOf([...combo, ...spot.board])
+      const twoPairUp = best.cat >= HAND_CATEGORY.TWO_PAIR && compareRank(best, boardRank) > 0
+      assert.equal(callerKept.has(comboId(combo)), twoPairUp, `${where}: the caller keeps ${comboId(combo)} exactly when it is two pair or better beating the board`)
+    }
+    const top = Math.max(...spot.board.map(card => card.r))
+    const bettorKept = new Set(keeps[0].combos.map(comboId))
+    assert.ok(keeps[0].combos.every(combo => bettor.combos.some(b => comboId(b) === comboId(combo))), `${where}: the bettor keeps only hands they bet`)
+    if (/strongest hands were used/.test(keeps[0].note)) {
+      assert.equal(keeps[0].combos.length, MIN_CONTINUING, `${where}: the fallback keeps ${MIN_CONTINUING}`)
+    } else if (/keeps top pair or better/.test(keeps[0].note)) {
+      for (const combo of bettor.combos) {
+        const best = rankOf([...combo, ...spot.board])
+        const topPair = best.cat >= HAND_CATEGORY.PAIR && combo.some(card => card.r === top)
+        const overPair = combo[0].r === combo[1].r && combo[0].r > top
+        const twoPairUp = best.cat >= HAND_CATEGORY.TWO_PAIR
+        if (bettorKept.has(comboId(combo))) assert.ok(topPair || overPair || twoPairUp, `${where}: the bettor keeps ${comboId(combo)} without top pair or better`)
+        else assert.ok(!topPair && !overPair && !(twoPairUp && compareRank(best, boardRank) > 0), `${where}: the bettor folds ${comboId(combo)}, which is top pair or better`)
+      }
+    } else if (/keeps a pair or better/.test(keeps[0].note)) {
+      for (const combo of bettor.combos) {
+        const best = rankOf([...combo, ...spot.board])
+        const pairUp = best.cat >= HAND_CATEGORY.PAIR && compareRank(best, boardRank) > 0
+        if (bettorKept.has(comboId(combo))) assert.ok(best.cat >= HAND_CATEGORY.PAIR, `${where}: the bettor keeps ${comboId(combo)} without a pair`)
+        else assert.ok(!pairUp, `${where}: the bettor folds ${comboId(combo)}, which has a pair of its own`)
+      }
+    } else {
+      assert.match(keeps[0].note, /puts the bettor all in/, `${where}: the bettor's sentence is one of the stated rules`)
+    }
+    assert.equal(r.bettorKeeps, keeps[0].combos.length)
+    assert.equal(r.callerKeeps, keeps[1].combos.length)
+    assert.equal(r.bettorHands, bettor.combos.length)
+    assert.equal(r.callerHands, caller.combos.length)
+
+    // Count the four outcomes again, independently.
+    const recount = { 'both-fold': [0, 0], 'bettor-calls': [0, 0], 'caller-calls': [0, 0], 'both-call': [0, 0] }
+    const heroRank = rankOf([...spot.hero, ...spot.board])
+    const rankFor = new Map([...bettor.combos, ...caller.combos].map(h => [comboId(h), rankOf([...h, ...spot.board])]))
+    let pairs = 0
+    for (const a of bettor.combos) {
+      for (const b of caller.combos) {
+        if (a.some(x => b.some(y => cardId(x) === cardId(y)))) continue
+        pairs++
+        const inA = bettorKept.has(comboId(a))
+        const inB = callerKept.has(comboId(b))
+        const id = inA && inB ? 'both-call' : inA ? 'bettor-calls' : inB ? 'caller-calls' : 'both-fold'
+        const stayed = [inA ? a : null, inB ? b : null].filter(Boolean).map(h => rankFor.get(comboId(h)))
+        let share = 1
+        if (stayed.length) {
+          if (stayed.some(h => compareRank(h, heroRank) > 0)) share = 0
+          else share = 1 / (1 + stayed.filter(h => compareRank(h, heroRank) === 0).length)
+        }
+        recount[id][0]++
+        recount[id][1] += share
+      }
+    }
+    assert.equal(pairs, r.pairs, `${where}: pairs`)
+    const to = raiseTo(spot)
+    const potNow = judgement.derived.potNow
+    let evFromCounts = 0
+    for (const o of r.outcomes) {
+      const [n, won] = recount[o.id]
+      assert.equal(o.pairs, n, `${where}: ${o.id} pairs`)
+      if (n > 0) assert.ok(Math.abs(o.equity - won / n) < 1e-9, `${where}: ${o.id} equity`)
+      const callers = { 'both-fold': 0, 'bettor-calls': 1, 'caller-calls': 1, 'both-call': 2 }[o.id]
+      const pot = callers ? potNow + to + callers * (to - spot.bet) : potNow
+      assert.equal(o.pot, pot, `${where}: ${o.id} pot`)
+      assert.equal(o.added, callers ? to : 0, `${where}: ${o.id} chips hero adds`)
+      evFromCounts += callers ? won * pot - n * to : n * potNow
+    }
+    evFromCounts /= pairs
+    // Raise EV is the printed formula: share × (equity × pot − added), summed.
+    const evFromLine = r.outcomes.reduce((sum, o) => sum + o.share * (o.equity * o.pot - o.added), 0)
+    assert.ok(Math.abs(r.ev - evFromCounts) < 1e-6, `${where}: raise EV ${r.ev} against ${evFromCounts} from the counts`)
+    assert.ok(Math.abs(r.ev - evFromLine) < 1e-6, `${where}: raise EV ${r.ev} against ${evFromLine} from its own line`)
+    assert.ok(Math.abs(r.outcomes.reduce((sum, o) => sum + o.share, 0) - 1) < 1e-12, `${where}: the four shares add to one`)
+
+    // The reasons name every number the raise used.
+    if (judgement.correct !== 'fold') {
+      const text = judgement.reasons.join(' ')
+      const pieces = [fmtChips(to), String(r.bettorKeeps), String(r.bettorHands), String(r.callerKeeps), String(r.callerHands),
+        r.pairs.toLocaleString('en-US'), fmtChips(r.ev), fmtChips(judgement.callEv), fmtChips(RAISE_MARGIN * potNow), '5%']
+      for (const o of r.outcomes) {
+        pieces.push(`${OUTCOME_WORDS[o.id]} ${fmtPercent(o.share)}`)
+        if (o.id !== 'both-fold' && o.pairs > 0) pieces.push(`${fmtPercent(o.equity)} of a ${fmtChips(o.pot)} chip pot`)
+      }
+      for (const piece of pieces) assert.ok(text.includes(piece), `${where}: the reasons never print "${piece}": ${text}`)
+      const worthIt = r.ev > judgement.callEv + RAISE_MARGIN * potNow
+      assert.equal(judgement.correct === 'raise', worthIt && r.whenCalled >= 0 && r.calledShare > 0, `${where}: raise exactly when it clears the margin and is no bluff`)
+    }
+
+    // The nut hand for this board, dealt to hero in the same spot, never grades as a call.
+    const deck = remainingDeck(spot.board)
+    let nut = null
+    let nutRank = null
+    for (let i = 0; i < deck.length; i++) {
+      for (let k = i + 1; k < deck.length; k++) {
+        const cards = [deck[i], deck[k]]
+        const cardsRank = rankOf([...cards, ...spot.board])
+        if (!nut || compareRank(cardsRank, nutRank) > 0) { nut = cards; nutRank = cardsRank }
+      }
+    }
+    if (compareRank(nutRank, boardRank) <= 0) continue
+    const blocked = new Set(nut.map(cardId))
+    const nutSpot = { ...spot, hero: nut, opponents: spot.opponents.map(o => ({ ...o, combos: o.combos.filter(h => !h.some(card => blocked.has(cardId(card)))) })) }
+    const nutJudgement = judgeMultiway(nutSpot).judgement
+    nutSpots++
+    assert.equal(nutJudgement.correct, 'raise', `${where}: the nuts (${comboId(nut)}) grade ${nutJudgement.correct}: ${nutJudgement.reasons.join(' ')}`)
+  }
+  assert.ok(nutSpots > SEEDS / 2, `only ${nutSpots} boards had a nut hand that beats the board`)
+  assert.ok(['fold', 'call', 'raise'].every(v => multiVerdicts.has(v)), 'three-way river spots are folds, calls and raises')
+}
 // A bet that was raised: the chips already bet count in the pot and not in the cost.
 const raised = dealSpot(11, 'bet-raised').spot
 const raisedJudgement = judge(raised, { equity: 0.4, aheadOf: 0.5 }, { equity: 0.4, combos: 5 })
@@ -805,7 +990,8 @@ assert.doesNotThrow(() => judge(hopeless, { equity: 0, aheadOf: 0 }))
     const result = spot.opponents.length === 1
       ? equityVsRange(spot.hero, spot.opponents[0].combos, spot.board)
       : cachedEquityVsRanges(spot.hero, [spot.opponents[0].combos, spot.opponents[1].combos], spot.board, PT_MAX_RANGE_WORK)
-    const raiseCombos = raiseModelled(spot) ? raiseContinuingCombos(spot) : []
+    if (spot.opponents.length > 1) { mix[judgeMultiway(spot).judgement.correct]++; continue }
+    const raiseCombos = raiseModelled(spot) ? raiseContinuing(spot)[0].combos : []
     mix[judge(spot, result, raiseCombos.length ? equityVsRange(spot.hero, raiseCombos, spot.board) : null).correct]++
   }
   const share = key => mix[key] / SEEDS
