@@ -36,6 +36,7 @@ import { games } from '../src/config/games.ts'
 import { learnings } from '../src/config/learnings.ts'
 import { DRIFTFIELD_MODES, DRIFTFIELD_SLUG, isDriftfieldPublic } from '../src/lib/driftfield.ts'
 import { escapeHtml } from '../src/lib/escape.ts'
+import { CARD_ART } from '../src/lib/card-art.ts'
 import {
   OG_CARD_HEIGHT,
   OG_CARD_WIDTH,
@@ -95,10 +96,36 @@ function stars(seed) {
   return out.join('')
 }
 
+// The hub card's colours (shared.css [data-type="card-art"]) with the theme.css
+// dark values written literally, for the same reason as the rest of this page.
+const ART_HUES = { violet: '#a78bfa', amber: '#f2a93b', teal: '#2dd4bf', rose: '#fb7185', sky: '#5eb4ff', lime: '#a3e635' }
+const ART_MUTED = '#7a8796'
+
+/** The slug's line drawing, drawn the way the hub draws it, or '' when it has none. */
+function artHtml(slug, title) {
+  // A long title wraps to four lines and runs to ~730px, so its drawing shrinks to stay clear of it.
+  const w = String(title).length > 40 ? 400 : 470
+  const art = CARD_ART[slug]
+  if (!art) return ''
+  const hue = ART_HUES[art.hue]
+  const swatches = Object.entries(ART_HUES)
+    .map(([name, c]) => `.art .c-${name}{--c:${c}}`)
+    .join('')
+  return `<style>
+  .art{position:absolute;right:${w > 400 ? 40 : 64}px;top:50%;width:${w}px;height:${Math.round((w * 72) / 160)}px;margin-top:-${Math.round((w * 72) / 320)}px}
+  .art:before{content:'';position:absolute;inset:-70px -50px;background:radial-gradient(ellipse at 50% 50%,${hue}29,transparent 70%)}
+  .art svg{position:relative;display:block;width:100%;height:100%;color:${ART_MUTED}}
+  .art .a{stroke:${hue}}.art .d{stroke:none;fill:${hue}}.art .f{fill:${hue}47;stroke:${hue}}
+  .art text{stroke:none;fill:currentColor;font-family:'JetBrains Mono',monospace;font-weight:700}
+  .art [class^="c-"]{stroke:var(--c);fill:color-mix(in srgb,var(--c) 22%,transparent)}${swatches}
+</style>
+<div class="art"><svg viewBox="0 0 160 72" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${art.svg}</svg></div>`
+}
+
 /** Card markup. Colours are the site's own theme tokens (theme.css dark block)
  *  written literally — this file is rendered by Chrome outside the app, so it
  *  cannot read the stylesheet's custom properties. */
-function cardHtml({ label, title, description, slug }) {
+function cardHtml({ label, title, description, slug, art }) {
   return `<!doctype html>
 <html><head><meta charset="utf-8">
 <style>
@@ -123,6 +150,7 @@ function cardHtml({ label, title, description, slug }) {
 <body>
   <svg class="sky" width="${WIDTH}" height="${HEIGHT}">${stars(slug)}</svg>
   <div class="glow"></div>
+  ${artHtml(art ?? slug, title)}
   <div class="wrap">
     <div class="label">${esc(label)}</div>
     <div class="mid">
@@ -181,6 +209,7 @@ async function main() {
     ...(isDriftfieldPublic(tools) ? DRIFTFIELD_MODES : []).map(m => ({
       kind: 'tools',
       slug: `${DRIFTFIELD_SLUG}-${m.slug}`,
+      art: DRIFTFIELD_SLUG,
       label: 'Driftfield',
       title: m.title,
       description: m.description,
