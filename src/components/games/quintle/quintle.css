@@ -137,10 +137,10 @@ div[data-type="q-tile"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid rgba(148, 163, 184, 0.2);
-  border-bottom: 3px solid rgba(0, 0, 0, 0.6);
+  border: 1.5px solid var(--color-muted);
+  border-bottom: 3px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: rgba(15, 23, 42, 0.75);
+  background: var(--color-surface-2);
   font-family: var(--font-mono);
   font-size: var(--text-title);
   font-weight: 800;

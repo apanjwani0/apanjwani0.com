@@ -200,7 +200,10 @@ class TypeTrialTool extends HTMLElement {
     this.innerHTML = `
       <div data-type="tt-game" data-tool="type-trial">
         <div data-type="tool-header">
-          <h1>Type Trial</h1>
+          <div data-type="tt-titlebar">
+            <h1>Type Trial</h1>
+            <span data-type="tt-badge">daily typing race</span>
+          </div>
           <p>How fast can you type? The Daily tab races one shared passage — same text for everyone, new at midnight UTC — with a leaderboard you can join by name. Practice categories stay entirely in your browser, and any finished run can mint a ghost link: whoever opens it races your keystrokes, replayed live.</p>
         </div>
 
