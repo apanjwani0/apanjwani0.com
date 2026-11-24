@@ -383,3 +383,49 @@ console.log('cards: no empty meta line when a conditional meta slot renders noth
   assert.match(await read('src/layouts/Base.astro'), /<slot name="head" \/>/, 'Base has the head slot the game and article routes link through')
 }
 console.log('embeds: every component stylesheet is named by EMBED_STYLES, each embed links only its own, and the export bar follows canvas-export')
+
+/* ─────  Every hub card has its own drawing, and the drawings carry no style or hex  ─────
+   src/lib/card-art.ts (used by CardArt.astro) falls back to a neutral mark for an unknown slug, which hides a
+   forgotten drawing. The slugs the three hubs render are derived from the
+   configs (tools not disabled, enabled games, published learnings) and each
+   must key the component's map. The markup is under the CSP and the token
+   rule: no style attribute, no hex colour.
+   (mutations: delete one slug's entry → fails; add style="" to a drawing → fails) */
+{
+  const { tools } = await import('../src/config/tools.ts')
+  const { games } = await import('../src/config/games.ts')
+  const { learnings } = await import('../src/config/learnings.ts')
+  const { isPublishedLearning } = await import('../src/lib/learnings.ts')
+  const art = await read('src/lib/card-art.ts')
+  const keys = new Set([...art.matchAll(/^ {2}'([a-z0-9-]+)': \{/gm)].map(m => m[1]))
+  const shown = [
+    ...tools.filter(t => t.status !== 'disabled').map(t => t.slug),
+    ...games.filter(g => g.enabled).map(g => g.slug),
+    ...learnings.filter(isPublishedLearning).map(l => l.slug),
+  ]
+  assert.ok(shown.length >= 20, `derived ${shown.length} hub slugs — too few to be checking anything`)
+  for (const slug of shown) assert.ok(keys.has(slug), `${slug} renders on a hub but src/lib/card-art.ts has no drawing for it (it would show the fallback)`)
+  const markup = art
+  assert.doesNotMatch(markup, /\bstyle\s*=/, 'CardArt markup has a style attribute, which the CSP refuses')
+  assert.doesNotMatch(markup, /#[0-9a-fA-F]{3,8}\b/, 'CardArt markup has a hex colour; colour comes from tokens in shared.css')
+}
+console.log('card art: every tool, game and article a hub renders has its own drawing, with no style attribute and no hex colour')
+
+/* ─────  A game page carries its game's hue, and its foot row has a picture per sibling  ─────
+   Every playable game's page wraps its game in `game-identity`, whose data-hue
+   comes from card-art.ts (the glow and the badge colour hang off it), and the
+   "Related" row is the picture-tile variant of RelatedLinks, which renders one
+   CardArt per item it is given. Source-text checks; the hue and tile rules in
+   shared.css are asserted too, so a rename cannot orphan them.
+   (mutations: drop the data-hue from [slug].astro → fails; drop the art tile from RelatedLinks → fails)  */
+{
+  const page = await read('src/pages/games/[slug].astro')
+  assert.match(page, /<div data-type="game-identity" data-hue=\{\(CARD_ART\[game\.slug\] \?\? CARD_ART_FALLBACK\)\.hue\}>/, 'a game page wraps its game in game-identity, hued from card-art.ts')
+  assert.match(page, /<RelatedLinks heading="Related"[^>]*\bart\b[^>]*\/>/, 'the game page foot row is the picture-tile variant of RelatedLinks')
+  const related = await read('src/components/RelatedLinks.astro')
+  assert.match(related, /art \? \(\s*<a [^>]*data-type="related-tile">\s*<CardArt slug=\{[^}]+\} \/>/, 'RelatedLinks renders a CardArt tile for every item when `art` is set')
+  const css = await read('src/styles/shared.css')
+  assert.match(css, /\[data-type="game-identity"\]\[data-hue="violet"\] \{ --art-hue/, 'shared.css sets the game page hue from data-hue')
+  assert.match(css, /\[data-type="related-tile"\]:has\(> \[data-type="card-art"\]\[data-hue="violet"\]\)/, 'shared.css gives each tile its hue')
+}
+console.log('game pages: every game page carries its hue, and the foot row has a picture tile per sibling')

@@ -4,7 +4,7 @@
  * card-badges group), card-desc, then an optional card-meta pinned to the bottom.
  * The whole card is its link through the title anchor's stretched ::after.
  *
- * Slots: `badges` (the group is rendered only when the slot is passed),
+ * Slots: `art` (a CardArt line drawing, rendered first), `badges` (the group is rendered only when the slot is passed),
  * `desc` (the description's content), `meta` (the card-meta paragraph, rendered
  * only when the slot produces content). With no `href` the title is plain text (a coming-soon card).
  */
@@ -33,6 +33,7 @@ const meta = Astro.slots.has('meta') ? (await Astro.slots.render('meta')).trim()
 ---
 
 <li data-status={status}>
+  {Astro.slots.has('art') && <slot name="art" />}
   <div data-type="card-head">
     <Title data-type="card-title">
       {href

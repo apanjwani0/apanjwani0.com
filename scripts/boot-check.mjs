@@ -17,7 +17,8 @@
  * against), on a free loopback port, requests `/`, and requires a complete 200
  * HTML page AND a process still alive a moment later — a server that answers
  * once and then dies on an unhandled rejection is as dead as one that never
- * started. Then it stops the server.
+ * started. Then it stops the server, and boots a second one that has served
+ * only `/` to prove SIGTERM ends it cleanly at once (a deploy's `docker stop`).
  *
  * Run locally it sees YOUR node_modules (devDependencies included), your OS
  * and your user, so a server that only a devDependency keeps alive passes here.
@@ -173,4 +174,38 @@ if (exited) await fail(`the server exited ${SETTLE_MS}ms after its first 200 (co
 ok(`still running ${SETTLE_MS}ms later`)
 
 await stop()
+
+// A deploy stops the container with SIGTERM, and Node as PID 1 ignores it
+// without a handler, so Docker waits 10 s and kills it. The handler must exist
+// from boot (astro.config.mjs puts src/lib/shutdown-boot.ts at the head of the
+// adapter's server entry), not only once a store is used. The server above
+// touched the webhook store, which installs the handler too, so a fresh server
+// that has served only GET / takes the signal. Outside a container, a server
+// with no handler dies by the signal (code null) rather than exiting 0.
+const sigPort = await freePort()
+const sigChild = spawn(process.execPath, [entry], {
+  cwd: root, env: { ...env, PORT: String(sigPort) }, stdio: 'ignore',
+})
+const sigExit = new Promise((resolve) => sigChild.on('exit', (code, signal) => resolve({ code, signal })))
+const sigDeadline = Date.now() + BOOT_TIMEOUT_MS
+let sigUp = false
+while (!sigUp && Date.now() < sigDeadline) {
+  sigUp = await fetch(`http://127.0.0.1:${sigPort}/`, { headers, signal: AbortSignal.timeout(5_000) })
+    .then((r) => r.text().then(() => r.status === 200), () => false)
+  if (!sigUp) await sleep(200)
+}
+if (!sigUp) {
+  sigChild.kill('SIGKILL')
+  await fail('the second server (for the SIGTERM check) never answered GET /')
+}
+const sigStart = Date.now()
+sigChild.kill('SIGTERM')
+const sigResult = await Promise.race([sigExit, sleep(2_000).then(() => null)])
+if (!sigResult) {
+  sigChild.kill('SIGKILL')
+  await fail('SIGTERM after boot did not stop the server within 2 s (no handler from boot: a deploy waits out Docker\'s 10 s grace)')
+}
+if (sigResult.code !== 0) await fail(`SIGTERM after boot ended the server with code ${sigResult.code}, signal ${sigResult.signal}; expected a clean exit 0 from the shutdown handler`)
+ok(`SIGTERM right after boot exits cleanly (${Date.now() - sigStart} ms)`)
+
 console.log('boot check ok')

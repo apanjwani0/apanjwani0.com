@@ -1,0 +1,19 @@
+---
+/**
+ * The line drawing on top of a hub card (shared.css: [data-type="card-art"]).
+ * Drawings live in src/lib/card-art.ts; an unknown slug gets the neutral mark,
+ * so a new item never breaks a hub, but `scripts/tools-hub-smoke.mjs` fails
+ * until it has its own drawing.
+ */
+import { CARD_ART, CARD_ART_FALLBACK } from '../lib/card-art'
+
+interface Props {
+  slug: string
+  hue?: string
+}
+
+const { slug, hue } = Astro.props
+const art = CARD_ART[slug] ?? CARD_ART_FALLBACK
+---
+
+<div data-type="card-art" data-hue={hue ?? art.hue} aria-hidden="true"><svg viewBox="0 0 160 72" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" focusable="false" set:html={art.svg} /></div>

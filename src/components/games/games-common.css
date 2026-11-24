@@ -190,7 +190,8 @@ div[data-group="seed"] input[type="text"] {
 :where([data-game]) div[data-type="sl-titlebar"],
 :where([data-game]) div[data-type="sf-titlebar"],
 :where([data-game]) div[data-type="tb-titlebar"],
-:where([data-game]) div[data-type="tw-titlebar"] {
+:where([data-game]) div[data-type="tw-titlebar"],
+:where([data-game]) div[data-type="tt-titlebar"] {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -209,7 +210,8 @@ div[data-group="seed"] input[type="text"] {
 :where([data-game]) div[data-type="sl-titlebar"] h1,
 :where([data-game]) div[data-type="sf-titlebar"] h1,
 :where([data-game]) div[data-type="tb-titlebar"] h1,
-:where([data-game]) div[data-type="tw-titlebar"] h1 {
+:where([data-game]) div[data-type="tw-titlebar"] h1,
+:where([data-game]) div[data-type="tt-titlebar"] h1 {
   margin: 0;
 }
 
@@ -224,7 +226,8 @@ div[data-group="seed"] input[type="text"] {
 :where([data-game]) span[data-type="sl-badge"],
 :where([data-game]) span[data-type="sf-badge"],
 :where([data-game]) span[data-type="tb-badge"],
-:where([data-game]) span[data-type="tw-badge"] {
+:where([data-game]) span[data-type="tw-badge"],
+:where([data-game]) span[data-type="tt-badge"] {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   letter-spacing: 0.02em;

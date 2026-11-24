@@ -12,6 +12,7 @@
  * bottom of the page, where the job is to be crawlable and unobtrusive.
  */
 import { shellLinkAttrs } from '../lib/shells'
+import CardArt from './CardArt.astro'
 
 interface Props {
   /** Section heading, e.g. 'Read about it' — also the nav's accessible name. */
@@ -22,9 +23,12 @@ interface Props {
   inset?: boolean
   /** The hub these items come from, pinned after the row ('Driftfield'). */
   all?: { label: string; href: string }
+  /** Picture tiles (the CardArt band over the title) in place of text chips.
+   *  The art is looked up by the last segment of each href. */
+  art?: boolean
 }
 
-const { heading, items, inset = false, all } = Astro.props
+const { heading, items, inset = false, all, art = false } = Astro.props
 
 // Derived from the heading, not a constant: a product page renders this twice
 // (siblings, plus the article about it) and two navs sharing one id is invalid
@@ -39,9 +43,18 @@ const headingId = `related-${heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').r
       <h2 id={headingId}>{heading}</h2>
       {all && <a href={all.href} {...shellLinkAttrs(all.href)} data-type="related-all">{all.label} →</a>}
     </div>
-    <ul>
+    <ul data-art={art ? '' : undefined}>
       {items.map(item => (
-        <li><a href={item.href} {...shellLinkAttrs(item.href)}>{item.title}</a></li>
+        <li>
+          {art ? (
+            <a href={item.href} {...shellLinkAttrs(item.href)} data-type="related-tile">
+              <CardArt slug={item.href.split('/').pop() ?? ''} />
+              <span>{item.title}</span>
+            </a>
+          ) : (
+            <a href={item.href} {...shellLinkAttrs(item.href)}>{item.title}</a>
+          )}
+        </li>
       ))}
     </ul>
   </nav>
@@ -140,6 +153,45 @@ const headingId = `related-${heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').r
      outside the chip is clipped at its edges, so only here it sits inside. */
   li a:focus-visible {
     outline-offset: calc(-1 * var(--focus-offset));
+  }
+
+  /* Picture tiles: the art band over the title, the whole tile one link. Hover
+     is the hub card's: border takes the hue, a small lift after a short rest. */
+  ul[data-art] li a {
+    display: flex;
+    flex-direction: column;
+    width: var(--size-art-tile);
+    padding: 0;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    white-space: normal;
+    transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-out);
+  }
+
+  ul[data-art] li a :global([data-type="card-art"]) {
+    margin: 0;
+    border-radius: 0;
+  }
+
+  ul[data-art] li a span {
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  ul[data-art] li a:is(:hover, :focus-visible) {
+    border-color: var(--art-hue);
+    transform: translateY(calc(var(--lift) - 1px));
+    transition-delay: var(--motion-rest);
+  }
+
+  ul[data-art] li a:is(:hover, :focus-visible) :global([data-type="card-art"]) {
+    color: var(--color-text);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    ul[data-art] li a:is(:hover, :focus-visible) {
+      transform: none;
+    }
   }
 
   a[data-type="related-all"] {

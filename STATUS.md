@@ -1,15 +1,14 @@
 # Status
 
-Session pickup. Rewritten each session, not appended. Last updated 17 Nov 2026.
+Session pickup. Rewritten each session, not appended. Last updated 24 Nov 2026.
 
 ## Branches
 
-- **`develop` is ahead of `main` (17 Nov), waiting for Aman's release PR:** #65 (10 more Cron Whisperer presets,
-  25 in all; the Learnings article `unable-to-get-local-issuer-certificate` with Chainsaw as its figure, the first
-  tool used as a figure; Chainsaw and the article now say curl fails "on Linux", since stock macOS curl and iOS
-  fetch a missing intermediate) plus the 15 Nov pickup commit. Approved community posts wait for this release:
-  `~/Projects/docs/sites/outreach/` (Show HN links the Chainsaw page).
-- `origin/main` is live at PR #64's merge (`1bed06f`).
+- **`develop` is ahead of `main` (24 Nov), waiting for Aman's release PR:** #80 (every hub card gets a line
+  drawing of its item in one of six hues, and lifts on hover), #81 (share cards show the same drawing; the map lives
+  in `src/lib/card-art.ts`), #82 (game pages: a glow and badge in the game's hue, a Related row of picture tiles,
+  visible Bytele tiles, a Type Trial badge). `origin/main` is live at PR #76's merge (`16f89f6`).
+- The light-theme `--color-art-*` values are unseen: the site renders dark and the theme toggle is still a stub.
 - 15 Nov, late: the image runs as uid 1001, the owner of `/opt/portfolio/data` (#63). From 11 Aug it ran as
   uid 100 and no data file ever saved in production (visits, analytics, both leaderboards, the interest
   counter, webhook bins); verified saving after the deploy. Cloudflare now rate-limits 50 requests / 10 s per IP.
