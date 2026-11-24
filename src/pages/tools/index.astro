@@ -3,6 +3,7 @@ export const prerender = false
 
 import Base from '../../layouts/Base.astro'
 import Card from '../../components/Card.astro'
+import CardArt from '../../components/CardArt.astro'
 import JsonLd from '../../components/JsonLd.astro'
 import { getSite, getTools } from '../../lib/config'
 import { collectionPageJsonLd } from '../../lib/jsonld'
@@ -89,6 +90,7 @@ const ldJson = collectionPageJsonLd({
               descAs="p"
               level={3}
             >
+              <CardArt slot="art" slug={tool.slug} />
               <Fragment slot="badges">
                 {tool.status === 'wip' && <span data-type="tool-wip">coming soon</span>}
                 {/* The arrow is decorative — without aria-hidden a screen reader

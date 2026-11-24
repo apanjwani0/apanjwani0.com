@@ -638,6 +638,77 @@ p[data-type="card-meta"] {
   position: relative;
 }
 
+/* The line drawing on top of a hub card (CardArt.astro). The card takes its
+   hue from the band's data-hue (the six :has rules below). The band bleeds to the
+   card's edges (negative margins cancel the card padding) and has a fixed ratio,
+   so nothing shifts as it loads. It is a plain block under the title's stretched
+   ::after, so a click on it still follows the card's link. Strokes are muted;
+   `.a` strokes, `.d` dots and `.f` fills take the card's hue; `.c-<hue>` is a
+   fixed one (the swatch drawings). Nothing here animates on a timer. */
+[data-type="card-art"] {
+  margin: calc(-1 * var(--space-card)) calc(-1 * var(--space-card)) 0;
+  aspect-ratio: 160 / 72;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background:
+    radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--art-hue) 16%, transparent), transparent 70%),
+    var(--color-surface-2);
+  color: var(--color-muted);
+  pointer-events: none;
+  overflow: hidden;
+  transition: color var(--motion-base) var(--ease-out);
+}
+
+[data-type="card-art"] svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+[data-type="card-art"] .a { stroke: var(--art-hue); }
+[data-type="card-art"] .d { stroke: none; fill: var(--art-hue); }
+[data-type="card-art"] .f { fill: color-mix(in srgb, var(--art-hue) 28%, transparent); stroke: var(--art-hue); }
+[data-type="card-art"] text {
+  stroke: none;
+  fill: currentColor;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+[data-type="card-art"] .c-violet { --c: var(--color-art-violet); }
+[data-type="card-art"] .c-amber { --c: var(--color-art-amber); }
+[data-type="card-art"] .c-teal { --c: var(--color-art-teal); }
+[data-type="card-art"] .c-rose { --c: var(--color-art-rose); }
+[data-type="card-art"] .c-sky { --c: var(--color-art-sky); }
+[data-type="card-art"] .c-lime { --c: var(--color-art-lime); }
+[data-type="card-art"] [class^="c-"] {
+  stroke: var(--c);
+  fill: color-mix(in srgb, var(--c) 22%, transparent);
+}
+
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="violet"]) { --art-hue: var(--color-art-violet); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="amber"]) { --art-hue: var(--color-art-amber); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="teal"]) { --art-hue: var(--color-art-teal); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="rose"]) { --art-hue: var(--color-art-rose); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="sky"]) { --art-hue: var(--color-art-sky); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="lime"]) { --art-hue: var(--color-art-lime); }
+
+/* A card with art lifts a little more, takes its hue as the border, and brightens
+   the drawing. The short delay keeps a mouse passing over the grid from flicking
+   every card; it applies to the hover state only, so leaving is immediate. */
+[data-type="card-grid"] > :has(> [data-type="card-art"]):is(:hover, :focus-within) {
+  border-color: var(--art-hue);
+  transform: translateY(calc(var(--lift) - 1px));
+  transition-delay: 60ms;
+}
+[data-type="card-grid"] > :has(> [data-type="card-art"]):is(:hover, :focus-within) [data-type="card-art"] {
+  color: var(--color-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-type="card-grid"] > :has(> [data-type="card-art"]):is(:hover, :focus-within) {
+    transform: none;
+  }
+}
+
 /* No min-height on the title link: the stretched ::after above makes the whole
    card the tap target, so the 29px link is no longer the thing a thumb has to
    hit. Padding the link instead would inflate every card to satisfy a floor

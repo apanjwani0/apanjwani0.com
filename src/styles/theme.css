@@ -68,6 +68,14 @@
   --tone-amber: #c27a0e;
   --tone-red: #c7413a;
   --tone-violet: #7a5bd8;
+  /* Hub card art hues: line-drawing accents, held to 3:1 on --color-surface and
+     --color-surface-2 (4.2:1 or better here). The dark block lightens them. */
+  --color-art-violet: #6d4fd6;
+  --color-art-amber: #a86200;
+  --color-art-teal: #0c7c76;
+  --color-art-rose: #c2335e;
+  --color-art-sky: #1d6cb5;
+  --color-art-lime: #547a0c;
 
   /* ── Elevation ───────────────────────────────────────────────
      Three steps, smallest first: a resting control, a lifted card, a surface
@@ -275,6 +283,12 @@
   --tone-amber: #f2a93b;
   --tone-red: #ff7a72;
   --tone-violet: #a98cff;
+  --color-art-violet: #a78bfa;
+  --color-art-amber: #f2a93b;
+  --color-art-teal: #2dd4bf;
+  --color-art-rose: #fb7185;
+  --color-art-sky: #5eb4ff;
+  --color-art-lime: #a3e635;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6), 0 4px 14px rgba(0, 0, 0, 0.45);
