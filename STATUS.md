@@ -1,14 +1,21 @@
 # Status
 
-Session pickup. Rewritten each session, not appended. Last updated 24 Nov 2026.
+Session pickup. Rewritten each session, not appended. Last updated 25 Nov 2026.
 
 ## Branches
 
-- **`develop` is ahead of `main` (24 Nov), waiting for Aman's release PR:** #80 (every hub card gets a line
-  drawing of its item in one of six hues, and lifts on hover), #81 (share cards show the same drawing; the map lives
-  in `src/lib/card-art.ts`), #82 (game pages: a glow and badge in the game's hue, a Related row of picture tiles,
-  visible Bytele tiles, a Type Trial badge). `origin/main` is live at PR #76's merge (`16f89f6`).
+- **Live since 24 Nov 20:16 UTC (PR #83):** hub card drawings (#80), share cards with drawings (#81), game page
+  hues and picture-tile Related row (#82). Checked live after deploy: 60/60 pages 200, heads and JSON-LD unchanged,
+  all share images fresh, PageSpeed mobile 98 with CLS 0 on /, /games, /tools.
+- **`develop` is ahead of `main`:** #84, Poker Trainer raises on two-opponent river spots (turn multiway stays
+  call-only). Waits for Aman's next release PR.
+- Decisions on 24-25 Nov, all agent calls: line drawings per item and the hover lift; dropped the game-header
+  emblem (read as a stray button); kept the heading "Related" because the row also holds tools; the multiway river
+  raise (Aman asked the agent to decide).
 - The light-theme `--color-art-*` values are unseen: the site renders dark and the theme toggle is still a stub.
+- The daily site-numbers task (`~/Projects/docs/sites/metrics`) gained a release watch, "Within reach" searches,
+  weekly link and PageSpeed checks and `ideas.md` on 25 Nov; its first run on the new prompt is 25 Nov 09:41 IST.
+  Backup of the old scripts and prompt: `backup-2026-11-25/` there.
 - 15 Nov, late: the image runs as uid 1001, the owner of `/opt/portfolio/data` (#63). From 11 Aug it ran as
   uid 100 and no data file ever saved in production (visits, analytics, both leaderboards, the interest
   counter, webhook bins); verified saving after the deploy. Cloudflare now rate-limits 50 requests / 10 s per IP.
