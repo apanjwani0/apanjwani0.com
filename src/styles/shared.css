@@ -684,12 +684,24 @@ p[data-type="card-meta"] {
   fill: color-mix(in srgb, var(--c) 22%, transparent);
 }
 
-[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="violet"]) { --art-hue: var(--color-art-violet); }
-[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="amber"]) { --art-hue: var(--color-art-amber); }
-[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="teal"]) { --art-hue: var(--color-art-teal); }
-[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="rose"]) { --art-hue: var(--color-art-rose); }
-[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="sky"]) { --art-hue: var(--color-art-sky); }
-[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="lime"]) { --art-hue: var(--color-art-lime); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="violet"]),
+[data-type="related-tile"]:has(> [data-type="card-art"][data-hue="violet"]),
+[data-type="game-identity"][data-hue="violet"] { --art-hue: var(--color-art-violet); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="amber"]),
+[data-type="related-tile"]:has(> [data-type="card-art"][data-hue="amber"]),
+[data-type="game-identity"][data-hue="amber"] { --art-hue: var(--color-art-amber); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="teal"]),
+[data-type="related-tile"]:has(> [data-type="card-art"][data-hue="teal"]),
+[data-type="game-identity"][data-hue="teal"] { --art-hue: var(--color-art-teal); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="rose"]),
+[data-type="related-tile"]:has(> [data-type="card-art"][data-hue="rose"]),
+[data-type="game-identity"][data-hue="rose"] { --art-hue: var(--color-art-rose); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="sky"]),
+[data-type="related-tile"]:has(> [data-type="card-art"][data-hue="sky"]),
+[data-type="game-identity"][data-hue="sky"] { --art-hue: var(--color-art-sky); }
+[data-type="card-grid"] > :has(> [data-type="card-art"][data-hue="lime"]),
+[data-type="related-tile"]:has(> [data-type="card-art"][data-hue="lime"]),
+[data-type="game-identity"][data-hue="lime"] { --art-hue: var(--color-art-lime); }
 
 /* A card with art lifts a little more, takes its hue as the border, and brightens
    the drawing. The short delay keeps a mouse passing over the grid from flicking
@@ -701,6 +713,19 @@ p[data-type="card-meta"] {
 }
 [data-type="card-grid"] > :has(> [data-type="card-art"]):is(:hover, :focus-within) [data-type="card-art"] {
   color: var(--color-text);
+}
+
+/* A game page: its own colour as a faint glow behind the header, and the badge
+   beside the title in the same hue. The glow is one gradient tile at the top of
+   the wrapper that fades to fully transparent inside the tile on every side, so
+   no edge shows at any width. */
+[data-type="game-identity"] {
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, color-mix(in srgb, var(--art-hue) 9%, transparent), transparent) top / 100% var(--size-art-glow) no-repeat;
+}
+
+[data-type="game-identity"] [data-type$="-badge"] {
+  color: var(--art-hue);
+  border-color: var(--art-hue);
 }
 
 @media (prefers-reduced-motion: reduce) {

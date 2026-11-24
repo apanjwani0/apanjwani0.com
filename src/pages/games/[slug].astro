@@ -8,6 +8,7 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro'
 import JsonLd from '../../components/JsonLd.astro'
 import { buildBreadcrumbs } from '../../lib/breadcrumbs'
 import RelatedLinks from '../../components/RelatedLinks.astro'
+import { CARD_ART, CARD_ART_FALLBACK } from '../../lib/card-art'
 import { webAppJsonLd } from '../../lib/jsonld'
 import { existingOgCardPath, gameHasOgCard } from '../../lib/og'
 import { gameTag, isPlayableGame } from '../../lib/games'
@@ -112,40 +113,44 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
   {GameTag && embedStyles(slug).map(href => <link slot="head" rel="stylesheet" href={href} />)}
   {GameTag && embedPreloads(slug).map(href => <link slot="head" rel="modulepreload" href={href} />)}
   <Breadcrumbs items={crumbs} />
-  {GameTag && slug === 'poker-trainer' && (
-    <poker-trainer-game data-game="poker-trainer">
-      <div data-type="pt-game">
-        <div data-type="pt-header">
-          <div data-type="pt-titlebar">
-            <h1>{game.title}</h1>
-            <span data-type="pt-badge">exact, never sampled</span>
+  {GameTag && (
+    <div data-type="game-identity" data-hue={(CARD_ART[game.slug] ?? CARD_ART_FALLBACK).hue}>
+    {GameTag && slug === 'poker-trainer' && (
+      <poker-trainer-game data-game="poker-trainer">
+        <div data-type="pt-game">
+          <div data-type="pt-header">
+            <div data-type="pt-titlebar">
+              <h1>{game.title}</h1>
+              <span data-type="pt-badge">exact, never sampled</span>
+            </div>
+            <div data-type="project-description" set:html={gameIntroHtml} />
           </div>
-          <div data-type="project-description" set:html={gameIntroHtml} />
-        </div>
 
-        <nav data-type="pt-tabs" role="tablist">
-          <button role="tab" data-mode="drill" type="button" data-active="true" aria-selected="true">Play a spot</button>
-          <button role="tab" data-mode="solve" type="button" aria-selected="false">Run the numbers</button>
-          <button role="tab" data-mode="learn" type="button" aria-selected="false">How to think (Concepts)</button>
-        </nav>
+          <nav data-type="pt-tabs" role="tablist">
+            <button role="tab" data-mode="drill" type="button" data-active="true" aria-selected="true">Play a spot</button>
+            <button role="tab" data-mode="solve" type="button" aria-selected="false">Run the numbers</button>
+            <button role="tab" data-mode="learn" type="button" aria-selected="false">How to think (Concepts)</button>
+          </nav>
 
-        <section data-type="pt-panel" data-panel="drill">
-          <div data-type="pt-spotcard">
-            <div data-type="pt-felt" data-placeholder="true">
-              <div data-type="pt-table">
-                <div data-type="pt-table-watermark">POKER TRAINER</div>
+          <section data-type="pt-panel" data-panel="drill">
+            <div data-type="pt-spotcard">
+              <div data-type="pt-felt" data-placeholder="true">
+                <div data-type="pt-table">
+                  <div data-type="pt-table-watermark">POKER TRAINER</div>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-      </div>
-    </poker-trainer-game>
-  )}
-  {GameTag && slug !== 'poker-trainer' && (
-    <GameTag data-game={game.slug}>
-      <h1>{game.title}</h1>
-      <div data-type="project-description" set:html={gameIntroHtml} />
-    </GameTag>
+          </section>
+        </div>
+      </poker-trainer-game>
+    )}
+    {GameTag && slug !== 'poker-trainer' && (
+      <GameTag data-game={game.slug}>
+        <h1>{game.title}</h1>
+        <div data-type="project-description" set:html={gameIntroHtml} />
+      </GameTag>
+    )}
+    </div>
   )}
   {!GameTag && (
     <>
@@ -181,7 +186,7 @@ const interestCount = GameTag ? 0 : await getInterest(game.slug)
     </>
   )}
   {gameSeoContentHtml && <section data-type="seo-support" set:html={gameSeoContentHtml} />}
-  <RelatedLinks heading="Related" items={related} />
+  <RelatedLinks heading="Related" items={related} art all={{ label: 'All games', href: '/games' }} />
   <RelatedLinks heading="Read about it" items={stories} />
 
   {GameTag && slug === 'poker-trainer' && (

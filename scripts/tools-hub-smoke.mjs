@@ -410,3 +410,22 @@ console.log('embeds: every component stylesheet is named by EMBED_STYLES, each e
   assert.doesNotMatch(markup, /#[0-9a-fA-F]{3,8}\b/, 'CardArt markup has a hex colour; colour comes from tokens in shared.css')
 }
 console.log('card art: every tool, game and article a hub renders has its own drawing, with no style attribute and no hex colour')
+
+/* ─────  A game page carries its game's hue, and its foot row has a picture per sibling  ─────
+   Every playable game's page wraps its game in `game-identity`, whose data-hue
+   comes from card-art.ts (the glow and the badge colour hang off it), and the
+   "Related" row is the picture-tile variant of RelatedLinks, which renders one
+   CardArt per item it is given. Source-text checks; the hue and tile rules in
+   shared.css are asserted too, so a rename cannot orphan them.
+   (mutations: drop the data-hue from [slug].astro → fails; drop the art tile from RelatedLinks → fails)  */
+{
+  const page = await read('src/pages/games/[slug].astro')
+  assert.match(page, /<div data-type="game-identity" data-hue=\{\(CARD_ART\[game\.slug\] \?\? CARD_ART_FALLBACK\)\.hue\}>/, 'a game page wraps its game in game-identity, hued from card-art.ts')
+  assert.match(page, /<RelatedLinks heading="Related"[^>]*\bart\b[^>]*\/>/, 'the game page foot row is the picture-tile variant of RelatedLinks')
+  const related = await read('src/components/RelatedLinks.astro')
+  assert.match(related, /art \? \(\s*<a [^>]*data-type="related-tile">\s*<CardArt slug=\{[^}]+\} \/>/, 'RelatedLinks renders a CardArt tile for every item when `art` is set')
+  const css = await read('src/styles/shared.css')
+  assert.match(css, /\[data-type="game-identity"\]\[data-hue="violet"\] \{ --art-hue/, 'shared.css sets the game page hue from data-hue')
+  assert.match(css, /\[data-type="related-tile"\]:has\(> \[data-type="card-art"\]\[data-hue="violet"\]\)/, 'shared.css gives each tile its hue')
+}
+console.log('game pages: every game page carries its hue, and the foot row has a picture tile per sibling')

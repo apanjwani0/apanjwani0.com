@@ -92,6 +92,7 @@
   /* ── Motion ──────────────────────────────────────────────────
      Tasteful and short. shared.css's prefers-reduced-motion block is the off
      switch for all of it, so a duration here never needs its own opt-out. */
+  --motion-rest: 60ms;       /* rest before a hover lift starts */
   --motion-fast: 120ms;      /* hover, press, colour changes    */
   --motion-base: 180ms;      /* reveals, lifts, small moves     */
   --motion-page: 240ms;      /* page-level transitions          */
@@ -223,6 +224,8 @@
      ordered rung scale, which these are not. */
   --measure-narrow: 34rem;  /* an error page's column            */
   --measure-about: 38rem;   /* the footer's about block          */
+  --size-art-glow: 10rem;    /* the glow behind a game page's header */
+  --size-art-tile: 11.5rem;  /* a picture tile in the foot row    */
   --measure-text: 42rem;    /* a lede or short prose block       */
   --pad-block-fluid: clamp(2rem, 8vw, 4rem); /* an error page's vertical room */
   --pad-tool-y: 2rem;       /* the tools' workbench and its pending placeholder */
