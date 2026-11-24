@@ -142,6 +142,7 @@ function cardHtml({ label, title, description, slug, art }) {
          text-transform:uppercase;color:#8fa3c8}
   .mid{flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:26px}
   h1{font-size:76px;line-height:1.06;font-weight:600;letter-spacing:-.015em;max-width:16ch}
+  h1.long{font-size:54px;line-height:1.08}
   p{margin-top:26px;font-size:31px;line-height:1.42;color:#aab4c8;max-width:30ch}
   .foot{display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',ui-monospace,monospace;
         font-size:22px;color:#8fa3c8}
@@ -154,7 +155,7 @@ function cardHtml({ label, title, description, slug, art }) {
   <div class="wrap">
     <div class="label">${esc(label)}</div>
     <div class="mid">
-      <h1>${esc(title)}</h1>
+      <h1${String(title).length > 40 ? ' class="long"' : ''}>${esc(title)}</h1>
       <p>${esc(description)}</p>
     </div>
     <div class="foot"><span class="dot"></span><span>apanjwani0.com</span></div>
