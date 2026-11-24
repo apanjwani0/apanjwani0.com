@@ -3,6 +3,7 @@ export const prerender = false
 
 import Base from '../layouts/Base.astro'
 import Card from '../components/Card.astro'
+import CardArt from '../components/CardArt.astro'
 import JsonLd from '../components/JsonLd.astro'
 import { getSite, getLearnings } from '../lib/config'
 import { itemListJsonLd } from '../lib/jsonld'
@@ -46,6 +47,7 @@ const ldJson = itemListJsonLd(
   <ul data-type="card-grid">
     {ordered.map(l => (
       <Card title={l.title} href={`/learnings/${l.slug}`}>
+        <CardArt slot="art" slug={l.slug} />
         <Fragment slot="desc" set:html={render(l.summary)} />
         <span slot="meta" data-type="writing-date"><time datetime={l.date}>{formatDisplayDate(l.date)}</time> · {readingTime(l.content)} min read</span>
       </Card>

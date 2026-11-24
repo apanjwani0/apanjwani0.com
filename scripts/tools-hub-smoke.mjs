@@ -383,3 +383,30 @@ console.log('cards: no empty meta line when a conditional meta slot renders noth
   assert.match(await read('src/layouts/Base.astro'), /<slot name="head" \/>/, 'Base has the head slot the game and article routes link through')
 }
 console.log('embeds: every component stylesheet is named by EMBED_STYLES, each embed links only its own, and the export bar follows canvas-export')
+
+/* ─────  Every hub card has its own drawing, and the drawings carry no style or hex  ─────
+   CardArt.astro falls back to a neutral mark for an unknown slug, which hides a
+   forgotten drawing. The slugs the three hubs render are derived from the
+   configs (tools not disabled, enabled games, published learnings) and each
+   must key the component's map. The markup is under the CSP and the token
+   rule: no style attribute, no hex colour.
+   (mutations: delete one slug's entry → fails; add style="" to a drawing → fails) */
+{
+  const { tools } = await import('../src/config/tools.ts')
+  const { games } = await import('../src/config/games.ts')
+  const { learnings } = await import('../src/config/learnings.ts')
+  const { isPublishedLearning } = await import('../src/lib/learnings.ts')
+  const art = await read('src/components/CardArt.astro')
+  const keys = new Set([...art.matchAll(/^ {2}'([a-z0-9-]+)': \{/gm)].map(m => m[1]))
+  const shown = [
+    ...tools.filter(t => t.status !== 'disabled').map(t => t.slug),
+    ...games.filter(g => g.enabled).map(g => g.slug),
+    ...learnings.filter(isPublishedLearning).map(l => l.slug),
+  ]
+  assert.ok(shown.length >= 20, `derived ${shown.length} hub slugs — too few to be checking anything`)
+  for (const slug of shown) assert.ok(keys.has(slug), `${slug} renders on a hub but CardArt.astro has no drawing for it (it would show the fallback)`)
+  const markup = art.slice(art.indexOf('const ART'), art.indexOf('const { slug, hue }'))
+  assert.doesNotMatch(markup, /\bstyle\s*=/, 'CardArt markup has a style attribute, which the CSP refuses')
+  assert.doesNotMatch(markup, /#[0-9a-fA-F]{3,8}\b/, 'CardArt markup has a hex colour; colour comes from tokens in shared.css')
+}
+console.log('card art: every tool, game and article a hub renders has its own drawing, with no style attribute and no hex colour')

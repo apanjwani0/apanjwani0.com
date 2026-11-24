@@ -3,6 +3,7 @@ export const prerender = false
 
 import Base from '../layouts/Base.astro'
 import Card from '../components/Card.astro'
+import CardArt from '../components/CardArt.astro'
 import JsonLd from '../components/JsonLd.astro'
 import { getSite, getGames } from '../lib/config'
 import { render } from '../lib/markdown'
@@ -60,6 +61,7 @@ const metaDescription =
     <ul data-type="card-grid">
       {games.map(g => (
         <Card title={g.title} href={`/games/${g.slug}`} descAs="div">
+          <CardArt slot="art" slug={g.slug} />
           <Fragment slot="badges">
             {isPlayableGame(g) ? (
               <span data-type="game-badge" data-live>play <span aria-hidden="true">&rsaquo;</span></span>

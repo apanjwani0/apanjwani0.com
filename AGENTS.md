@@ -217,7 +217,8 @@ The tool-engine rules (an observation must not be taken through a lens that alte
   under `/tools/<x>` (asserted from the page files).
 - **The /tools hub is grouped by `TOOL_GROUPS` in `src/lib/tools.ts`**: a new
   live tool joins exactly one group (asserted), and a group's lede is one plain
-  sentence. "try:" links (`src/lib/tool-tries.ts`) open a tool with a real,
+  sentence. A new live tool, game or article also needs its line drawing in
+  `src/components/CardArt.astro` (asserted). "try:" links (`src/lib/tool-tries.ts`) open a tool with a real,
   checked input and only prefill: a server tool still waits for its button.
 - **`/terms` states what the code keeps.** A change that makes a tool or route
   store something new updates `src/pages/terms.astro` in the same commit; its

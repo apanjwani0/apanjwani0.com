@@ -210,6 +210,7 @@ are asserted by `npm run security:smoke`.
   lives in `src/components/tools/<slug>/` and a game's in `src/components/games/<slug>/`; the
   listing is its entry in `src/config/` (read through `src/lib/config.ts`), and
   the existing `[slug].astro` route renders it.
+- **A hub card's art band is a line drawing per slug.** A new live tool, game or article adds its drawing to `src/components/CardArt.astro` (a literal SVG, classes for colour, no `style=`, no hex); `tools-hub-smoke.mjs` fails until it does.
 - **Accessibility in tools.** Asserted over every tool source by
   `scripts/smoke/tool-a11y.mjs`.
   - Every `<input>`, `<textarea>` and `<select>` has an `aria-label`, an
