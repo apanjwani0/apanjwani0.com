@@ -477,6 +477,87 @@ export function equityVsRanges(
   return { equity: total / pairs, pairs, runouts, aheadOf: ahead / pairs }
 }
 
+/** One way a raise can be answered: how many pairs of hands answer it so, and hero's pot shares summed over them. */
+export interface RaiseOutcome {
+  pairs: number
+  /** Sum over these pairs of hero's share of the showdown: 1 a win, 1/2 or 1/3 a tie, 0 a loss. */
+  won: number
+}
+
+export interface RiverRaiseCounts {
+  /** Every legal pair, one hand from each range sharing no card: the same pairs `equityVsRanges` counts. */
+  pairs: number
+  bothFold: number
+  /** Only the first range's hand continues: hero against it alone. */
+  firstOnly: RaiseOutcome
+  /** Only the second range's hand continues. */
+  secondOnly: RaiseOutcome
+  /** Both continue: a three-way showdown. */
+  both: RaiseOutcome
+}
+
+/**
+ * How a river raise is answered by two opponents, counted over every pair of hands.
+ *
+ * Assumes Hold'em and a five-card board, so each pair's showdown is settled
+ * with no cards to come. `keeps` are the hands from each range that continue
+ * against the raise (each a subset of its range); every other hand folds. Each
+ * opponent decides on their own hand, and a pair lands in exactly one of the
+ * four outcomes. Combos that use hero's or the board's cards are skipped, and
+ * pairs are weighted equally, as in `equityVsRanges`. Throws when no legal pair
+ * remains.
+ */
+export function riverRaiseCounts(
+  hero: Card[],
+  board: Card[],
+  ranges: readonly [Card[][], Card[][]],
+  keeps: readonly [Card[][], Card[][]],
+): RiverRaiseCounts {
+  if (hero.length !== 2 || board.length !== 5) throw new Error('A river raise needs two hole cards and five board cards.')
+  const dead = new Set([...hero, ...board].map(cardKey))
+  const heroScore = scoreBest([...hero, ...board])
+  const comboKey = (hand: Card[]) => hand.map(cardKey).sort().join(',')
+  const prepare = (range: Card[][], keep: Card[][]) => {
+    const kept = new Set(keep.map(comboKey))
+    return range
+      .filter(hand => hand.length === 2 && !hand.some(card => dead.has(cardKey(card))))
+      .map(hand => ({
+        ids: [cardId(hand[0]), cardId(hand[1])],
+        score: scoreBest([...hand, ...board]),
+        keeps: kept.has(comboKey(hand)),
+      }))
+  }
+  const listA = prepare(ranges[0], keeps[0])
+  const listB = prepare(ranges[1], keeps[1])
+
+  // Hero's share of a showdown against the hands that stayed in.
+  const share = (scores: number[]) => {
+    const best = Math.max(heroScore, ...scores)
+    if (heroScore !== best) return 0
+    return 1 / (1 + scores.filter(score => score === best).length)
+  }
+
+  const counts: RiverRaiseCounts = {
+    pairs: 0,
+    bothFold: 0,
+    firstOnly: { pairs: 0, won: 0 },
+    secondOnly: { pairs: 0, won: 0 },
+    both: { pairs: 0, won: 0 },
+  }
+  for (const a of listA) {
+    for (const b of listB) {
+      if (a.ids[0] === b.ids[0] || a.ids[0] === b.ids[1] || a.ids[1] === b.ids[0] || a.ids[1] === b.ids[1]) continue
+      counts.pairs++
+      if (a.keeps && b.keeps) { counts.both.pairs++; counts.both.won += share([a.score, b.score]) }
+      else if (a.keeps) { counts.firstOnly.pairs++; counts.firstOnly.won += share([a.score]) }
+      else if (b.keeps) { counts.secondOnly.pairs++; counts.secondOnly.won += share([b.score]) }
+      else counts.bothFold++
+    }
+  }
+  if (counts.pairs === 0) throw new Error('Every pair of opposing hands is blocked by the known cards.')
+  return counts
+}
+
 /**
  * Cards that improve a hand to the current best, given a board.
  *

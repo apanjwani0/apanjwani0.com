@@ -236,6 +236,28 @@ function noteFor(tone: BetTone, kind: BetKind, river: boolean): string {
   }
 }
 
+/** The sentence the page prints for what a player who only called keeps against a raise. */
+export const CALLER_VS_RAISE_NOTE = 'The player who only called keeps two pair or better against your raise and folds everything else. A hand that only plays the cards on the board does not count.'
+
+/**
+ * The hands a river caller keeps when hero raises behind them.
+ *
+ * Assumes a five-card board and combos free of the board's cards. A player who
+ * only called the bet showed nothing worth raising with, so against a raise
+ * they keep two pair or better, counted only when their best five cards beat
+ * the board's own five (playing the board is not a hand of theirs). No bluffs
+ * and no fallback: when nothing qualifies, the caller always folds, which is
+ * an answer the model can price exactly.
+ */
+export function callerVsRaise(combos: Card[][], board: Card[]): Card[][] {
+  if (board.length !== 5) throw new Error('A caller facing a raise is only modelled on the river.')
+  const boardScore = scoreBest(board)
+  return combos.filter(combo => {
+    const score = strength(combo, board)
+    return score >> CATEGORY_SHIFT >= HAND_CATEGORY.TWO_PAIR && score > boardScore
+  })
+}
+
 /**
  * Narrow a range to the hands that would make this bet or raise.
  *

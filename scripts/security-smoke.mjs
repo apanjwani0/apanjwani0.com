@@ -1401,7 +1401,7 @@ for (const dir of toolDirs.filter(d => d.isDirectory())) {
   }
   // The drill must take its verdict from the engine's judge, not from a local
   // comparison, so the numbers on the page and the rule that graded them cannot drift.
-  assert.ok(ptSrc.includes('judge(spot, result, raiseResult)'), 'the drill grades through judge()')
+  assert.ok(ptSrc.includes('judge(spot, result, raiseResult ?? raiseCounts)'), 'the drill grades through judge()')
   assert.ok(!/result\.equity >= 0\.\d+ \? 'raise'/.test(ptSrc), 'no hidden raise threshold in the drill')
 
   // The two fractions must stay separate numbers. Collapsing them back into one

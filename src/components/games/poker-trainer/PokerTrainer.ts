@@ -43,6 +43,7 @@ import {
   rangeWork,
   rankHand,
   requiredEquity,
+  riverRaiseCounts,
   type MultiwayEquityResult,
   type RangeEquityResult,
   type Variant,
@@ -54,16 +55,18 @@ import {
   cachedRangeCombos,
   type ParsedCombos,
 } from './engine/equity-cache'
-import { MIN_CONTINUING, RIVER_BLUFFS, continuingRange, fallbackSentence, toneForSize, type BetTone } from './engine/continuing'
+import { CALLER_VS_RAISE_NOTE, MIN_CONTINUING, RIVER_BLUFFS, continuingRange, fallbackSentence, toneForSize, type BetTone } from './engine/continuing'
 import {
   RAISE_MARGIN,
   fmtChips,
   fmtPercent,
+  OUTCOME_WORDS,
   judge,
-  raiseContinuingCombos,
+  raiseContinuing,
   raiseModelled,
   raiseTo,
   type Judgement,
+  type MultiwayRaiseFigures,
 } from './engine/decide'
 import { PRESET_RANGES } from './engine/ranges'
 import {
@@ -185,6 +188,8 @@ interface PtGraded {
   result: RangeEquityResult | MultiwayEquityResult
   /** Equity against the hands that would call a raise, with how many hands that is. Null when no raise is modelled. */
   raiseResult: { equity: number; combos: number; runouts: number } | null
+  /** How both opponents answer a river raise, counted exactly. Null unless a raise is modelled against two. */
+  raiseCounts: MultiwayRaiseFigures | null
   right: boolean
 }
 
@@ -355,9 +360,9 @@ function ptOpponentSeat(spot: Spot, index: number, answered: boolean): string {
 /** The lines that say why the drill offers no raise, or null when it does. */
 function ptNoRaiseReason(spot: Spot): string | null {
   if (raiseModelled(spot)) return null
-  if (spot.opponents.length > 1) return 'With two opponents this drill grades the call only.'
   if (spot.allIn) return 'They are all in, so raising adds nothing.'
-  return 'You do not have enough chips behind to raise, so this drill grades the call only.'
+  if (spot.effectiveStack <= spot.bet) return 'You do not have enough chips behind to raise, so this drill grades the call only.'
+  return 'With two opponents on the turn, this drill grades the call only. What a raise is worth here depends on the betting still to come on the river, and the drill does not play that out.'
 }
 
 /** The headline for what you chose against what the numbers said, with the engine's own reasons as the detail. */
@@ -412,6 +417,7 @@ function ptRaiseWorking(spot: Spot, to: number): string {
 
 /** The raise half of the ledger: one card with every quantity the raise needed, or the reason there is none. */
 function ptRaiseCard(spot: Spot, judgement: Judgement, raiseResult: PtGraded['raiseResult']): string {
+  if (judgement.raiseMultiway) return ptMultiwayRaiseCard(spot, judgement)
   const raise = judgement.raise
   if (!raise || !raiseResult) {
     return `
@@ -452,6 +458,68 @@ function ptRaiseCard(spot: Spot, judgement: Judgement, raiseResult: PtGraded['ra
         ${row('Raise EV', `${ptSigned(raise.ev)} chips`, `${fmtPercent(raise.theyFold)} × ${fmtChips(potNow)} + ${fmtPercent(raise.theyCall)} × (${fmtPercent(raise.equityVsCallers)} × ${fmtChips(callTotal)} − ${fmtChips(added)}) = ${ptSigned(raise.ev)}`, 'The average chips a raise wins: the pot now when they fold, plus your share of the bigger pot minus the chips you add when they call.')}
       </div>
       <p data-type="pt-math-desc">A raise is only the best play when its EV beats the EV of calling (${ptSigned(judgement.callEv)} chips) by more than ${RAISE_MARGIN * 100}% of the pot now (${fmtChips(margin)} chips), and when your equity against the callers is at least the equity you need if called. The margin is there because this drill does not model what happens on later streets, and because it uses one fixed guess about which hands would call a raise.</p>
+    </div>
+  `
+}
+
+/** What one of the four answers to a raise means, for its ledger row. */
+const PT_OUTCOME_MEANING: Record<string, string> = {
+  'both-fold': 'Neither keeps a hand worth calling with, so you win the pot now without a showdown.',
+  'bettor-calls': 'The bettor calls and the caller folds, so you show down against the bettor alone.',
+  'caller-calls': 'The caller calls and the bettor folds, so you show down against the caller alone.',
+  'both-call': 'Both of them call, so you show down against both hands for the biggest pot.',
+}
+
+/** The raise card for two opponents on the river: who keeps what, the four ways it can go, and Raise EV from them. */
+function ptMultiwayRaiseCard(spot: Spot, judgement: Judgement): string {
+  const r = judgement.raiseMultiway
+  if (!r) return ''
+  const { potNow } = judgement.derived
+  const notes = raiseContinuing(spot).map(keep => keep.note)
+  const row = (label: string, value: string, working: string, definition: string) => `
+    <div data-type="pt-ledger-row">
+      <span data-type="pt-ledger-label">${label}: ${escapeHtml(value)}</span>
+      <div data-type="pt-ledger-content">
+        <code>${escapeHtml(working)}</code>
+        <span>${escapeHtml(definition)}</span>
+      </div>
+    </div>
+  `
+  const pairs = r.pairs.toLocaleString()
+  const outcomeRows = r.outcomes.map(o => {
+    const name = OUTCOME_WORDS[o.id]
+    const label = name.charAt(0).toUpperCase() + name.slice(1)
+    const share = `${o.pairs.toLocaleString()} ÷ ${pairs} pairs = ${fmtPercent(o.share)}`
+    if (o.id === 'both-fold') {
+      return row(label, fmtPercent(o.share), `${share}; you win the pot now, ${fmtChips(o.pot)} chips`, PT_OUTCOME_MEANING[o.id])
+    }
+    const equity = o.pairs > 0
+      ? `; your equity ${ptCount(o.equity * o.pairs)} ÷ ${o.pairs.toLocaleString()} = ${fmtPercent(o.equity)} of a ${fmtChips(o.pot)} chip pot`
+      : ''
+    return row(label, fmtPercent(o.share), `${share}${equity}`, PT_OUTCOME_MEANING[o.id])
+  }).join('')
+  const potWorking = `${fmtChips(potNow)} + ${fmtChips(r.added)} + ${fmtChips(r.theirAdded)} = ${fmtChips(potNow + r.added + r.theirAdded)} chips with one caller, and ${fmtChips(potNow)} + ${fmtChips(r.added)} + 2 × ${fmtChips(r.theirAdded)} = ${fmtChips(potNow + r.added + 2 * r.theirAdded)} chips with both`
+  const [fold, ...called] = r.outcomes
+  const evWorking = `${fmtPercent(fold.share)} × ${fmtChips(fold.pot)} + `
+    + called.map(o => `${fmtPercent(o.share)} × (${fmtPercent(o.equity)} × ${fmtChips(o.pot)} − ${fmtChips(o.added)})`).join(' + ')
+    + ` = ${ptSigned(r.ev)}`
+  const margin = RAISE_MARGIN * potNow
+  return `
+    <div data-type="pt-math-card" data-card-kind="raise" data-wide>
+      <div data-type="pt-math-head">
+        <span data-type="pt-math-title">If you raise</span>
+        <span data-type="pt-math-val">${ptSigned(r.ev)} chips</span>
+      </div>
+      <p data-type="pt-math-desc">On the river there are no cards to come, so a raise against two players can be counted exactly. Each of them decides on their own hand whether to call, and the drill counts every pair of hands they could hold together to see how often both fold, one calls or both call.</p>
+      <div data-type="pt-math-ledger">
+        ${row('Raise to', `${fmtChips(r.to)} chips`, ptRaiseWorking(spot, r.to), 'The total you would have in the pot this street after raising.')}
+        ${row('Bettor keeps', `${r.bettorKeeps} of ${r.bettorHands} hands`, `${r.bettorKeeps} ÷ ${r.bettorHands} = ${fmtPercent(r.bettorKeeps / r.bettorHands)}`, notes[0])}
+        ${row('Caller keeps', `${r.callerKeeps} of ${r.callerHands} hands`, `${r.callerKeeps} ÷ ${r.callerHands} = ${fmtPercent(r.callerKeeps / r.callerHands)}`, notes[1])}
+        ${row('Pot if called', `${fmtChips(potNow + r.added + r.theirAdded)} or ${fmtChips(potNow + r.added + 2 * r.theirAdded)} chips`, potWorking, `The pot now, plus the ${fmtChips(r.added)} chips you add, plus ${fmtChips(r.theirAdded)} more from each player who calls.`)}
+        ${outcomeRows}
+        ${row('Raise EV', `${ptSigned(r.ev)} chips`, evWorking, 'The average chips a raise wins: for each of the four outcomes, how often it happens times what you net in it, which is your share of that pot minus the chips you add.')}
+      </div>
+      <p data-type="pt-math-desc">A raise is only the best play when its EV beats the EV of calling (${ptSigned(judgement.callEv)} chips) by more than ${RAISE_MARGIN * 100}% of the pot now (${fmtChips(margin)} chips), and when it does not lose chips on average in the ${fmtPercent(r.calledShare)} of cases where at least one of them calls. The margin is there because which hands would call a raise is one fixed guess.</p>
     </div>
   `
 }
@@ -699,14 +767,22 @@ class PokerTrainerGame extends HTMLElement {
         ? cachedEquityVsRange(hero, spot.opponents[0].combos, spot.board)
         : cachedEquityVsRanges(hero, [spot.opponents[0].combos, spot.opponents[1].combos], spot.board, PT_MAX_RANGE_WORK)
       let raiseResult: PtGraded['raiseResult'] = null
+      let raiseCounts: PtGraded['raiseCounts'] = null
       if (raiseModelled(spot)) {
-        const callers = cachedEquityVsRange(hero, raiseContinuingCombos(spot), spot.board)
-        raiseResult = { equity: callers.equity, combos: callers.combos, runouts: callers.runouts }
+        const keeps = raiseContinuing(spot).map(keep => keep.combos)
+        if (spot.opponents.length === 1) {
+          const callers = cachedEquityVsRange(hero, keeps[0], spot.board)
+          raiseResult = { equity: callers.equity, combos: callers.combos, runouts: callers.runouts }
+        } else {
+          // River only, and no cards to come: integer comparisons over the pairs, cheap enough to redo on a redraw.
+          const counts = riverRaiseCounts(hero, spot.board, [spot.opponents[0].combos, spot.opponents[1].combos], [keeps[0], keeps[1]])
+          raiseCounts = { counts, kept: [keeps[0].length, keeps[1].length] }
+        }
       }
-      const judgement = judge(spot, result, raiseResult)
+      const judgement = judge(spot, result, raiseResult ?? raiseCounts)
       // A call is accepted when a raise was best: calling is still profitable then.
       const right = choice === judgement.correct || (judgement.correct === 'raise' && choice === 'call')
-      return { judgement, result, raiseResult, right }
+      return { judgement, result, raiseResult, raiseCounts, right }
     } catch {
       return null
     }
@@ -1120,7 +1196,7 @@ class PokerTrainerGame extends HTMLElement {
       `Poker Trainer: ${spot.title}, on the ${spot.street}`,
       `You hold ${ptFormatCardsDisplay(spot.hero)} on ${ptFormatCardsDisplay(spot.board)} in ${ptSeatPhrase(spot.heroPosition)}. ${spot.line[spot.line.length - 1]}`,
       `Pot before their bet ${fmtChips(spot.potBefore)}, their bet ${fmtChips(spot.bet)}${spot.callersIn > 0 ? `, chips from callers ${fmtChips(spot.callersIn)}` : ''}${spot.heroIn > 0 ? `, chips you already put in ${fmtChips(spot.heroIn)}` : ''}, pot now ${fmtChips(x.potNow)}, your call ${fmtChips(x.toCall)}.`,
-      `Break-even equity ${fmtPercent(x.breakEven)}, your equity ${fmtPercent(j.equity)}, EV of calling ${ptSigned(j.callEv)} chips${j.raise ? `, Raise EV ${ptSigned(j.raise.ev)} chips` : ''}.`,
+      `Break-even equity ${fmtPercent(x.breakEven)}, your equity ${fmtPercent(j.equity)}, EV of calling ${ptSigned(j.callEv)} chips${j.raise ? `, Raise EV ${ptSigned(j.raise.ev)} chips` : j.raiseMultiway ? `, Raise EV ${ptSigned(j.raiseMultiway.ev)} chips` : ''}.`,
       `Best play: ${j.correct}. ${graded.right ? '✓ I got it right.' : '✗ I got it wrong.'}`,
       `Try it: ${ptSpotUrl(d)}`,
     ].join('\n')
@@ -1384,7 +1460,7 @@ class PokerTrainerGame extends HTMLElement {
               <p><strong>The break-even rule.</strong> Calling is right when your equity is above the break-even equity, which is your call divided by the pot after your call. In chips, the EV of calling is your equity times the pot after your call, minus your call, and the drill says fold when that is zero or less.</p>
               <p><strong>The raise model.</strong> When there is one opponent who is not all in, and you have chips left to raise with, the drill also works out a raise to three times their bet (two and a half times if you cannot afford three, and never more than all of your chips). It guesses that only their stronger hands would call a raise and that every other hand folds. Raise EV is the share that folds times the pot now, plus the share that calls times (your equity against the callers times the bigger pot, minus the chips you add).</p>
               <p><strong>When a raise is the best play.</strong> Raise EV must beat the EV of calling by more than ${RAISE_MARGIN * 100}% of the pot now. The margin is there because the model ignores later streets. Your equity against the callers must also be at least the equity you need if called. That is the rule against pure bluffs: the drill never recommends a raise that only works because they fold, since how often they fold is a guess.</p>
-              <p><strong>Two opponents.</strong> The drill grades the call only, because a raise would have to be answered by both of them.</p>
+              <p><strong>Two opponents.</strong> On the river, the drill also works out a raise against two players. The bettor keeps hands by the same rule as with one opponent. ${escapeHtml(CALLER_VS_RAISE_NOTE)} Each of them decides on their own hand, and the drill counts every pair of hands they could hold together, so it knows exactly how often both fold, only one calls, or both call, and what your share of the pot is each time. Raise EV adds up those four outcomes, and the same ${RAISE_MARGIN * 100}% margin and rule against pure bluffs apply. On the turn with two opponents the drill grades the call only, because what a raise is worth there depends on the betting still to come on the river, which it does not play out.</p>
               <p><strong>Every number is counted, never sampled.</strong> The drill adds up every pair of hands they could hold and every set of cards that could still come. When that is too much to count in a browser, it deals a later street instead of estimating.</p>
             </div>
             <div data-type="pt-concept-box">
